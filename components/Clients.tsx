@@ -1,5 +1,6 @@
 import React from 'react';
 import { EMPLOYERS, FREELANCE_CLIENTS } from '../constants';
+import AnimatedSection from './AnimatedSection';
 
 const Clients: React.FC = () => {
   // Duplicate lists to create seamless loop
@@ -7,7 +8,8 @@ const Clients: React.FC = () => {
   const freelanceLoop = [...FREELANCE_CLIENTS, ...FREELANCE_CLIENTS, ...FREELANCE_CLIENTS];
 
   return (
-    <div className="py-12 border-y border-gray-800 bg-dark/50 backdrop-blur-sm relative overflow-hidden">
+    <AnimatedSection animation="fade-in-up">
+      <div className="py-12 border-y border-gray-800 bg-dark/50 backdrop-blur-sm relative overflow-hidden">
       <style>{`
         @keyframes scroll {
           0% { transform: translateX(0); }
@@ -82,8 +84,8 @@ const Clients: React.FC = () => {
           </div>
         </div>
       </div>
-
-    </div>
+      </div>
+    </AnimatedSection>
   );
 };
 
