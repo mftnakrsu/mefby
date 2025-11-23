@@ -78,17 +78,19 @@ const App: React.FC = () => {
               </h2>
             </AnimatedSection>
             
-            <div className="space-y-12 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-700 before:to-transparent">
-              {EXPERIENCE.map((exp, index) => (
-                <AnimatedSection key={exp.id} animation={index % 2 === 0 ? 'fade-in-left' : 'fade-in-right'} delay={index * 150}>
-                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                    {/* Icon */}
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full border border-gray-700 bg-dark shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                      <div className="w-2 h-2 bg-accent rounded-full"></div>
-                    </div>
-                    
-                    {/* Card */}
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-6 rounded-2xl bg-gray-900 border border-gray-800 hover:border-gray-600 transition-all duration-300">
+            <div className="space-y-12 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:left-1/2 md:before:-translate-x-1/2 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-700 before:to-transparent">
+              {EXPERIENCE.map((exp, index) => {
+                const isEven = index % 2 === 0;
+                return (
+                  <AnimatedSection key={exp.id} animation={isEven ? 'fade-in-left' : 'fade-in-right'} delay={index * 150}>
+                    <div className={`relative flex items-center ${isEven ? 'md:justify-start' : 'md:justify-end'} justify-between`}>
+                      {/* Icon - Always centered */}
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full border border-gray-700 bg-dark shadow shrink-0 absolute left-5 md:left-1/2 md:-translate-x-1/2 z-10">
+                        <div className="w-2 h-2 bg-accent rounded-full"></div>
+                      </div>
+                      
+                      {/* Card */}
+                      <div className={`w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-6 rounded-2xl bg-gray-900 border border-gray-800 hover:border-gray-600 transition-all duration-300 ${isEven ? 'md:mr-auto md:pr-12' : 'md:ml-auto md:pl-12'}`}>
                       <div className="flex items-start gap-4">
                         {exp.logo && (
                           <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center p-1 shrink-0">
@@ -111,7 +113,8 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </AnimatedSection>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>

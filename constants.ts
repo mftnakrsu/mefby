@@ -189,9 +189,9 @@ export const PROJECTS: Project[] = [
 ];
 
 export const SKILLS: Skill[] = [
-  { subject: 'GenAI & LLM Agents', A: 95, fullMark: 100 },
+  { subject: 'GenAI & LLM', A: 95, fullMark: 100 },
   { subject: 'Computer Vision', A: 90, fullMark: 100 },
-  { subject: 'Data Eng. (Azure)', A: 85, fullMark: 100 },
+  { subject: 'Data Engineering', A: 85, fullMark: 100 },
   { subject: 'Python / C++', A: 90, fullMark: 100 },
   { subject: 'MLOps & DevOps', A: 75, fullMark: 100 },
 ];
