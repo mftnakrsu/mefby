@@ -33,7 +33,28 @@ export interface Client {
   id: number;
   name: string;
   industry: string;
-  logo?: string; // URL or placeholder text
+  logo?: string;
+  link?: string;
+}
+
+export interface Publication {
+  id: number;
+  title: string;
+  authors: string;
+  venue: string;
+  year: number;
+  link?: string;
+}
+
+export interface Education {
+  id: number;
+  degree: string;
+  school: string;
+  location: string;
+  period: string;
+  gpa?: string;
+  description?: string;
+  logo?: string;
 }
 
 export interface CompanyProfile {

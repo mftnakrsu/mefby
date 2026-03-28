@@ -3,129 +3,39 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mefby | AI & Autonomous Systems</title>
-    <meta name="description" content="Professional Portfolio of Meftun Akarsu - AI Engineer & Data Scientist" />
+    <title>Meftun Akarsu</title>
+    <meta name="description" content="AI Engineer — LLM infrastructure, computer vision, data pipelines." />
     <link rel="icon" type="image/png" href="/icon.png" />
     <link rel="apple-touch-icon" href="/icon.png" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
               sans: ['Inter', 'sans-serif'],
-              mono: ['Space Grotesk', 'monospace'], // Used for headings to give tech vibe
             },
             colors: {
-              primary: '#3b82f6',
-              secondary: '#0f172a',
-              accent: '#06b6d4', // Cyan
-              dark: '#030712', // Richer black
+              dark: '#ffffff',
             },
-            backgroundImage: {
-              'grid-pattern': "linear-gradient(to right, #1e293b 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px)",
-            }
           }
         }
       }
     </script>
     <style>
-      html {
-        scroll-behavior: smooth;
-        scroll-padding-top: 100px; /* Offset for the fixed header */
-      }
+      html { scroll-behavior: smooth; }
       body {
-        background-color: #030712;
-        color: #e2e8f0;
+        background-color: #ffffff;
+        color: #52525b;
         font-family: 'Inter', sans-serif;
       }
-      h1, h2, h3, h4, h5, h6 {
-        font-family: 'Space Grotesk', monospace;
-      }
-      .glass {
-        background: rgba(15, 23, 42, 0.6);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
-      .tech-border {
-        position: relative;
-      }
-      .tech-border::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.5), transparent);
-      }
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #030712;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #1e293b;
-        border-radius: 3px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #334155;
-      }
-      
-      /* Scroll Animation Classes */
-      .fade-in-up {
-        opacity: 0;
-        transform: translateY(30px);
-        transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-      }
-      .fade-in-up.visible {
-        opacity: 1;
-        transform: translateY(0);
-      }
-      
-      .fade-in-left {
-        opacity: 0;
-        transform: translateX(-30px);
-        transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-      }
-      .fade-in-left.visible {
-        opacity: 1;
-        transform: translateX(0);
-      }
-      
-      .fade-in-right {
-        opacity: 0;
-        transform: translateX(30px);
-        transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-      }
-      .fade-in-right.visible {
-        opacity: 1;
-        transform: translateX(0);
-      }
-      
-      .fade-in {
-        opacity: 0;
-        transition: opacity 0.8s ease-out;
-      }
-      .fade-in.visible {
-        opacity: 1;
-      }
-      
-      .scale-in {
-        opacity: 0;
-        transform: scale(0.9);
-        transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-      }
-      .scale-in.visible {
-        opacity: 1;
-        transform: scale(1);
-      }
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: #ffffff; }
+      ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 2px; }
+      a { transition: color 0.15s; }
     </style>
   <script type="importmap">
 {
