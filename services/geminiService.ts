@@ -1,5 +1,5 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai/web";
-import { PROFILE, SERVICES, EXPERIENCE, PROJECTS, SKILLS, CLIENTS, PUBLICATIONS, EDUCATION, CERTIFICATIONS } from '../constants';
+import { PROFILE, SERVICES, EXPERIENCE, PROJECTS, SKILLS, CLIENTS, PUBLICATIONS, EDUCATION, CERTIFICATIONS, WRITING } from '../constants';
 
 let ai: GoogleGenAI | null = null;
 
@@ -53,6 +53,9 @@ const buildContext = () => {
 
     Certifications:
     ${CERTIFICATIONS.join("\n")}
+
+    Writing / Blog Posts:
+    ${WRITING.map(w => `- "${w.title}" (${w.date})${w.summary ? ` — ${w.summary}` : ''}`).join("\n")}
 
     Skills:
     ${SKILLS.map(s => `${s.subject} (${s.A}%)`).join(", ")}
