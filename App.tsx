@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ChatBot from './components/ChatBot';
+import BlogPostModal from './components/BlogPostModal';
 import { EXPERIENCE, PROJECTS, PROFILE, PUBLICATIONS, EDUCATION, CERTIFICATIONS, WRITING } from './constants';
+import { WritingPost } from './types';
 
 const App: React.FC = () => {
+  const [activePost, setActivePost] = useState<WritingPost | null>(null);
+
   return (
     <div className="min-h-screen bg-white text-zinc-500 font-sans">
       <div className="max-w-2xl mx-auto px-6 py-16 md:py-24">
@@ -98,9 +102,40 @@ const App: React.FC = () => {
         {/* Writing */}
         <section className="mb-20">
           <h2 className="text-xs font-medium text-zinc-600 uppercase tracking-widest mb-8">Writing</h2>
+
+          {/* Featured in-app posts */}
+          <div className="space-y-4 mb-8">
+            {WRITING.filter(p => p.content).map((post, i) => (
+              <button
+                key={`featured-${i}`}
+                onClick={() => setActivePost(post)}
+                className="w-full text-left p-5 rounded-xl border border-zinc-200 hover:border-emerald-300 hover:shadow-[0_4px_24px_-8px_rgba(16,185,129,0.25)] bg-gradient-to-br from-white to-emerald-50/20 transition-all group"
+              >
+                <div className="flex items-baseline justify-between gap-4 mb-2.5">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-emerald-600 uppercase tracking-[0.18em]">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    New essay
+                  </span>
+                  <span className="text-[11px] text-zinc-400 font-mono shrink-0">{post.date}</span>
+                </div>
+                <h3 className="text-[15px] text-zinc-900 font-medium leading-snug mb-2 group-hover:text-emerald-700 transition-colors">
+                  {post.title}
+                </h3>
+                {post.summary && (
+                  <p className="text-[13px] text-zinc-500 leading-relaxed mb-3">{post.summary}</p>
+                )}
+                <span className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 group-hover:text-emerald-600 transition-colors">
+                  Read essay
+                  <span className="group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* External writings */}
           <div className="space-y-4">
-            {WRITING.map((post, i) => (
-              <a key={i} href={post.url} target="_blank" rel="noreferrer" className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 group">
+            {WRITING.filter(p => !p.content && p.url).map((post, i) => (
+              <a key={`ext-${i}`} href={post.url} target="_blank" rel="noreferrer" className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 group">
                 <span className="text-sm text-zinc-500 group-hover:text-emerald-600 transition-colors">{post.title}</span>
                 <span className="text-xs text-zinc-400 font-mono shrink-0">{post.date}</span>
               </a>
@@ -151,6 +186,7 @@ const App: React.FC = () => {
       </div>
 
       <ChatBot />
+      <BlogPostModal post={activePost} onClose={() => setActivePost(null)} />
     </div>
   );
 };

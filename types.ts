@@ -57,6 +57,15 @@ export interface Education {
   logo?: string;
 }
 
+export interface WritingPost {
+  title: string;
+  date: string;
+  url?: string;
+  summary?: string;
+  content?: string;
+  tags?: string[];
+}
+
 export interface CompanyProfile {
   name: string;
   owner: string;
