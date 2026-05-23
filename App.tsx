@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import ChatBot from './components/ChatBot';
 import BlogPostModal from './components/BlogPostModal';
 import { EXPERIENCE, PROJECTS, PROFILE, PUBLICATIONS, EDUCATION, CERTIFICATIONS, WRITING } from './constants';
 import { WritingPost } from './types';
@@ -185,7 +184,6 @@ const App: React.FC = () => {
 
       </div>
 
-      <ChatBot />
       <BlogPostModal post={activePost} onClose={() => setActivePost(null)} />
     </div>
   );
