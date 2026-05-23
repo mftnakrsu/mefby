@@ -27,7 +27,7 @@ Editing `constants.ts` updates the rendered portfolio. Adding a new content sect
 
 **Styling.** Tailwind is loaded via the `cdn.tailwindcss.com` script in `index.html`, with the config inlined in a `<script>` block right after it (custom `Inter` font and a `dark` color alias). There is no `tailwind.config.js`, no PostCSS, no `@tailwind` directives. `index.css` is essentially empty. Class names are authored directly in JSX.
 
-**Importmap caveat.** `index.html` contains an `<script type="importmap">` pointing React, recharts, and `@google/genai` at `aistudiocdn.com`. This is an artifact from Google AI Studio prototyping. The Vite build resolves these imports from `node_modules` (the npm packages in `package.json`); the importmap only matters if `index.html` were opened without Vite. Don't rely on it for production paths.
+**Importmap caveat.** `index.html` contains an `<script type="importmap">` pointing React and recharts at `aistudiocdn.com`. This is an artifact from Google AI Studio prototyping. The Vite build resolves these imports from `node_modules` (the npm packages in `package.json`); the importmap only matters if `index.html` were opened without Vite. Don't rely on it for production paths.
 
 **Path alias.** `vite.config.ts` and `tsconfig.json` both define `@/*` → project root, but nothing currently uses it — imports are relative.
 
