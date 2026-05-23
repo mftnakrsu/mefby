@@ -6,7 +6,6 @@ Modern, AI-powered portfolio website showcasing Meftun Akarsu's expertise in AI 
 ## 🚀 Features
 
 - **Modern UI/UX**: Dark theme with smooth animations and responsive design
-- **AI Chatbot**: Interactive AI assistant powered by Google Gemini
 - **Portfolio Sections**: About, Services, Experience, Projects, and Contact
 - **Interactive Stats**: Visual representation of technical skills
 - **Client Showcase**: Display of career experience and freelance collaborations
@@ -17,7 +16,6 @@ Modern, AI-powered portfolio website showcasing Meftun Akarsu's expertise in AI 
 - **Vite** for build tooling
 - **Tailwind CSS** for styling
 - **Recharts** for data visualization
-- **Google Gemini AI** for chatbot functionality
 
 ## 📦 Installation
 
@@ -32,14 +30,7 @@ cd mefby
 npm install
 ```
 
-3. Create a `.env` file in the root directory:
-```bash
-VITE_GEMINI_API_KEY=your_api_key_here
-```
-
-   Get your Gemini API key from: https://aistudio.google.com/apikey
-
-4. Run the development server:
+3. Run the development server:
 ```bash
 npm run dev
 ```
@@ -75,16 +66,7 @@ The production build will be in the `dist` directory.
    - Sign in with your GitHub account
    - Click "New Project"
    - Import your GitHub repository
-   - Add environment variable:
-     - Name: `VITE_GEMINI_API_KEY`
-     - Value: Your Gemini API key
    - Click "Deploy"
-
-3. **Environment Variables in Vercel**:
-   - Go to your project settings
-   - Navigate to "Environment Variables"
-   - Add `VITE_GEMINI_API_KEY` with your API key value
-   - Redeploy if needed
 
 ### Manual Deployment
 
@@ -93,12 +75,6 @@ You can also deploy the `dist` folder to any static hosting service:
 - GitHub Pages
 - AWS S3 + CloudFront
 - Any other static hosting provider
-
-## 📝 Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `VITE_GEMINI_API_KEY` | Google Gemini API key for chatbot | Yes (for chatbot) |
 
 ## 🎨 Customization
 
