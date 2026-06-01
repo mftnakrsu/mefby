@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="t d">
+  <title id="t">Data pipeline: PDFs to Q&amp;A pairs</title>
+  <desc id="d">Four-stage transformation. 58 unclassified PDFs are cleaned and chunked into 4,051 chunks (95.2% retention), filtered to 3,747 (92.5% pass), then expanded into 18,730 Q&amp;A pairs at five pairs per chunk.</desc>
+
+  <style><![CDATA[
+    :root { color-scheme: light dark; }
+    .frame { fill: #ffffff; stroke: #e4e4e7; stroke-width: 1; }
+    .label { font: 500 11px ui-sans-serif, system-ui, sans-serif; fill: #71717a; letter-spacing: 0.06em; text-transform: uppercase; }
+    .num   { font: 600 24px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .unit  { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #a1a1aa; }
+    .ret   { font: 500 11px ui-monospace, monospace; fill: #10b981; }
+    .stage { opacity: 0; animation: in 0.6s cubic-bezier(0.4,0,0.2,1) forwards; }
+    .a1 { animation-delay: 0s; }
+    .a2 { animation-delay: 0.6s; }
+    .a3 { animation-delay: 1.2s; }
+    .a4 { animation-delay: 1.8s; }
+    .arrow { stroke: #d4d4d8; stroke-width: 1.5; fill: none; opacity: 0; animation: in 0.4s ease forwards; }
+    .ar1 { animation-delay: 0.5s; } .ar2 { animation-delay: 1.1s; } .ar3 { animation-delay: 1.7s; }
+    @keyframes in { to { opacity: 1; transform: translateY(0); } from { opacity: 0; transform: translateY(8px); } }
+    @keyframes loop { 0%,86%,100% { opacity: 1 } 88%,98% { opacity: 0 } }
+    g.stages { animation: loop 14s infinite; }
+  ]]></style>
+
+  <g class="stages">
+    <g class="stage a1">
+      <rect class="frame" x="40" y="155" width="150" height="140" rx="10"/>
+      <text class="label" x="115" y="180" text-anchor="middle">source</text>
+      <text class="num"   x="115" y="225" text-anchor="middle">58</text>
+      <text class="unit"  x="115" y="245" text-anchor="middle">unclassified PDFs</text>
+      <text class="unit"  x="115" y="262" text-anchor="middle">158.8 MB · 2.37M tok</text>
+    </g>
+
+    <path class="arrow ar1" d="M195 225 L225 225" marker-end="url(#a)"/>
+
+    <g class="stage a2">
+      <rect class="frame" x="230" y="165" width="150" height="120" rx="10"/>
+      <text class="label" x="305" y="190" text-anchor="middle">cleaned + chunked</text>
+      <text class="num"   x="305" y="232" text-anchor="middle">4,051</text>
+      <text class="unit"  x="305" y="250" text-anchor="middle">chunks · 924 tok median</text>
+      <text class="ret"   x="305" y="270" text-anchor="middle">95.2% retained</text>
+    </g>
+
+    <path class="arrow ar2" d="M385 225 L415 225" marker-end="url(#a)"/>
+
+    <g class="stage a3">
+      <rect class="frame" x="420" y="175" width="150" height="100" rx="10"/>
+      <text class="label" x="495" y="198" text-anchor="middle">quality filter</text>
+      <text class="num"   x="495" y="235" text-anchor="middle">3,747</text>
+      <text class="ret"   x="495" y="258" text-anchor="middle">92.5% pass</text>
+    </g>
+
+    <path class="arrow ar3" d="M575 225 L605 225" marker-end="url(#a)"/>
+
+    <g class="stage a4">
+      <rect class="frame" x="610" y="160" width="150" height="130" rx="10"/>
+      <text class="label" x="685" y="185" text-anchor="middle">GPT-5.4 Q&amp;A gen</text>
+      <text class="num"   x="685" y="228" text-anchor="middle">18,730</text>
+      <text class="unit"  x="685" y="246" text-anchor="middle">pairs · 5 per chunk</text>
+      <text class="unit"  x="685" y="263" text-anchor="middle">$47.81 · 81 min</text>
+    </g>
+  </g>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#a1a1aa"/>
+    </marker>
+  </defs>
+
+  <text x="400" y="50" text-anchor="middle" font="600 14px ui-sans-serif, system-ui, sans-serif" fill="#52525b">From 58 doctrine PDFs to 18,730 Q&amp;A pairs</text>
+  <text x="400" y="72" text-anchor="middle" font="400 12px ui-sans-serif, system-ui, sans-serif" fill="#a1a1aa">Tiers 1–4: official doctrine, academic, think-tank, modern case studies</text>
+
+  <text x="400" y="370" text-anchor="middle" font="400 11px ui-monospace, monospace" fill="#a1a1aa">prepare_corpus.py → filter_chunks.py → full_qa.py → build_splits.py</text>
+  <text x="400" y="395" text-anchor="middle" font="400 11px ui-sans-serif, system-ui, sans-serif" fill="#a1a1aa">chunk-stratified split: train 15,905 · val 935 · test 1,875 · held-out 15</text>
+</svg>
