@@ -1,96 +1,116 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" role="img" aria-labelledby="t d">
   <title id="t">Where each model's 300-token output budget went</title>
   <desc id="d">Two horizontal bars showing how baseline gpt-oss-20b and the v4 LoRA adapter spent their 300-token output cap on the test set. Baseline burned mean 297.5 tokens inside the analysis channel and emitted no final answer 91.8% of the time. v4 used mean 49 tokens, all in the final channel.</desc>
 
   <style><![CDATA[
-    .title    { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
-    .subtitle { font: 400 12px ui-sans-serif, system-ui, sans-serif; fill: #71717a; }
-    .row-label { font: 600 13px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
-    .row-sub   { font: 400 11px ui-monospace, monospace; fill: #a1a1aa; }
-    .scale     { font: 400 10px ui-monospace, monospace; fill: #a1a1aa; }
-    .legend    { font: 500 11px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
-    .frame     { fill: none; stroke: #e4e4e7; stroke-width: 1; }
+    .title    { font: 600 16px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .subtitle { font: 400 13px ui-sans-serif, system-ui, sans-serif; fill: #71717a; }
 
+    .row-label  { font: 600 13px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .row-sub    { font: 400 11px ui-monospace, monospace; fill: #a1a1aa; }
+    .bar-inline { font: 600 13px ui-sans-serif, system-ui, sans-serif; fill: #ffffff; }
+    .callout    { font: 500 12px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+    .callout-strong { font: 700 14px ui-sans-serif, system-ui, sans-serif; }
+    .scale-tick { font: 400 10px ui-monospace, monospace; fill: #a1a1aa; }
+    .legend     { font: 500 12px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+
+    .frame { fill: none; stroke: #e4e4e7; stroke-width: 1; }
     .analysis-fill { fill: #d4d4d8; }
     .final-fill    { fill: #10b981; }
-    .empty-fill    { fill: #dc2626; opacity: 0.85; }
+    .empty-marker  { fill: #dc2626; opacity: 0.9; }
+    .unused-fill   { fill: #fafafa; }
 
-    .bar-analysis { transform-origin: left center; transform: scaleX(0); animation: fill1 2.2s cubic-bezier(0.4,0,0.2,1) 0.2s forwards, loop1 12s infinite 2.4s; }
-    .bar-empty    { transform-origin: left center; transform: scaleX(0); animation: fill2 0.4s ease 2.4s forwards, loop1 12s infinite 2.8s; }
-    .bar-final-v4 { transform-origin: left center; transform: scaleX(0); animation: fill3 1.4s cubic-bezier(0.4,0,0.2,1) 0.4s forwards, loop1 12s infinite 1.8s; }
+    .bar-analysis { transform-origin: left center; transform: scaleX(0); animation: fill1 2s cubic-bezier(0.4,0,0.2,1) 0.3s forwards, loop 12s infinite 2.3s; }
+    .bar-empty    { transform-origin: left center; transform: scaleX(0); animation: fill2 0.4s ease 2.3s forwards, loop 12s infinite 2.7s; }
+    .bar-final-v4 { transform-origin: left center; transform: scaleX(0); animation: fill3 1.4s cubic-bezier(0.4,0,0.2,1) 0.5s forwards, loop 12s infinite 1.9s; }
+    .text-fade    { opacity: 0; animation: fade 0.4s ease forwards, loop 12s infinite; }
+    .t1 { animation-delay: 1.7s, 1.7s; }
+    .t2 { animation-delay: 2.5s, 2.5s; }
+    .t3 { animation-delay: 1.6s, 1.6s; }
+    .t4 { animation-delay: 2.0s, 2.0s; }
 
     @keyframes fill1 { to { transform: scaleX(0.99); } }
     @keyframes fill2 { to { transform: scaleX(0.01); } }
     @keyframes fill3 { to { transform: scaleX(0.163); } }
-    @keyframes loop1 { 0%,88%,100% { opacity: 1 } 90%,98% { opacity: 0.15 } }
-
-    .num-big    { font: 700 22px ui-sans-serif, system-ui, sans-serif; }
-    .num-unit   { font: 500 11px ui-monospace, monospace; fill: #a1a1aa; }
+    @keyframes fade  { to { opacity: 1; } }
+    @keyframes loop  { 0%,88%,100% { opacity: 1 } 92%,98% { opacity: 0.2 } }
 
     .marker-line { stroke: #e4e4e7; stroke-width: 1; stroke-dasharray: 3 3; }
   ]]></style>
 
-  <text class="title" x="400" y="38" text-anchor="middle">Where the 300-token output budget went</text>
+  <text class="title" x="400" y="36" text-anchor="middle">Where the 300-token output budget went</text>
   <text class="subtitle" x="400" y="58" text-anchor="middle">Mean over 1,875 test cases · max_tokens=300 · temperature=0.3</text>
 
-  <g transform="translate(150, 110)">
-    <line class="marker-line" x1="0"   y1="-12" x2="0"   y2="280"/>
-    <line class="marker-line" x1="500" y1="-12" x2="500" y2="280"/>
-    <text class="scale" x="0"   y="-18">0</text>
-    <text class="scale" x="500" y="-18" text-anchor="end">300 tokens</text>
+  <g transform="translate(170, 100)">
+    <line class="marker-line" x1="0"   y1="-12" x2="0"   y2="290"/>
+    <line class="marker-line" x1="500" y1="-12" x2="500" y2="290"/>
+    <text class="scale-tick" x="0"   y="-18">0 tokens</text>
+    <text class="scale-tick" x="500" y="-18" text-anchor="end">300 tokens (cap)</text>
 
     <g transform="translate(0, 30)">
-      <text class="row-label" x="-12" y="22" text-anchor="end">baseline</text>
-      <text class="row-sub"   x="-12" y="40" text-anchor="end">gpt-oss-20b, no adapter</text>
+      <text class="row-label" x="-16" y="22" text-anchor="end">baseline</text>
+      <text class="row-sub"   x="-16" y="38" text-anchor="end">gpt-oss-20b</text>
+      <text class="row-sub"   x="-16" y="52" text-anchor="end">no adapter</text>
 
-      <rect class="frame" x="0" y="0" width="500" height="50" rx="4"/>
+      <rect class="frame" x="0" y="0" width="500" height="56" rx="4"/>
 
       <g class="bar-analysis">
-        <rect class="analysis-fill" x="0" y="0" width="500" height="50" rx="4"/>
+        <rect class="analysis-fill" x="0" y="0" width="500" height="56" rx="4"/>
       </g>
       <g class="bar-empty">
-        <rect class="empty-fill" x="495" y="0" width="5" height="50" rx="0"/>
+        <rect class="empty-marker" x="495" y="0" width="5" height="56" rx="0"/>
       </g>
 
-      <text x="240" y="32" text-anchor="middle" font="500 11px ui-sans-serif, system-ui, sans-serif" fill="#52525b">
-        analysis CoT · mean 297.5 / 300 tokens
-      </text>
+      <g class="text-fade t1">
+        <text class="bar-inline" x="250" y="34" text-anchor="middle" fill="#52525b">analysis CoT · 297 / 300 tokens</text>
+      </g>
 
-      <text class="num-big" x="520" y="20" fill="#52525b">297</text>
-      <text class="num-unit" x="520" y="36">tok in analysis</text>
-      <text class="num-big" x="620" y="20" fill="#dc2626">0–3</text>
-      <text class="num-unit" x="620" y="36">tok in final</text>
+      <g class="text-fade t2">
+        <text class="callout" x="520" y="22">
+          <tspan class="callout-strong" fill="#dc2626">final: empty</tspan>
+        </text>
+        <text class="callout" x="520" y="42">in 91.8% of cases</text>
+        <text class="callout" x="520" y="56">(1,721 / 1,875 test)</text>
+      </g>
     </g>
 
-    <g transform="translate(0, 140)">
-      <text class="row-label" x="-12" y="22" text-anchor="end">v4</text>
-      <text class="row-sub"   x="-12" y="40" text-anchor="end">LoRA r=16, direct-answer SFT</text>
+    <g transform="translate(0, 170)">
+      <text class="row-label" x="-16" y="22" text-anchor="end">v4</text>
+      <text class="row-sub"   x="-16" y="38" text-anchor="end">LoRA r=16</text>
+      <text class="row-sub"   x="-16" y="52" text-anchor="end">direct-answer SFT</text>
 
-      <rect class="frame" x="0" y="0" width="500" height="50" rx="4"/>
+      <rect class="frame" x="0" y="0" width="500" height="56" rx="4"/>
 
       <g class="bar-final-v4">
-        <rect class="final-fill" x="0" y="0" width="500" height="50" rx="4"/>
+        <rect class="final-fill" x="0" y="0" width="500" height="56" rx="4"/>
       </g>
 
-      <text x="40" y="32" font="500 11px ui-sans-serif, system-ui, sans-serif" fill="#ffffff">49</text>
+      <g class="text-fade t3">
+        <text class="bar-inline" x="42" y="34">49 tok</text>
+      </g>
 
-      <text class="num-big" x="520" y="20" fill="#047857">49</text>
-      <text class="num-unit" x="520" y="36">tok · all in final</text>
-      <text class="num-big" x="620" y="20" fill="#71717a">251</text>
-      <text class="num-unit" x="620" y="36">tok unused</text>
+      <g class="text-fade t4">
+        <text class="callout" x="520" y="22">
+          <tspan class="callout-strong" fill="#047857">all in final</tspan>
+        </text>
+        <text class="callout" x="520" y="42">mean 49.4 tokens</text>
+        <text class="callout" x="520" y="56">(251 budget unused)</text>
+      </g>
     </g>
   </g>
 
-  <g transform="translate(150, 380)">
+  <g transform="translate(170, 410)">
     <rect class="analysis-fill" x="0" y="0" width="14" height="14" rx="2"/>
     <text class="legend" x="22" y="12">hidden CoT (analysis channel)</text>
 
-    <rect class="final-fill" x="220" y="0" width="14" height="14" rx="2"/>
-    <text class="legend" x="242" y="12">user-visible answer (final channel)</text>
+    <rect class="final-fill" x="240" y="0" width="14" height="14" rx="2"/>
+    <text class="legend" x="262" y="12">user-visible answer (final channel)</text>
 
-    <rect class="empty-fill" x="460" y="0" width="14" height="14" rx="2"/>
-    <text class="legend" x="482" y="12">final empty (baseline: 91.8% of cases)</text>
+    <rect class="empty-marker" x="480" y="0" width="14" height="14" rx="2"/>
+    <text class="legend" x="502" y="12">final empty</text>
   </g>
 
-  <text x="400" y="430" text-anchor="middle" class="subtitle">Most of v4's measured win comes from baseline exhausting its budget before answering.</text>
+  <text x="400" y="446" text-anchor="middle" class="subtitle">
+    Most of v4's measured win comes from baseline exhausting its budget before answering.
+  </text>
 </svg>

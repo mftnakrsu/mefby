@@ -1,78 +1,88 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" role="img" aria-labelledby="t d">
   <title id="t">v4 win rate decomposed</title>
   <desc id="d">Three vertical bars comparing v4's win rate over the un-adapted baseline across three slices of the eval data: the full test set (82.6% on n=1873), the subset where baseline actually produced a final answer (77.9% on n=154), and the held-out-source set (66.7% on n=15).</desc>
 
   <style><![CDATA[
-    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
-    .subtitle { font: 400 12px ui-sans-serif, system-ui, sans-serif; fill: #71717a; }
-    .axis { stroke: #e4e4e7; stroke-width: 1; }
-    .grid { stroke: #f4f4f5; stroke-width: 1; stroke-dasharray: 3 3; }
-    .tick { font: 400 10px ui-monospace, monospace; fill: #a1a1aa; }
-    .pct  { font: 700 22px ui-sans-serif, system-ui, sans-serif; fill: #047857; }
-    .cap  { font: 500 12px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
-    .sub  { font: 400 11px ui-monospace, monospace; fill: #a1a1aa; }
-    .ci   { font: 400 10px ui-monospace, monospace; fill: #71717a; }
+    .title    { font: 600 16px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .subtitle { font: 400 13px ui-sans-serif, system-ui, sans-serif; fill: #71717a; }
+    .axis     { stroke: #e4e4e7; stroke-width: 1; }
+    .grid     { stroke: #f4f4f5; stroke-width: 1; stroke-dasharray: 3 3; }
+    .tick     { font: 400 11px ui-monospace, monospace; fill: #a1a1aa; }
+    .pct      { font: 700 28px ui-sans-serif, system-ui, sans-serif; fill: #047857; }
+    .ci       { font: 400 11px ui-monospace, monospace; fill: #71717a; }
+    .cap      { font: 600 13px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .sub      { font: 400 11px ui-monospace, monospace; fill: #a1a1aa; }
+    .note     { font: 500 11px ui-sans-serif, system-ui, sans-serif; }
 
-    .bar    { fill: #10b981; transform-origin: bottom; transform: scaleY(0); animation: rise 1.4s cubic-bezier(0.4,0,0.2,1) forwards, loop 12s infinite; }
-    .b1 { animation-delay: 0.2s, 1.4s; }
-    .b2 { animation-delay: 0.6s, 1.8s; }
-    .b3 { animation-delay: 1.0s, 2.2s; }
-
+    .bar { fill: #10b981; transform-origin: bottom; transform: scaleY(0);
+           animation: rise 1.4s cubic-bezier(0.4,0,0.2,1) forwards, loop 12s infinite; }
+    .b1 { animation-delay: 0.3s, 1.5s; }
+    .b2 { animation-delay: 0.7s, 1.9s; }
+    .b3 { animation-delay: 1.1s, 2.3s; }
+    .label-fade { opacity: 0; animation: fade 0.4s ease forwards, loop 12s infinite; }
+    .l1 { animation-delay: 1.5s, 1.5s; }
+    .l2 { animation-delay: 1.9s, 1.9s; }
+    .l3 { animation-delay: 2.3s, 2.3s; }
     @keyframes rise { to { transform: scaleY(1); } }
-    @keyframes loop { 0%,90%,100% { opacity: 1 } 92%,98% { opacity: 0.4 } }
-
-    .annot { stroke: #d4d4d8; stroke-width: 1; fill: none; }
+    @keyframes fade { to { opacity: 1; } }
+    @keyframes loop { 0%,90%,100% { opacity: 1 } 92%,98% { opacity: 0.35 } }
   ]]></style>
 
-  <text class="title" x="400" y="34" text-anchor="middle">v4 win rate, decomposed</text>
-  <text class="subtitle" x="400" y="54" text-anchor="middle">Pair-wise GPT-5.4 judge · 3-axis rubric · strict winner field</text>
+  <text class="title" x="400" y="36" text-anchor="middle">v4 win rate, decomposed</text>
+  <text class="subtitle" x="400" y="58" text-anchor="middle">Pair-wise GPT-5.4 judge · 3-axis rubric · strict winner field</text>
 
-  <g transform="translate(120, 90)">
-    <line class="axis" x1="0" y1="0"   x2="0"   y2="260"/>
-    <line class="axis" x1="0" y1="260" x2="560" y2="260"/>
+  <g transform="translate(120, 130)">
+    <line class="axis" x1="0" y1="0"   x2="0"   y2="220"/>
+    <line class="axis" x1="0" y1="220" x2="580" y2="220"/>
 
-    <line class="grid" x1="0" y1="0"   x2="560" y2="0"/>
-    <line class="grid" x1="0" y1="65"  x2="560" y2="65"/>
-    <line class="grid" x1="0" y1="130" x2="560" y2="130"/>
-    <line class="grid" x1="0" y1="195" x2="560" y2="195"/>
+    <line class="grid" x1="0" y1="0"   x2="580" y2="0"/>
+    <line class="grid" x1="0" y1="55"  x2="580" y2="55"/>
+    <line class="grid" x1="0" y1="110" x2="580" y2="110"/>
+    <line class="grid" x1="0" y1="165" x2="580" y2="165"/>
 
-    <text class="tick" x="-8" y="4"   text-anchor="end">100%</text>
-    <text class="tick" x="-8" y="69"  text-anchor="end">75%</text>
-    <text class="tick" x="-8" y="134" text-anchor="end">50%</text>
-    <text class="tick" x="-8" y="199" text-anchor="end">25%</text>
-    <text class="tick" x="-8" y="264" text-anchor="end">0%</text>
+    <text class="tick" x="-10" y="4"   text-anchor="end">100%</text>
+    <text class="tick" x="-10" y="59"  text-anchor="end">75%</text>
+    <text class="tick" x="-10" y="114" text-anchor="end">50%</text>
+    <text class="tick" x="-10" y="169" text-anchor="end">25%</text>
+    <text class="tick" x="-10" y="224" text-anchor="end">0%</text>
 
-    <g class="bar b1" transform="translate(60, 45)">
-      <rect width="100" height="215" rx="4"/>
+    <g class="bar b1" transform="translate(60, 38)">
+      <rect width="120" height="182" rx="4"/>
     </g>
-    <g class="bar b2" transform="translate(230, 67)">
-      <rect width="100" height="193" rx="4"/>
+    <g class="bar b2" transform="translate(230, 49)">
+      <rect width="120" height="171" rx="4"/>
     </g>
-    <g class="bar b3" transform="translate(400, 87)">
-      <rect width="100" height="173" rx="4"/>
+    <g class="bar b3" transform="translate(400, 73)">
+      <rect width="120" height="147" rx="4"/>
     </g>
 
-    <text class="pct" x="110" y="36"  text-anchor="middle">82.6%</text>
-    <text class="ci"  x="110" y="50"  text-anchor="middle">CI 80.9–84.4</text>
-    <text class="pct" x="280" y="58"  text-anchor="middle">77.9%</text>
-    <text class="ci"  x="280" y="73"  text-anchor="middle">apples-to-apples</text>
-    <text class="pct" x="450" y="78"  text-anchor="middle">66.7%</text>
-    <text class="ci"  x="450" y="93"  text-anchor="middle">CI 40–93</text>
+    <g class="label-fade l1">
+      <text class="pct" x="120" y="22"  text-anchor="middle">82.6%</text>
+      <text class="ci"  x="120" y="36"  text-anchor="middle">CI 80.9–84.4</text>
+    </g>
+    <g class="label-fade l2">
+      <text class="pct" x="290" y="33"  text-anchor="middle">77.9%</text>
+      <text class="ci"  x="290" y="47"  text-anchor="middle">apples-to-apples</text>
+    </g>
+    <g class="label-fade l3">
+      <text class="pct" x="460" y="57"  text-anchor="middle">66.7%</text>
+      <text class="ci"  x="460" y="71"  text-anchor="middle">CI 40–93</text>
+    </g>
 
-    <text class="cap" x="110" y="285" text-anchor="middle">full test set</text>
-    <text class="sub" x="110" y="302" text-anchor="middle">n = 1,873</text>
+    <text class="cap" x="120" y="244" text-anchor="middle">full test set</text>
+    <text class="sub" x="120" y="262" text-anchor="middle">n = 1,873</text>
 
-    <text class="cap" x="280" y="285" text-anchor="middle">non-empty baseline</text>
-    <text class="sub" x="280" y="302" text-anchor="middle">n = 154 (8.2%)</text>
+    <text class="cap" x="290" y="244" text-anchor="middle">non-empty baseline</text>
+    <text class="sub" x="290" y="262" text-anchor="middle">n = 154 (8.2% of test)</text>
 
-    <text class="cap" x="450" y="285" text-anchor="middle">held-out source</text>
-    <text class="sub" x="450" y="302" text-anchor="middle">n = 15</text>
+    <text class="cap" x="460" y="244" text-anchor="middle">held-out source</text>
+    <text class="sub" x="460" y="262" text-anchor="middle">n = 15 · directional</text>
   </g>
 
-  <text x="400" y="423" text-anchor="middle" class="subtitle">
+  <text x="400" y="425" text-anchor="middle" class="subtitle">
     Full-set win rate is inflated by baseline budget exhaustion (91.8% empty outputs).
   </text>
-  <text x="400" y="442" text-anchor="middle" class="subtitle">
-    The non-empty subset is the cleaner doctrine-knowledge signal.
+  <text x="400" y="445" text-anchor="middle" class="subtitle">
+    Non-empty subset is the cleaner doctrine-knowledge signal.
   </text>
 </svg>
