@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 440" role="img" aria-labelledby="t d">
+  <title id="t">Kodlu lazer işaretleme ve güdümlü mühimmat</title>
+  <desc id="d">TOYGUN kodlu darbeyle hedefi "boyar"; enerji saçılır; aynı PRF koduna ayarlı mühimmatın kadran (quadrant) arayıcısı yansıyan noktaya kilitlenir. Sağ alttaki kesit: nokta merkezden saparsa kadran dedektörü hangi yöne dönüleceğini hesaplar. NATO STANAG 3733 birlikte çalışabilirliği sağlar.</desc>
+
+  <style><![CDATA[
+    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-main { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-sub  { font: 400 10.5px ui-monospace, monospace; fill: #71717a; }
+    .annot { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+    .panel { fill: none; stroke: #e4e4e7; stroke-width: 1; }
+
+    .frame-toygun { fill: #ecfdf5; stroke: #10b981; stroke-width: 2; }
+    .frame-muh   { fill: #fef3c7; stroke: #fcd34d; stroke-width: 1.5; }
+
+    .laser-down { stroke: #f59e0b; stroke-width: 3; fill: none; opacity: 0;
+                  animation: lin 0.5s ease 0.4s forwards, loop 7s infinite; }
+    @keyframes lin { to { opacity: 1; } }
+
+    .laser-pulse { stroke: #f59e0b; stroke-width: 2.5; fill: none; opacity: 0;
+                   animation: pulse 1.2s ease-in-out 1.2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 0; } 50% { opacity: 1; } }
+
+    .scatter-line { stroke: #fb923c; stroke-width: 1.5; fill: none; opacity: 0;
+                    animation: sin 0.5s ease 1.0s forwards, loop 7s infinite; }
+    @keyframes sin { to { opacity: 1; } }
+
+    .seeker-line { stroke: #16a34a; stroke-width: 2; fill: none; stroke-dasharray: 5 4; opacity: 0;
+                   animation: kin 0.5s ease 1.5s forwards, loop 7s infinite; }
+    @keyframes kin { to { opacity: 1; } }
+
+    @keyframes loop { 0%,80%,100% { opacity: 1 } 85%,95% { opacity: 0.1 } }
+
+    .ground { stroke: #a1a1aa; stroke-width: 1; }
+    .quad-line { stroke: #71717a; stroke-width: 1; }
+    .spot-off { fill: #ea580c; }
+  ]]></style>
+
+  <text class="title" x="400" y="28" text-anchor="middle">İşaretleme — kodlu lazer + güdümlü mühimmat</text>
+
+  <g transform="translate(60, 70)">
+    <rect class="frame-toygun" x="0" y="0" width="130" height="56" rx="8"/>
+    <text class="label-main" x="65" y="24" text-anchor="middle">TOYGUN</text>
+    <text class="label-sub"  x="65" y="42" text-anchor="middle">gösterici</text>
+  </g>
+
+  <line class="laser-down" x1="190" y1="98" x2="380" y2="280" marker-end="url(#tipL)"/>
+  <text class="label-sub" fill="#f59e0b" x="265" y="170">kodlu darbe (PRF)</text>
+
+  <line class="laser-pulse" x1="225" y1="135" x2="245" y2="155"/>
+  <line class="laser-pulse" x1="265" y1="170" x2="285" y2="190" style="animation-delay: 1.3s"/>
+  <line class="laser-pulse" x1="305" y1="205" x2="325" y2="225" style="animation-delay: 1.4s"/>
+
+  <line class="ground" x1="60" y1="285" x2="740" y2="285"/>
+
+  <circle class="spot-off" cx="380" cy="285" r="6"/>
+  <text class="label-sub" x="380" y="305" text-anchor="middle" fill="#ea580c">hedef noktası</text>
+
+  <line class="scatter-line" x1="380" y1="280" x2="350" y2="220"/>
+  <line class="scatter-line" x1="380" y1="280" x2="380" y2="210"/>
+  <line class="scatter-line" x1="380" y1="280" x2="430" y2="220"/>
+  <line class="scatter-line" x1="380" y1="280" x2="470" y2="240"/>
+
+  <g transform="translate(490, 50)">
+    <text class="label-sub" x="50" y="0" text-anchor="middle">güdümlü mühimmat</text>
+    <rect class="frame-muh" x="38" y="10" width="24" height="80" rx="3"/>
+    <line stroke="#71717a" stroke-width="1" x1="50" y1="90" x2="50" y2="110"/>
+    <text class="label-sub" x="78" y="65">kadran arayıcı</text>
+  </g>
+
+  <line class="seeker-line" x1="540" y1="155" x2="385" y2="280" marker-end="url(#tipS)"/>
+  <text class="label-sub" fill="#16a34a" x="475" y="225">kilitlenir</text>
+
+  <g transform="translate(580, 220)">
+    <rect class="panel" x="-5" y="-5" width="140" height="140" rx="8" fill="#fafafa"/>
+    <text class="label-sub" x="65" y="11" text-anchor="middle">kadran dedektörü</text>
+
+    <circle cx="65" cy="65" r="50" fill="none" stroke="#a1a1aa" stroke-width="1"/>
+    <line class="quad-line" x1="15" y1="65"  x2="115" y2="65"/>
+    <line class="quad-line" x1="65" y1="15"  x2="65"  y2="115"/>
+
+    <circle class="spot-off" cx="86" cy="46" r="4">
+      <animate attributeName="cx" values="86;52;86" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="46;78;46" dur="3s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <g transform="translate(60, 360)">
+    <rect class="panel" x="0" y="0" width="680" height="58" rx="8" fill="#fef3c7"/>
+    <text class="label-main" x="20" y="22" letter-spacing="0.06em">STANDART VE DALGA BOYLARI</text>
+    <text class="annot" x="20" y="44">Kod kümesi NATO <tspan font-family="ui-monospace, monospace" font-weight="700">STANAG 3733</tspan> ile standartlaştırılır. TOYGUN: <tspan font-family="ui-monospace, monospace" font-weight="700">1064 nm</tspan> muharebe · <tspan font-family="ui-monospace, monospace" font-weight="700">1570 nm</tspan> göze güvenli (eğitim/atış sahası).</text>
+  </g>
+
+  <defs>
+    <marker id="tipL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="tipS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#16a34a"/>
+    </marker>
+  </defs>
+</svg>

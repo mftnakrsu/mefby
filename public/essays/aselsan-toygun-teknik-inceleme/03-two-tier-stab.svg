@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" role="img" aria-labelledby="t d">
+  <title id="t">İki katmanlı stabilizasyon — kaba + ince kontrol</title>
+  <desc id="d">Bozulma (titreşim + manevra) jiroskoplar tarafından ölçülür; bilgi iki paralel düzeltme yoluna gider. Mekanik gimbal kaba ve yavaş düzeltmeyi yapar, hızlı yönlendirme aynası (FSM) ince ve hızlı düzeltmeyi yapar. İkisi birleşince mikro-radyan seviyesinde kararlı bir bakış hattı (LOS) üretir.</desc>
+
+  <style><![CDATA[
+    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-main { font: 600 13px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-sub  { font: 400 11px ui-monospace, monospace; fill: #71717a; }
+    .annot      { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+    .legend     { font: 500 11px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+
+    .frame-dis   { fill: #f4f4f5; stroke: #d4d4d8; stroke-width: 1.5; }
+    .frame-meas  { fill: #eff6ff; stroke: #93c5fd; stroke-width: 1.5; }
+    .frame-mech  { fill: #ecfdf5; stroke: #6ee7b7; stroke-width: 1.5; }
+    .frame-fsm   { fill: #fef3c7; stroke: #fcd34d; stroke-width: 1.5; }
+    .frame-out   { fill: #ecfdf5; stroke: #10b981; stroke-width: 2; }
+
+    .arrow { stroke: #71717a; stroke-width: 1.5; fill: none; }
+    .arrow-cmd { stroke: #d4d4d8; stroke-width: 1.2; fill: none; stroke-dasharray: 4 3; }
+
+    .fade { opacity: 0; animation: in 0.5s ease forwards; }
+    .a1 { animation-delay: 0.2s; }
+    .a2 { animation-delay: 0.7s; }
+    .a3a { animation-delay: 1.1s; }
+    .a3b { animation-delay: 1.4s; }
+    .a4 { animation-delay: 1.8s; }
+
+    @keyframes in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+
+    .osc { animation: shake 1.5s ease-in-out infinite; transform-origin: center; }
+    @keyframes shake {
+      0%, 100% { transform: translateY(0) }
+      25% { transform: translateY(-2px) }
+      75% { transform: translateY(2px) }
+    }
+  ]]></style>
+
+  <text class="title" x="400" y="28" text-anchor="middle">Stabilizasyon — kaba + ince iki katman</text>
+
+  <g class="fade a1 osc" transform="translate(60, 170)">
+    <rect class="frame-dis" x="0" y="0" width="140" height="60" rx="8"/>
+    <text class="label-main" x="70" y="26" text-anchor="middle">Bozulma</text>
+    <text class="label-sub" x="70" y="44" text-anchor="middle">titreşim + manevra</text>
+  </g>
+
+  <path class="arrow fade a2" d="M 200 200 L 235 200" marker-end="url(#a)"/>
+
+  <g class="fade a2" transform="translate(240, 170)">
+    <rect class="frame-meas" x="0" y="0" width="135" height="60" rx="8"/>
+    <text class="label-main" x="67.5" y="26" text-anchor="middle">Jiroskoplar</text>
+    <text class="label-sub" x="67.5" y="44" text-anchor="middle">bozulmayı ölçer</text>
+  </g>
+
+  <path class="arrow fade a3a" d="M 375 195 Q 420 195, 440 110 Q 450 80, 480 80" marker-end="url(#a)"/>
+  <text class="label-sub fade a3a" x="395" y="135" text-anchor="middle">kaba</text>
+
+  <path class="arrow fade a3b" d="M 375 205 Q 420 205, 440 290 Q 450 320, 480 320" marker-end="url(#a)"/>
+  <text class="label-sub fade a3b" x="395" y="280" text-anchor="middle">ince</text>
+
+  <g class="fade a3a" transform="translate(480, 50)">
+    <rect class="frame-mech" x="0" y="0" width="200" height="60" rx="8"/>
+    <text class="label-main" x="100" y="26" text-anchor="middle">Mekanik gimbal</text>
+    <text class="label-sub" x="100" y="44" text-anchor="middle">kaba · büyük açı · yavaş</text>
+  </g>
+
+  <g class="fade a3b" transform="translate(480, 290)">
+    <rect class="frame-fsm" x="0" y="0" width="200" height="60" rx="8"/>
+    <text class="label-main" x="100" y="26" text-anchor="middle">Optik ayna (FSM)</text>
+    <text class="label-sub" x="100" y="44" text-anchor="middle">ince · küçük açı · hızlı</text>
+  </g>
+
+  <g class="fade a4" transform="translate(710, 170)">
+    <rect class="frame-out" x="0" y="0" width="60" height="60" rx="8"/>
+    <text class="label-main" x="30" y="26" text-anchor="middle">Kararlı</text>
+    <text class="label-sub" x="30" y="44" text-anchor="middle">LOS</text>
+  </g>
+
+  <path class="arrow fade a4" d="M 680 80  Q 720 80, 720 170" marker-end="url(#a)"/>
+  <path class="arrow fade a4" d="M 680 320 Q 720 320, 720 230" marker-end="url(#a)"/>
+
+  <path class="arrow-cmd fade a3a" d="M 590 5 L 590 50"/>
+  <text class="label-sub fade a3a" x="595" y="20">yönel komutu</text>
+
+  <text x="400" y="395" text-anchor="middle" class="annot">35 km'de mikro-radyan seviyesinde bir titreşim bile görüntüyü bulanıklaştırır ve lazer noktasını kaydırır.</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#71717a"/>
+    </marker>
+  </defs>
+</svg>

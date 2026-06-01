@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" role="img" aria-labelledby="t d">
+  <title id="t">Geolocation — açıdan koordinata</title>
+  <desc id="d">TOYGUN bir hedefi merkezlediğinde dört bilgi bilinir: bakış hattı açıları, uçağın GPS konumu, uçağın IMU/INS tutumu (yaw-pitch-roll) ve lazer eğik menzili (R). Bu dördü bir vektör çözücüde birleşip hedefin enlem-boylam-irtifasını verir.</desc>
+
+  <style><![CDATA[
+    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-main { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-sub  { font: 400 10.5px ui-monospace, monospace; fill: #71717a; }
+    .annot { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+
+    .frame-in   { fill: #eff6ff; stroke: #93c5fd; stroke-width: 1.5; }
+    .frame-proc { fill: #ecfdf5; stroke: #6ee7b7; stroke-width: 1.5; }
+    .frame-out  { fill: #ecfdf5; stroke: #10b981; stroke-width: 2; }
+
+    .uak { fill: #18181b; }
+    .ground { stroke: #a1a1aa; stroke-width: 1; stroke-dasharray: 3 3; }
+    .axis-v { stroke: #d4d4d8; stroke-width: 1; stroke-dasharray: 4 3; }
+    .los { stroke: #10b981; stroke-width: 2.5; stroke-dasharray: 300; stroke-dashoffset: 300;
+           animation: trace 1.6s cubic-bezier(0.4,0,0.2,1) 0.4s forwards, loop 8s infinite; }
+    .hedef { fill: #ea580c; opacity: 0; animation: pin 0.5s ease 2.0s forwards, loop 8s infinite; }
+
+    @keyframes trace { to { stroke-dashoffset: 0; } }
+    @keyframes pin { to { opacity: 1; } }
+    @keyframes loop { 0%,86%,100% { opacity: 1 } 88%,98% { opacity: 0.2 } }
+
+    .arrow { stroke: #71717a; stroke-width: 1.5; fill: none; }
+  ]]></style>
+
+  <text class="title" x="400" y="28" text-anchor="middle">Açıdan koordinata — vektör geometrisiyle hedef konumu</text>
+
+  <g transform="translate(60, 60)">
+    <rect fill="none" stroke="#e4e4e7" x="0" y="0" width="680" height="240" rx="10"/>
+
+    <g transform="translate(120, 50)">
+      <polygon class="uak" points="0,0 -10,18 10,18"/>
+    </g>
+    <text class="label-sub" x="120" y="38" text-anchor="middle">uçak (GPS+IMU)</text>
+
+    <line class="axis-v" x1="120" y1="70" x2="120" y2="195"/>
+    <text class="label-sub" x="113" y="138" text-anchor="end">irtifa</text>
+
+    <line class="ground" x1="60" y1="195" x2="640" y2="195"/>
+    <text class="label-sub" x="630" y="212" text-anchor="end">yer düzlemi</text>
+
+    <line class="los" x1="125" y1="70" x2="560" y2="195"/>
+    <text class="label-sub" x="280" y="115" fill="#047857">R = eğik menzil</text>
+    <text class="label-sub" x="160" y="86">bakış açısı</text>
+
+    <circle class="hedef" cx="560" cy="195" r="6"/>
+    <text class="label-sub" fill="#ea580c" x="560" y="217" text-anchor="middle">hedef</text>
+  </g>
+
+  <g transform="translate(60, 330)">
+    <rect class="frame-in" x="0" y="0" width="220" height="60" rx="8"/>
+    <text class="label-main" x="110" y="24" text-anchor="middle">Girdiler</text>
+    <text class="label-sub" x="110" y="42" text-anchor="middle">GPS · IMU · LOS açıları · R</text>
+  </g>
+
+  <path class="arrow" d="M 280 360 L 320 360" marker-end="url(#a)"/>
+
+  <g transform="translate(325, 330)">
+    <rect class="frame-proc" x="0" y="0" width="160" height="60" rx="8"/>
+    <text class="label-main" x="80" y="24" text-anchor="middle">Koordinat çözücü</text>
+    <text class="label-sub" x="80" y="42" text-anchor="middle">vektör geometrisi</text>
+  </g>
+
+  <path class="arrow" d="M 485 360 L 525 360" marker-end="url(#a)"/>
+
+  <g transform="translate(530, 330)">
+    <rect class="frame-out" x="0" y="0" width="210" height="60" rx="8"/>
+    <text class="label-main" x="105" y="24" text-anchor="middle">Hedef koordinatı</text>
+    <text class="label-sub" x="105" y="42" text-anchor="middle">enlem · boylam · irtifa</text>
+  </g>
+
+  <text x="400" y="430" text-anchor="middle" class="annot">Hassasiyet zincirin en zayıf halkasıyla sınırlıdır: GPS, INS, gimbal enkoderi, lazer hatası birikir.</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#71717a"/>
+    </marker>
+  </defs>
+</svg>

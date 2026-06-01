@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 470" role="img" aria-labelledby="t d">
+  <title id="t">MWIR soğutmalı dedektör kesiti ve elektromanyetik tayfta MWIR bandı</title>
+  <desc id="d">Optik gelen IR'yi vakum Dewar içindeki odak düzlem dizisine (FPA) odaklar; entegre Stirling soğutucu çipi soğuk parmak üzerinden yaklaşık 77 K'e indirir; okuma devresi (ROIC) sinyali sayısal görüntüye çevirir. Altta TOYGUN'un çalıştığı MWIR bandı (≈3-5 μm) elektromanyetik tayf üzerinde işaretlidir.</desc>
+
+  <style><![CDATA[
+    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-main { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-sub  { font: 400 10.5px ui-monospace, monospace; fill: #71717a; }
+    .scale      { font: 400 10.5px ui-monospace, monospace; fill: #a1a1aa; }
+    .annot      { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+    .band-label { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: #ffffff; }
+    .panel-title { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: #18181b; letter-spacing: 0.06em; text-transform: uppercase; }
+
+    .dewar { fill: none; stroke: #93c5fd; stroke-width: 1.5; stroke-dasharray: 5 3; }
+    .optic { fill: #e4e4e7; stroke: #a1a1aa; }
+    .fpa { fill: #ea580c; }
+    .roic { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.5; }
+    .cooler { fill: #f4f4f5; stroke: #d4d4d8; stroke-width: 1.5; }
+    .cold-finger { stroke: #93c5fd; stroke-width: 4; }
+
+    .ray { stroke: #ea580c; stroke-width: 1.5; fill: none; opacity: 0; animation: fade 0.5s ease 0.4s forwards, loop 6s infinite; }
+    @keyframes fade { to { opacity: 1; } }
+    @keyframes loop { 0%,86%,100% { opacity: 1 } 88%,98% { opacity: 0.3 } }
+
+    .band-mwir { fill: #ea580c; animation: glow 4s ease-in-out infinite; }
+    @keyframes glow { 0%,100% { opacity: 1 } 50% { opacity: 0.7 } }
+
+    .band-other { fill: #d4d4d8; }
+  ]]></style>
+
+  <text class="title" x="400" y="28" text-anchor="middle">MWIR soğutmalı dedektör — kesit + tayftaki yeri</text>
+
+  <text class="panel-title" x="40" y="65" >SOĞUTMALI FPA</text>
+
+  <g transform="translate(40, 90)">
+    <text class="label-sub" x="20" y="85">gelen IR</text>
+    <line class="ray" x1="20" y1="100" x2="125" y2="180"/>
+    <line class="ray" x1="20" y1="120" x2="125" y2="185"/>
+    <line class="ray" x1="20" y1="140" x2="125" y2="190"/>
+    <line class="ray" x1="20" y1="160" x2="125" y2="195"/>
+
+    <ellipse class="optic" cx="125" cy="135" rx="14" ry="58"/>
+    <text class="label-sub" x="125" y="225" text-anchor="middle">optik</text>
+
+    <line class="ray" x1="125" y1="135" x2="290" y2="170"/>
+    <line class="ray" x1="125" y1="135" x2="290" y2="180"/>
+    <line class="ray" x1="125" y1="135" x2="290" y2="190"/>
+
+    <rect class="dewar" x="225" y="65" width="190" height="160" rx="12"/>
+    <text class="label-sub" x="320" y="58">VAKUM DEWAR</text>
+
+    <rect class="fpa" x="280" y="155" width="20" height="55" rx="2"/>
+    <text class="label-sub" x="290" y="148" text-anchor="middle">FPA 1280×1024</text>
+
+    <line class="cold-finger" x1="290" y1="225" x2="290" y2="275"/>
+    <text class="label-sub" x="298" y="252">soğuk parmak</text>
+
+    <rect class="cooler" x="240" y="275" width="100" height="50" rx="6"/>
+    <text class="label-main" x="290" y="297" text-anchor="middle">Stirling soğutucu</text>
+    <text class="label-sub" x="290" y="313" text-anchor="middle">hedef ≈ 77 K</text>
+
+    <rect class="roic" x="430" y="155" width="130" height="55" rx="6"/>
+    <text class="label-main" x="495" y="178" text-anchor="middle">Okuma (ROIC)</text>
+    <text class="label-sub" x="495" y="194" text-anchor="middle">sinyal → veri</text>
+
+    <line stroke="#a1a1aa" stroke-width="1.5" x1="305" y1="183" x2="425" y2="183" marker-end="url(#a)"/>
+    <text class="label-sub" x="580" y="187">sayısal görüntü</text>
+  </g>
+
+  <text class="panel-title" x="40" y="370">KIZILÖTESİ TAYF →</text>
+
+  <g transform="translate(40, 385)">
+    <rect class="band-other" x="0"   y="0" width="120" height="36" rx="2"/>
+    <rect class="band-other" x="125" y="0" width="110" height="36" rx="2"/>
+    <rect class="band-other" x="240" y="0" width="120" height="36" rx="2"/>
+    <rect class="band-mwir"  x="365" y="0" width="160" height="36" rx="2"/>
+    <rect class="band-other" x="530" y="0" width="190" height="36" rx="2"/>
+
+    <text class="scale" x="60"  y="55" text-anchor="middle">Görünür</text>
+    <text class="scale" x="180" y="55" text-anchor="middle">NIR</text>
+    <text class="scale" x="300" y="55" text-anchor="middle">SWIR</text>
+    <text class="band-label" x="445" y="22" text-anchor="middle">MWIR 3-5 μm</text>
+    <text class="scale" x="625" y="55" text-anchor="middle">LWIR</text>
+
+    <text class="annot" x="445" y="-8" text-anchor="middle" fill="#ea580c" font-weight="600">TOYGUN burada görür</text>
+  </g>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#a1a1aa"/>
+    </marker>
+  </defs>
+</svg>
