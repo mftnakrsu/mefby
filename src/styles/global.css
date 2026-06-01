@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "katex/dist/katex.min.css";
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #ffffff;
+  color: #52525b;
+  font-family: var(--font-sans);
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #ffffff; }
+::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 2px; }
+
+a { transition: color 0.15s; }

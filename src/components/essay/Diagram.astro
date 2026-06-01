@@ -1,0 +1,25 @@
+---
+interface Props {
+  number?: number | string;
+  caption?: string;
+  source?: string;
+  class?: string;
+}
+const { number, caption, source, class: className = '' } = Astro.props;
+const hasFooter = number != null || caption || source;
+---
+
+<figure class={`my-10 rounded-xl border border-zinc-200 bg-white ${className}`}>
+  <div class="p-6">
+    <slot />
+  </div>
+  {hasFooter && (
+    <figcaption class="px-6 py-3 border-t border-zinc-100 bg-zinc-50/40 text-xs text-zinc-600">
+      {number != null && <span class="font-mono text-zinc-400 mr-2">Fig {number}</span>}
+      {caption}
+      {source && (
+        <a href={source} class="ml-2 underline text-zinc-400">source</a>
+      )}
+    </figcaption>
+  )}
+</figure>
