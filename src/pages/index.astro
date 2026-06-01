@@ -1,14 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { EXPERIENCE, PROJECTS, PROFILE, PUBLICATIONS, EDUCATION, CERTIFICATIONS, WRITING } from '../../constants';
+import { getCollection } from 'astro:content';
 
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 60);
-}
+const essays = (await getCollection('essays', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 ---
 
 <Layout>
@@ -98,9 +94,9 @@ function slugify(title: string): string {
         <h2 class="text-xs font-medium text-zinc-600 uppercase tracking-widest mb-8">Writing</h2>
 
         <div class="space-y-4 mb-8">
-          {WRITING.filter(p => p.content).map((post) => (
+          {essays.map(essay => (
             <a
-              href={`/essays/${slugify(post.title)}`}
+              href={`/essays/${essay.slug}`}
               class="block w-full text-left p-5 rounded-xl border border-zinc-200 hover:border-emerald-300 hover:shadow-[0_4px_24px_-8px_rgba(16,185,129,0.25)] bg-gradient-to-br from-white to-emerald-50/20 transition-all group"
             >
               <div class="flex items-baseline justify-between gap-4 mb-2.5">
@@ -108,13 +104,13 @@ function slugify(title: string): string {
                   <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                   New essay
                 </span>
-                <span class="text-[11px] text-zinc-400 font-mono shrink-0">{post.date}</span>
+                <span class="text-[11px] text-zinc-400 font-mono shrink-0">{essay.data.date.toISOString().slice(0,10)}</span>
               </div>
               <h3 class="text-[15px] text-zinc-900 font-medium leading-snug mb-2 group-hover:text-emerald-700 transition-colors">
-                {post.title}
+                {essay.data.title}
               </h3>
-              {post.summary && (
-                <p class="text-[13px] text-zinc-500 leading-relaxed mb-3">{post.summary}</p>
+              {essay.data.description && (
+                <p class="text-[13px] text-zinc-500 leading-relaxed mb-3">{essay.data.description}</p>
               )}
               <span class="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 group-hover:text-emerald-600 transition-colors">
                 Read essay
@@ -125,7 +121,7 @@ function slugify(title: string): string {
         </div>
 
         <div class="space-y-4">
-          {WRITING.filter(p => !p.content && p.url).map((post) => (
+          {WRITING.filter(p => p.url).map(post => (
             <a href={post.url} target="_blank" rel="noreferrer" class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 group">
               <span class="text-sm text-zinc-500 group-hover:text-emerald-600 transition-colors">{post.title}</span>
               <span class="text-xs text-zinc-400 font-mono shrink-0">{post.date}</span>
