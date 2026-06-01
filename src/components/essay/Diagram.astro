@@ -9,12 +9,14 @@ const { number, caption, source, class: className = '' } = Astro.props;
 const hasFooter = number != null || caption || source;
 ---
 
-<figure class={`my-10 rounded-xl border border-zinc-200 bg-white ${className}`}>
-  <div class="p-6">
+<figure
+  class={`my-10 rounded-xl border border-zinc-200 bg-white md:-mx-8 lg:-mx-24 xl:-mx-40 ${className}`}
+>
+  <div class="p-4 sm:p-6">
     <slot />
   </div>
   {hasFooter && (
-    <figcaption class="px-6 py-3 border-t border-zinc-100 bg-zinc-50/40 text-xs text-zinc-600">
+    <figcaption class="px-4 sm:px-6 py-3 border-t border-zinc-100 bg-zinc-50/40 text-xs text-zinc-600 leading-relaxed">
       {number != null && <span class="font-mono text-zinc-400 mr-2">Fig {number}</span>}
       {caption}
       {source && (
