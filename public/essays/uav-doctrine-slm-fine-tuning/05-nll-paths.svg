@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="t d">
+  <title id="t">Two different ways to measure NLL on the same checkpoint</title>
+  <desc id="d">Diagram showing that the same v4 checkpoint scored against the same validation/test data produces 1.28 NLL via the training-time forward/backward path and 1.99 NLL via the inference-time compute_logprobs path — a 0.71-nat gap. Picking a checkpoint on training-time val_nll is picking on the wrong measurement.</desc>
+
+  <style><![CDATA[
+    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .subtitle { font: 400 12px ui-sans-serif, system-ui, sans-serif; fill: #71717a; }
+    .node { fill: #ffffff; stroke: #e4e4e7; stroke-width: 1; }
+    .node-label { font: 500 12px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .node-sub   { font: 400 10px ui-monospace, monospace; fill: #a1a1aa; }
+    .path-label { font: 500 11px ui-monospace, monospace; fill: #71717a; }
+    .nll-num    { font: 700 26px ui-sans-serif, system-ui, sans-serif; }
+    .nll-cap    { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #71717a; }
+    .gap-label  { font: 600 13px ui-monospace, monospace; fill: #dc2626; }
+
+    .arrow-top { stroke: #71717a; stroke-width: 1.5; fill: none;
+                 stroke-dasharray: 280; stroke-dashoffset: 280;
+                 animation: trace 1.8s cubic-bezier(0.4,0,0.2,1) 0.4s forwards, loop 12s infinite; }
+    .arrow-bot { stroke: #71717a; stroke-width: 1.5; fill: none;
+                 stroke-dasharray: 280; stroke-dashoffset: 280;
+                 animation: trace 1.8s cubic-bezier(0.4,0,0.2,1) 0.4s forwards, loop 12s infinite; }
+    .num-top { opacity: 0; animation: pop 0.4s ease 2.0s forwards, loop 12s infinite; }
+    .num-bot { opacity: 0; animation: pop 0.4s ease 2.0s forwards, loop 12s infinite; }
+    .gap     { opacity: 0; animation: pop 0.4s ease 2.6s forwards, loop 12s infinite; }
+
+    @keyframes trace { to { stroke-dashoffset: 0; } }
+    @keyframes pop   { to { opacity: 1; } }
+    @keyframes loop  { 0%,90%,100% { opacity: 1 } 92%,98% { opacity: 0.3 } }
+  ]]></style>
+
+  <text class="title" x="400" y="34" text-anchor="middle">Same checkpoint, same data, two different NLLs</text>
+  <text class="subtitle" x="400" y="54" text-anchor="middle">v4 LoRA, validation set · 0.71-nat gap between measurement paths</text>
+
+  <g transform="translate(60, 195)">
+    <rect class="node" x="0" y="-30" width="160" height="60" rx="8"/>
+    <text class="node-label" x="80" y="-8" text-anchor="middle">v4 checkpoint</text>
+    <text class="node-sub"   x="80" y="10" text-anchor="middle">step 994</text>
+    <text class="node-sub"   x="80" y="24" text-anchor="middle">+ val set</text>
+  </g>
+
+  <path class="arrow-top" d="M 220 175 Q 320 100, 460 100" marker-end="url(#ar)"/>
+  <text class="path-label" x="340" y="92" text-anchor="middle">training-time forward/backward</text>
+  <text class="path-label" x="340" y="106" text-anchor="middle">(optimizer val_nll)</text>
+
+  <path class="arrow-bot" d="M 220 215 Q 320 290, 460 290" marker-end="url(#ar)"/>
+  <text class="path-label" x="340" y="285" text-anchor="middle">inference-time compute_logprobs</text>
+  <text class="path-label" x="340" y="299" text-anchor="middle">(Tinker sampling API)</text>
+
+  <g transform="translate(460, 70)" class="num-top">
+    <rect class="node" x="0" y="0" width="180" height="80" rx="8"/>
+    <text class="nll-num" x="90" y="36" text-anchor="middle" fill="#10b981">1.28</text>
+    <text class="nll-cap" x="90" y="58" text-anchor="middle">val_nll</text>
+  </g>
+
+  <g transform="translate(460, 260)" class="num-bot">
+    <rect class="node" x="0" y="0" width="180" height="80" rx="8"/>
+    <text class="nll-num" x="90" y="36" text-anchor="middle" fill="#dc2626">1.99</text>
+    <text class="nll-cap" x="90" y="58" text-anchor="middle">test NLL</text>
+  </g>
+
+  <g class="gap" transform="translate(660, 200)">
+    <line stroke="#dc2626" stroke-width="1.5" stroke-dasharray="3 3" x1="0" y1="-90" x2="0" y2="100"/>
+    <text class="gap-label" x="14" y="0">Δ = 0.71 nats</text>
+    <text class="path-label" x="14" y="18" fill="#a1a1aa">enough to flip a</text>
+    <text class="path-label" x="14" y="32" fill="#a1a1aa">checkpoint selection</text>
+  </g>
+
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#71717a"/>
+    </marker>
+  </defs>
+
+  <text x="400" y="425" text-anchor="middle" class="subtitle">
+    Never pick a checkpoint on training-time val NLL. Re-score every candidate via the inference path.
+  </text>
+</svg>
