@@ -1,100 +1,56 @@
-# mefby
-# Mefby - Professional Portfolio
+# Mefby — Personal Portfolio
 
-Modern, AI-powered portfolio website showcasing Meftun Akarsu's expertise in AI Engineering, Data Science, and Autonomous Systems.
+Personal portfolio and essays for Meftun Akarsu (AI Engineer).
 
-## 🚀 Features
+## Tech Stack
 
-- **Modern UI/UX**: Dark theme with smooth animations and responsive design
-- **Portfolio Sections**: About, Services, Experience, Projects, and Contact
-- **Interactive Stats**: Visual representation of technical skills
-- **Client Showcase**: Display of career experience and freelance collaborations
+- **Astro 5** (static-by-default rendering)
+- **TypeScript** (strict)
+- **Tailwind CSS 4** (CSS-native theme config)
+- **MDX** essays via Astro Content Collections (type-safe frontmatter)
+- **Vercel** deployment
 
-## 🛠️ Tech Stack
+## Local development
 
-- **React 19** with TypeScript
-- **Vite** for build tooling
-- **Tailwind CSS** for styling
-- **Recharts** for data visualization
-
-## 📦 Installation
-
-1. Clone the repository:
-```bash
-git clone <your-repo-url>
-cd mefby
-```
-
-2. Install dependencies:
 ```bash
 npm install
+npm run dev    # → http://localhost:3000
+npm run build  # production build (runs astro check + astro build)
+npm run preview
 ```
 
-3. Run the development server:
-```bash
-npm run dev
-```
+No environment variables required.
 
-The app will be available at `http://localhost:3000`
+## Writing an essay
 
-## 🏗️ Build
+1. Create `src/content/essays/<slug>.mdx` with frontmatter:
 
-To build for production:
+   ```mdx
+   ---
+   title: "Your Essay Title"
+   description: "One-line summary."
+   date: 2026-06-15
+   tags: ["RAG", "LLMs"]
+   ---
 
-```bash
-npm run build
-```
+   Your prose here.
 
-The production build will be in the `dist` directory.
-
-## 🚢 Deployment
-
-### Deploy to Vercel
-
-1. **Push to GitHub**:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git branch -M main
-   git remote add origin https://github.com/yourusername/mefby.git
-   git push -u origin main
+   <Diagram number="1" caption="Figure caption">
+     <img src="/essays/<slug>/figure.svg" alt="" />
+   </Diagram>
    ```
 
-2. **Deploy on Vercel**:
-   - Go to [Vercel](https://vercel.com)
-   - Sign in with your GitHub account
-   - Click "New Project"
-   - Import your GitHub repository
-   - Click "Deploy"
+2. Drop any figures into `public/essays/<slug>/`.
 
-### Manual Deployment
+3. The essay appears at `/essays/<slug>`, gets listed at `/essays`, and joins the RSS feed.
 
-You can also deploy the `dist` folder to any static hosting service:
-- Netlify
-- GitHub Pages
-- AWS S3 + CloudFront
-- Any other static hosting provider
+## Deployment
 
-## 🎨 Customization
+Vercel auto-detects Astro from `astro.config.mjs`. Push to `main` → production deploy.
 
-Edit the following files to customize the portfolio:
+## Author
 
-- `constants.ts` - Update profile, services, experience, projects, and skills
-- `components/` - Modify React components for UI changes
-- `index.html` - Update meta tags and global styles
-
-## 📄 License
-
-This project is private and proprietary.
-
-## 👤 Author
-
-**Meftun Akarsu**
+Meftun Akarsu
 - Email: meftunakrsu@gmail.com
 - LinkedIn: [meftunakarsu](https://www.linkedin.com/in/meftunakarsu/)
 - GitHub: [mftnakrsu](https://github.com/mftnakrsu)
-
----
-
-Built with ❤️ using React, TypeScript, and Vite
