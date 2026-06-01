@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" role="img" aria-labelledby="t d">
+  <title id="t">TOYGUN bakış alanı (field of regard)</title>
+  <desc id="d">Solda üstten görünüm: azimutta tam tur (360°) sürekli tarama. Sağda yandan görünüm: elevasyonda dik aşağıdan (yaklaşık -90°) hafif yukarıya (+10°) kadar süren kapsama sektörü. Açısal değerler temsilîdir; tam değerler uçak entegrasyonuna göre değişir.</desc>
+
+  <style><![CDATA[
+    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .panel-title { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: #18181b; letter-spacing: 0.06em; text-transform: uppercase; }
+    .label { font: 500 11px ui-monospace, monospace; fill: #71717a; }
+    .annot { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: #047857; }
+    .axis { stroke: #d4d4d8; stroke-width: 1; }
+    .circle { fill: none; stroke: #10b981; stroke-width: 2; }
+    .center { fill: #10b981; }
+    .horizon { stroke: #a1a1aa; stroke-width: 1; stroke-dasharray: 3 3; }
+    .ray { stroke: #10b981; stroke-width: 2; fill: none; }
+    .arc-az { fill: none; stroke: #f59e0b; stroke-width: 2.5; stroke-linecap: round; }
+    .sweep-cone { fill: rgba(16,185,129,0.12); stroke: #10b981; stroke-width: 1; }
+    .rotor { animation: rotate 4s linear infinite; transform-origin: center; transform-box: fill-box; }
+    @keyframes rotate { to { transform: rotate(360deg); } }
+    .pulse { animation: pulse 3s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+    @keyframes pulse { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(0.4); } }
+  ]]></style>
+
+  <text class="title" x="400" y="28" text-anchor="middle">Bakış alanı: azimutta 360°, elevasyonda −90° … +10°</text>
+
+  <g transform="translate(70, 80)">
+    <rect fill="none" stroke="#e4e4e7" x="0" y="0" width="320" height="280" rx="10"/>
+    <text class="panel-title" x="160" y="28" text-anchor="middle">ÜSTTEN GÖRÜNÜM</text>
+
+    <g transform="translate(160, 165)">
+      <circle class="circle" cx="0" cy="0" r="90"/>
+      <line class="axis" x1="-110" y1="0" x2="-95" y2="0"/>
+      <line class="axis" x1="95"  y1="0" x2="110" y2="0"/>
+      <line class="axis" x1="0" y1="-110" x2="0" y2="-95"/>
+      <line class="axis" x1="0" y1="95" x2="0" y2="110"/>
+
+      <g class="rotor">
+        <path class="arc-az" d="M 0 -90 A 90 90 0 0 1 64 64" marker-end="url(#tipA)"/>
+      </g>
+
+      <circle class="center" cx="0" cy="0" r="4"/>
+      <line class="axis" x1="0" y1="0" x2="80" y2="0"/>
+    </g>
+    <text class="annot" x="160" y="265" text-anchor="middle">Azimut: 360° sürekli</text>
+  </g>
+
+  <g transform="translate(410, 80)">
+    <rect fill="none" stroke="#e4e4e7" x="0" y="0" width="320" height="280" rx="10"/>
+    <text class="panel-title" x="160" y="28" text-anchor="middle">YANDAN GÖRÜNÜM</text>
+
+    <line class="horizon" x1="60" y1="155" x2="290" y2="155"/>
+    <text class="label" x="280" y="150" text-anchor="end">0° ufuk</text>
+
+    <circle class="center" cx="100" cy="155" r="5"/>
+
+    <g class="pulse">
+      <path class="sweep-cone" d="M 100 155 L 290 142 L 290 250 L 100 250 z"/>
+    </g>
+
+    <line class="ray" x1="100" y1="155" x2="290" y2="142" marker-end="url(#tipB)"/>
+    <line class="ray" x1="100" y1="155" x2="100" y2="245" marker-end="url(#tipB)"/>
+
+    <text class="label" x="290" y="135" text-anchor="end">+10°</text>
+    <text class="label" x="110" y="245">−90°</text>
+  </g>
+
+  <text x="400" y="395" text-anchor="middle" class="annot" fill="#71717a" font-weight="400">Hava-yer (aşağı bakış geniş) ve hava-hava (ufuk üstü +10°) profilleri birlikte desteklenir.</text>
+
+  <defs>
+    <marker id="tipA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="tipB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#10b981"/>
+    </marker>
+  </defs>
+</svg>

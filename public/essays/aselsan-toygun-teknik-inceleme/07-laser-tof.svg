@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" role="img" aria-labelledby="t d">
+  <title id="t">Lazer uçuş süresi (time-of-flight) mesafe ölçümü</title>
+  <desc id="d">TOYGUN kısa bir lazer darbesi gönderir; hedeften dönen yankıyı ölçer; gidiş-dönüş süresinden mesafeyi d = c·t/2 bağıntısıyla hesaplar. Pasif kameranın aksine bu işlem aktiftir; ancak ışın dar ve atış kısa sürelidir.</desc>
+
+  <style><![CDATA[
+    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-main { font: 600 13px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-sub  { font: 400 11px ui-monospace, monospace; fill: #71717a; }
+    .annot { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+    .formula { font: 700 26px ui-monospace, monospace; fill: #047857; }
+    .formula-sub { font: 400 11px ui-monospace, monospace; fill: #71717a; }
+    .scale-num { font: 600 12px ui-monospace, monospace; fill: #18181b; }
+
+    .frame-toygun { fill: #ecfdf5; stroke: #10b981; stroke-width: 2; }
+    .frame-hedef { fill: #fef3c7; stroke: #fcd34d; stroke-width: 1.5; }
+    .axis { stroke: #a1a1aa; stroke-width: 1; }
+    .ray-go { stroke: #f59e0b; stroke-width: 2.5; fill: none; stroke-dasharray: 600; stroke-dashoffset: 600;
+              animation: go 1.4s linear forwards, loop 6s infinite; }
+    .ray-back { stroke: #f59e0b; stroke-width: 2; fill: none; stroke-dasharray: 5 5; opacity: 0;
+                animation: backfade 0.6s ease 1.8s forwards, loop 6s infinite; }
+    @keyframes go { to { stroke-dashoffset: 0; } }
+    @keyframes backfade { to { opacity: 1; } }
+    @keyframes loop { 0%,80%,100% { opacity: 1 } 85%,95% { opacity: 0.1 } }
+
+    .formula-box { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.5; }
+  ]]></style>
+
+  <text class="title" x="400" y="28" text-anchor="middle">Lazer mesafe ölçümü — uçuş süresi (time of flight)</text>
+
+  <g transform="translate(60, 130)">
+    <rect class="frame-toygun" x="0" y="0" width="130" height="56" rx="8"/>
+    <text class="label-main" x="65" y="24" text-anchor="middle">TOYGUN</text>
+    <text class="label-sub"  x="65" y="42" text-anchor="middle">mesafe ölçer</text>
+  </g>
+
+  <g transform="translate(610, 130)">
+    <rect class="frame-hedef" x="0" y="0" width="130" height="56" rx="8"/>
+    <text class="label-main" x="65" y="24" text-anchor="middle">Hedef</text>
+    <text class="label-sub"  x="65" y="42" text-anchor="middle">yansıtıcı</text>
+  </g>
+
+  <line class="ray-go" x1="190" y1="148" x2="610" y2="148" marker-end="url(#tipGo)"/>
+  <text class="label-sub" fill="#f59e0b" x="400" y="142" text-anchor="middle">giden lazer darbesi</text>
+
+  <line class="ray-back" x1="610" y1="168" x2="190" y2="168" marker-end="url(#tipBack)"/>
+  <text class="label-sub" fill="#f59e0b" x="400" y="186" text-anchor="middle">dönen yankı</text>
+
+  <line class="axis" x1="190" y1="110" x2="610" y2="110"/>
+  <line class="axis" x1="190" y1="100" x2="190" y2="120"/>
+  <line class="axis" x1="610" y1="100" x2="610" y2="120"/>
+  <text class="scale-num" x="400" y="100" text-anchor="middle">d (eğik menzil, ≤ 35 km)</text>
+
+  <g transform="translate(110, 240)">
+    <rect class="formula-box" x="0" y="0" width="220" height="100" rx="10"/>
+    <text class="annot" x="110" y="22" text-anchor="middle" font-weight="600" letter-spacing="0.06em">UÇUŞ SÜRESİ BAĞINTISI</text>
+    <text class="formula" x="110" y="62" text-anchor="middle">d = c · t / 2</text>
+    <text class="formula-sub" x="110" y="84" text-anchor="middle">c = ışık hızı · t = gidiş-dönüş süresi</text>
+  </g>
+
+  <g transform="translate(370, 240)">
+    <rect fill="none" stroke="#e4e4e7" x="0" y="0" width="360" height="100" rx="10"/>
+    <text class="annot" x="180" y="22" text-anchor="middle" font-weight="600" letter-spacing="0.06em">ÖRNEK</text>
+    <text class="annot" x="180" y="48" text-anchor="middle">35 km için <tspan font-family="ui-monospace, monospace" font-weight="700">t ≈ 233 μs</tspan></text>
+    <text class="annot" x="180" y="68" text-anchor="middle">233 ns zamanlama hatası → 35 m mesafe sapması</text>
+    <text class="annot" x="180" y="86" text-anchor="middle">nanosaniye sınıfı saatleme zorunlu</text>
+  </g>
+
+  <defs>
+    <marker id="tipGo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="tipBack" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+</svg>

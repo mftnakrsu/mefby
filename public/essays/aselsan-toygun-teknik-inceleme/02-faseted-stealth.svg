@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 430" role="img" aria-labelledby="t d">
+  <title id="t">Eğri yüzey vs fasetli yüzey — radar yansıma karşılaştırması</title>
+  <desc id="d">Eğri (kubbe biçimli) yüzey gelen radar dalgasını geniş bir açı yelpazesinde geri saçarak yüksek radar yansıması üretir. Fasetli yüzey ise dalgayı aynasal yansımayla tek bir yöne sapıtır, radar kaynağına enerji geri döndürmez.</desc>
+
+  <style><![CDATA[
+    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .panel-title { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: #18181b; letter-spacing: 0.06em; text-transform: uppercase; }
+    .label { font: 500 11px ui-monospace, monospace; fill: #71717a; }
+    .annot { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+    .panel { fill: none; stroke: #e4e4e7; stroke-width: 1; }
+    .panel-bad { fill: #fef2f2; }
+    .panel-good { fill: #ecfdf5; }
+
+    .ray-in    { stroke: #71717a; stroke-width: 1.5; fill: none; opacity: 0; animation: rin 0.6s ease 0.3s forwards, loop 8s infinite; }
+    .ray-bad   { stroke: #dc2626; stroke-width: 1.5; fill: none; opacity: 0; animation: rin 0.4s ease forwards, loop 8s infinite; }
+    .b1 { animation-delay: 1.0s, 1.0s; }
+    .b2 { animation-delay: 1.2s, 1.2s; }
+    .b3 { animation-delay: 1.4s, 1.4s; }
+    .b4 { animation-delay: 1.6s, 1.6s; }
+    .b5 { animation-delay: 1.8s, 1.8s; }
+
+    .ray-in2   { stroke: #71717a; stroke-width: 1.5; fill: none; opacity: 0; animation: rin 0.6s ease 0.3s forwards, loop 8s infinite; }
+    .ray-good  { stroke: #10b981; stroke-width: 2; fill: none; opacity: 0; animation: rin 0.6s ease 1.2s forwards, loop 8s infinite; }
+
+    .surf-bad  { fill: none; stroke: #ef4444; stroke-width: 2.5; }
+    .surf-good { fill: none; stroke: #10b981; stroke-width: 2.5; }
+
+    @keyframes rin { to { opacity: 1; } }
+    @keyframes loop { 0%,86%,100% { opacity: 1 } 88%,98% { opacity: 0 } }
+  ]]></style>
+
+  <text class="title" x="400" y="30" text-anchor="middle">Eğri yüzey radarı geri saçar · düz fasetler enerjiyi sapıtır</text>
+
+  <g transform="translate(40, 60)">
+    <rect class="panel panel-bad" x="0" y="0" width="340" height="320" rx="10"/>
+    <text class="panel-title" x="170" y="28" text-anchor="middle">EĞRİ KUBBE → GERİ SAÇMA</text>
+
+    <text class="label" x="290" y="80">radar</text>
+    <line class="ray-in" x1="290" y1="92" x2="180" y2="230" marker-end="url(#dot)"/>
+
+    <path class="surf-bad" d="M 50 280 Q 170 180 290 280" />
+
+    <line class="ray-bad b1" x1="170" y1="225" x2="80" y2="80" marker-end="url(#tipR)"/>
+    <line class="ray-bad b2" x1="170" y1="225" x2="140" y2="60" marker-end="url(#tipR)"/>
+    <line class="ray-bad b3" x1="170" y1="225" x2="200" y2="55" marker-end="url(#tipR)"/>
+    <line class="ray-bad b4" x1="170" y1="225" x2="260" y2="70" marker-end="url(#tipR)"/>
+    <line class="ray-bad b5" x1="170" y1="225" x2="300" y2="100" marker-end="url(#tipR)"/>
+
+    <text class="annot" x="170" y="300" text-anchor="middle" fill="#dc2626">Enerji geniş açıyla kaynağa döner</text>
+  </g>
+
+  <g transform="translate(420, 60)">
+    <rect class="panel panel-good" x="0" y="0" width="340" height="320" rx="10"/>
+    <text class="panel-title" x="170" y="28" text-anchor="middle">DÜZ FASET → SAPMA</text>
+
+    <text class="label" x="60" y="80">radar</text>
+    <line class="ray-in2" x1="68" y1="92" x2="180" y2="225" marker-end="url(#dot)"/>
+
+    <line class="surf-good" x1="70"  y1="280" x2="120" y2="270"/>
+    <line class="surf-good" x1="135" y1="268" x2="185" y2="248"/>
+    <line class="surf-good" x1="200" y1="244" x2="250" y2="236"/>
+    <line class="surf-good" x1="265" y1="234" x2="310" y2="230"/>
+
+    <line class="ray-good" x1="180" y1="225" x2="310" y2="100" marker-end="url(#tipG)"/>
+
+    <text class="annot" x="170" y="300" text-anchor="middle" fill="#047857">Enerji başka yöne sapar, dönmez</text>
+  </g>
+
+  <text x="400" y="410" text-anchor="middle" class="annot">Aynı sebepten F-35'in EOTS'i de gövdeye fasetli safir pencereyle gömülüdür. Çizim yansıma yönünü temsil eder; ölçekli değildir.</text>
+
+  <defs>
+    <marker id="tipR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#dc2626"/>
+    </marker>
+    <marker id="tipG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#10b981"/>
+    </marker>
+    <marker id="dot" viewBox="-2 -2 4 4" refX="0" refY="0" markerWidth="4" markerHeight="4">
+      <circle r="2" fill="#71717a"/>
+    </marker>
+  </defs>
+</svg>

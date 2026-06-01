@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 410" role="img" aria-labelledby="t d">
+  <title id="t">Görüntü işleme hattı ve kapalı çevrim takip</title>
+  <desc id="d">Üstte ham FPA verisinden takip kapısına uzanan işlem hattı: ham → NUC + piksel kalibrasyon → iyileştirme → tespit (IRST/ATR) → takip kapısı. Altta kapalı takip çevrimi: takip kapısı hedef merkezinden sapmayı ölçer, hatayı gimbal/FSM'ye geri besler, LOS düzeltilir.</desc>
+
+  <style><![CDATA[
+    .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-main { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: #18181b; }
+    .label-sub  { font: 400 10.5px ui-monospace, monospace; fill: #71717a; }
+    .label-loop { font: 500 11px ui-sans-serif, system-ui, sans-serif; fill: #f59e0b; }
+    .annot { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #52525b; }
+
+    .frame-raw   { fill: #f4f4f5; stroke: #d4d4d8; stroke-width: 1.5; }
+    .frame-clean { fill: #ecfdf5; stroke: #6ee7b7; stroke-width: 1.5; }
+    .frame-fb    { fill: #fef3c7; stroke: #fcd34d; stroke-width: 1.5; }
+
+    .arrow { stroke: #71717a; stroke-width: 1.5; fill: none; }
+    .arrow-fb { stroke: #f59e0b; stroke-width: 1.5; fill: none; }
+
+    .fade { opacity: 0; animation: in 0.5s ease forwards; }
+    .a1 { animation-delay: 0.2s; }
+    .a2 { animation-delay: 0.6s; }
+    .a3 { animation-delay: 1.0s; }
+    .a4 { animation-delay: 1.4s; }
+    .a5 { animation-delay: 1.8s; }
+    .af { animation-delay: 2.4s; }
+    @keyframes in { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+
+    .flow-loop { animation: dash 4s linear infinite; stroke-dasharray: 6 4; }
+    @keyframes dash { to { stroke-dashoffset: -100; } }
+  ]]></style>
+
+  <text class="title" x="400" y="28" text-anchor="middle">İşlem hattı + kapalı çevrim takip</text>
+
+  <g class="fade a1" transform="translate(30, 80)">
+    <rect class="frame-raw" x="0" y="0" width="120" height="64" rx="8"/>
+    <text class="label-main" x="60" y="26" text-anchor="middle">Ham FPA</text>
+    <text class="label-sub"  x="60" y="44" text-anchor="middle">sensör çıktısı</text>
+  </g>
+  <path class="arrow fade a2" d="M 152 112 L 178 112" marker-end="url(#a)"/>
+
+  <g class="fade a2" transform="translate(180, 80)">
+    <rect class="frame-clean" x="0" y="0" width="120" height="64" rx="8"/>
+    <text class="label-main" x="60" y="26" text-anchor="middle">NUC + piksel</text>
+    <text class="label-sub"  x="60" y="44" text-anchor="middle">kalibrasyon</text>
+  </g>
+  <path class="arrow fade a3" d="M 302 112 L 328 112" marker-end="url(#a)"/>
+
+  <g class="fade a3" transform="translate(330, 80)">
+    <rect class="frame-clean" x="0" y="0" width="120" height="64" rx="8"/>
+    <text class="label-main" x="60" y="26" text-anchor="middle">İyileştirme</text>
+    <text class="label-sub"  x="60" y="44" text-anchor="middle">histogram · sis</text>
+  </g>
+  <path class="arrow fade a4" d="M 452 112 L 478 112" marker-end="url(#a)"/>
+
+  <g class="fade a4" transform="translate(480, 80)">
+    <rect class="frame-clean" x="0" y="0" width="120" height="64" rx="8"/>
+    <text class="label-main" x="60" y="26" text-anchor="middle">Tespit</text>
+    <text class="label-sub"  x="60" y="44" text-anchor="middle">IRST · ATR</text>
+  </g>
+  <path class="arrow fade a5" d="M 602 112 L 628 112" marker-end="url(#a)"/>
+
+  <g class="fade a5" transform="translate(630, 80)">
+    <rect class="frame-clean" x="0" y="0" width="140" height="64" rx="8"/>
+    <text class="label-main" x="70" y="26" text-anchor="middle">Takip kapısı</text>
+    <text class="label-sub"  x="70" y="44" text-anchor="middle">kilit · izleme</text>
+  </g>
+
+  <text class="label-loop fade af" x="700" y="184" text-anchor="end">ölçülen hata</text>
+
+  <text class="label-loop fade af" x="555" y="232" text-anchor="middle" letter-spacing="0.06em">KAPALI ÇEVRİM</text>
+
+  <g class="fade af" transform="translate(330, 250)">
+    <rect class="frame-fb" x="0" y="0" width="180" height="56" rx="8"/>
+    <text class="label-main" x="90" y="24" text-anchor="middle">Gimbal / FSM</text>
+    <text class="label-sub" x="90" y="40" text-anchor="middle">hatayı sıfırla</text>
+  </g>
+
+  <path class="arrow-fb flow-loop fade af" d="M 700 144 Q 720 230, 510 278" marker-end="url(#ao)"/>
+
+  <path class="arrow-fb flow-loop fade af" d="M 330 278 Q 60 250, 90 144" marker-end="url(#ao)"/>
+
+  <text class="label-loop fade af" x="100" y="190" text-anchor="start">LOS düzeltme</text>
+
+  <text x="400" y="365" text-anchor="middle" class="annot">Hedef sürekli görüntü merkezinde tutulur; çıktı (video + iz verisi) görev bilgisayarına aktarılır.</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#71717a"/>
+    </marker>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+</svg>
