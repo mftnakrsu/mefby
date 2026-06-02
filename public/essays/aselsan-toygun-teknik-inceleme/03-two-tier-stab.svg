@@ -25,9 +25,9 @@
     .a3b { animation-delay: 1.4s; }
     .a4 { animation-delay: 1.8s; }
 
-    @keyframes in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes in { from { opacity: 0; } to { opacity: 1; } }
 
-    .osc { animation: shake 1.5s ease-in-out infinite; transform-origin: center; }
+    .osc { animation: shake 1.5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
     @keyframes shake {
       0%, 100% { transform: translateY(0) }
       25% { transform: translateY(-2px) }
@@ -37,10 +37,12 @@
 
   <text class="title" x="400" y="28" text-anchor="middle">Stabilizasyon — kaba + ince iki katman</text>
 
-  <g class="fade a1 osc" transform="translate(60, 170)">
-    <rect class="frame-dis" x="0" y="0" width="140" height="60" rx="8"/>
-    <text class="label-main" x="70" y="26" text-anchor="middle">Bozulma</text>
-    <text class="label-sub" x="70" y="44" text-anchor="middle">titreşim + manevra</text>
+  <g class="fade a1" transform="translate(60, 170)">
+    <g class="osc">
+      <rect class="frame-dis" x="0" y="0" width="140" height="60" rx="8"/>
+      <text class="label-main" x="70" y="26" text-anchor="middle">Bozulma</text>
+      <text class="label-sub" x="70" y="44" text-anchor="middle">titreşim + manevra</text>
+    </g>
   </g>
 
   <path class="arrow fade a2" d="M 200 200 L 235 200" marker-end="url(#a)"/>

@@ -24,7 +24,7 @@
     .st4 { animation-delay: 2.4s, 2.4s; }
     .st5 { animation-delay: 3.1s, 3.1s; }
     .st6 { animation-delay: 3.8s, 3.8s; }
-    @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes in { from { opacity: 0; } to { opacity: 1; } }
     @keyframes loop { 0%,92%,100% { opacity: 1 } 94%,99% { opacity: 0.3 } }
 
     .banner { fill: #ecfdf5; stroke: #6ee7b7; stroke-width: 1; }
@@ -50,7 +50,7 @@
     <rect class="frame-pasif" x="0" y="0" width="360" height="50" rx="8"/>
     <circle class="num-bg" cx="30" cy="25" r="16"/>
     <text class="step-num" x="30" y="30" text-anchor="middle">2</text>
-    <text class="label-main" x="60" y="22">Tespit & tanı</text>
+    <text class="label-main" x="60" y="22">Tespit &amp; tanı</text>
     <text class="label-sub"  x="60" y="40">ATR hedefi bulur ve sınıflandırır</text>
   </g>
   <path class="arrow step st3" d="M 400 255 L 400 270" marker-end="url(#a)"/>
@@ -68,7 +68,7 @@
     <rect class="frame-pasif" x="0" y="0" width="360" height="50" rx="8"/>
     <circle class="num-bg" cx="30" cy="25" r="16"/>
     <text class="step-num" x="30" y="30" text-anchor="middle">4</text>
-    <text class="label-main" x="60" y="22">Menzil & koordinat</text>
+    <text class="label-main" x="60" y="22">Menzil &amp; koordinat</text>
     <text class="label-sub"  x="60" y="40">lazer + GPS/IMU → hedef konumu</text>
   </g>
   <path class="arrow step st5" d="M 400 405 L 400 420" marker-end="url(#a)"/>

@@ -21,7 +21,7 @@
     .s5 { animation-delay: 2.2s; }
     .s6 { animation-delay: 2.7s; }
     .s7 { animation-delay: 3.2s; }
-    @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes in { from { opacity: 0; } to { opacity: 1; } }
     .loop-group { animation: loop 16s infinite 3.7s; }
     @keyframes loop { 0%,90%,100% { opacity: 1 } 92%,98% { opacity: 0.2 } }
   ]]></style>

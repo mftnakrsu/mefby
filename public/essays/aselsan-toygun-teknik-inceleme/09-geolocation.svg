@@ -17,7 +17,7 @@
     .axis-v { stroke: #d4d4d8; stroke-width: 1; stroke-dasharray: 4 3; }
     .los { stroke: #10b981; stroke-width: 2.5; stroke-dasharray: 300; stroke-dashoffset: 300;
            animation: trace 1.6s cubic-bezier(0.4,0,0.2,1) 0.4s forwards, loop 8s infinite; }
-    .hedef { fill: #ea580c; opacity: 0; animation: pin 0.5s ease 2.0s forwards, loop 8s infinite; }
+    .hedef { fill: #ea580c; opacity: 0; animation: pin 0.5s ease 2.0s forwards, loop 8s 2.5s infinite; }
 
     @keyframes trace { to { stroke-dashoffset: 0; } }
     @keyframes pin { to { opacity: 1; } }

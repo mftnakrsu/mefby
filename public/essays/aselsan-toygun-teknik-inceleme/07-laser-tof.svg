@@ -17,7 +17,7 @@
     .ray-go { stroke: #f59e0b; stroke-width: 2.5; fill: none; stroke-dasharray: 600; stroke-dashoffset: 600;
               animation: go 1.4s linear forwards, loop 6s infinite; }
     .ray-back { stroke: #f59e0b; stroke-width: 2; fill: none; stroke-dasharray: 5 5; opacity: 0;
-                animation: backfade 0.6s ease 1.8s forwards, loop 6s infinite; }
+                animation: backfade 0.6s ease 1.8s forwards, loop 6s 2.4s infinite; }
     @keyframes go { to { stroke-dashoffset: 0; } }
     @keyframes backfade { to { opacity: 1; } }
     @keyframes loop { 0%,80%,100% { opacity: 1 } 85%,95% { opacity: 0.1 } }
