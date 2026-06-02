@@ -4,7 +4,7 @@ export const PROFILE: CompanyProfile = {
   name: "Mefby",
   owner: "Meftun Akarsu",
   title: "AI Engineer | M.Sc. AI Engineering @ THI",
-  bio: "I work on AI systems \u2014 LLM infrastructure, computer vision, and data pipelines. Currently at Turkish Aerospace deploying models on NVIDIA H200 GPUs in air-gapped environments. Before that, three years at Bosch building inspection systems, anomaly detection, and process automation for manufacturing. Studying AI Engineering at TH Ingolstadt, Germany.",
+  bio: "I work on AI systems \u2014 LLM infrastructure, computer vision, and data pipelines. Three years at Bosch building inspection systems, anomaly detection, and process automation for manufacturing. Studying AI Engineering at TH Ingolstadt, Germany.",
   email: "meftunakrsu@gmail.com",
   location: "Ankara, Turkiye",
   socials: {
@@ -42,13 +42,6 @@ export const SERVICES: Service[] = [
 ];
 
 export const EMPLOYERS: Client[] = [
-  {
-    id: 1,
-    name: "Turkish Aerospace (TAI)",
-    industry: "Aerospace & Defense",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/a/a3/Tai_logo.png",
-    link: "https://www.tusas.com"
-  },
   {
     id: 2,
     name: "RADIAITE",
@@ -112,14 +105,6 @@ export const CLIENTS: Client[] = [...EMPLOYERS, ...FREELANCE_CLIENTS];
 
 export const EXPERIENCE: Experience[] = [
   {
-    id: 1,
-    role: "Expert AI Engineer",
-    company: "Turkish Aerospace Industries (TAI)",
-    period: "Feb 2026 - Present",
-    description: "Deploying LLM infrastructure on NVIDIA H200 GPUs, serving Qwen 3.5 (27B) locally. Built air-gapped RAG systems, multi-agent pipelines with CrewAI for Jira automation, and user-facing AI interfaces via Open WebUI.",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/a/a3/Tai_logo.png"
-  },
-  {
     id: 2,
     role: "AI Developer",
     company: "RADIAITE",
@@ -162,13 +147,6 @@ export const EXPERIENCE: Experience[] = [
 ];
 
 export const PROJECTS: Project[] = [
-  {
-    id: 1,
-    title: "Air-Gapped LLM Infrastructure",
-    description: "LLM infrastructure on NVIDIA H200 GPUs at Turkish Aerospace. Serves Qwen 3.5 (27B) locally with multi-agent CrewAI pipelines and Open WebUI for organization-wide access.",
-    tags: ["LLM", "NVIDIA H200", "CrewAI", "Open WebUI", "RAG"],
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=600"
-  },
   {
     id: 2,
     title: "Odigos \u2014 RAG Chatbot",
