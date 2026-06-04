@@ -1,0 +1,75 @@
+---
+title: "When the Co-Pilot Is an Algorithm: How Europe Plans to Make Aviation AI Trustworthy"
+description: "The EU's aviation regulator just published a 239-page concept paper on making AI safe enough to fly. From artificial narrow intelligence to learning assurance and the W-shape process — the mental model behind trustworthy aviation AI, explained for non-experts."
+date: 2026-06-04
+tags: ["EASA", "Aviation", "AI Safety", "Trustworthy AI", "Machine Learning", "EU AI Act"]
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+
+Autopilots have flown aircraft for decades, but they only ever do exactly what a human spelled out, rule by rule, in code. The new wave of artificial intelligence is a different animal. It doesn't follow rules so much as *infer* them: show it enough examples and it works out its own way to reach an answer. That is precisely what makes modern AI so powerful — and precisely what makes a safety regulator break out in a cold sweat. How do you bless a system as "safe to fly" when you can't trace every decision back to a line someone wrote?
+
+That single question is the reason the **European Union Aviation Safety Agency (EASA)** — Europe's aviation safety regulator, which decides whether aircraft, equipment and operations may fly — published a 239-page document with the unglamorous title *Concept Paper: guidance for artificial intelligence applications*. This post walks through just its opening chapters — the foreword and introduction — where EASA lays out the whole mental model before the technical fine print.
+
+<Diagram caption="Decades of cockpit automation still run on rules a human wrote line by line. EASA's concept paper is about what changes when the system starts inferring its own answers instead. Photo: Airbus A400M flight deck by Oleg V. Belyakov, CC BY-SA 3.0." source="https://commons.wikimedia.org/wiki/File:Airbus_A400M_cockpit_ILA2014.jpg">
+  <img src="/essays/easa-ai-concept-paper/01-cockpit.jpg" alt="The glass cockpit of an Airbus A400M, with multiple multifunction displays and fly-by-wire sidesticks" class="w-full rounded-lg" />
+</Diagram>
+
+## A regulator thinking out loud
+
+The first thing to understand is what a **concept paper** actually is: a document where a regulator reasons in public about rules that don't exist yet. It is *not* binding law. EASA is blunt about this — the paper offers "actionable objectives" but "does not constitute at this stage definitive or detailed guidance." Think of it as a weather forecast for regulation: a way for aircraft makers and airlines to see roughly what's coming and start preparing years before anything becomes mandatory. Formally, it feeds EASA's **AI Roadmap 2.0** and a future rulemaking task (the formal process by which EASA turns ideas into binding regulation) with the bureaucratic codename RMT.0742.
+
+It also doesn't exist in isolation. In 2024 the EU passed the **AI Act**, Europe's sweeping horizontal law on artificial intelligence. Its Article 108 specifically orders EASA to fold the Act's requirements into aviation rules. So this paper is EASA's attempt to keep two trains — aviation safety regulation and the new AI Act — running on the same track.
+
+## Which "AI" are we even talking about?
+
+"AI" is a slippery word, so EASA narrows it down. The scope is **artificial narrow intelligence** — systems built for specific jobs in defined contexts — and explicitly *not* artificial general intelligence (the hypothetical do-anything machine), which the paper says "falls outside the boundaries of what can presently be certified." Within that, EASA borrows the AI Act's definition: a system that, for some objective, *infers* from its inputs how to generate outputs like predictions, recommendations or decisions.
+
+The paper then splits the field in two. There's **machine learning** (also called data-driven AI) — algorithms whose performance improves as they're exposed to data, the family that includes deep neural networks. And there's **logic- and knowledge-based AI**, or **LKB** (also called symbolic AI) — systems that reach conclusions by reasoning over an explicit base of logic and knowledge, the way an old-school expert system would. EASA is careful here: an LKB system is *not* the same as a traditional rule-based program where every rule is hand-written into the code and fully traceable. In an LKB system, a reasoning engine *draws its own inferences* from the knowledge base — which is exactly why it needs new oversight. The two families can also be combined (**hybrid AI**), and today's generative large language models (**LLMs**) are explicitly pulled into scope as well — all of it counts.
+
+## Four levels of letting go
+
+The heart of the framework is a ladder describing how much the human hands over to the machine. EASA defines **four AI levels**, each with sub-levels, and the boundaries between them are drawn on a beautifully simple logic: *is a person directly in the loop → who actually makes the decision → how much authority has been handed to the AI?*
+
+- **Level 0 — low automation.** The AI quietly gathers and analyses information in the background, with no direct user interaction and no link to a decision. Think of a system that crunches sensor data but never speaks to anyone.
+- **Level 1 — assistance to human.** Now a person is directly interacting with the AI, but the human still makes every call. It splits into **1A** (human *augmentation* — sharpening what the person perceives) and **1B** (helping the person *choose* a decision or action). The line between Level 0 and Level 1 is purely about whether an end user is in direct contact; the decision-making is identical.
+- **Level 2 — human–AI cooperation or collaboration.** Here the AI can *automatically select and carry out* actions — but the human keeps full control and can override at any moment, in a "progressive release of partial authority." **2A** is *cooperation* (the AI helps you reach *your* goal); **2B** is *collaboration*, also called human–AI teaming, where human and machine pursue a *shared* goal together.
+- **Level 3 — advanced automation.** Now the AI is given *full* authority to make and carry out decisions. In **3A** a human still safeguards it from a distance, able to step in when alerted; in **3B** there's no human involved at all.
+
+The jump that matters most is from Level 2 to Level 3: at 2B the human is still predominantly responsible, while at Level 3 the AI is genuinely in charge.
+
+## Turning the dials: criticality and proportionality
+
+A chatbot suggesting a maintenance tip and an AI flying an aircraft are wildly different risks, so EASA refuses to treat them the same. Every AI (sub)system gets an **assurance level** reflecting how much damage a failure could cause — a **DAL** (development assurance level) for airworthiness and air operations, or a **SWAL** (software assurance level) for air traffic management and air navigation services (ATM/ANS). The whole rulebook then scales to match, a principle EASA calls **proportionality**: the more critical the application, the deeper the scrutiny. Picture a set of dials that you turn up for a life-or-death function and down for a trivial one.
+
+<Diagram caption="Air traffic management and air navigation services (ATM/ANS) sit squarely in scope — one of the domains where EASA assigns a software assurance level (SWAL). Photo: control tower at Beijing Daxing International Airport by Benlisquare, CC BY-SA 4.0." source="https://commons.wikimedia.org/wiki/File:Air_traffic_control_at_Beijing_Daxing_International_Airport.jpg">
+  <img src="/essays/easa-ai-concept-paper/02-atc.jpg" alt="The control tower at Beijing Daxing International Airport with airliners parked on the apron" class="w-full rounded-lg" />
+</Diagram>
+
+## The four building blocks of trustworthy AI
+
+EASA organises everything into four **building blocks** — the load-bearing pillars of its trustworthy-AI framework — and the way they fit together reveals the paper's core philosophy.
+
+The first block, **trustworthiness analysis**, is the entry gate. It is *always* performed in its full spectrum, no matter the application: you characterise the AI, then run safety/risk, security and ethics assessments before anything else — and it also seeds the *continuous* risk assessment that keeps watching the system long after it enters service. The other three blocks are the dials from earlier — their depth flexes with the application's criticality and level. They are **AI assurance** (proving the AI itself was built right), **human-centred design** (making sure people and machines interact safely), and **AI safety risk mitigation** (managing the dangers of advanced automation that runs with little or no direct human oversight).
+
+Underneath sits the philosophy that ties it all together. EASA openly admits you can *never* exhaustively verify every behaviour of a learning or reasoning system — there are simply too many possible inputs. So the goal is not perfect proof but **bounded and managed uncertainty**: you can't chart every wave in the ocean, so instead you mark out exactly which waters you'll sail and put up guardrails for the rest.
+
+## The clever new ideas
+
+To make that philosophy work, the paper introduces several genuinely novel concepts.
+
+The biggest is **learning assurance** (and its sibling **LKB assurance**) — the recognition that, with AI, the burden of trust shifts *from the code to the data and knowledge*. Traditional software is judged by tracing every line back to a requirement. But an AI's behaviour comes from what it learned, so assurance pivots to the *correctness, completeness and representativeness* of the training data, scenarios or knowledge base — plus evidence the model generalises to situations it never saw. It's the difference between reading a student's brain and instead checking that they studied the right material and can pass an exam on fresh problems. (The same logic even opens a cautious door to off-the-shelf models like LLMs, under strict criticality limits and careful performance evaluation.)
+
+But if you can't trace behaviour to requirements, you need a stand-in. That's the **operational domain (OD)** and **operational design domain (ODD)** — a precise description of the conditions the AI is built to handle (the OD at system level, the ODD a finer-grained version at the AI level). EASA calls this OD/ODD pair a "proxy" for traceability: instead of "this output came from that rule," you get "this output happened inside the boundaries we declared the system could handle."
+
+To rebuild the development process around all this, EASA bends the classic engineering blueprint. Traditional assurance follows a **V-shape** (requirements down one side, verification up the other). AI gets a second V bolted on for the data side, producing a **W-shape**: the first V manages the data, scenarios and knowledge that shape the model; the second V handles the actual implementation. Wrapping the AI is a new architectural idea, the **AI constituent** — a flexible "box" that can hold a sliver of a component or a whole cluster of them, yet from the outside behaves like an ordinary part (an "item") so it slots neatly into existing aviation engineering practice. It's the messy AI sealed inside a tidy, standard-shaped cartridge.
+
+Then there's **explainability** — the ability of an AI to tell a human *enough* about how it reached a result. Crucially, this does not mean "show everything." Full transparency of a deep neural network would be useless to a pilot mid-flight. Instead the paper splits it in two: **operational explainability** (the right information, at the right level of detail, at the right moment, for the end user actually using the system) and **development explainability** (the deep technical view that engineers, certifiers and accident investigators need). The audience determines the explanation.
+
+On the human side, EASA carefully distinguishes **cooperation** (Level 2A — the AI works to help you reach *your* goal, like a smart power tool that does what you point it at) from **collaboration** (Level 2B — human and AI share a goal, share situation awareness, and communicate, like a genuine teammate). And for Level 3, where humans step back, it adds two new oversight ideas: **remote oversight**, where a person intervenes only when the system alerts them, and **delegated oversight**, where an independent "operational oversight system" is built to *emulate* the watchful human — both designed to satisfy the EU AI Act's Article 14 demand that AI remain under effective human oversight.
+
+Finally, a refreshingly optimistic idea: **net safety benefit**. Historically, certification only ever asked "what happens when this breaks?" — it gave no credit for the lives a system might *save*. EASA proposes flipping that: if an AI demonstrably makes operations safer overall, it can earn a one-level reduction in its required assurance level (within firm limits — never for the most catastrophic failure conditions, and never below a defined floor), judged by a dedicated EASA governance board. The paper also makes room for **service experience** — letting systems run in "shadow operations" to gather real-world data — and for keeping aviation's oversight of AI coherent with, rather than duplicating, the AI Act.
+
+## Why this matters
+
+Strip away the acronyms and the W-shapes, and this paper is really about a profession learning to say "yes" to a technology it doesn't yet fully understand — without lowering the bar that has made flying the safest way to travel. EASA's bet is that you tame AI not by demanding the impossible, but by *bounding* what the machine may do and scaling the scrutiny to the stakes. It is a deliberate balancing act between safety and innovation — and a quiet signal that the age of AI in the cockpit is no longer a question of *if*, but of *how carefully*.
