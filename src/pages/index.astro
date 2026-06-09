@@ -5,6 +5,39 @@ import { getCollection } from 'astro:content';
 
 const essays = (await getCollection('essays', ({ data }) => !data.draft && !data.isTranslation))
   .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+
+const elsewhere = WRITING.filter((p) => p.url);
+
+// Human-readable date: 2026-06-09 -> "Jun 9, 2026"
+const fmtDate = (d: Date) =>
+  d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+const fmtMaybe = (s: string) => {
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : fmtDate(d);
+};
+
+// Reading time from the raw markdown body (~200 wpm), counting prose rather than
+// MDX/JSX syntax (imports, <Diagram> blocks, fenced code, markdown punctuation).
+const readingTime = (body: string) => {
+  const words = body
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^import\s.+$/gm, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[#>*_`~\-\[\]()|]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean).length;
+  return Math.max(1, Math.round(words / 200));
+};
+
+// Every essay is bilingual; surface its languages EN-first regardless of canonical.
+const essayLangs = (lang: 'en' | 'tr', hasTranslation: boolean): string[] =>
+  hasTranslation ? ['EN', 'TR'] : [lang.toUpperCase()];
+
+// Drop language-marker tags (already shown by the language badge); keep 3 topics.
+const topicTags = (tags: string[]): string[] =>
+  tags
+    .filter((t) => !['english', 'türkçe', 'turkce', 'turkish'].includes(t.toLowerCase()))
+    .slice(0, 3);
 ---
 
 <Layout>
@@ -90,46 +123,103 @@ const essays = (await getCollection('essays', ({ data }) => !data.draft && !data
         </div>
       </section>
 
-      <section class="mb-20">
-        <h2 class="text-xs font-medium text-zinc-600 uppercase tracking-widest mb-8">Writing</h2>
+      <section class="mb-20" aria-labelledby="writing-heading">
+        <h2 id="writing-heading" class="text-xs font-medium text-zinc-600 uppercase tracking-widest mb-8">Writing</h2>
 
-        <div class="space-y-4 mb-8">
-          {essays.map(essay => (
-            <a
-              href={`/essays/${essay.slug}`}
-              class="block w-full text-left p-5 rounded-xl border border-zinc-200 hover:border-emerald-300 hover:shadow-[0_4px_24px_-8px_rgba(16,185,129,0.25)] bg-gradient-to-br from-white to-emerald-50/20 transition-all group"
-            >
-              <div class="flex items-baseline justify-between gap-4 mb-2.5">
-                <span class="inline-flex items-center gap-1.5 text-[10px] font-mono text-emerald-600 uppercase tracking-[0.18em]">
-                  <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  New essay
-                </span>
-                <span class="text-[11px] text-zinc-400 font-mono shrink-0">{essay.data.date.toISOString().slice(0,10)}</span>
-              </div>
-              <h3 class="text-[15px] text-zinc-900 font-medium leading-snug mb-2 group-hover:text-emerald-700 transition-colors">
-                {essay.data.title}
-              </h3>
-              {essay.data.description && (
-                <p class="text-[13px] text-zinc-500 leading-relaxed mb-3">{essay.data.description}</p>
-              )}
-              <span class="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 group-hover:text-emerald-600 transition-colors">
-                Read essay
-                <span class="group-hover:translate-x-0.5 transition-transform">&rarr;</span>
-              </span>
-            </a>
-          ))}
-        </div>
+        {/* Essays — refined editorial index, hairline-separated rows */}
+        {essays.length > 0 && (
+          <div>
+            <div class="flex items-center gap-3 mb-4">
+              <h3 class="text-[11px] font-medium text-zinc-400 uppercase tracking-widest">Essays</h3>
+              <span aria-hidden="true" class="h-px flex-1 bg-zinc-100"></span>
+            </div>
+            <ul class="border-t border-zinc-100">
+              {essays.map((essay, i) => {
+                const langs = essayLangs(essay.data.lang, !!essay.data.translationSlug);
+                const tags = topicTags(essay.data.tags);
+                const isNewest = i === 0;
+                return (
+                  <li class="border-b border-zinc-100">
+                    <a
+                      href={`/essays/${essay.slug}`}
+                      class={`group block py-5 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${isNewest ? '-ml-2 -mr-2 pl-3 pr-2 rounded-l-none border-l-2 border-emerald-300' : '-mx-2 px-2'}`}
+                    >
+                      <div class="flex items-baseline gap-2">
+                        <h4 class={`font-medium text-zinc-900 leading-snug group-hover:text-emerald-700 transition-colors ${isNewest ? 'text-base' : 'text-[15px]'}`}>
+                          {essay.data.title}
+                        </h4>
+                        {isNewest && (
+                          <span class="shrink-0 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-medium uppercase tracking-wider text-emerald-700">
+                            New<span class="sr-only"> — most recent essay</span>
+                          </span>
+                        )}
+                        <span aria-hidden="true" class="ml-auto pl-2 text-zinc-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all">&rarr;</span>
+                      </div>
 
-        <div class="space-y-4">
-          {WRITING.filter(p => p.url).map(post => (
-            <a href={post.url} target="_blank" rel="noreferrer" class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 group">
-              <span class="text-sm text-zinc-500 group-hover:text-emerald-600 transition-colors">{post.title}</span>
-              <span class="text-xs text-zinc-400 font-mono shrink-0">{post.date}</span>
-            </a>
-          ))}
-        </div>
-        <a href="https://medium.com/@meftunakarsu" target="_blank" rel="noreferrer" class="inline-block mt-6 text-xs text-zinc-400 hover:text-emerald-600 transition-colors">
-          all posts &rarr;
+                      <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-zinc-400">
+                        <time datetime={essay.data.date.toISOString().slice(0, 10)}>{fmtDate(essay.data.date)}</time>
+                        <span aria-hidden="true" class="text-zinc-300">&middot;</span>
+                        <span>{readingTime(essay.body)} min read</span>
+                        <span aria-hidden="true" class="text-zinc-300">&middot;</span>
+                        <span aria-label={`Available in ${langs.join(' and ')}`}>{langs.join(' · ')}</span>
+                      </div>
+
+                      {essay.data.description && (
+                        <p class="mt-2 text-[13px] leading-relaxed text-zinc-500 line-clamp-2">
+                          {essay.data.description}
+                        </p>
+                      )}
+
+                      {tags.length > 0 && (
+                        <ul class="mt-2.5 flex flex-wrap gap-x-1.5 gap-y-1" aria-label="Topics">
+                          {tags.map((tag) => (
+                            <li class="text-[10px] font-mono text-zinc-400 group-hover:text-emerald-600/80 transition-colors">#{tag}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* Elsewhere — external writing, an even lighter list */}
+        {elsewhere.length > 0 && (
+          <div>
+            <div class="flex items-center gap-3 mt-10 mb-4">
+              <h3 class="text-[11px] font-medium text-zinc-400 uppercase tracking-widest">Elsewhere</h3>
+              <span aria-hidden="true" class="h-px flex-1 bg-zinc-100"></span>
+            </div>
+            <ul class="space-y-3">
+              {elsewhere.map((post) => (
+                <li>
+                  <a
+                    href={post.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    class="group flex flex-col gap-0.5 -mx-2 px-2 py-1 rounded-lg sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                  >
+                    <span class="text-[13px] text-zinc-500 group-hover:text-emerald-700 transition-colors">
+                      {post.title}<span class="sr-only"> (opens in a new tab)</span>
+                    </span>
+                    <time datetime={post.date} class="shrink-0 text-[11px] font-mono text-zinc-400">{fmtMaybe(post.date)}</time>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <a
+          href="https://medium.com/@meftunakarsu"
+          target="_blank"
+          rel="noreferrer"
+          class="group mt-6 inline-flex items-center gap-1 rounded text-xs text-zinc-400 hover:text-emerald-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+        >
+          All posts on Medium<span class="sr-only"> (opens in a new tab)</span>
+          <span aria-hidden="true" class="group-hover:translate-x-0.5 transition-transform">&rarr;</span>
         </a>
       </section>
 
