@@ -8,85 +8,81 @@ tags: ["RAG", "LLM", "Retrieval", "Embeddings", "AI", "NLP"]
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles — Part 1 of the series.*
+*RAG from First Principles. Part 1 of the series.*
 
 ## What you'll learn
 
-By the end of this part you'll understand, in plain language, why a large language model — however impressive — gets confident and wrong about your own documents and about anything recent, and how **RAG** (Retrieval-Augmented Generation) fixes that by handing the model the right information at the moment it answers. We'll stay conceptual here: no code, just the four problems RAG solves, one durable mental model (the open-book exam), and a bird's-eye map of the whole pipeline you'll spend the rest of the series building.
+By the end of this part you'll understand, in plain language, why a large language model, however impressive, gets confident and wrong about your own documents and about anything recent, and how **RAG** (Retrieval-Augmented Generation) fixes that by handing the model the right information at the moment it answers. We'll stay conceptual here: no code, just the four problems RAG solves, one durable mental model (the open-book exam), and a bird's-eye map of the whole pipeline you'll spend the rest of the series building.
 
 ## Prerequisites
 
-None. This is Part 1. If you can read a sentence of Python you're already over-qualified for today — the code starts in later parts.
+None. This is Part 1. If you can read a sentence of Python you're already over-qualified for today; the code starts in later parts.
 
 ## The confidently wrong answer
 
 Here's a moment you may have lived through.
 
-You've got a genuinely capable model in front of you — the kind that writes working code, explains calculus, and drafts your emails. So you ask it something that matters to *your* world:
+You've got a genuinely capable model in front of you: the kind that writes working code, explains calculus, and drafts your emails. So you ask it something that matters to *your* world:
 
 > "What's our company's refund window for orders placed in 2026?"
 
 It answers instantly, in fluent, self-assured prose: *"Refunds are accepted within 90 days of purchase."* Clean. Confident. Done.
 
-Except your refund window is 30 days. It always has been. The number 90 appears nowhere in your handbook. The model didn't read your handbook — it has never seen it — so it did the only thing it knows how to do: it produced text that *sounds* like a refund policy. And a plausible-sounding refund policy contains a number, so it supplied one.
+Except your refund window is 30 days. It always has been. The number 90 appears nowhere in your handbook. The model didn't read your handbook (it has never seen it), so it did the only thing it knows how to do: it produced text that *sounds* like a refund policy. And a plausible-sounding refund policy contains a number, so it supplied one.
 
 Now try a different question:
 
 > "Summarize what happened in the incident our team filed yesterday."
 
-Same fluency, same confidence, same problem — except this time there isn't even a wrong page to point to. Yesterday hadn't happened yet when this model was built. It cannot know.
+Same fluency, same confidence, same problem, but this time there isn't even a wrong page to point to. Yesterday hadn't happened yet when this model was built. It cannot know.
 
-Neither of these is a bug you can prompt your way out of, and neither means the model is "dumb." They're structural. A language model, on its own, is a brilliant reasoner with **no access to your information and no clock**. Before we can fix that, we have to be precise about *why* it happens — because each cause maps to a thing RAG does.
+Neither of these is a bug you can prompt your way out of, and neither means the model is "dumb." They're structural. A language model, on its own, is a brilliant reasoner with **no access to your information and no clock**. Before we can fix that, we have to be precise about *why* it happens, because each cause maps to a thing RAG does.
 
 ## Why a vanilla LLM gets it wrong: four limitations
 
 Let me define the thing we're critiquing first. A **large language model (LLM)** is a model trained on an enormous pile of text to do one deceptively simple task: given some text, predict the next chunk of text. That's it. Everything it appears to "know" is a side effect of having gotten very, very good at that prediction game across a huge fraction of the internet.
 
-That single design choice produces four limitations. They're not random flaws — they fall out directly from "predict the next piece of text."
+That single design choice produces four limitations. They're not random flaws; they fall out directly from "predict the next piece of text."
 
 ### 1. Hallucination
 
-A **hallucination** is when the model states something false *with the same confidence it states something true*. Not a typo, not a hedge — a fabricated fact delivered in a steady voice.
+A **hallucination** is when the model states something false *with the same confidence it states something true*. Not a typo, not a hedge: a fabricated fact delivered in a steady voice.
 
-Why does it happen? Because the model was never trained to track *truth*. It was trained to produce *likely text*. When you ask for our refund window, the model isn't consulting a fact and reporting it; it's generating the most probable continuation of "our refund window is ___." If it saw thousands of refund policies during training and many said "90 days," then "90 days" is a *probable* continuation — and probable is all the model is optimizing for. There is no internal step where it checks "is this actually correct for *this* company?" because it has no notion of a ground truth to check against, and no copy of your policy to check it in.
+Why does it happen? Because the model was never trained to track *truth*. It was trained to produce *likely text*. When you ask for our refund window, the model isn't consulting a fact and reporting it; it's generating the most probable continuation of "our refund window is ___." If it saw thousands of refund policies during training and many said "90 days," then "90 days" is a *probable* continuation, and probable is all the model is optimizing for. There is no internal step where it checks "is this actually correct for *this* company?" because it has no notion of a ground truth to check against, and no copy of your policy to check it in.
 
 This is the uncomfortable part for newcomers: the model sounds *most* confident exactly when it's making things up, because fluent invention and fluent recall are produced by the same machinery. Confidence is not evidence.
-
-> 💡 **From experience**
->
-> [INSERT YOUR OWN STORY HERE — e.g. the time a teammate shipped an answer the model invented, how it slipped past review because it read so plausibly, and what that taught you about never trusting fluency as a proxy for correctness.]
 
 ### 2. Knowledge cutoff
 
 Every LLM is built from a snapshot of text collected *up to a certain date*. That date is its **knowledge cutoff**: the point where its training data ends and, as far as the model is concerned, history stops.
 
-Ask it about anything that happened after that line — yesterday's incident, this morning's release, a law passed last week — and it simply has no data. It will still answer (it always answers), but it's now extrapolating into a void. The frozen snapshot is also why a model can't "learn" your correction mid-conversation in any lasting way: its weights were fixed at training time and the world has kept moving without it.
+Ask it about anything that happened after that line (yesterday's incident, this morning's release, a law passed last week) and it simply has no data. It will still answer (it always answers), but it's now extrapolating into a void. The frozen snapshot is also why a model can't "learn" your correction mid-conversation in any lasting way: its weights were fixed at training time and the world has kept moving without it.
 
 Here's that gap drawn out:
 
 <Diagram number={1} caption="The model's knowledge is frozen at its training cutoff; everything after it is a blind spot, no matter how recent or important.">
-  <img src="/essays/why-rag-exists/knowledge-cutoff.svg" alt="A horizontal timeline. A solid bar of training data ends at a 'knowledge cutoff' marker; beyond it, a faded, hatched region labelled 'the model knows nothing here' contains events — yesterday's news, your product launch, this morning's incident — leading to a 'Today' marker far to the right." class="w-full rounded-lg" />
+  <img src="/essays/why-rag-exists/knowledge-cutoff.svg" alt="A horizontal timeline. A solid bar of training data ends at a 'knowledge cutoff' marker; beyond it, a faded, hatched region labelled 'the model knows nothing here' contains events (yesterday's news, your product launch, this morning's incident) leading to a 'Today' marker far to the right." class="w-full rounded-lg" />
 </Diagram>
 
 ### 3. No private or proprietary knowledge
 
-The knowledge cutoff is about *when*. This one is about *what*. Even for events well before the cutoff, the model only ever saw **public** text — roughly, what was scrapeable from the open internet and licensed datasets.
+The knowledge cutoff is about *when*. This one is about *what*. Even for events well before the cutoff, the model only ever saw **public** text: roughly, what was scrapeable from the open internet and licensed datasets.
 
-It never saw your internal wiki. Not your Slack, not your design docs, not your customer database, not the PDF policy that actually governs refunds. None of that was in the training pile, so none of it is in the model. This is usually the limitation that bites businesses hardest: the single most valuable knowledge you have — *your* knowledge — is precisely the knowledge a general-purpose model is guaranteed not to possess. A bigger or smarter model doesn't help here, because the issue isn't capability; it's that the information was never in the room.
+It never saw your internal wiki. Not your Slack, not your design docs, not your customer database, not the PDF policy that actually governs refunds. None of that was in the training pile, so none of it is in the model. This is usually the limitation that bites businesses hardest: the single most valuable knowledge you have, *your* knowledge, is precisely the knowledge a general-purpose model is guaranteed not to possess. A bigger or smarter model doesn't help here, because the issue isn't capability; it's that the information was never in the room.
 
 ### 4. Context window limits
 
-"Fine," you might say, "I'll just paste our whole handbook into the prompt every time." It's the right instinct, and it runs straight into a wall — so let me define the two terms that explain the wall.
+"Fine," you might say, "I'll just paste our whole handbook into the prompt every time." It's the right instinct, and it runs straight into a wall, so let me define the two terms that explain the wall.
 
-A **token** is the unit a model reads and writes in. It's a chunk of text — very roughly ¾ of a word in English, so "refund" might be one token and "unbelievable" might be three. Models don't see letters or words; they see sequences of tokens.
+A **token** is the unit a model reads and writes in. It's a chunk of text, very roughly ¾ of a word in English, so "refund" might be one token and "unbelievable" might be three. Models don't see letters or words; they see sequences of tokens.
 
-The **context window** is the maximum number of tokens the model can hold in mind at once — your prompt *and* its answer combined. Think of it as the model's working memory, or the size of its desk. It's finite and fixed for a given model.
+The **context window** is the maximum number of tokens the model can hold in mind at once: your prompt *and* its answer combined. Think of it as the model's working memory, or the size of its desk. It's finite and fixed for a given model.
 
 So pasting "everything" fails for concrete reasons:
 
 - **It doesn't fit.** A modest knowledge base is millions of tokens; a context window holds a few hundred thousand at most. Most of your data physically cannot be in the prompt at the same time.
 - **It's wasteful.** Even when something fits, every token you send costs money and time on every single request. Shipping your entire handbook to answer one refund question is like re-reading the whole binder out loud before every sentence.
-- **It degrades.** Bury one relevant line in a hundred thousand irrelevant ones and models get measurably worse at finding and using it — the signal drowns. More context is not the same as more *relevant* context.
+- **It degrades.** Bury one relevant line in a hundred thousand irrelevant ones and models get measurably worse at finding and using it; the signal drowns. More context is not the same as more *relevant* context.
 
 The fix isn't a bigger desk. It's putting *only the right page* on the desk at the right moment. Which is exactly what RAG does.
 
@@ -98,11 +94,11 @@ Here's the whole idea in one sentence:
 
 That's it. We're not retraining the model, not changing its weights, not teaching it anything permanent. We're changing *what it sees at the moment it answers*. The name spells out the three moves, in order:
 
-- **R — Retrieval.** **Retrieval** is the step that searches your knowledge for the pieces most relevant to the question and pulls them out. When you ask about refunds, retrieval finds the actual paragraph from your actual policy. This is what gives the model access to private data and to anything newer than its cutoff — you're handing it the page, not hoping it memorized one.
-- **A — Augmentation.** **Augmentation** means *augmenting the prompt*: we take the retrieved pieces and place them into the prompt alongside the user's question, usually with a quiet instruction like "answer using the context below." We aren't asking the model what it remembers; we're asking it to read what we just gave it and respond to *that*.
-- **G — Generation.** **Generation** is the model doing what it's genuinely great at — writing a fluent, coherent answer — except now it's writing one grounded in the supplied evidence rather than spun from probability. Same talented writer, finally given the right source material.
+- **R is for Retrieval.** **Retrieval** is the step that searches your knowledge for the pieces most relevant to the question and pulls them out. When you ask about refunds, retrieval finds the actual paragraph from your actual policy. This is what gives the model access to private data and to anything newer than its cutoff: you're handing it the page, not hoping it memorized one.
+- **A is for Augmentation.** **Augmentation** means *augmenting the prompt*: we take the retrieved pieces and place them into the prompt alongside the user's question, usually with a quiet instruction like "answer using the context below." We aren't asking the model what it remembers; we're asking it to read what we just gave it and respond to *that*.
+- **G is for Generation.** **Generation** is the model doing what it's genuinely great at, writing a fluent, coherent answer, except now it's writing one grounded in the supplied evidence rather than spun from probability. Same talented writer, finally given the right source material.
 
-Notice how cleanly the three moves answer the four problems. Retrieval supplies the private data point 3 lacked and the fresh data point 2 lacked. Augmentation puts *only the relevant slice* on the desk, sidestepping the context-window wall of point 4. And because the answer is now anchored to real text the model can read — and even cite — hallucination from point 1 drops sharply: it's much harder to invent a refund number when the correct one is sitting right there in the prompt.
+Notice how cleanly the three moves answer the four problems. Retrieval supplies the private data point 3 lacked and the fresh data point 2 lacked. Augmentation puts *only the relevant slice* on the desk, sidestepping the context-window wall of point 4. And because the answer is now anchored to real text the model can read, and can even cite, hallucination from point 1 drops sharply: it's much harder to invent a refund number when the correct one is sitting right there in the prompt.
 
 This is the shift, side by side:
 
@@ -116,11 +112,11 @@ If you remember one image from this whole part, make it this one.
 
 Picture two students taking the same exam.
 
-The first sits a **closed-book** exam. When a question lands outside what she happens to remember, she has no way to look anything up — so she writes down her best guess in confident handwriting, because a blank answer scores zero and a plausible one might not. Sometimes she's right. Sometimes she invents a citation that doesn't exist. She has no way to tell those two cases apart, and neither do you from the paper alone.
+The first sits a **closed-book** exam. When a question lands outside what she happens to remember, she has no way to look anything up, so she writes down her best guess in confident handwriting, because a blank answer scores zero and a plausible one might not. Sometimes she's right. Sometimes she invents a citation that doesn't exist. She has no way to tell those two cases apart, and neither do you from the paper alone.
 
-The second sits the **open-book** version of the exact same exam. Same student, same brain, same skill — but now she's allowed to bring the textbook. When a question lands, she flips to the relevant page, lays the book open beside her question, reads the passage, and writes the answer in her own words, grounded in what's on the page in front of her.
+The second sits the **open-book** version of the exact same exam. Same student, same brain, same skill, but now she's allowed to bring the textbook. When a question lands, she flips to the relevant page, lays the book open beside her question, reads the passage, and writes the answer in her own words, grounded in what's on the page in front of her.
 
-The closed-book student is a vanilla LLM. The open-book student is RAG. **Nothing about the student's intelligence changed — only her access to the source did.** That's the entire intuition, and it maps one-to-one onto the mechanism:
+The closed-book student is a vanilla LLM. The open-book student is RAG. **Nothing about the student's intelligence changed; only her access to the source did.** That's the entire intuition, and it maps one-to-one onto the mechanism:
 
 - Flipping to the right page **= retrieval** (find the relevant material)
 - Laying the open book beside the question **= augmentation** (put that material in front of the model with the question)
@@ -130,33 +126,33 @@ The closed-book student is a vanilla LLM. The open-book student is RAG. **Nothin
   <img src="/essays/why-rag-exists/open-book-exam.svg" alt="A friendly illustration of two students at desks. On the left, a student with closed, stacked books and a question-mark thought bubble guesses from memory, labelled 'Vanilla LLM'. On the right, a student with an open book, finger on a highlighted passage, calmly writes the answer, labelled 'RAG', with small notes mapping flip-to-the-page to retrieval, open-beside-the-question to augmentation, and write-in-your-own-words to generation." class="w-full rounded-lg" />
 </Diagram>
 
-The analogy even predicts RAG's failure modes, which is how you know it's a good one. If your "textbook" doesn't contain the answer, the open-book student is no better off — RAG can only ground answers in knowledge you actually gave it. And if she flips to the *wrong* page, she'll confidently answer from irrelevant material — which is why **retrieval quality is the whole ballgame**, and why much of this series is about getting the right page into her hands.
+The analogy even predicts RAG's failure modes, which is how you know it's a good one. If your "textbook" doesn't contain the answer, the open-book student is no better off: RAG can only ground answers in knowledge you actually gave it. And if she flips to the *wrong* page, she'll confidently answer from irrelevant material, which is why **retrieval quality is the whole ballgame**, and why much of this series is about getting the right page into her hands.
 
 ## A bird's-eye view of the pipeline
 
-So how do we let a program "flip to the right page" across thousands of documents in milliseconds? You don't read all your documents at question time — that's the context-window wall again. Instead you do a little preparation *ahead* of time so that, at question time, finding the right page is fast.
+So how do we let a program "flip to the right page" across thousands of documents in milliseconds? You don't read all your documents at question time; that's the context-window wall again. Instead you do a little preparation *ahead* of time so that, at question time, finding the right page is fast.
 
 There are two phases. The first happens once, up front, whenever your documents change. The second happens every time someone asks something.
 
 **Indexing (done ahead of time):**
 
-1. **Document** — start with your raw source: a PDF, a wiki page, a transcript, a database row.
-2. **Chunk** — split each document into smaller passages. A **chunk** is a bite-sized piece of text — a few sentences or a paragraph — small enough to be specific, big enough to stand on its own. (We chunk because we want to retrieve *the relevant paragraph*, not an entire 80-page manual.)
-3. **Embed** — convert each chunk into an **embedding**: a list of numbers that captures the chunk's *meaning*, such that passages about similar ideas end up with similar numbers. That list of numbers is called a **vector**. This is the quiet trick that lets a computer search by meaning instead of by exact keywords — and it's important enough that it's the entire subject of Part 2.
-4. **Store** — save all those vectors in a **vector store**, a database built to answer one question blazingly fast: "which stored vectors are most similar to *this* one?"
+1. **Document.** Start with your raw source: a PDF, a wiki page, a transcript, a database row.
+2. **Chunk.** Split each document into smaller passages. A **chunk** is a bite-sized piece of text, a few sentences or a paragraph, small enough to be specific, big enough to stand on its own. (We chunk because we want to retrieve *the relevant paragraph*, not an entire 80-page manual.)
+3. **Embed.** Convert each chunk into an **embedding**: a list of numbers that captures the chunk's *meaning*, such that passages about similar ideas end up with similar numbers. That list of numbers is called a **vector**. This is the quiet trick that lets a computer search by meaning instead of by exact keywords, and it's important enough that it's the entire subject of Part 2.
+4. **Store.** Save all those vectors in a **vector store**, a database built to answer one question blazingly fast: "which stored vectors are most similar to *this* one?"
 
 **Querying (done per question):**
 
-5. **Retrieve** — embed the user's question into a vector too, then ask the vector store for the chunks whose vectors are closest to it. Closest-in-meaning ≈ most-relevant. These are the "right pages."
-6. **Augment** — drop those retrieved chunks into the prompt alongside the question, with an instruction to answer from them.
-7. **Generate** — send that assembled prompt to the LLM, which writes the grounded answer (ideally citing which chunk it used).
+5. **Retrieve.** Embed the user's question into a vector too, then ask the vector store for the chunks whose vectors are closest to it. Closest-in-meaning ≈ most-relevant. These are the "right pages."
+6. **Augment.** Drop those retrieved chunks into the prompt alongside the question, with an instruction to answer from them.
+7. **Generate.** Send that assembled prompt to the LLM, which writes the grounded answer (ideally citing which chunk it used).
 
-That's the entire arc: **document → chunk → embed → store → retrieve → augment → generate.** Don't worry about *how* any single stage works yet — each one gets its own part later. For now I just want the map in your head, because the rest of the series is a guided tour of exactly these stations. The interactive figure below walks one document through all seven, one step at a time — play it, then step through it slowly:
+That's the entire arc: **document → chunk → embed → store → retrieve → augment → generate.** Don't worry about *how* any single stage works yet; each one gets its own part later. For now I just want the map in your head, because the rest of the series is a guided tour of exactly these stations. The interactive figure below walks one document through all seven, one step at a time. Play it, then step through it slowly:
 
 <Diagram number={4} caption="The full RAG pipeline, animated. Press Play, or step Next / Back through chunk → embed → store → retrieve → augment → generate.">
   <IframeFigure
     src="/essays/why-rag-exists/rag-pipeline.html"
-    title="Interactive animation: one document flowing through the full RAG pipeline — chunk, embed, store, retrieve, augment, generate — with play/pause and step-through controls"
+    title="Interactive animation: one document flowing through the full RAG pipeline (chunk, embed, store, retrieve, augment, generate) with play/pause and step-through controls"
     height={760}
   />
 </Diagram>
@@ -165,36 +161,36 @@ That's the entire arc: **document → chunk → embed → store → retrieve →
 
 RAG is not the only tool, and reaching for it reflexively is its own mistake. Here's how I decide between the three options people usually weigh.
 
-**Just use a bigger prompt** (paste the relevant text in by hand) when the knowledge is *tiny and known in advance* — a single policy, one short doc, a fixed style guide. If you can comfortably fit the source in the prompt and you already know which source it is, you don't need retrieval; you need copy-paste. Don't build a pipeline to solve a one-paragraph problem.
+**Just use a bigger prompt** (paste the relevant text in by hand) when the knowledge is *tiny and known in advance*: a single policy, one short doc, a fixed style guide. If you can comfortably fit the source in the prompt and you already know which source it is, you don't need retrieval; you need copy-paste. Don't build a pipeline to solve a one-paragraph problem.
 
-**Reach for RAG** when the knowledge is *large, changing, private, or you don't know in advance which piece you'll need*. This is the sweet spot: company wikis, product docs, support histories, contracts, anything that updates often or is too big to paste. RAG shines because you can add, change, or remove a document and the system reflects it on the next question — no retraining, just re-indexing the part that changed. If your core problem is *"the model doesn't know my facts"* or *"my facts keep changing,"* RAG is the answer.
+**Reach for RAG** when the knowledge is *large, changing, private, or you don't know in advance which piece you'll need*. This is the sweet spot: company wikis, product docs, support histories, contracts, anything that updates often or is too big to paste. RAG shines because you can add, change, or remove a document and the system reflects it on the next question: no retraining, just re-indexing the part that changed. If your core problem is *"the model doesn't know my facts"* or *"my facts keep changing,"* RAG is the answer.
 
-**Consider fine-tuning** — actually adjusting the model's weights on your own examples — when you need to change the model's *behavior, format, or style* rather than its *facts*. Fine-tuning is great at "always respond in this tone / this JSON shape / this domain's phrasing" and poor at "know this fact," because facts baked into weights are expensive to update and still can't be cited. A useful one-liner: **fine-tuning changes how the model talks; RAG changes what it knows right now.** Many serious systems use both — fine-tune the manner, RAG the matter — but if you only adopt one thing first, and your pain is wrong-about-my-data, start with RAG.
+**Consider fine-tuning** (actually adjusting the model's weights on your own examples) when you need to change the model's *behavior, format, or style* rather than its *facts*. Fine-tuning is great at "always respond in this tone / this JSON shape / this domain's phrasing" and poor at "know this fact," because facts baked into weights are expensive to update and still can't be cited. A useful one-liner: **fine-tuning changes how the model talks; RAG changes what it knows right now.** Many serious systems use both (fine-tune the manner, RAG the matter), but if you only adopt one thing first, and your pain is wrong-about-my-data, start with RAG.
 
-Here's the decision in a sentence: *if the failure is the model not knowing your current, specific information, RAG is the fix — and almost every "the AI made something up about our business" problem is that failure in disguise.*
+Here's the decision in a sentence: *if the failure is the model not knowing your current, specific information, RAG is the fix, and almost every "the AI made something up about our business" problem is that failure in disguise.*
 
 ## Key takeaways
 
-- A vanilla LLM predicts likely text; it has **no built-in notion of truth, no clock, and no access to your private data** — which is why it hallucinates, has a knowledge cutoff, can't see proprietary information, and can't simply be handed "everything" due to context-window limits.
+- A vanilla LLM predicts likely text; it has **no built-in notion of truth, no clock, and no access to your private data**, which is why it hallucinates, has a knowledge cutoff, can't see proprietary information, and can't simply be handed "everything" due to context-window limits.
 - **RAG = Retrieval + Augmentation + Generation:** find the relevant pieces of your data, put them in the prompt, and let the model answer from that evidence instead of from memory alone.
-- The durable mental model is the **open-book exam**: RAG doesn't make the model smarter, it lets it look the answer up — retrieval is flipping to the page, augmentation is laying it open by the question, generation is writing the answer in its own words.
+- The durable mental model is the **open-book exam**: RAG doesn't make the model smarter, it lets it look the answer up. Retrieval is flipping to the page, augmentation is laying it open by the question, generation is writing the answer in its own words.
 - The pipeline is one arc to remember: **document → chunk → embed → store → retrieve → augment → generate**, split into a one-time *indexing* phase and a per-question *querying* phase.
 - **Retrieval quality decides everything.** RAG can only ground answers in what you actually retrieve; flip to the wrong page and it'll be confidently wrong about that page instead.
 - Choose deliberately: a **bigger prompt** for tiny known sources, **RAG** for large/changing/private knowledge, **fine-tuning** to change style and behavior rather than facts.
 
 ## Glossary
 
-- **Token** — the unit of text a model reads and writes; a chunk of characters roughly ¾ of an English word. Models process sequences of tokens, not letters or whole words.
-- **Context window** — the maximum number of tokens a model can consider at once (prompt plus answer combined). Its finite "working memory."
-- **Hallucination** — a false statement produced with the same fluency and confidence as a true one, because the model optimizes for plausible text, not verified fact.
-- **Knowledge cutoff** — the date the model's training data ends; it has no information about anything that happened afterward.
-- **Retrieval** — searching a knowledge source for the pieces most relevant to a query and pulling them out. The "R" in RAG.
-- **Augmentation** — inserting the retrieved pieces into the model's prompt alongside the question, so it answers from them. The "A" in RAG.
-- **Generation** — the model composing a fluent answer; in RAG, one grounded in the augmented context rather than memory alone. The "G" in RAG.
-- **Chunk** — a small, self-contained passage of a document (a few sentences or a paragraph), the unit RAG retrieves.
-- **Embedding** — a representation of a chunk's *meaning* as a list of numbers, arranged so that similar meanings produce similar numbers; what lets a computer search by meaning.
-- **Vector** — the list of numbers that an embedding produces; "embedding" is the act, "vector" is the result, and the two terms are often used interchangeably.
+- **Token**: the unit of text a model reads and writes; a chunk of characters roughly ¾ of an English word. Models process sequences of tokens, not letters or whole words.
+- **Context window**: the maximum number of tokens a model can consider at once (prompt plus answer combined). Its finite "working memory."
+- **Hallucination**: a false statement produced with the same fluency and confidence as a true one, because the model optimizes for plausible text, not verified fact.
+- **Knowledge cutoff**: the date the model's training data ends; it has no information about anything that happened afterward.
+- **Retrieval**: searching a knowledge source for the pieces most relevant to a query and pulling them out. The "R" in RAG.
+- **Augmentation**: inserting the retrieved pieces into the model's prompt alongside the question, so it answers from them. The "A" in RAG.
+- **Generation**: the model composing a fluent answer; in RAG, one grounded in the augmented context rather than memory alone. The "G" in RAG.
+- **Chunk**: a small, self-contained passage of a document (a few sentences or a paragraph), the unit RAG retrieves.
+- **Embedding**: a representation of a chunk's *meaning* as a list of numbers, arranged so that similar meanings produce similar numbers; what lets a computer search by meaning.
+- **Vector**: the list of numbers that an embedding produces; "embedding" is the act, "vector" is the result, and the two terms are often used interchangeably.
 
 ---
 
-**Next up — Part 2: Embeddings.** We cracked open the word "embed" and ran past it; next we slow down and answer the question the whole pipeline rests on: *how do you turn the meaning of a sentence into numbers — and why does that make search by meaning possible?*
+**Next up, Part 2: Embeddings.** We cracked open the word "embed" and ran past it; next we slow down and answer the question the whole pipeline rests on: *how do you turn the meaning of a sentence into numbers, and why does that make search by meaning possible?*

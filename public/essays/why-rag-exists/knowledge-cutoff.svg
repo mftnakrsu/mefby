@@ -31,7 +31,7 @@
   <rect x="80" y="218" width="495" height="40" rx="12" fill="url(#trainFill)" stroke="url(#trainStroke)" stroke-width="1.4" />
 
   <!-- training bar labels -->
-  <text x="328" y="206" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Training data — what the model learned</text>
+  <text x="328" y="206" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Training data: what the model learned</text>
   <text x="328" y="280" font-size="12.5" fill="#64748b" text-anchor="middle">the model's frozen knowledge</text>
 
   <!-- UNKNOWN / hatched band after cutoff: x=575 .. 980 -->
@@ -90,5 +90,5 @@
   <text x="940" y="349" font-size="12.5" font-weight="700" fill="#059669" text-anchor="middle">Today</text>
 
   <!-- footer hint -->
-  <text x="80" y="404" font-size="12.5" fill="#64748b">Everything to the right of the cutoff is invisible to the model — RAG exists to feed it that fresh context.</text>
+  <text x="80" y="404" font-size="12.5" fill="#64748b">Everything to the right of the cutoff is invisible to the model. RAG exists to feed it that fresh context.</text>
 </svg>

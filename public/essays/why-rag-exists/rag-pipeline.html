@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>RAG Pipeline — from First Principles</title>
+<title>RAG Pipeline: from First Principles</title>
 <style>
   /* ====================================================================
-     RAG from First Principles — Part 1 flagship animation
+     RAG from First Principles, Part 1 flagship animation
      Self-contained: no external resources, no web fonts, inline SVG only.
      Design tokens are declared as CSS custom properties below so every
      asset in the series can share the exact same palette.
@@ -605,7 +605,7 @@
     <header class="ragx-head">
       <span class="ragx-eyebrow">RAG from First Principles · Part 1</span>
       <h1 class="ragx-title">One document through the RAG pipeline</h1>
-      <p class="ragx-sub">Indexing, then a live query — step by step.</p>
+      <p class="ragx-sub">Indexing, then a live query, step by step.</p>
     </header>
 
     <!-- ---------- Stage rail (6 nodes) ---------- -->
@@ -817,13 +817,13 @@
     { node: 2, scene: 2, accent: ACCENT.teal,
       caption: "<b>Store.</b> Save every vector in a vector store so we can search by similarity later." },
     { node: 3, scene: 3, accent: ACCENT.cyan,
-      caption: "<b>Query.</b> A user asks a question — it's embedded the same way the chunks were." },
+      caption: "<b>Query.</b> A user asks a question, and it's embedded the same way the chunks were." },
     { node: 3, scene: 3, accent: ACCENT.cyan,
       caption: "<b>Retrieve.</b> The store returns the chunk whose vector is closest to the question." },
     { node: 4, scene: 4, accent: ACCENT.amber,
       caption: "<b>Augment.</b> The retrieved chunk is added to the prompt as context, alongside the question." },
     { node: 5, scene: 5, accent: ACCENT.emerald,
-      caption: "<b>Generate.</b> The LLM answers from that context — grounded, and with a cited source." }
+      caption: "<b>Generate.</b> The LLM answers from that context: grounded, and with a cited source." }
   ];
 
   var AUTO_MS = 2200;
