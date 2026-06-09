@@ -104,6 +104,27 @@ const articleJsonLd = {
     font-size: 0.9em;
     font-family: ui-monospace, monospace;
   }
+  /* Fenced code blocks: a light, bordered surface that matches the palette. */
+  .prose-essay pre {
+    background-color: #f8fafc !important;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.65;
+  }
+  /* Reset the inline-code styling inside fenced blocks so Shiki's token
+     colors show on the block surface (more specific than .prose-essay code). */
+  .prose-essay pre code {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
   .prose-essay ul {
     margin-bottom: 1.5rem;
     padding-left: 0.25rem;
