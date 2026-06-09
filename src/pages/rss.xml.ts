@@ -3,7 +3,7 @@ import { getCollection } from 'astro:content';
 import type { APIContext } from 'astro';
 
 export async function GET(context: APIContext) {
-  const essays = await getCollection('essays', ({ data }) => !data.draft);
+  const essays = await getCollection('essays', ({ data }) => !data.draft && !(data.lang === 'tr' && data.translationSlug));
   return rss({
     title: 'Meftun Akarsu — Essays',
     description: 'Long-form technical essays from Meftun Akarsu.',

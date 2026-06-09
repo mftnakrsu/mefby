@@ -2,7 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 
-const essays = (await getCollection('essays', ({ data }) => !data.draft))
+const essays = (await getCollection('essays', ({ data }) => !data.draft && !(data.lang === 'tr' && data.translationSlug)))
   .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 ---
 

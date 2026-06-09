@@ -1,0 +1,198 @@
+---
+title: "RAG Neden Var?"
+description: "Güçlü bir LLM bile, kendi belgeleriniz ve dün olan olaylar hakkında kendinden emin bir şekilde ve yanlış cevap verir. Retrieval-Augmented Generation (RAG) üzerine sıfırdan bir serinin 1. bölümü: kod yok, sadece RAG'in çözdüğü dört sorun ve kalıcı bir zihinsel model."
+date: 2026-06-09
+tags: ["RAG", "LLM", "Retrieval", "Embeddings", "AI", "NLP", "Türkçe"]
+lang: "tr"
+translationSlug: "why-rag-exists"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*Temellerden RAG. Serinin 1. bölümü.*
+
+## Ne öğreneceksin
+
+Bu bölümün sonunda, sade bir dille şunu anlamış olacaksın: ne kadar etkileyici olursa olsun bir büyük dil modeli, neden senin kendi belgelerin ve yakın zamanda olan herhangi bir şey hakkında kendinden emin biçimde yanlış cevap verir; ve **RAG** (Retrieval-Augmented Generation, yani "getirmeyle zenginleştirilmiş üretim") bunu, cevabı verdiği anda modele doğru bilgiyi tutuşturarak nasıl çözer. Burada kavramsal kalacağız: kod yok, sadece RAG'in çözdüğü dört sorun, kalıcı bir zihinsel model (açık kitap sınavı) ve serinin geri kalanında inşa edeceğin tüm hattın kuşbakışı bir haritası.
+
+## Ön koşullar
+
+Yok. Bu 1. bölüm. Bir satır Python okuyabiliyorsan bugünlük fazlasıyla yeterli; kod sonraki bölümlerde başlıyor.
+
+## Kendinden emin ama yanlış cevap
+
+Belki yaşadığın bir an.
+
+Önünde gerçekten yetenekli bir model var: çalışan kod yazan, kalkülüsü açıklayan, e-postalarını taslaklaştıran cinsten. Sen de ona *kendi* dünyanı ilgilendiren bir şey soruyorsun:
+
+> "2026'da verilen siparişler için iade süremiz ne kadar?"
+
+Anında, akıcı ve özgüvenli bir üslupla cevap veriyor: *"İadeler satın alımdan sonra 90 gün içinde kabul edilir."* Temiz. Kendinden emin. Bitti.
+
+Ama senin iade süren 30 gün. Hep öyleydi. 90 sayısı el kitabının hiçbir yerinde geçmiyor. Model senin el kitabını okumadı (onu hiç görmedi bile), bu yüzden yapabildiği tek şeyi yaptı: bir iade politikası gibi *görünen* bir metin üretti. Ve makul görünen bir iade politikasında bir sayı bulunur, o da bir sayı tutuşturdu.
+
+Şimdi farklı bir soru dene:
+
+> "Ekibimizin dün açtığı olay kaydında ne olduğunu özetle."
+
+Aynı akıcılık, aynı özgüven, aynı sorun; ama bu sefer işaret edebileceği yanlış bir sayfa bile yok. Bu model inşa edildiğinde "dün" henüz yaşanmamıştı. Bilmesi mümkün değil.
+
+Bunların hiçbiri, doğru prompt'la aşabileceğin bir kusur değil; ikisi de modelin "aptal" olduğu anlamına gelmiyor. Bunlar yapısal. Bir dil modeli, tek başına, **senin bilgine erişimi ve bir saati olmayan** parlak bir muhakemecidir. Bunu düzeltmeden önce, *neden* olduğunu net koymamız gerek; çünkü her sebep, RAG'in yaptığı bir şeye karşılık geliyor.
+
+## Sade bir LLM neden yanılır: dört sınır
+
+Önce eleştirdiğimiz şeyi tanımlayayım. **Büyük dil modeli (LLM)**, devasa bir metin yığını üzerinde aldatıcı derecede basit tek bir işi yapmak için eğitilmiş bir modeldir: verilen bir metnin ardından gelecek metin parçasını tahmin etmek. Hepsi bu. "Bildiği" gibi görünen her şey, internetin çok büyük bir kısmı üzerinde bu tahmin oyununda çok çok iyileşmiş olmasının bir yan ürünü.
+
+Bu tek tasarım tercihi dört sınır doğurur. Bunlar rastgele kusurlar değil; doğrudan "sıradaki metin parçasını tahmin et"ten çıkarlar.
+
+### 1. Halüsinasyon
+
+**Halüsinasyon**, modelin yanlış bir şeyi *doğru bir şeyi söylediği özgüvenle* söylemesidir. Yazım hatası değil, çekingen bir tahmin değil: sakin bir sesle sunulan, uydurulmuş bir gerçek.
+
+Neden olur? Çünkü model hiçbir zaman *gerçeği* takip etmek üzere eğitilmedi. *Olası metin* üretmek üzere eğitildi. İade süremizi sorduğunda, model bir olguya bakıp onu raporlamıyor; "iade süremiz ___" ifadesinin en olası devamını üretiyor. Eğitim sırasında binlerce iade politikası gördüyse ve çoğu "90 gün" diyorsa, "90 gün" *olası* bir devamdır; ve model yalnızca olasılığı en iyilemeye çalışır. İçeride "bu *bu* şirket için gerçekten doğru mu?" diye kontrol ettiği bir adım yoktur, çünkü karşılaştıracağı bir gerçeklik (ground truth) kavramı yoktur ve kontrol edeceği politikanın bir kopyası elinde değildir.
+
+Yeni başlayanlar için işin rahatsız edici yanı şu: model en *çok* uydurduğu anlarda en kendinden emin görünür, çünkü akıcı uydurma ile akıcı hatırlama aynı mekanizmadan çıkar. Özgüven, kanıt değildir.
+
+### 2. Bilgi kesim tarihi
+
+Her LLM, *belirli bir tarihe kadar* toplanmış bir metin anlık görüntüsünden inşa edilir. O tarih, onun **bilgi kesim tarihidir (knowledge cutoff)**: eğitim verisinin bittiği ve modelin gözünde tarihin durduğu nokta.
+
+Bu çizgiden sonra olan herhangi bir şeyi sor (dünkü olay, bu sabahki sürüm, geçen hafta çıkan bir yasa) ve modelin elinde hiç veri yoktur. Yine de cevap verir (her zaman cevap verir), ama artık boşluğa doğru tahmin yürütüyordur. Donmuş anlık görüntü, modelin senin düzeltmeni sohbet ortasında kalıcı biçimde "öğrenememesinin" de sebebidir: ağırlıkları eğitim anında sabitlenmiştir ve dünya onsuz yoluna devam etmiştir.
+
+İşte o boşluğun çizilmiş hali:
+
+<Diagram number={1} caption="Modelin bilgisi eğitim kesim tarihinde donmuştur; ondan sonrası, ne kadar yeni veya önemli olursa olsun, kör bir noktadır.">
+  <img src="/essays/why-rag-exists/knowledge-cutoff.svg" alt="Yatay bir zaman çizelgesi. Dolu bir eğitim verisi çubuğu bir 'knowledge cutoff' işaretinde biter; ötesinde, soluk ve taralı bir bölge ('the model knows nothing here') dünün haberleri, ürün lansmanınız ve bu sabahki olay gibi olayları içerir ve sağda uzaktaki bir 'Today' işaretine uzanır." class="w-full rounded-lg" />
+</Diagram>
+
+### 3. Özel veya kuruma ait bilgi yok
+
+Bilgi kesim tarihi *ne zaman* ile ilgiliydi. Bu ise *ne* ile ilgili. Kesim tarihinden çok önce olmuş olaylar için bile, model yalnızca **herkese açık** metni gördü: kabaca, açık internetten kazınabilen ve lisanslı veri kümeleri.
+
+Senin iç wiki'ni hiç görmedi. Slack'ini, tasarım dokümanlarını, müşteri veritabanını, iadeleri gerçekten yöneten o PDF politikayı görmedi. Bunların hiçbiri eğitim yığınında yoktu, dolayısıyla hiçbiri modelin içinde yok. İşletmeleri en çok ısıran sınır genelde budur: sahip olduğun en değerli bilgi, yani *senin* bilgin, genel amaçlı bir modelin sahip olmamasının garanti olduğu bilgidir. Daha büyük veya daha akıllı bir model burada yardımcı olmaz, çünkü sorun yetenek değil; bilginin hiçbir zaman odada olmamasıdır.
+
+### 4. Bağlam penceresi sınırları
+
+"Tamam," diyebilirsin, "o zaman her seferinde tüm el kitabımızı prompt'a yapıştırırım." Doğru bir içgüdü ve dümdüz bir duvara toslar; o yüzden duvarı açıklayan iki terimi tanımlayayım.
+
+**Token**, bir modelin okuyup yazdığı birimdir. Bir metin parçasıdır; İngilizcede çok kabaca bir kelimenin dörtte üçü kadar, yani "refund" tek token olabilir, "unbelievable" üç token olabilir. Modeller harf ya da kelime görmez; token dizileri görür.
+
+**Bağlam penceresi (context window)**, modelin aynı anda akılda tutabileceği maksimum token sayısıdır: prompt'un *ve* cevabı birlikte. Bunu modelin çalışma belleği, ya da masasının büyüklüğü gibi düşün. Belirli bir model için sonlu ve sabittir.
+
+Yani "her şeyi" yapıştırmak somut sebeplerle başarısız olur:
+
+- **Sığmaz.** Mütevazı bir bilgi tabanı milyonlarca token'dır; bir bağlam penceresi en fazla birkaç yüz bin tutar. Verinin çoğu fiziksel olarak aynı anda prompt'ta olamaz.
+- **İsraftır.** Bir şey sığsa bile, gönderdiğin her token her istekte para ve zamana mal olur. Tek bir iade sorusunu cevaplamak için tüm el kitabını göndermek, her cümleden önce klasörün tamamını sesli okumak gibidir.
+- **Kaliteyi düşürür.** İlgili tek bir satırı yüz bin ilgisiz satırın arasına göm, modeller onu bulup kullanmakta ölçülebilir biçimde kötüleşir; sinyal boğulur. Daha çok bağlam, daha çok *ilgili* bağlam ile aynı şey değildir.
+
+Çözüm daha büyük bir masa değil. Doğru anda masaya *yalnızca doğru sayfayı* koymaktır. RAG'in yaptığı tam olarak budur.
+
+## RAG sahneye çıkıyor
+
+Tüm fikir tek cümlede:
+
+> **RAG, kendi verinin en ilgili parçalarını getirir ve modelin prompt'una yerleştirir; böylece model yalnızca hafızasından değil, *senin sağladığın kanıttan* cevap verir.**
+
+Hepsi bu. Modeli yeniden eğitmiyoruz, ağırlıklarını değiştirmiyoruz, ona kalıcı bir şey öğretmiyoruz. *Cevap verdiği anda ne gördüğünü* değiştiriyoruz. İsim, üç hamleyi sırayla heceliyor:
+
+- **R, Retrieval (getirme) demek.** **Getirme**, bilginde soruya en ilgili parçaları arayıp çıkaran adımdır. İadeleri sorduğunda, getirme senin gerçek politikandan gerçek paragrafı bulur. Modele özel veriye ve kesim tarihinden daha yeni her şeye erişimi veren şey budur: sayfayı eline tutuşturuyorsun, ezberlemiş olmasını ummuyorsun.
+- **A, Augmentation (zenginleştirme) demek.** **Zenginleştirme**, *prompt'u zenginleştirmek* anlamına gelir: getirdiğimiz parçaları, kullanıcının sorusunun yanına, genelde "aşağıdaki bağlamı kullanarak cevap ver" gibi sessiz bir talimatla prompt'a yerleştiririz. Modele ne hatırladığını sormuyoruz; az önce verdiğimiz şeyi okuyup *ona* cevap vermesini istiyoruz.
+- **G, Generation (üretim) demek.** **Üretim**, modelin gerçekten harika olduğu şeyi yapmasıdır: akıcı, tutarlı bir cevap yazmak; ama artık olasılıktan örülmüş değil, sağlanan kanıta dayanan bir cevap. Aynı yetenekli yazar, nihayet doğru kaynak malzemeyle.
+
+Üç hamlenin dört soruna ne kadar temiz cevap verdiğine dikkat et. Getirme, 3. maddenin eksik olduğu özel veriyi ve 2. maddenin eksik olduğu güncel veriyi sağlar. Zenginleştirme, masaya *yalnızca ilgili dilimi* koyarak 4. maddenin bağlam penceresi duvarını aşar. Ve cevap artık modelin okuyabildiği (hatta kaynak gösterebildiği) gerçek bir metne bağlı olduğundan, 1. maddedeki halüsinasyon belirgin biçimde azalır: doğru iade sayısı tam orada, prompt'un içinde dururken onu uydurmak çok daha zordur.
+
+Yan yana, değişim şöyle:
+
+<Diagram number={2} caption="Aynı soru, aynı model. Tek fark, model cevap vermeden önce ilgili kanıtın getirilip prompt'a konup konmadığı.">
+  <img src="/essays/why-rag-exists/llm-vs-rag.svg" alt="Yan yana iki yol. Solda: bir soru bir LLM'e girer ve kaynaksız, halüsinasyon olarak işaretlenmiş, kendinden emin ama yanlış bir cevap çıkar. Sağda: aynı soru önce bir bilgi tabanından bir parça getirir, o parça artı soru bir zenginleştirilmiş prompt olur, LLM onu okur ve kaynak gösterilmiş, doğru ve dayanaklı bir cevap çıkar." class="w-full rounded-lg" />
+</Diagram>
+
+## Zihinsel model: açık kitap sınavı
+
+Bu bölümün tamamından tek bir imge hatırlayacaksan, bu olsun.
+
+Aynı sınava giren iki öğrenci düşün.
+
+Birincisi **kapalı kitap** sınavına giriyor. Bir soru, hatırladıklarının dışına düştüğünde, hiçbir şeye bakma imkânı yok; bu yüzden en iyi tahminini kendinden emin bir el yazısıyla yazıyor, çünkü boş cevap sıfır alır, makul bir tahmin belki almaz. Bazen haklı çıkıyor. Bazen var olmayan bir kaynak uyduruyor. Bu iki durumu birbirinden ayırmanın yolu yok; kâğıda bakarak sen de ayıramazsın.
+
+İkincisi tam olarak aynı sınavın **açık kitap** sürümüne giriyor. Aynı öğrenci, aynı beyin, aynı beceri; ama artık ders kitabını yanında getirebiliyor. Bir soru geldiğinde ilgili sayfayı açıyor, kitabı sorunun yanına açık koyuyor, paragrafı okuyor ve cevabı, önündeki sayfada yazana dayanarak, kendi cümleleriyle yazıyor.
+
+Kapalı kitap öğrencisi sade bir LLM. Açık kitap öğrencisi RAG. **Öğrencinin zekâsıyla ilgili hiçbir şey değişmedi; yalnızca kaynağa erişimi değişti.** Tüm sezgi bu ve mekanizmaya bire bir oturuyor:
+
+- Doğru sayfayı açmak **= getirme** (ilgili malzemeyi bul)
+- Kitabı sorunun yanına açık koymak **= zenginleştirme** (o malzemeyi soruyla birlikte modelin önüne koy)
+- Cevabı kendi cümlelerinle yazmak **= üretim** (model, orada olandan yanıtı oluşturur)
+
+<Diagram number={3} caption="RAG, modeli daha akıllı yapmaz; kapalı kitap sınavını açık kitap sınavına çevirir.">
+  <img src="/essays/why-rag-exists/open-book-exam.svg" alt="Sıralarda oturan iki öğrencinin dostça bir çizimi. Solda, kapalı ve üst üste kitapları ve soru işaretli bir düşünce balonu olan bir öğrenci hafızasından tahmin yürütür ('Vanilla LLM'). Sağda, açık bir kitabı olan, parmağı vurgulanmış bir pasajın üstünde duran bir öğrenci sakince cevabı yazar ('RAG'); küçük notlar sayfayı açmayı getirmeye, soru yanına koymayı zenginleştirmeye, kendi cümlelerinle yazmayı üretime eşler." class="w-full rounded-lg" />
+</Diagram>
+
+Analoji, RAG'in başarısızlık biçimlerini bile öngörür; iyi bir analoji olduğunu buradan anlarsın. "Ders kitabın" cevabı içermiyorsa, açık kitap öğrencisinin de elinden bir şey gelmez: RAG yalnızca gerçekten verdiğin bilgiye dayanarak cevap verebilir. Ve *yanlış* sayfayı açarsa, ilgisiz malzemeden kendinden emin biçimde cevap verir; bu yüzden **getirme kalitesi her şeydir** ve bu serinin büyük kısmı, doğru sayfayı onun eline ulaştırmakla ilgilidir.
+
+## Hattın kuşbakışı görünümü
+
+Peki bir programın binlerce belge arasında milisaniyeler içinde "doğru sayfayı açmasını" nasıl sağlarız? Tüm belgelerini soru anında okumazsın; bu yine bağlam penceresi duvarıdır. Bunun yerine, *önceden* küçük bir hazırlık yaparsın; böylece soru anında doğru sayfayı bulmak hızlı olur.
+
+İki aşama var. İlki bir kez, baştan, belgelerin her değiştiğinde olur. İkincisi, biri her soru sorduğunda olur.
+
+**İndeksleme (önceden yapılır):**
+
+1. **Belge.** Ham kaynağınla başla: bir PDF, bir wiki sayfası, bir transkript, bir veritabanı satırı.
+2. **Parçalama (chunk).** Her belgeyi daha küçük pasajlara böl. Bir **parça (chunk)**, lokma büyüklüğünde bir metin parçasıdır; birkaç cümle ya da bir paragraf, kendine özgü olacak kadar küçük, tek başına ayakta duracak kadar büyük. (Parçalıyoruz çünkü 80 sayfalık koca bir kılavuzu değil, *ilgili paragrafı* getirmek istiyoruz.)
+3. **Gömme (embed).** Her parçayı bir **gömüye (embedding)** dönüştür: parçanın *anlamını* yakalayan bir sayı listesi; öyle ki benzer fikirlerle ilgili pasajlar benzer sayılarla sonuçlanır. O sayı listesine **vektör** denir. Bu, bir bilgisayarın tam anahtar kelimelerle değil, anlamla aramasını sağlayan sessiz numaradır; ve o kadar önemlidir ki 2. bölümün tüm konusu budur.
+4. **Saklama (store).** Tüm o vektörleri bir **vektör deposunda (vector store)** sakla; tek bir soruyu yıldırım hızında cevaplamak için kurulmuş bir veritabanı: "*şu* vektöre en benzeyen saklı vektörler hangileri?"
+
+**Sorgulama (her soruda yapılır):**
+
+5. **Getirme (retrieve).** Kullanıcının sorusunu da bir vektöre göm, sonra vektör deposundan, vektörü bu soruya en yakın olan parçaları iste. Anlamca en yakın ≈ en ilgili. İşte "doğru sayfalar" bunlar.
+6. **Zenginleştirme (augment).** Getirilen o parçaları, onlardan cevap verme talimatıyla birlikte, sorunun yanına prompt'a koy.
+7. **Üretim (generate).** O hazır prompt'u LLM'e gönder; LLM dayanaklı cevabı yazar (ideal olarak hangi parçayı kullandığını da göstererek).
+
+İşte tüm yay bu: **belge → parça → gömme → saklama → getirme → zenginleştirme → üretim.** Herhangi bir aşamanın *nasıl* çalıştığını şimdilik dert etme; her biri ileride kendi bölümünü alıyor. Şimdilik tek istediğim, haritanın kafanda olması; çünkü serinin geri kalanı tam olarak bu durakların rehberli bir turu. Aşağıdaki interaktif figür, tek bir belgeyi yedi adımın hepsinden, birer birer geçiriyor. Oynat, sonra yavaşça adım adım ilerle:
+
+<Diagram number={4} caption="Tüm RAG hattı, animasyonlu. Play'e bas ya da chunk → embed → store → retrieve → augment → generate adımlarında Next / Back ile ilerle.">
+  <IframeFigure
+    src="/essays/why-rag-exists/rag-pipeline.html"
+    title="İnteraktif animasyon: tek bir belge, tüm RAG hattından (chunk, embed, store, retrieve, augment, generate) akıyor; oynat/duraklat ve adım adım kontrollerle"
+    height={760}
+  />
+</Diagram>
+
+## Peki RAG'e ne zaman uzanmalı?
+
+RAG tek araç değil ve ona refleksle uzanmak başlı başına bir hata. İnsanların genelde tarttığı üç seçenek arasında ben şöyle karar veriyorum.
+
+**Sadece daha büyük bir prompt kullan** (ilgili metni elle yapıştır) eğer bilgi *küçük ve önceden biliniyorsa*: tek bir politika, kısa bir doküman, sabit bir biçem kılavuzu. Kaynağı prompt'a rahatça sığdırabiliyorsan ve hangi kaynak olduğunu zaten biliyorsan, getirmeye değil kopyala-yapıştıra ihtiyacın var. Tek paragraflık bir sorunu çözmek için hat kurma.
+
+**RAG'e uzan** eğer bilgi *büyük, değişken, özel ise ya da hangi parçaya ihtiyacın olacağını önceden bilmiyorsan*. Asıl tatlı nokta burası: şirket wiki'leri, ürün dokümanları, destek geçmişleri, sözleşmeler, sık güncellenen veya yapıştırılamayacak kadar büyük her şey. RAG parlar çünkü bir belgeyi ekleyip değiştirip kaldırabilirsin ve sistem bir sonraki soruda bunu yansıtır: yeniden eğitim yok, sadece değişen kısmı yeniden indeksleme. Asıl sorunun *"model benim olgularımı bilmiyor"* ya da *"olgularım sürekli değişiyor"* ise, cevap RAG'dir.
+
+**İnce ayarı (fine-tuning) düşün** (modelin ağırlıklarını kendi örneklerinle fiilen ayarlamak) eğer modelin *olgularını* değil, *davranışını, biçimini ya da üslubunu* değiştirmen gerekiyorsa. İnce ayar "hep şu tonda / şu JSON biçiminde / şu alanın diliyle cevap ver" konusunda harikadır, "şu olguyu bil" konusunda zayıftır; çünkü ağırlıklara işlenmiş olgular güncellemesi pahalıdır ve yine de kaynak gösteremez. İşe yarar bir tek cümle: **ince ayar modelin nasıl konuştuğunu değiştirir; RAG ise şu an ne bildiğini.** Ciddi sistemlerin çoğu ikisini de kullanır (üslubu ince ayarla, içeriği RAG'le), ama önce tek bir şeyi benimseyeceksen ve derdin veri hakkında yanlış cevap vermesiyse, RAG'le başla.
+
+Kararı tek cümlede: *başarısızlık, modelin senin güncel ve özgül bilgini bilmemesiyse, çözüm RAG'dir; ve "yapay zekâ işimiz hakkında bir şey uydurdu" sorunlarının neredeyse hepsi kılık değiştirmiş bu başarısızlıktır.*
+
+## Özet çıkarımlar
+
+- Sade bir LLM olası metni tahmin eder; **gerçeklik kavramı, saati ve özel verine erişimi yoktur**, bu yüzden halüsinasyon görür, bir bilgi kesim tarihi vardır, kuruma ait bilgiyi göremez ve bağlam penceresi sınırları yüzünden ona kolayca "her şey" verilemez.
+- **RAG = Getirme + Zenginleştirme + Üretim:** verinin ilgili parçalarını bul, prompt'a koy ve modelin yalnızca hafızasından değil, o kanıttan cevap vermesini sağla.
+- Kalıcı zihinsel model **açık kitap sınavıdır**: RAG modeli daha akıllı yapmaz, cevabı aratır. Getirme sayfayı açmak, zenginleştirme kitabı sorunun yanına açık koymak, üretim cevabı kendi cümleleriyle yazmaktır.
+- Hat, akılda tutulacak tek bir yaydır: **belge → parça → gömme → saklama → getirme → zenginleştirme → üretim**; bir kez yapılan *indeksleme* ve her soruda yapılan *sorgulama* aşamalarına ayrılır.
+- **Getirme kalitesi her şeyi belirler.** RAG yalnızca gerçekten getirdiğin şeye dayanarak cevap verebilir; yanlış sayfayı aç, bu sefer o sayfa hakkında kendinden emin biçimde yanılır.
+- Bilinçli seç: küçük ve bilinen kaynaklar için **daha büyük prompt**, büyük/değişken/özel bilgi için **RAG**, olguları değil üslubu ve davranışı değiştirmek için **ince ayar**.
+
+## Sözlük
+
+- **Token**: bir modelin okuyup yazdığı metin birimi; İngilizcede kabaca bir kelimenin dörtte üçü kadar bir karakter öbeği. Modeller harf veya kelime değil, token dizileri işler.
+- **Bağlam penceresi (context window)**: bir modelin aynı anda göz önünde tutabileceği maksimum token sayısı (prompt artı cevap birlikte). Modelin sonlu "çalışma belleği".
+- **Halüsinasyon (hallucination)**: doğru bir ifadeyle aynı akıcılık ve özgüvenle üretilen yanlış bir ifade; çünkü model doğrulanmış olguyu değil, makul metni en iyiler.
+- **Bilgi kesim tarihi (knowledge cutoff)**: modelin eğitim verisinin bittiği tarih; ondan sonra olan hiçbir şey hakkında bilgisi yoktur.
+- **Getirme (retrieval)**: bir bilgi kaynağında bir sorguya en ilgili parçaları arayıp çıkarmak. RAG'deki "R".
+- **Zenginleştirme (augmentation)**: getirilen parçaları, soruyla birlikte modelin prompt'una eklemek; böylece onlardan cevap verir. RAG'deki "A".
+- **Üretim (generation)**: modelin akıcı bir cevap oluşturması; RAG'de, yalnızca hafızadan değil, zenginleştirilmiş bağlamdan dayanak alan bir cevap. RAG'deki "G".
+- **Parça (chunk)**: bir belgenin küçük, kendi başına anlamlı bir pasajı (birkaç cümle ya da bir paragraf); RAG'in getirdiği birim.
+- **Gömü (embedding)**: bir parçanın *anlamının* sayı listesi olarak temsili; benzer anlamlar benzer sayılar üretecek biçimde düzenlenir. Anlamla aramayı mümkün kılan şey.
+- **Vektör (vector)**: bir gömünün ürettiği sayı listesi; "gömme" eylem, "vektör" sonuçtur ve iki terim çoğu zaman birbirinin yerine kullanılır.
+
+---
+
+**Sırada, 2. Bölüm: Gömüler (Embeddings).** "Embed" kelimesini açıp hızla geçtik; sırada yavaşlayıp tüm hattın dayandığı soruyu cevaplıyoruz: *bir cümlenin anlamını sayılara nasıl çevirirsin ve bu, anlamla aramayı neden mümkün kılar?*

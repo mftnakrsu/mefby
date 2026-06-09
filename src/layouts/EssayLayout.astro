@@ -6,9 +6,14 @@ interface Props {
   description: string;
   date: Date;
   tags?: string[];
+  lang?: string;
+  translationSlug?: string;
 }
-const { title, description, date, tags = [] } = Astro.props;
+const { title, description, date, tags = [], lang = 'en', translationSlug } = Astro.props;
 const dateFormatted = date.toISOString().slice(0, 10);
+
+const backLabel = lang === 'tr' ? 'geri' : 'back';
+const langs = ['en', 'tr'] as const;
 
 const articleJsonLd = {
   "@context": "https://schema.org",
@@ -16,17 +21,38 @@ const articleJsonLd = {
   headline: title,
   description,
   datePublished: dateFormatted,
+  inLanguage: lang,
   author: { "@type": "Person", name: "Meftun Akarsu" },
 };
 ---
 
-<Layout title={title} description={description}>
+<Layout title={title} description={description} lang={lang}>
   <script type="application/ld+json" set:html={JSON.stringify(articleJsonLd)} />
   <div class="min-h-screen bg-white text-zinc-500 font-sans">
     <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
-      <a href="/" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors mb-12 inline-block">&larr; back</a>
+      <div class="flex items-center justify-between mb-12">
+        <a href="/" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors">&larr; {backLabel}</a>
+        {translationSlug && (
+          <nav class="flex items-center gap-1" aria-label="Language">
+            {langs.map((code) => (
+              lang === code ? (
+                <span
+                  class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  aria-current="true"
+                >{code.toUpperCase()}</span>
+              ) : (
+                <a
+                  href={`/essays/${translationSlug}`}
+                  class="text-[11px] font-mono px-2.5 py-1 rounded-full text-zinc-400 border border-transparent hover:text-emerald-600 hover:border-zinc-200 transition-colors"
+                  aria-label={code === 'tr' ? 'Türkçe oku' : 'Read in English'}
+                >{code.toUpperCase()}</a>
+              )
+            ))}
+          </nav>
+        )}
+      </div>
 
-      <article>
+      <article lang={lang}>
         <p class="text-xs font-mono text-zinc-400 mb-3 tracking-wider">{dateFormatted}</p>
         <h1 class="text-2xl sm:text-[28px] font-semibold text-zinc-900 leading-[1.25] tracking-tight mb-6">{title}</h1>
         <p class="text-[15px] text-zinc-600 italic leading-relaxed border-l-2 border-emerald-400 pl-4 mb-10">{description}</p>
