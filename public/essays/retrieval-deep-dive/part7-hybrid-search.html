@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hybrid search: dense and sparse, merged live</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 7 flagship animation
+     Self-contained: no external resources, no web fonts.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --radius-card: 14px;
+    --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 520ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .hs { max-width: 980px; margin: 0 auto; }
+
+  .hs-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 12px; }
+  .hs-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .hs-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .hs-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* query bar */
+  .hs-query { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; flex-wrap: wrap; }
+  .hs-query .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .hs-query .q {
+    font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--heading);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px;
+  }
+
+  /* controls */
+  .hs-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; margin: 0 0 16px; }
+  .hs-modes { display: inline-flex; border: 1px solid var(--border); border-radius: 11px; padding: 3px; background: var(--surface-1); gap: 3px; }
+  .hs-mode {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--muted);
+    background: transparent; border: none; border-radius: 8px; padding: 7px 15px; cursor: pointer;
+    transition: background-color 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .hs-mode[aria-pressed="true"] { background: #fff; color: var(--heading); box-shadow: 0 1px 2px rgba(15,23,42,0.10); }
+  .hs-mode:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); }
+
+  .hs-slider { display: flex; flex-direction: column; gap: 4px; min-width: 280px; flex: 1; }
+  .hs-slider .row { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 600; color: var(--body); }
+  .hs-slider .row .ends { color: var(--muted); font-weight: 500; }
+  .hs-slider .row .ends b { font-weight: 700; }
+  .hs-slider input[type="range"] { width: 100%; accent-color: var(--indigo); cursor: pointer; }
+  .hs-slider input[type="range"]:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; border-radius: 4px; }
+  .hs-slider.disabled { opacity: 0.4; pointer-events: none; }
+  .hs-alpha { font-family: var(--mono); color: var(--indigo-strong); font-variant-numeric: tabular-nums; }
+
+  /* three columns */
+  .hs-cols { display: grid; grid-template-columns: 1fr 1fr 1.12fr; gap: 16px; align-items: start; }
+  .hs-col { }
+  .hs-col h2 {
+    font-size: 13px; font-weight: 700; margin: 0 0 4px; letter-spacing: 0.02em;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .hs-col h2 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .hs-col .by { font-size: 11.5px; color: var(--muted); margin: 0 0 10px; }
+  .dot-dense { background: var(--violet); }
+  .dot-sparse { background: var(--teal); }
+  .dot-merge { background: var(--indigo); }
+  .hs-col.dense h2 { color: #7c3aed; }
+  .hs-col.sparse h2 { color: #0d9488; }
+  .hs-col.merge h2 { color: var(--indigo-strong); }
+
+  .hs-list { position: relative; }
+  .hs-row {
+    position: absolute; left: 0; right: 0;
+    display: flex; align-items: center; gap: 9px;
+    height: 48px; padding: 0 11px;
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    transition: top var(--dur) var(--ease), box-shadow 200ms var(--ease), border-color 200ms var(--ease), background-color 200ms var(--ease);
+    will-change: top;
+  }
+  .hs-rank { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--muted); width: 16px; text-align: center; flex: none; }
+  .hs-body { min-width: 0; flex: 1; }
+  .hs-name { font-size: 12.5px; font-weight: 600; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hs-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .hs-score { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--body); flex: none; font-variant-numeric: tabular-nums; }
+
+  /* the rescued exact-match chunk */
+  .hs-row.answer { border-color: #6ee7b7; background: #f0fdf9; }
+  .hs-row.answer .hs-name { color: #047857; }
+  .hs-row.answer.top { box-shadow: 0 4px 14px rgba(16,185,129,0.22); border-color: var(--emerald); }
+  .badge {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #047857; background: #d1fae5; border-radius: 5px; padding: 1px 5px; margin-left: 6px; white-space: nowrap;
+  }
+
+  .hs-note { font-size: 12.5px; color: var(--muted); margin: 14px 0 0; min-height: 18px; }
+  .hs-note b { color: var(--body); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hs-row { transition: box-shadow 1ms, border-color 1ms, background-color 1ms; }
+  }
+  @media (max-width: 720px) {
+    .hs-cols { grid-template-columns: 1fr; }
+    .hs-slider { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+  <main class="hs" aria-label="Interactive hybrid search demonstration">
+    <header class="hs-head">
+      <span class="hs-eyebrow">RAG from First Principles &#183; Part 7</span>
+      <h1 class="hs-title">Hybrid search, live</h1>
+      <p class="hs-sub">Two retrievers, one merged list. Drag the dial and watch the ranking change.</p>
+    </header>
+
+    <div class="hs-query">
+      <span class="lbl">Query</span>
+      <span class="q">how do I fix error E-4042 at checkout?</span>
+    </div>
+
+    <div class="hs-controls">
+      <div class="hs-modes" role="group" aria-label="Merge strategy">
+        <button class="hs-mode" id="mWeighted" type="button" aria-pressed="true">Weighted sum</button>
+        <button class="hs-mode" id="mRRF" type="button" aria-pressed="false">RRF</button>
+      </div>
+      <div class="hs-slider" id="alphaWrap">
+        <div class="row">
+          <label for="alphaR">Merge weight (alpha)</label>
+          <span class="ends"><b class="hs-alpha" id="alphaV">0.50</b></span>
+        </div>
+        <input id="alphaR" type="range" min="0" max="1" step="0.05" value="0.5"
+               aria-label="Alpha: 0 is pure sparse, 1 is pure dense" />
+        <div class="row ends"><span>0 &#183; all sparse</span><span>all dense &#183; 1</span></div>
+      </div>
+    </div>
+
+    <div class="hs-cols">
+      <section class="hs-col dense">
+        <h2><span class="dot dot-dense"></span>Dense</h2>
+        <p class="by">ranked by meaning</p>
+        <div class="hs-list" id="listDense"></div>
+      </section>
+      <section class="hs-col sparse">
+        <h2><span class="dot dot-sparse"></span>Sparse</h2>
+        <p class="by">ranked by keyword overlap</p>
+        <div class="hs-list" id="listSparse"></div>
+      </section>
+      <section class="hs-col merge">
+        <h2><span class="dot dot-merge"></span>Merged</h2>
+        <p class="by" id="mergeBy">weighted sum of both, alpha = 0.50</p>
+        <div class="hs-list" id="listMerge"></div>
+      </section>
+    </div>
+
+    <p class="hs-note" id="note" aria-live="polite"></p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- the candidate chunks, with the scores each retriever assigns ----
+  // dense = cosine of query/chunk embeddings (meaning);  sparse = BM25-style
+  // keyword overlap, normalized to 0..1. The story: chunk A literally answers
+  // the query (the exact code "E-4042") but dense rounds the code off, so dense
+  // ranks it near the bottom. Sparse ranks it first. The merge rescues it.
+  var CHUNKS = [
+    { id: "A", name: "Error E-4042: auth token expired, refresh and retry", dense: 0.55, sparse: 0.97, answer: true },
+    { id: "B", name: "Troubleshooting checkout & payment failures",         dense: 0.88, sparse: 0.44 },
+    { id: "C", name: "Resolving login and authentication issues",           dense: 0.80, sparse: 0.28 },
+    { id: "F", name: "Checkout shows a generic error after Pay",            dense: 0.70, sparse: 0.58 },
+    { id: "E", name: "Contact support about an order",                      dense: 0.62, sparse: 0.22 },
+    { id: "D", name: "Refund policy: refunds within 30 days",               dense: 0.45, sparse: 0.09 }
+  ];
+
+  var ROW_H = 48, GAP = 8, RRF_K = 60;
+  var mode = "weighted";
+  var alpha = 0.5;
+
+  var listDense  = document.getElementById("listDense");
+  var listSparse = document.getElementById("listSparse");
+  var listMerge  = document.getElementById("listMerge");
+  var alphaR     = document.getElementById("alphaR");
+  var alphaV     = document.getElementById("alphaV");
+  var alphaWrap  = document.getElementById("alphaWrap");
+  var mWeighted  = document.getElementById("mWeighted");
+  var mRRF       = document.getElementById("mRRF");
+  var mergeBy    = document.getElementById("mergeBy");
+  var note       = document.getElementById("note");
+
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // build a stable set of row elements for one list, keyed by chunk id
+  function buildList(container, withScore) {
+    var rows = {};
+    CHUNKS.forEach(function (c) {
+      var row = document.createElement("div");
+      row.className = "hs-row" + (c.answer ? " answer" : "");
+      row.innerHTML =
+        '<span class="hs-rank"></span>' +
+        '<span class="hs-body"><span class="hs-name">' + c.name +
+        (c.answer ? '<span class="badge">exact match</span>' : '') +
+        '</span><span class="hs-meta"></span></span>' +
+        '<span class="hs-score"></span>';
+      container.appendChild(row);
+      rows[c.id] = row;
+    });
+    container.style.height = (CHUNKS.length * ROW_H + (CHUNKS.length - 1) * GAP) + "px";
+    return rows;
+  }
+
+  var rowsDense  = buildList(listDense, true);
+  var rowsSparse = buildList(listSparse, true);
+  var rowsMerge  = buildList(listMerge, true);
+
+  function placeRanked(rows, scored, metaFn) {
+    // scored: [{id, score}] sorted desc; position each row by its rank
+    scored.forEach(function (s, i) {
+      var row = rows[s.id];
+      row.style.top = (i * (ROW_H + GAP)) + "px";
+      row.querySelector(".hs-rank").textContent = (i + 1);
+      row.querySelector(".hs-score").textContent = s.score.toFixed(2);
+      row.querySelector(".hs-meta").textContent = metaFn ? metaFn(s) : "";
+      row.classList.toggle("top", i === 0);
+    });
+  }
+
+  function sortDesc(arr) {
+    // stable-ish: tie-break by original index so motion is calm
+    return arr.slice().sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.idx - b.idx;
+    });
+  }
+
+  function rankOf(scored) {
+    var r = {};
+    scored.forEach(function (s, i) { r[s.id] = i + 1; });
+    return r;
+  }
+
+  function render() {
+    // 1. dense list
+    var dense = sortDesc(CHUNKS.map(function (c, i) { return { id: c.id, score: c.dense, idx: i }; }));
+    placeRanked(rowsDense, dense, function (s) { return "dense " + s.score.toFixed(2); });
+
+    // 2. sparse list
+    var sparse = sortDesc(CHUNKS.map(function (c, i) { return { id: c.id, score: c.sparse, idx: i }; }));
+    placeRanked(rowsSparse, sparse, function (s) { return "bm25 " + s.score.toFixed(2); });
+
+    // 3. merged list
+    var merged, metaFn;
+    if (mode === "weighted") {
+      // both score lists already live on 0..1 here, so a convex combination
+      // is honest. In real code you must normalize first (see the prose).
+      merged = sortDesc(CHUNKS.map(function (c, i) {
+        return { id: c.id, score: alpha * c.dense + (1 - alpha) * c.sparse, idx: i };
+      }));
+      metaFn = function (s) {
+        var c = CHUNKS.filter(function (x) { return x.id === s.id; })[0];
+        return "dense " + c.dense.toFixed(2) + " / bm25 " + c.sparse.toFixed(2);
+      };
+    } else {
+      // RRF: merge by rank, not raw score. No normalization, no alpha.
+      var dr = rankOf(dense), sr = rankOf(sparse);
+      merged = sortDesc(CHUNKS.map(function (c, i) {
+        var score = 1 / (RRF_K + dr[c.id]) + 1 / (RRF_K + sr[c.id]);
+        return { id: c.id, score: score * 100, idx: i }; // x100 just for a legible readout
+      }));
+      metaFn = function (s) { return "d#" + dr[s.id] + " + s#" + sr[s.id]; };
+    }
+    placeRanked(rowsMerge, merged, metaFn);
+
+    // narration
+    var aPos = 0;
+    dense.forEach(function (s, i) { if (s.id === "A") aPos = i + 1; });
+    var mPos = 0;
+    merged.forEach(function (s, i) { if (s.id === "A") mPos = i + 1; });
+    var topId = merged[0].id;
+    var topName = CHUNKS.filter(function (c) { return c.id === topId; })[0].name;
+    note.innerHTML = "The exact-match chunk sits at <b>rank " + aPos +
+      "</b> in dense alone, but the merge lifts it to <b>rank " + mPos + "</b>. " +
+      "Top merged result: <b>" + topName + "</b>.";
+  }
+
+  function setMode(m) {
+    mode = m;
+    mWeighted.setAttribute("aria-pressed", m === "weighted" ? "true" : "false");
+    mRRF.setAttribute("aria-pressed", m === "rrf" ? "true" : "false");
+    if (m === "rrf") {
+      alphaWrap.classList.add("disabled");
+      mergeBy.innerHTML = "reciprocal rank fusion (no alpha, no normalization)";
+    } else {
+      alphaWrap.classList.remove("disabled");
+      mergeBy.innerHTML = "weighted sum of both, alpha = " + alpha.toFixed(2);
+    }
+    render();
+  }
+
+  mWeighted.addEventListener("click", function () { setMode("weighted"); });
+  mRRF.addEventListener("click", function () { setMode("rrf"); });
+  alphaR.addEventListener("input", function () {
+    alpha = +alphaR.value;
+    alphaV.textContent = alpha.toFixed(2);
+    if (mode === "weighted") mergeBy.innerHTML = "weighted sum of both, alpha = " + alpha.toFixed(2);
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

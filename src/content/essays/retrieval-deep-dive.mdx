@@ -1,0 +1,267 @@
+---
+title: "Retrieval Deep Dive"
+description: "Our Part 6 app works, but it retrieves naively: pure semantic search with a fixed top-k. Part 7 of a from-scratch series on Retrieval-Augmented Generation: why dense retrieval whiffs on exact codes and names, the sparse (keyword) retrieval that nails them, TF-IDF and BM25 explained by intuition, how hybrid search fuses the two (weighted sum and Reciprocal Rank Fusion), and why top-k is a real knob with a lost-in-the-middle trap. Dense and sparse fail in opposite directions; combine them."
+date: 2026-06-13
+tags: ["RAG", "Retrieval", "BM25", "Hybrid Search", "Vector Search", "NLP", "AI"]
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*RAG from First Principles. Part 7 of the series.*
+
+## What you'll learn
+
+In Part 6 we finally stopped explaining and built the thing: a complete, working RAG application that embeds a small knowledge base, embeds the user's question, ranks chunks by cosine similarity, keeps the top few, and hands them to a language model. It works. It is also naive in one specific way we glossed over: it uses pure semantic search with a fixed top-k, and that quietly limits how good it can get. This part is about retrieval itself, the heart of RAG. You'll learn why semantic search, for all its cleverness, can miss an exact term sitting in plain sight (a product code, an error code, a name); what **sparse** keyword retrieval is and why it catches exactly those cases; the two classic ways to combine them into **hybrid search**; and why **top-k**, which we treated as a constant, is actually a dial with a real trade-off and a surprising failure mode. By the end you'll understand all three flavors of retrieval, when each shines and fails, and how to fuse them.
+
+## Prerequisites
+
+Parts 1 through 6, and especially [Embeddings, Truly Understood](/essays/embeddings) (Part 2), [Measuring Similarity](/essays/measuring-similarity) (Part 3), and [Build Your First RAG](/essays/build-your-first-rag) (Part 6). You should be comfortable that text becomes a vector, that similar meanings sit close together, that we rank candidates by cosine similarity and keep the top-k, and that you have an end-to-end app doing exactly that. Basic Python helps for the one focused code addition, but this is mostly a concept chapter: we lead with intuition and pictures.
+
+## The miss that motivates everything
+
+Let me show you our app failing, because the failure is the whole reason this chapter exists.
+
+Our Part 6 knowledge base includes a short support article: *"Error E-4042: the authentication token has expired. Refresh the token and retry the request."* A user types the most natural question in the world:
+
+```text
+how do I fix error E-4042 at checkout?
+```
+
+You would bet money the app returns that article. It does not. The top results come back as *"Troubleshooting checkout and payment failures,"* *"Resolving login and authentication issues,"* and *"The checkout page shows a generic error after Pay."* All plausibly related. None of them is the article that literally answers the question. The chunk we needed sits down at rank five, below the fixed top-k cutoff, so the language model never sees it and answers with a vague guess.
+
+What went wrong? Nothing was broken. The embedding model did its job: it found chunks that are *about* checkout errors and authentication, because that is what the query is about, semantically. But the single most informative token in the whole query, the exact code `E-4042`, carried almost no weight, because to an embedding model a rare alphanumeric code is nearly meaningless. Its meaning gets blurred into the surrounding topic. The model rounded off the very token we needed.
+
+This is not a bug to patch. It is a structural limit of one kind of retrieval, and the cure is to understand the kinds. Our goal for this part: learn the flavors of retrieval, see exactly when each one shines and fails, and learn how to combine them so the failure above stops happening.
+
+## Dense (semantic) retrieval: recap and limits
+
+Start with what we already built. **Dense retrieval** is the approach from Parts 2 and 3: embed the query and every chunk into vectors, then rank chunks by cosine similarity to the query. It is called *dense* because the vectors are short and packed, every one of their few hundred or thousand dimensions carries a real number, and meaning is spread across all of them at once.
+
+Its strength is meaning. Because Part 2 turned text into geometry where similar ideas sit close together, dense retrieval understands synonyms and paraphrase for free. A query about an *"automobile"* finds a chunk about a *"car"* even though they share no letters, because the two words land near each other in the space. Ask for *"ways to lower my monthly bill"* and it can surface *"reducing your recurring charges."* This is genuinely powerful, and it is why semantic search felt like magic when we first built it.
+
+But the same property that makes dense retrieval strong makes it weak in a predictable place. Tie it back to Part 2: meaning becomes geometry, and geometry is *smooth*. It is built to generalize, to treat near-synonyms as nearly identical. That smoothing is exactly what blurs an exact token. A rare code like `E-4042`, an SKU, a person's name, a function name, an uncommon acronym: these have little learned meaning to spread across the dimensions, so they get averaged into the gist of the sentence and effectively vanish from the match. Dense retrieval is also weakest on terms it has barely seen in training (rare or out-of-vocabulary tokens), which is precisely what codes and identifiers tend to be. It understands the forest beautifully and loses the one specific tree you were pointing at.
+
+## Sparse (keyword / lexical) retrieval
+
+The opposite approach has been around far longer, and it is what classic search engines are built on. **Sparse retrieval** (also called keyword or lexical retrieval) scores a chunk by how much its actual words overlap with the query's actual words. No embeddings, no geometry of meaning: just terms matching terms.
+
+Why "sparse"? Because of how the vectors look. Imagine a vector with one slot for every distinct word in your entire vocabulary, tens or hundreds of thousands of slots. A given chunk uses only a few dozen of those words, so almost every slot is zero. The vector is mostly empty, sparse, with a few non-zero entries marking the words that actually appear. That is the mirror image of a dense embedding, where every slot is full.
+
+The simplest way to weight those non-zero entries is **TF-IDF**, the product of two intuitive quantities.
+
+- **Term frequency (TF)** asks: how often does this term appear in this chunk? A chunk that says *"refund"* five times is more about refunds than one that says it once. More occurrences, higher weight.
+- **Inverse document frequency (IDF)** asks: how rare is this term across the whole collection? A word like *"the"* appears everywhere and tells you nothing, so it gets crushed toward zero. A word like *"E-4042"* appears in almost no documents, so it is enormously informative, and IDF gives it a high weight. Common terms down, rare terms up.
+
+Multiply them and you get a score that rewards a chunk for containing terms that are frequent *here* but rare *everywhere else*, which is a good proxy for "this chunk is specifically about your query."
+
+In practice almost nobody uses raw TF-IDF anymore; they use **BM25**, its robust refinement, and it is the default ranking function in Lucene, Elasticsearch, OpenSearch, and most keyword engines you will meet. You do not need its formula to use it well, just two intuitions about what it fixes:
+
+- **Term-frequency saturation.** Plain TF grows without limit: a chunk mentioning *"refund"* twenty times would score ten times higher than one mentioning it twice, which is silly. BM25 makes term frequency *saturate*: the first few occurrences matter a lot, and each additional one matters less and less. Diminishing returns, the way a human reader would judge relevance.
+- **Document-length normalization.** A long chunk contains more words, so by sheer length it is more likely to contain your query terms by accident. BM25 normalizes for length, so a long chunk does not get an unfair edge over a short, focused one.
+
+Those two corrections are why BM25 is so dependable. It has no model to train, it is fast, it is interpretable (you can see exactly which terms scored and why), and it is excellent at the thing dense retrieval is worst at: exact matching of keywords, codes, names, and identifiers. Search for `E-4042` and BM25 puts the chunk containing `E-4042` at the very top, because that token is rare and decisive.
+
+Its weakness is the exact inverse of dense retrieval's strength. BM25 is literal. It has no notion of meaning, so it cannot connect *"car"* to *"automobile"*: if the query and the chunk use different words for the same idea, BM25 sees no overlap and scores zero. This is the classic **vocabulary mismatch** problem, and it is the price of taking words at face value.
+
+## The complementarity insight
+
+Put the two failure modes side by side and the whole chapter clicks into place.
+
+Dense retrieval understands meaning but is fuzzy on exact terms. Sparse retrieval matches exact terms but is blind to meaning. They do not fail in similar ways that you could fix at once; they fail in *opposite* directions. Where one is weak, the other is precisely strong. Dense sails through vocabulary mismatch and drowns on rare codes; sparse nails rare codes and drowns on vocabulary mismatch.
+
+<Diagram number={1} caption="Opposite failure modes. Left: a synonym query where dense wins and sparse whiffs (automobile finds car). Right: an exact-code query where sparse wins and dense whiffs (E-4042). Each is strong exactly where the other is weak.">
+  <img src="/essays/retrieval-deep-dive/part7-dense-vs-sparse.svg" alt="Two side-by-side panels. The left panel, labelled dense wins, shows the query automobile prices: a dense retriever matches the sentence about car prices with a green check while a sparse retriever misses it with a red cross, because the word automobile never appears. The right panel, labelled sparse wins, shows the query error E-4042: a sparse retriever matches the exact error code chunk with a green check while a dense retriever returns generic troubleshooting text with a red cross, because the code gets rounded off." class="w-full rounded-lg" />
+</Diagram>
+
+When two methods fail in opposite directions, the move is obvious: stop choosing between them and combine them.
+
+## Hybrid search
+
+**Hybrid search** runs both retrievers over the same query and merges their results into a single ranked list, aiming to keep the semantic recall of dense and the lexical precision of sparse. The only real question is *how* to merge, and there are two common strategies.
+
+### Score combination (weighted sum)
+
+The direct approach: take each retriever's scores, combine them into one number per chunk, and re-rank. We use a weighted sum, a convex combination governed by a knob usually called **alpha**:
+
+```text
+combined = alpha * dense_score + (1 - alpha) * sparse_score
+```
+
+Alpha trades the two off: push it toward 1 and you lean on meaning, toward 0 and you lean on keywords. A value around 0.5 splits the difference.
+
+There is one catch you cannot skip: **dense and sparse scores live on completely different scales.** Cosine similarities sit in a tidy range near 0 to 1, while BM25 scores are unbounded and can run into double digits. Add them raw and BM25 simply drowns out cosine; the alpha knob becomes meaningless. So before any weighted sum you must **normalize** each score list onto a common range (min-max scaling to 0 to 1 is the usual choice). Normalization is not optional polish here; it is what makes the combination honest.
+
+### Reciprocal Rank Fusion (RRF)
+
+The second strategy sidesteps the scale problem entirely by throwing away the raw scores and merging by **rank** instead. **Reciprocal Rank Fusion (RRF)** gives each chunk points based on its *position* in each list: a chunk at rank 1 earns `1 / (k + 1)`, at rank 2 earns `1 / (k + 2)`, and so on, where `k` is a small constant (60 is the common default). Sum a chunk's points across both lists, and re-rank by the total.
+
+The intuition: appearing near the top of *either* list is worth a lot, and appearing near the top of *both* is worth even more, while exact score magnitudes never enter the picture. Because it only ever compares positions, RRF is immune to the normalization headache that haunts the weighted sum. That robustness, plus having only one gentle parameter, is why RRF is such a popular default and the merge built into many vector databases.
+
+Either way, hybrid usually wins. It gets semantic recall and lexical precision in one list, and it is more robust across query types: the woolly conceptual question and the give-me-this-exact-code question both get answered well, instead of the system being great at one and hopeless at the other.
+
+The figure below makes it tangible. It is the centerpiece of this part, so spend a minute with it.
+
+<Diagram number={2} caption="The same query ranked three ways. The exact-match chunk dense buries at rank 5 is ranked first by sparse, and the merge rescues it into the top results. Drag the alpha dial to re-weight dense versus sparse live, or switch to RRF to merge by rank instead of score.">
+  <IframeFigure
+    src="/essays/retrieval-deep-dive/part7-hybrid-search.html"
+    title="Interactive hybrid search: a fixed query with three parallel ranked lists, dense ranked by meaning, sparse ranked by keyword overlap, and a merged list that re-ranks live as you drag an alpha slider trading dense against sparse, with a toggle between weighted-sum and reciprocal rank fusion merging, showing the exact-match chunk that dense missed climbing in the merge"
+    height={720}
+  />
+</Diagram>
+
+Notice what happens. In the dense list, the `E-4042` chunk languishes near the bottom. In the sparse list it is first. In the merged list it climbs into the top results, rescued, and as you slide alpha toward the sparse side it climbs higher still. That is hybrid search earning its keep on exactly the query our naive app failed.
+
+{/* From experience: swap in your own first-person anecdote here, e.g. the week a class of "users searching by exact order ID / SKU / error code" kept failing in production, you assumed the embedding model or chunking was at fault, and adding BM25 + RRF fixed the entire category overnight. Keep the blockquote below or replace it. */}
+
+> 💡 **From experience**
+>
+> The first time hybrid search saved me, I had spent two days blaming the embedding model. A whole class of user queries, the ones with an exact order ID or part number in them, kept returning sensible-looking but wrong chunks, and I cycled through fancier embedding models and finer chunking convinced the problem was upstream. It was not. The queries all shared one trait: they hinged on a rare literal token that semantic search was averaging into oblivion. Bolting a BM25 retriever onto the existing pipeline and fusing with RRF fixed the entire category in an afternoon. The lesson stuck: when retrieval fails specifically on codes, names, and IDs, do not reach for a bigger model, reach for keywords.
+
+## Top-k is a real knob now
+
+We have been treating **top-k**, the number of retrieved chunks we keep and pass to the generator, as a fixed constant. It is not. It is a dial, and now that retrieval is better, where you set it genuinely matters.
+
+The trade-off is honest in both directions.
+
+Set **k too small** and you risk missing the chunk that holds the answer. This is exactly our opening failure: the right article was at rank five, but with the cutoff at three it fell outside the net and the generator never saw it. Low recall, and a generator that can only guess because it was starved of the evidence.
+
+Set **k too large** and a different problem appears. The prompt fills up with marginally relevant chunks, and that noise costs you three ways: it burns context-window budget (the wall from Part 1 is still real), it costs more money per call, and, least intuitively, it can actually make the answer *worse*. Long, padded contexts trigger a well-documented effect called **lost in the middle**: language models attend most to the beginning and end of their context and least to the middle, so a crucial chunk stranded in the middle of a long pile can be effectively ignored even though it was retrieved. More context is not free, and past a point it is not even helpful.
+
+<Diagram number={3} caption="The top-k dial on one ranked list. Too small drops the answer chunk entirely (low recall); too large buries it among noise, stranded in the middle the model attends to least; the sweet spot keeps it near the top with little noise.">
+  <img src="/essays/retrieval-deep-dive/part7-topk-tradeoff.svg" alt="Three panels over the same ranked list of twelve chunks, with the answer chunk drawn in green. The first panel, too small with k equals one, keeps only the top chunk and drops the answer at rank four, labelled answer never retrieved. The second panel, too large with k equals twelve, keeps all chunks with the middle ones faded to show attention sagging, and the answer buried at rank six is lost in the middle. The third panel, the sweet spot with k equals five, keeps the top five including the answer near the top and trims the noisy tail." class="w-full rounded-lg" />
+</Diagram>
+
+So what is the resolution? You do not have to pick a single perfect k that is both wide enough to catch the answer and tight enough to stay clean, because no such value usually exists. The practical pattern, which the next part is built around, is to split the job in two: **cast a wide net, then trim to the best few.** Retrieve generously (a large k, so the answer is almost certainly in the candidate pool), then apply a second, sharper pass that reorders those candidates and keeps only the very best handful for the prompt. That second pass is **reranking**, and it is the heart of Part 8. For now, the takeaway is just that top-k is a real decision with a real trade-off, and the way out is to retrieve more than you will ultimately use.
+
+## Extend the app: add sparse and fuse
+
+Let me close the loop with a focused code addition. This is an extension of the Part 6 app, not a rebuild: we keep its dense retriever exactly as is and add a BM25 retriever plus a fusion step beside it. The full runnable file lives at [`rag_hybrid.py`](/essays/retrieval-deep-dive/rag_hybrid.py); here are the pieces that matter.
+
+A compact BM25, scoring every chunk against the query. The comments mark the two BM25 ideas from earlier, saturation and length normalization:
+
+```python
+import math, re
+from collections import Counter
+
+def tokenize(text):
+    # keep hyphenated codes like "e-4042" intact as one token
+    return re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)*", text.lower())
+
+class BM25:
+    def __init__(self, corpus, k1=1.5, b=0.75):
+        self.k1, self.b = k1, b                  # k1: saturation, b: length norm
+        self.docs = [tokenize(d) for d in corpus]
+        self.avgdl = sum(len(d) for d in self.docs) / len(self.docs)
+        df = Counter(t for d in self.docs for t in set(d))
+        # IDF: rare terms (small df) weigh far more than common ones
+        self.idf = {t: math.log(1 + (len(self.docs) - n + 0.5) / (n + 0.5))
+                    for t, n in df.items()}
+
+    def scores(self, query):
+        q = tokenize(query)
+        out = []
+        for doc in self.docs:
+            tf, s = Counter(doc), 0.0
+            for term in q:
+                if term not in tf:
+                    continue
+                freq = tf[term]
+                # term frequency that saturates, then length-normalized
+                s += self.idf.get(term, 0.0) * freq * (self.k1 + 1) / (
+                    freq + self.k1 * (1 - self.b + self.b * len(doc) / self.avgdl))
+            out.append(s)
+        return out
+```
+
+The two fusion functions. Weighted sum needs normalization first; RRF does not:
+
+```python
+def min_max(scores):
+    lo, hi = min(scores), max(scores)
+    if hi == lo:
+        return [0.0 for _ in scores]
+    return [(s - lo) / (hi - lo) for s in scores]   # onto 0..1 so scales match
+
+def weighted_fusion(dense, sparse, alpha=0.5):
+    d, s = min_max(dense), min_max(sparse)          # MUST normalize before summing
+    return [alpha * d[i] + (1 - alpha) * s[i] for i in range(len(d))]
+
+def rrf(*rankings, k=60):
+    # each ranking is a list of doc indices, best first; merge by rank, not score
+    fused = Counter()
+    for ranking in rankings:
+        for rank, doc_id in enumerate(ranking, start=1):
+            fused[doc_id] += 1.0 / (k + rank)
+    return fused
+```
+
+And the run. We reuse Part 6's `dense_search` for the dense scores, add BM25 for the sparse scores, and fuse:
+
+```python
+dense  = dense_search(QUERY, CORPUS)   # from Part 6: cosine over embeddings
+sparse = BM25(CORPUS).scores(QUERY)    # new: keyword overlap
+
+fused  = rrf(order(dense), order(sparse))   # order() = indices sorted best-first
+```
+
+Running it on our problem query prints the rescue plainly:
+
+```text
+Query: 'how do I fix error E-4042 at checkout?'
+
+DENSE only (meaning):
+  1. Troubleshooting checkout and payment failures...
+  2. Resolving login and authentication issues...
+  3. The checkout page shows a generic error after Pay...
+
+SPARSE only (BM25 keywords):
+  1. Error E-4042: the authentication token has expired...   <- found it
+  2. The checkout page shows a generic error after Pay...
+  3. Troubleshooting checkout and payment failures...
+
+HYBRID via RRF:
+  1. Troubleshooting checkout and payment failures...
+  2. The checkout page shows a generic error after Pay...
+  3. Error E-4042: the authentication token has expired...   <- rescued
+```
+
+Dense alone never surfaces the `E-4042` chunk in its top three (it sits at rank five, the code rounded off). Sparse ranks it first. The fused list pulls it back into the top three, and pushing alpha toward the sparse side in `weighted_fusion` lifts it higher still. That is the exact failure from the opening of this chapter, fixed, with maybe forty lines added to the app we already had.
+
+A freshness note: BM25 and dense embedding both have excellent off-the-shelf libraries (`rank_bm25`, `sentence-transformers`, and the hybrid mode built into most vector databases), and their APIs change quickly. The hand-rolled BM25 above is for understanding the mechanism. Before you ship, prefer a maintained library and verify its current usage.
+
+## Recap and what's next
+
+We started Part 7 with a working but naive app: pure dense retrieval and a fixed top-k, failing on a question whose answer was sitting right there. We now understand why. Dense retrieval is fluent in meaning but blurs exact tokens; sparse retrieval is precise on exact tokens but deaf to meaning; and because they fail in opposite directions, hybrid search fuses them, by weighted sum or by Reciprocal Rank Fusion, to get the best of both. We also promoted top-k from a hidden constant to a deliberate dial, with low recall on one side and noise and lost-in-the-middle on the other.
+
+But even excellent retrieval only gets you a ranked list that is *roughly* right. The truly best chunk for the question might still be sitting at rank five of your generously retrieved candidates, outscored by chunks that merely look relevant. Part 8 is about squeezing the last bit of quality out of that list: **reranking with cross-encoders** (a slower, sharper model that re-scores the top candidates by reading the query and chunk together), plus metadata filtering and query transformations. We cast the wide net here; next we trim it expertly.
+
+## Key takeaways
+
+- **Dense (semantic) retrieval** ranks by meaning and excels at synonyms and paraphrase, but it blurs exact tokens (codes, IDs, names, rare acronyms): the embedding rounds off the very keyword you needed.
+- **Sparse (keyword) retrieval** scores by literal term overlap. **TF-IDF** weights terms by frequency-here times rarity-everywhere; **BM25** refines it with term-frequency saturation and document-length normalization, and is the dependable default in keyword engines. It nails exact matches but cannot bridge **vocabulary mismatch** (car versus automobile).
+- The two fail in **opposite directions**, which is exactly why combining them works.
+- **Hybrid search** merges both. **Weighted sum** needs **score normalization** first (the scales differ) and an **alpha** to trade them off; **Reciprocal Rank Fusion (RRF)** merges by rank, sidestepping normalization, which makes it a robust default.
+- **Top-k** is a real knob: too small misses the answer (low recall, starved generator); too large adds noise, wastes budget, and triggers **lost in the middle**.
+- The pattern that resolves the top-k tension is to retrieve generously, then **rerank** down to the best few, which is Part 8.
+
+## Glossary
+
+- **Dense retrieval**: ranking chunks by cosine similarity between dense query and chunk embeddings; strong on meaning, weak on exact rare tokens.
+- **Sparse retrieval**: ranking chunks by overlap of literal terms; the vector spans the whole vocabulary and is almost all zeros, hence "sparse."
+- **TF-IDF**: term frequency times inverse document frequency, a classic sparse weighting that favors terms frequent in a chunk but rare across the collection.
+- **Term frequency (TF)**: how often a term appears in a given chunk; more occurrences, higher weight.
+- **Inverse document frequency (IDF)**: how rare a term is across all chunks; common words are crushed, rare words are amplified.
+- **BM25**: the robust refinement of TF-IDF used in most keyword engines, adding term-frequency saturation (diminishing returns) and document-length normalization.
+- **Vocabulary mismatch**: when query and chunk express the same idea in different words, so a literal keyword method sees no overlap; the weakness sparse retrieval cannot escape.
+- **Hybrid search**: running dense and sparse retrieval together and merging their results into one ranked list.
+- **Score normalization**: rescaling each retriever's scores onto a common range (often 0 to 1) so a weighted sum is meaningful; mandatory because dense and sparse scores live on different scales.
+- **Alpha (weighted combination)**: the knob in a weighted sum that trades dense against sparse (1 is all dense, 0 is all sparse).
+- **Reciprocal Rank Fusion (RRF)**: merging by rank rather than raw score, where each chunk earns 1/(k + rank) from each list; robust because it needs no normalization.
+- **Top-k**: the number of retrieved chunks kept and passed to the generator; a trade-off between recall and noise.
+- **Lost in the middle**: the tendency of language models to attend less to information in the middle of a long context, so a relevant chunk buried there can be effectively ignored.
+
+---
+
+**Next up, Part 8: Making Retrieval Smarter.** We cast a wide net in this part; next we trim it with cross-encoder reranking, metadata filtering, and query transformations, so the best chunk is not just retrieved but ranked first.

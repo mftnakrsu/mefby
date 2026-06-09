@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 480" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <rect x="0" y="0" width="1080" height="480" fill="#ffffff" />
+
+  <!-- Title -->
+  <text x="30" y="40" font-size="20" font-weight="700" fill="#0f172a">Opposite failure modes</text>
+  <text x="30" y="62" font-size="13" fill="#64748b">Dense understands meaning but blurs exact tokens. Sparse matches exact tokens but is deaf to meaning.</text>
+
+  <!-- ===================== PANEL 1: DENSE WINS ===================== -->
+  <g>
+    <rect x="18" y="86" width="512" height="372" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+    <rect x="18" y="86" width="6" height="372" rx="3" fill="#8b5cf6" />
+    <text x="44" y="116" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#7c3aed">DENSE WINS &#183; SYNONYM / PARAPHRASE</text>
+
+    <!-- query -->
+    <text x="44" y="146" font-size="12" fill="#64748b">Query</text>
+    <rect x="44" y="156" width="220" height="40" rx="8" fill="#ffffff" stroke="#ddd6fe" />
+    <text x="60" y="181" font-size="14" font-weight="600" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, monospace">automobile prices</text>
+
+    <!-- dense result -->
+    <rect x="44" y="218" width="462" height="58" rx="8" fill="#ffffff" stroke="#a7f3d0" />
+    <circle cx="68" cy="247" r="11" fill="#10b981" />
+    <text x="68" y="252" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">&#10003;</text>
+    <text x="90" y="242" font-size="13.5" fill="#0f172a">"Used <tspan font-weight="700">car</tspan> prices rose sharply this year."</text>
+    <text x="90" y="264" font-size="12" fill="#059669">Dense retrieval matches: car and automobile sit close in meaning.</text>
+
+    <!-- sparse result -->
+    <rect x="44" y="288" width="462" height="58" rx="8" fill="#ffffff" stroke="#fecdd3" />
+    <circle cx="68" cy="317" r="11" fill="#f43f5e" />
+    <text x="68" y="322" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">&#215;</text>
+    <text x="90" y="312" font-size="13.5" fill="#0f172a">Same sentence, scored by keyword overlap.</text>
+    <text x="90" y="334" font-size="12" fill="#e11d48">Sparse misses it: the word "automobile" never appears.</text>
+
+    <text x="44" y="392" font-size="13.5" font-weight="700" fill="#7c3aed">Meaning matched, exact word irrelevant.</text>
+    <text x="44" y="416" font-size="12.5" fill="#334155">The vocabulary-mismatch problem: different words,</text>
+    <text x="44" y="436" font-size="12.5" fill="#334155">same idea. Dense sails through it; sparse cannot.</text>
+  </g>
+
+  <!-- ===================== PANEL 2: SPARSE WINS ===================== -->
+  <g>
+    <rect x="550" y="86" width="512" height="372" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+    <rect x="550" y="86" width="6" height="372" rx="3" fill="#14b8a6" />
+    <text x="576" y="116" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#0d9488">SPARSE WINS &#183; EXACT CODE / NAME</text>
+
+    <!-- query -->
+    <text x="576" y="146" font-size="12" fill="#64748b">Query</text>
+    <rect x="576" y="156" width="200" height="40" rx="8" fill="#ffffff" stroke="#99f6e4" />
+    <text x="592" y="181" font-size="14" font-weight="600" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, monospace">error E-4042</text>
+
+    <!-- sparse result -->
+    <rect x="576" y="218" width="462" height="58" rx="8" fill="#ffffff" stroke="#a7f3d0" />
+    <circle cx="600" cy="247" r="11" fill="#10b981" />
+    <text x="600" y="252" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">&#10003;</text>
+    <text x="622" y="242" font-size="13.5" fill="#0f172a"><tspan font-weight="700">Error E-4042</tspan>: the auth token expired.</text>
+    <text x="622" y="264" font-size="12" fill="#059669">Sparse nails it: the exact code is a rare, decisive keyword.</text>
+
+    <!-- dense result -->
+    <rect x="576" y="288" width="462" height="58" rx="8" fill="#ffffff" stroke="#fecdd3" />
+    <circle cx="600" cy="317" r="11" fill="#f43f5e" />
+    <text x="600" y="322" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">&#215;</text>
+    <text x="622" y="312" font-size="13.5" fill="#0f172a">"General troubleshooting tips for checkout."</text>
+    <text x="622" y="334" font-size="12" fill="#e11d48">Dense returns topical neighbours; "E-4042" gets rounded off.</text>
+
+    <text x="576" y="392" font-size="13.5" font-weight="700" fill="#0d9488">Exact token matched, meaning irrelevant.</text>
+    <text x="576" y="416" font-size="12.5" fill="#334155">Codes, IDs, names, acronyms: the embedding smooths</text>
+    <text x="576" y="436" font-size="12.5" fill="#334155">over the very token you needed. Sparse keeps it sharp.</text>
+  </g>
+</svg>
