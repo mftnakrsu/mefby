@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="360" fill="#ffffff"/>
+  <text x="24" y="30" font-size="15" font-weight="700" fill="#0f172a">Self-querying: one sentence, parsed into a search and a filter</text>
+  <text x="24" y="50" font-size="12" fill="#64748b">An LLM separates the part you can <tspan font-style="italic">mean</tspan> from the part you must <tspan font-style="italic">match</tspan>.</text>
+
+  <!-- NL query -->
+  <rect x="24" y="74" width="712" height="44" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="40" y="93" font-size="10.5" font-weight="700" fill="#64748b">USER, IN PLAIN LANGUAGE</text>
+  <text x="40" y="110" font-size="14" fill="#0f172a">"What did our <tspan font-weight="700" fill="#4f46e5">2023</tspan> <tspan font-weight="700" fill="#b45309">earnings reports</tspan> say about <tspan font-weight="700" fill="#0e7490">margins</tspan>?"</text>
+
+  <!-- LLM parser -->
+  <line x1="380" y1="118" x2="380" y2="140" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#a2)"/>
+  <rect x="300" y="140" width="160" height="40" rx="10" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="380" y="159" font-size="12" font-weight="700" fill="#4f46e5" text-anchor="middle">LLM query parser</text>
+  <text x="380" y="173" font-size="9.5" fill="#6366f1" text-anchor="middle">splits meaning from constraints</text>
+
+  <!-- split arrows -->
+  <line x1="340" y1="180" x2="220" y2="206" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#a2)"/>
+  <line x1="420" y1="180" x2="540" y2="206" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#a2)"/>
+
+  <!-- semantic query -->
+  <rect x="40" y="210" width="300" height="74" rx="12" fill="#ecfeff" stroke="#06b6d4"/>
+  <text x="56" y="231" font-size="10.5" font-weight="700" fill="#0e7490">SEMANTIC QUERY  (vector search)</text>
+  <rect x="56" y="242" width="120" height="28" rx="7" fill="#ffffff" stroke="#06b6d4"/>
+  <text x="116" y="261" font-size="13" font-weight="700" fill="#0e7490" text-anchor="middle">"margins"</text>
+  <text x="190" y="261" font-size="10.5" fill="#475569">embed and match by meaning</text>
+
+  <!-- metadata filter -->
+  <rect x="420" y="210" width="300" height="74" rx="12" fill="#fffbeb" stroke="#f59e0b"/>
+  <text x="436" y="231" font-size="10.5" font-weight="700" fill="#b45309">METADATA FILTER  (exact match)</text>
+  <rect x="436" y="242" width="128" height="28" rx="7" fill="#ffffff" stroke="#f59e0b"/>
+  <text x="500" y="260" font-size="11" font-weight="700" fill="#b45309" text-anchor="middle">year = 2023</text>
+  <rect x="572" y="242" width="132" height="28" rx="7" fill="#ffffff" stroke="#f59e0b"/>
+  <text x="638" y="260" font-size="10" font-weight="700" fill="#b45309" text-anchor="middle">type = earnings_report</text>
+
+  <!-- converge to filtered search -->
+  <line x1="190" y1="284" x2="340" y2="312" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#a2)"/>
+  <line x1="560" y1="284" x2="420" y2="312" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#a2)"/>
+  <rect x="250" y="316" width="260" height="34" rx="9" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="380" y="338" font-size="12.5" font-weight="700" fill="#4f46e5" text-anchor="middle">filtered vector search</text>
+</svg>

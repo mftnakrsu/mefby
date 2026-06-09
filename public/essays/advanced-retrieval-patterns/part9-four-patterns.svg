@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 470" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="760" height="470" fill="#ffffff"/>
+  <text x="24" y="30" font-size="15" font-weight="700" fill="#0f172a">Four ways to decouple what you search from what you return</text>
+  <text x="24" y="50" font-size="12" fill="#64748b">Each pattern searches on one unit and serves the model a different one.</text>
+
+  <!-- ===================== Panel 1: Parent-document ===================== -->
+  <g transform="translate(24,68)">
+    <rect width="344" height="182" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <circle cx="22" cy="26" r="4" fill="#6366f1"/>
+    <text x="34" y="30" font-size="13.5" font-weight="700" fill="#0f172a">Parent-document</text>
+    <text x="22" y="48" font-size="11.5" fill="#64748b">small to big</text>
+
+    <!-- child -->
+    <rect x="22" y="74" width="86" height="34" rx="7" fill="#ecfeff" stroke="#06b6d4"/>
+    <text x="65" y="95" font-size="11" font-weight="600" fill="#0e7490" text-anchor="middle">child</text>
+    <text x="65" y="124" font-size="9.5" fill="#64748b" text-anchor="middle">search this</text>
+
+    <line x1="116" y1="91" x2="156" y2="91" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#arr)"/>
+
+    <!-- parent -->
+    <rect x="166" y="64" width="156" height="56" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+    <text x="244" y="88" font-size="11" font-weight="700" fill="#4f46e5" text-anchor="middle">parent</text>
+    <text x="244" y="104" font-size="9" fill="#6366f1" text-anchor="middle">(whole section)</text>
+    <text x="244" y="136" font-size="9.5" fill="#64748b" text-anchor="middle">serve this to the LLM</text>
+
+    <text x="22" y="166" font-size="10.5" fill="#475569">Index children, serve parents.</text>
+  </g>
+
+  <!-- ===================== Panel 2: Sentence-window ===================== -->
+  <g transform="translate(392,68)">
+    <rect width="344" height="182" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <circle cx="22" cy="26" r="4" fill="#06b6d4"/>
+    <text x="34" y="30" font-size="13.5" font-weight="700" fill="#0f172a">Sentence-window</text>
+    <text x="22" y="48" font-size="11.5" fill="#64748b">sentence plus neighbours</text>
+
+    <!-- sentences row -->
+    <g transform="translate(22,72)">
+      <rect x="0"   y="6" width="56" height="26" rx="5" fill="#f1f5f9" stroke="#cbd5e1"/>
+      <rect x="64"  y="6" width="56" height="26" rx="5" fill="#f1f5f9" stroke="#cbd5e1"/>
+      <rect x="128" y="6" width="56" height="26" rx="5" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.6"/>
+      <rect x="192" y="6" width="56" height="26" rx="5" fill="#f1f5f9" stroke="#cbd5e1"/>
+      <rect x="256" y="6" width="44" height="26" rx="5" fill="#f1f5f9" stroke="#cbd5e1"/>
+      <text x="156" y="23" font-size="10" font-weight="700" fill="#0e7490" text-anchor="middle">hit</text>
+      <!-- window bracket -->
+      <path d="M60,42 L60,48 L252,48 L252,42" fill="none" stroke="#6366f1" stroke-width="1.6"/>
+      <text x="156" y="64" font-size="9.5" fill="#4f46e5" text-anchor="middle">return hit +/- N neighbours</text>
+    </g>
+
+    <text x="22" y="150" font-size="10.5" fill="#475569">A dynamic window, not a fixed unit.</text>
+    <text x="22" y="166" font-size="10.5" fill="#475569">It can cross section boundaries.</text>
+  </g>
+
+  <!-- ===================== Panel 3: Self-querying ===================== -->
+  <g transform="translate(24,266)">
+    <rect width="344" height="182" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <circle cx="22" cy="26" r="4" fill="#f59e0b"/>
+    <text x="34" y="30" font-size="13.5" font-weight="700" fill="#0f172a">Self-querying</text>
+    <text x="22" y="48" font-size="11.5" fill="#64748b">natural language to query plus filter</text>
+
+    <rect x="22" y="64" width="300" height="28" rx="6" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="32" y="82" font-size="10.5" fill="#334155">"2023 earnings reports about margins"</text>
+
+    <line x1="110" y1="96" x2="92" y2="116" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+    <line x1="232" y1="96" x2="250" y2="116" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+
+    <rect x="22" y="120" width="130" height="34" rx="7" fill="#eef2ff" stroke="#6366f1"/>
+    <text x="87" y="135" font-size="9.5" fill="#6366f1" text-anchor="middle">semantic query</text>
+    <text x="87" y="149" font-size="10.5" font-weight="700" fill="#4f46e5" text-anchor="middle">"margins"</text>
+
+    <rect x="192" y="120" width="130" height="34" rx="7" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="257" y="135" font-size="9.5" fill="#b45309" text-anchor="middle">metadata filter</text>
+    <text x="257" y="149" font-size="9.5" font-weight="700" fill="#b45309" text-anchor="middle">year=2023, type=report</text>
+
+    <text x="22" y="172" font-size="10.5" fill="#475569">The filter is inferred, not typed.</text>
+  </g>
+
+  <!-- ===================== Panel 4: Contextual compression ===================== -->
+  <g transform="translate(392,266)">
+    <rect width="344" height="182" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <circle cx="22" cy="26" r="4" fill="#14b8a6"/>
+    <text x="34" y="30" font-size="13.5" font-weight="700" fill="#0f172a">Contextual compression</text>
+    <text x="22" y="48" font-size="11.5" fill="#64748b">chunk to only the relevant bits</text>
+
+    <!-- raw chunk -->
+    <rect x="22" y="66" width="116" height="86" rx="7" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="32" y="76" width="96" height="7" rx="3" fill="#cbd5e1"/>
+    <rect x="32" y="89" width="96" height="7" rx="3" fill="#10b981"/>
+    <rect x="32" y="102" width="96" height="7" rx="3" fill="#cbd5e1"/>
+    <rect x="32" y="115" width="96" height="7" rx="3" fill="#10b981"/>
+    <rect x="32" y="128" width="96" height="7" rx="3" fill="#cbd5e1"/>
+    <text x="80" y="148" font-size="9" fill="#64748b" text-anchor="middle">retrieved chunk</text>
+
+    <line x1="146" y1="105" x2="186" y2="105" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#arr)"/>
+    <text x="166" y="98" font-size="9" fill="#64748b" text-anchor="middle">compress</text>
+
+    <!-- compressed -->
+    <rect x="196" y="80" width="126" height="50" rx="7" fill="#f0fdfa" stroke="#14b8a6"/>
+    <rect x="208" y="92" width="102" height="7" rx="3" fill="#10b981"/>
+    <rect x="208" y="105" width="102" height="7" rx="3" fill="#10b981"/>
+    <text x="259" y="146" font-size="9" fill="#0f766e" text-anchor="middle">only what answers the query</text>
+
+    <text x="22" y="172" font-size="10.5" fill="#475569">Filters content within a chunk.</text>
+  </g>
+</svg>

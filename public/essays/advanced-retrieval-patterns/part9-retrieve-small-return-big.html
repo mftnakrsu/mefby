@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Retrieve small, return big</title>
+<style>
+  :root{
+    --bg:#ffffff; --surface:#f8fafc; --surface2:#f1f5f9; --border:#e2e8f0;
+    --heading:#0f172a; --body:#334155; --muted:#64748b;
+    --indigo:#6366f1; --indigo-d:#4f46e5; --cyan:#06b6d4; --teal:#14b8a6;
+    --emerald:#10b981; --amber:#f59e0b;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--body); font-family:var(--sans);
+    font-size:15px; line-height:1.5; padding:18px;
+  }
+  .wrap{max-width:760px; margin:0 auto}
+  .topbar{display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:14px}
+  .modes{display:inline-flex; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:3px}
+  .modes button{
+    appearance:none; border:0; background:transparent; cursor:pointer;
+    font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--muted);
+    padding:7px 12px; border-radius:8px; transition:all .15s ease;
+  }
+  .modes button[aria-pressed="true"]{background:var(--bg); color:var(--indigo-d); box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .legend{display:flex; gap:14px; font-size:12px; color:var(--muted); align-items:center}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .dot{width:10px; height:10px; border-radius:3px; display:inline-block}
+  .dot.search{background:var(--cyan)}
+  .dot.serve{background:var(--indigo)}
+
+  .query{
+    font-family:var(--mono); font-size:13px; color:var(--heading);
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:10px 12px; margin-bottom:14px; opacity:0; transition:opacity .35s ease;
+  }
+  .query.show{opacity:1}
+  .query b{color:var(--indigo-d); font-weight:600}
+
+  .doc{
+    border:1px solid var(--border); border-radius:14px; background:var(--bg);
+    padding:10px; overflow:hidden;
+  }
+  .parent{
+    border:1.5px dashed transparent; border-radius:10px; padding:6px; margin:2px 0;
+    transition:border-color .35s ease, background .35s ease;
+  }
+  .parent.served{border-color:var(--indigo); background:rgba(99,102,241,.06)}
+  .ptag{
+    font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--muted); padding:0 4px 4px; opacity:.0; transition:opacity .3s ease;
+  }
+  .parent.served .ptag{opacity:1; color:var(--indigo-d)}
+  .child{
+    position:relative; font-size:13.5px; color:var(--body);
+    padding:8px 10px; margin:4px 0; border-radius:8px;
+    background:var(--surface); border:1px solid var(--border);
+    transition:all .35s ease;
+  }
+  .child.served{background:rgba(99,102,241,.10); border-color:rgba(99,102,241,.45); color:var(--heading)}
+  .child.hit{
+    background:rgba(6,182,212,.14); border-color:var(--cyan); color:var(--heading);
+    box-shadow:0 0 0 3px rgba(6,182,212,.16);
+  }
+  .child.hit.served{box-shadow:0 0 0 3px rgba(6,182,212,.16)}
+  .score{
+    position:absolute; top:50%; right:8px; transform:translateY(-50%);
+    font-family:var(--mono); font-size:11px; font-weight:700; color:#fff;
+    background:var(--cyan); border-radius:999px; padding:2px 8px;
+    opacity:0; transition:opacity .3s ease;
+  }
+  .child.hit .score{opacity:1}
+
+  .caption{
+    margin-top:14px; min-height:40px; font-size:13.5px; color:var(--body);
+    background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--indigo);
+    border-radius:8px; padding:10px 12px;
+  }
+  .caption b{color:var(--heading)}
+
+  .controls{display:flex; align-items:center; gap:8px; margin-top:14px}
+  .controls button{
+    appearance:none; cursor:pointer; font-family:var(--sans); font-size:13px; font-weight:600;
+    color:var(--body); background:var(--bg); border:1px solid var(--border);
+    border-radius:8px; padding:7px 12px; transition:all .15s ease;
+  }
+  .controls button:hover{border-color:var(--indigo); color:var(--indigo-d)}
+  .controls button:disabled{opacity:.4; cursor:not-allowed}
+  .controls button.play{background:var(--indigo); color:#fff; border-color:var(--indigo)}
+  .controls button.play:hover{background:var(--indigo-d); color:#fff}
+  .spacer{flex:1}
+  .dots{display:flex; gap:7px}
+  .pdot{width:8px; height:8px; border-radius:999px; background:var(--border); border:0; padding:0; cursor:pointer}
+  .pdot[aria-current="true"]{background:var(--indigo); transform:scale(1.25)}
+  .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="modes" role="group" aria-label="Retrieval pattern">
+      <button id="m-parent" aria-pressed="true">Parent-document</button>
+      <button id="m-window" aria-pressed="false">Sentence-window</button>
+    </div>
+    <div class="legend">
+      <span><i class="dot search"></i> what we <b>search</b> (small)</span>
+      <span><i class="dot serve"></i> what the <b>LLM gets</b> (big)</span>
+    </div>
+  </div>
+
+  <div class="query" id="query">query: <b>"do I have to pay for return shipping?"</b></div>
+
+  <div class="doc" id="doc" aria-hidden="true"></div>
+
+  <div class="caption" id="caption" aria-live="polite"></div>
+
+  <div class="controls">
+    <button id="restart" title="Restart">↺ Restart</button>
+    <button id="back" title="Back">‹ Back</button>
+    <button id="play" class="play" title="Play">▶ Play</button>
+    <button id="next" title="Next">Next ›</button>
+    <span class="spacer"></span>
+    <div class="dots" id="dots" role="tablist" aria-label="Steps"></div>
+  </div>
+  <p class="sr" aria-live="polite" id="srlive"></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  // Flat list of small CHILD chunks (sentences) + which PARENT each belongs to.
+  var CHILDREN = [
+    {t:"Refunds are accepted within 30 days of purchase.",            p:0},
+    {t:"The item must be unused and in its original packaging.",      p:0},
+    {t:"Shipping fees are not refundable.",                           p:0},
+    {t:"For a different size or color, request an exchange instead.", p:1},
+    {t:"Exchanges ship free of charge.",                              p:1},
+    {t:"Items marked final sale cannot be returned or exchanged.",    p:1},
+    {t:"Electronics include a one-year limited warranty.",            p:2},
+    {t:"It covers manufacturing defects, not accidental damage.",     p:2}
+  ];
+  var PARENT_NAMES = ["Refunds", "Exchanges", "Warranty"];
+  var HIT = 2;            // the query matches this child (last sentence of parent 0)
+  var SCORE = "0.71";
+  var WINDOW = 1;        // sentence-window: hit +/- N neighbors
+
+  var mode = "parent";   // "parent" | "window"
+  var step = 0;
+  var STEPS = 4;         // 0 split, 1 query, 2 match, 3 expand
+  var playing = false, timer = null;
+
+  var docEl   = document.getElementById("doc");
+  var queryEl = document.getElementById("query");
+  var capEl   = document.getElementById("caption");
+  var dotsEl  = document.getElementById("dots");
+  var srEl    = document.getElementById("srlive");
+  var reduce  = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Build the document once.
+  var childEls = [];
+  (function build(){
+    var lastP = -1, parentEl = null;
+    CHILDREN.forEach(function(c, i){
+      if(c.p !== lastP){
+        parentEl = document.createElement("div");
+        parentEl.className = "parent";
+        parentEl.dataset.p = c.p;
+        var tag = document.createElement("div");
+        tag.className = "ptag";
+        tag.textContent = PARENT_NAMES[c.p] + " section";
+        parentEl.appendChild(tag);
+        docEl.appendChild(parentEl);
+        lastP = c.p;
+      }
+      var el = document.createElement("div");
+      el.className = "child";
+      el.innerHTML = '<span class="txt"></span><span class="score">'+SCORE+'</span>';
+      el.querySelector(".txt").textContent = c.t;
+      parentEl.appendChild(el);
+      childEls.push(el);
+    });
+  })();
+
+  // Which children get "served" (highlighted indigo) at the expand step.
+  function servedSet(){
+    var s = {};
+    if(mode === "parent"){
+      var pid = CHILDREN[HIT].p;
+      CHILDREN.forEach(function(c,i){ if(c.p === pid) s[i] = true; });
+    } else {
+      for(var i = HIT - WINDOW; i <= HIT + WINDOW; i++){
+        if(i >= 0 && i < CHILDREN.length) s[i] = true;
+      }
+    }
+    return s;
+  }
+
+  var CAPTIONS = {
+    parent: [
+      "We split the document into small <b>child chunks</b> (one sentence each). Small chunks embed sharply, so they match precisely.",
+      "A query arrives. Pure vector search will score every child by meaning.",
+      "One child matches best, with a <b>sharp score</b>. This is the unit we <b>searched</b> on. But it is a single sentence: too thin to answer well.",
+      "<b>Parent-document:</b> we trade the matched child up for its whole <b>parent</b> section (a fixed, pre-defined unit). We searched a sentence; the <b>LLM receives the entire Refunds section</b>."
+    ],
+    window: [
+      "We split the document into small <b>child chunks</b> (one sentence each). Small chunks embed sharply, so they match precisely.",
+      "A query arrives. Pure vector search will score every child by meaning.",
+      "One child matches best, with a <b>sharp score</b>. This is the unit we <b>searched</b> on. But it is a single sentence: too thin to answer well.",
+      "<b>Sentence-window:</b> we expand to a dynamic window of neighbours around the hit (here +/-1). Notice it <b>spills past the section boundary</b> into Exchanges, where a fixed parent never would."
+    ]
+  };
+
+  function render(){
+    // clear
+    childEls.forEach(function(el){ el.classList.remove("hit","served"); });
+    Array.prototype.forEach.call(docEl.querySelectorAll(".parent"), function(p){ p.classList.remove("served"); });
+    queryEl.classList.toggle("show", step >= 1);
+
+    if(step >= 2){
+      childEls[HIT].classList.add("hit");
+    }
+    if(step >= 3){
+      var s = servedSet();
+      Object.keys(s).forEach(function(k){ childEls[+k].classList.add("served"); });
+      if(mode === "parent"){
+        var pid = CHILDREN[HIT].p;
+        var pEl = docEl.querySelector('.parent[data-p="'+pid+'"]');
+        if(pEl) pEl.classList.add("served");
+      }
+    }
+
+    capEl.innerHTML = CAPTIONS[mode][step];
+    srEl.textContent = "Step " + (step+1) + " of " + STEPS + ". " + capEl.textContent;
+
+    // dots
+    Array.prototype.forEach.call(dotsEl.children, function(d, i){
+      d.setAttribute("aria-current", i === step ? "true" : "false");
+    });
+    document.getElementById("back").disabled = (step === 0);
+    document.getElementById("next").disabled = (step === STEPS - 1);
+  }
+
+  // dots
+  for(var i=0;i<STEPS;i++){
+    var b = document.createElement("button");
+    b.className = "pdot"; b.setAttribute("role","tab");
+    b.setAttribute("aria-label","Step "+(i+1));
+    (function(idx){ b.addEventListener("click", function(){ stop(); step = idx; render(); }); })(i);
+    dotsEl.appendChild(b);
+  }
+
+  function go(n){ step = Math.max(0, Math.min(STEPS-1, n)); render(); }
+  function stop(){ playing = false; if(timer){ clearInterval(timer); timer = null; } setPlay(); }
+  function setPlay(){
+    var p = document.getElementById("play");
+    p.textContent = playing ? "❚❚ Pause" : "▶ Play";
+  }
+  function play(){
+    if(playing){ stop(); return; }
+    if(step === STEPS-1) step = 0;
+    playing = true; setPlay();
+    timer = setInterval(function(){
+      if(step >= STEPS-1){ stop(); return; }
+      step++; render();
+    }, reduce ? 1500 : 1900);
+    render();
+  }
+
+  document.getElementById("next").addEventListener("click", function(){ stop(); go(step+1); });
+  document.getElementById("back").addEventListener("click", function(){ stop(); go(step-1); });
+  document.getElementById("restart").addEventListener("click", function(){ stop(); go(0); });
+  document.getElementById("play").addEventListener("click", play);
+
+  function setMode(m){
+    mode = m;
+    document.getElementById("m-parent").setAttribute("aria-pressed", m==="parent");
+    document.getElementById("m-window").setAttribute("aria-pressed", m==="window");
+    if(step < 2) step = 2;   // jump to the interesting step so the toggle is felt
+    render();
+  }
+  document.getElementById("m-parent").addEventListener("click", function(){ stop(); setMode("parent"); });
+  document.getElementById("m-window").addEventListener("click", function(){ stop(); setMode("window"); });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key === "ArrowRight"){ stop(); go(step+1); }
+    else if(e.key === "ArrowLeft"){ stop(); go(step-1); }
+    else if(e.key === " "){ e.preventDefault(); play(); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

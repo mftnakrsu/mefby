@@ -1,0 +1,230 @@
+---
+title: "Advanced Retrieval Patterns"
+description: "Eight parts in, your pipeline retrieves well. But it still assumes one unit of text does triple duty: the thing you embed, the thing you search, and the thing you hand the model. Part 9 of a from-scratch series on Retrieval-Augmented Generation breaks that assumption. The big idea is decoupling: the best unit to search on (small, sharp) is rarely the best unit to generate from (large, rich). Four patterns put it to work, parent-document, sentence-window, self-querying, and contextual compression, with one focused code addition on the running app."
+date: 2026-06-15
+tags: ["RAG", "Retrieval", "Chunking", "Vector Search", "LLM", "Python", "AI"]
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*RAG from First Principles. Part 9 of the series.*
+
+## What you'll learn
+
+For eight parts we have been sharpening retrieval from every angle. We built the pipeline by hand (Part 6), added sparse and hybrid search (Part 7), then layered on metadata filtering, query transformations, and reranking (Part 8). We made the query better, the candidate set better, and the ranking better. But we never questioned the one thing every part quietly assumed: that a single piece of text should do triple duty as the thing we embed, the thing we search, and the thing we hand to the model. This part names that assumption and breaks it. The whole chapter rests on one idea, **decoupling the unit you search from the unit you generate from**, and four patterns that put it to work. You will leave able to look at a failing answer and say "the retrieval is fine, it is the *unit* that is wrong," and know which pattern fixes it.
+
+## Prerequisites
+
+Parts 1 through 8, and especially two of them. [Documents and Chunking](/essays/documents-and-chunking) (Part 5), because this entire chapter is the resolution to the chunk-size dilemma it raised. And [Build Your First RAG](/essays/build-your-first-rag) (Part 6), whose small Python app we extend at the end. Part 7 ([Retrieval Deep Dive](/essays/retrieval-deep-dive)) and Part 8 help, since these patterns sit happily alongside hybrid search, filtering, and reranking. Basic Python is assumed; the code is one focused addition, not a rebuild.
+
+## The assumption we never questioned
+
+Here is the shape of every pipeline we have built. We take a document, split it into chunks, embed each chunk into a vector, and store it. A query comes in, we embed it, we find the nearest chunks, and we paste those exact chunks into the prompt. Notice that one object, *the chunk*, plays three roles without complaint:
+
+1. It is **embedded**: turned into the vector that represents its meaning.
+2. It is **searched**: that vector is what the query is compared against.
+3. It is **generated from**: its text is what the model reads to answer.
+
+We have spent eight parts improving how we *use* this object and never once asked whether the same object should play all three roles. It should not. And the moment you see why, a problem that has been nagging since Part 5 dissolves.
+
+Recall the chunk-size dilemma. Small chunks (a sentence, a line) retrieve **precisely**: the vector is about one idea, so it matches sharply and is rarely diluted by unrelated text sitting in the same chunk. But a single sentence is thin: hand it to the model and it has no surrounding context to reason with, so it answers narrowly or wrongly. Large chunks (a section, a page) are the mirror image: they give the model plenty of context to generate a full answer, but they retrieve **fuzzily**, because one vector now has to average together five different ideas, and that blurred average matches everything weakly and nothing sharply. In Part 5 we treated this as a dial to tune: pick a chunk size that is the least-bad compromise for both jobs.
+
+The insight of this chapter is that it was never one dial. It was two jobs wearing one mask. The fix is not a better compromise, it is to stop compromising:
+
+> **Decouple the unit you search from the unit you return.** Search on something small and sharp. Hand the model something large and rich. They do not have to be the same text.
+
+Every pattern below is a different answer to the question "small to search, big to generate, how exactly?" Here is the map of the four we will cover.
+
+<Diagram number={1} caption="The four patterns, side by side. Each one searches on a small, sharp unit and serves the model a larger or cleaner one. Keep this as a one-glance reference for the rest of the chapter.">
+  <img src="/essays/advanced-retrieval-patterns/part9-four-patterns.svg" alt="A two-by-two grid of four retrieval patterns. Parent-document, labelled small to big, shows a small child box with an arrow to a larger parent box, captioned index children serve parents. Sentence-window shows a row of sentence boxes with the middle one highlighted as the hit and a bracket marking the hit plus or minus N neighbours. Self-querying shows a natural-language query splitting into a semantic query chip reading margins and a metadata filter chip reading year equals 2023 type equals report. Contextual compression shows a retrieved chunk of five lines, two of them green, compressing into a smaller box containing only the two green lines, captioned only what answers the query." class="w-full rounded-lg" />
+</Diagram>
+
+## Pattern 1: Parent-document retrieval (small to big)
+
+This is the purest expression of decoupling, so we start here.
+
+The problem: your small chunks match beautifully, but when one wins, a lone sentence is not enough for the model to give a complete answer. It found the right place in the document and then handed the model a peephole view of it.
+
+The pattern: split each document twice. Cut it into large **parent chunks** (a paragraph, a section, sometimes the whole document), the unit you would *like* the model to read. Then cut each parent into small **child chunks** (a sentence or two), the unit that retrieves sharply. You embed and search only the children. When a child wins, you do not return it. You look up the parent it came from and return *that* to the model. Index children, serve parents.
+
+> **Parent chunk:** a larger unit of text (paragraph, section, document) that gives the model enough context to answer well.
+> **Child chunk:** a small unit (a sentence or two) carved from a parent, embedded and searched for sharp matching. A child is never sent to the model on its own; it is a pointer to its parent.
+
+The mechanics are just bookkeeping. Alongside the child vectors, you keep a map from each child back to its parent. A child wins the vector search; you follow the map; you serve the parent. That is the entire pattern, and we will write the eleven lines that do it later in this part.
+
+When to reach for it: the failure mode is unmistakable. Retrieval is clearly finding the right region of your documents (your relevance metrics look fine, the matched chunk is on-topic) but answers are thin, miss caveats, or stop just short of the real answer. That gap between "found the right place" and "could not answer from it" is parent-document's exact signature.
+
+## Pattern 2: Sentence-window retrieval
+
+The close cousin. Same goal, a slightly different mechanism, and the contrast between them is worth holding in your head.
+
+Sentence-window takes the small-to-search idea to its limit: you embed and retrieve at the level of a **single sentence**, the sharpest possible unit. But on a hit, instead of returning a pre-defined parent, you return the matched sentence plus a **window** of its N neighbours, the sentences immediately before and after it in the original document. The model gets the hit in its natural surroundings.
+
+The difference from parent-document is subtle but real. Parent-document returns a **fixed, pre-defined unit**: whichever section or paragraph the child was carved from, with boundaries you decided at indexing time. Sentence-window returns a **dynamic window centred on the hit**, computed at query time, and it does not care about your section boundaries: if the hit is the last sentence of one section, the window happily reaches into the next one. Parent-document respects the document's structure; sentence-window respects proximity to the match. Reach for sentence-window when the relevant context is "whatever is physically near this sentence" rather than "the section this sentence belongs to," for example in flowing prose, transcripts, or articles where ideas bleed across your chosen boundaries. Reach for parent-document when your documents have meaningful structure (policy sections, API methods, contract clauses) and the right context is the whole structural unit.
+
+The interactive below makes the distinction concrete. Watch a query match one small child, then toggle between the two patterns to see what the model actually receives: the whole parent section, or a window that spills across the boundary.
+
+<Diagram number={2} caption="Search small, return big. A query matches one sentence with a sharp score, then expands. In parent-document mode it grows into the whole Refunds section; toggle to sentence-window mode and it instead grows into a window of neighbours that crosses the section boundary into Exchanges. The cyan unit is what we search; the indigo unit is what the model gets.">
+  <IframeFigure
+    src="/essays/advanced-retrieval-patterns/part9-retrieve-small-return-big.html"
+    title="Interactive animation. A short policy document is split into small sentence-level child chunks shown as a column. A query matches one child, the last sentence of the Refunds section, which highlights in cyan with a sharp score badge. A toggle switches between two expansion modes: parent-document, where the whole Refunds section highlights in indigo as the unit sent to the model, and sentence-window, where instead the matched sentence plus one neighbour on each side highlights, crossing the boundary into the Exchanges section. A stepped player with play, back, next, and restart controls walks through splitting, querying, matching, and expanding."
+    height={620}
+  />
+</Diagram>
+
+## Pattern 3: Self-querying retrieval
+
+The first two patterns change *what text* a hit expands into. The next one changes *how the search itself is shaped* from the user's words.
+
+The problem: real questions mix two different kinds of request. Take "what did our **2023** **earnings reports** say about **margins**?" The word "margins" is a *semantic* ask: you want chunks that are *about* margins, and only an embedding can judge that. But "2023" and "earnings reports" are not semantic at all. They are *hard constraints*, exact filters on metadata. Pure vector search treats the whole sentence as one blob of meaning and quietly ignores the constraints: it will cheerfully return a 2021 forecast that happens to discuss margins, because nothing told it that the year was non-negotiable. In Part 8 we fixed this with metadata filtering, but we wrote the filter by hand. Users do not write filters. They write sentences.
+
+The pattern, **self-querying**: put a small LLM call in front of retrieval whose only job is to parse the natural-language question into two outputs, (a) a clean **semantic search string** and (b) a structured **metadata filter**. Then run a filtered vector search, exactly the Part 8 mechanism, except the filter was inferred from the sentence automatically instead of typed by you.
+
+> **Self-querying:** using an LLM to read a natural-language question and emit both a semantic query and a structured metadata filter, so the system applies hard constraints the user expressed in plain words.
+
+<Diagram number={3} caption="Self-querying in one picture. An LLM reads the plain sentence and separates the part you can mean (margins, for vector search) from the parts you must match (year equals 2023, type equals earnings_report, for the metadata filter). The two feed a single filtered vector search.">
+  <img src="/essays/advanced-retrieval-patterns/part9-self-querying.svg" alt="A flow diagram. At the top, a user question reads what did our 2023 earnings reports say about margins, with 2023, earnings reports, and margins highlighted in different colours. An arrow leads down to an LLM query parser box. From it, two arrows split: one to a semantic query box containing the single word margins, labelled embed and match by meaning; the other to a metadata filter box containing year equals 2023 and type equals earnings_report, labelled exact match. Both boxes converge with arrows into a single filtered vector search box at the bottom." class="w-full rounded-lg" />
+</Diagram>
+
+The catch is the one we keep meeting: this adds an LLM call before every search, with its latency, cost, and a small chance of a malformed filter. So you only reach for it when your corpus genuinely has structured metadata worth filtering on (dates, document types, authors, categories) *and* your users phrase those constraints in natural language. For a corpus with no useful metadata, there is nothing to infer, and self-querying is pure overhead.
+
+## Pattern 4: Contextual compression
+
+The first three patterns decide *which* text reaches the model. The last one cleans up *the text itself* once it has been chosen.
+
+The problem: even a perfect retrieval returns chunks that are mostly padding. A chunk that genuinely contains the answer also contains four sentences that have nothing to do with this particular question. That noise is not harmless. It burns context budget you are paying for, and worse, it dilutes the signal: recall "lost in the middle" from Part 7, where a model's attention sags on information buried in a long, noisy context. Relevant chunks, full of irrelevant sentences, make the answer worse.
+
+The pattern, **contextual compression**: after retrieval and before generation, run each chunk through a step that strips it down to just the parts relevant to the query. Two flavours:
+
+- **Extractive compression** pulls out the relevant sentences verbatim and drops the rest. It is cheap, it cannot invent anything, and it never distorts wording. Its ceiling is that it can only keep what is literally there.
+- **Abstractive compression** uses an LLM to *distil* the chunk into a short, query-focused summary in its own words. It can compress harder and synthesise across sentences, at the cost of another LLM call and a small risk of dropping or warping something.
+
+> **Contextual compression:** filtering the *content within* each retrieved chunk down to the query-relevant parts before generation.
+> **Extractive vs. abstractive:** extractive keeps the original sentences that matter; abstractive rewrites them into a shorter summary.
+
+It is worth lining this up against Part 8's metadata filtering, because they sound similar and do opposite things. Metadata filtering removes **whole chunks** before the search, on a hard rule (wrong year, drop it). Contextual compression removes **content inside a chunk** after the search, on relevance to this query. One decides which chunks exist; the other trims the chunks that survived. The trade-off is the familiar one: an extra processing pass per chunk (cost and latency), plus the risk, especially with abstractive, of compressing away something that turns out to matter. Reach for it when your retrieved chunks are large and noisy and you can see the context window filling with filler, not when your chunks are already tight.
+
+## A couple of relatives, in passing
+
+Two more patterns deserve a name so you recognise them in the wild. They are natural extensions of what you now understand, and they point toward the more autonomous architectures of Part 10.
+
+**Auto-merging retrieval** is parent-document with a quorum. You retrieve small children as usual, but instead of always promoting every hit to its parent, you only merge children back into their parent when *enough* of that parent's children were retrieved. A single stray hit returns just its small chunk; three hits from the same section are a strong signal that the whole section is relevant, so you merge them up. It is a way to let the *amount* of evidence decide how much context to return. Our code at the end does the de-duplication step this builds on.
+
+**Hierarchical (or summary) indexing** retrieves in two stages. You first index a short *summary* of each document and search those to find the right *document*, then retrieve among the chunks *within* that document. It is routing: cheaply narrow to the right source, then search inside it. Useful when you have many distinct documents and most chunks in the corpus are irrelevant noise for any given query.
+
+Keep these light for now. They are the bridge to Part 10, where retrieval stops being a single fixed step and starts to loop and decide.
+
+## How to choose, and how to combine
+
+The most important thing to internalise is that these are **not** mutually exclusive, and not a menu you pick one item from. They are independent moves that stack. A mature pipeline might self-query to build a filter, run hybrid search (Part 7) inside that filter, retrieve small children and serve their parents, rerank the parents (Part 8), and compress the survivors before generation. Every one of those is solving a different, specific problem.
+
+Which is exactly the discipline to hold onto. Do **not** add these by default. Each pattern buys a fix for one named failure at the price of latency, cost, or complexity. Add one when your failure analysis points at the specific problem it solves, and not before.
+
+| Pattern | The problem it solves | Cost added | Reach for it when |
+| --- | --- | --- | --- |
+| Parent-document | Sharp matches, but a lone chunk starves the model of context | Index/lookup bookkeeping; bigger prompts | Retrieval finds the right place but answers are thin or miss caveats |
+| Sentence-window | Same, but the right context is *proximity* not structure | Trivial; bigger prompts | Flowing prose, transcripts; ideas cross your chunk boundaries |
+| Self-querying | Users hide hard constraints (dates, types) inside natural language | One LLM call per query; latency | The corpus has real metadata and users phrase filters in words |
+| Contextual compression | Retrieved chunks are padded with query-irrelevant noise | A processing pass per chunk; risk of over-trimming | Large, noisy chunks; the context window fills with filler |
+
+How do you know whether a pattern actually helped? You measure. That is Part 11, evaluation, where we stop reasoning about which pattern *should* help and start proving which one *does*. For now, the rule is simply: change one thing, then check the answers got better.
+
+> 💡 **From experience**
+>
+> The first time this clicked for me, I had spent a full day convinced my retrieval was broken. Every query I tried, the top chunk was *exactly* the right sentence: my relevance numbers were great, the matched text was spot on. And the answers were still wrong. The model kept saying refunds were unconditional, when the policy clearly had an "unused and in original packaging" condition. The retrieval was not broken at all. I was indexing tiny sentence chunks, and the one that matched ("refunds are accepted within 30 days") was a different sentence from the one with the condition. The model only ever saw the peephole. The fix was eleven lines: keep the small chunks for searching, but return the whole parent paragraph to the model. The "bug" was never in the search. It was in the unit. That is the day I stopped tuning chunk size and started decoupling.
+
+{/* Author: replace the anecdote above with your own story when you have one, e.g. the support-bot that retrieved perfectly and answered wrong until parent-document. Keep it concrete and first-person. */}
+
+## Extend the app: parent-document on the running code
+
+Let us make the purest pattern real on the Part 6 app. The change is small by design: we are not rebuilding retrieval, we are adding a layer of bookkeeping around it. We split each document into large **parents** and small **children**, search the children, keep a child to parent map, and return the parent on a hit.
+
+```python
+# rag_parent_document.py  -  parent-document retrieval on the Part 6 app.
+# The whole idea in one line: INDEX CHILDREN, SERVE PARENTS.
+
+import re
+
+# Each string is a PARENT: a coherent section, the unit generation wants.
+PARENTS = [
+    "Refunds. We accept refunds within 30 days of purchase, as long as the "
+    "item is unused and in its original packaging. To start a return, email "
+    "support@example.com with your order number. Shipping fees are not refundable.",
+    "Exchanges. For a different size or color, request an exchange instead of a "
+    "refund. Exchanges ship free of charge. Final sale items cannot be returned.",
+]
+
+def split_sentences(text):                       # children are single sentences
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+
+# Build the children AND the map back to their parent, side by side.
+children, child_to_parent = [], []
+for p_idx, parent in enumerate(PARENTS):
+    for sentence in split_sentences(parent):
+        children.append(sentence)                # the small unit we SEARCH
+        child_to_parent.append(p_idx)            # remember where it came from
+```
+
+The only new state is `child_to_parent`, a list as long as `children`, where entry *i* is the index of the parent that child *i* was carved from. Now the retrieval. In your real app, `child_scores` is Part 6's cosine-over-embeddings search run against the *child* vectors; the lookup at the end is what is new:
+
+```python
+def retrieve_small_return_big(query, k_children=1):
+    scores = child_scores(query)                 # Part 6 search, but over CHILDREN
+    top = sorted(range(len(children)),
+                 key=lambda i: scores[i], reverse=True)[:k_children]
+    # Follow each winning child back to its parent, de-duplicated.
+    # (Returning each parent once is the seed of "auto-merging" retrieval.)
+    parent_ids = list(dict.fromkeys(child_to_parent[i] for i in top))
+    return {
+        "matched_child": children[top[0]],       # what we SEARCHED and hit
+        "returned_parents": [PARENTS[p] for p in parent_ids],  # what the LLM GETS
+    }
+```
+
+Run it on a query whose sharp match is a thin sentence, and watch the before/after of what the model actually receives:
+
+```text
+Query: 'can I get my money back if the box is already open?'
+
+NAIVE  (search small, return small)  ->  the LLM receives:
+  [0.158] Once we receive the item, your refund is processed back to the
+          original payment method within five business days.
+
+PARENT-DOCUMENT  (search small, return big)  ->  the LLM receives:
+  Refunds. We accept refunds within 30 days of purchase, as long as the item is
+  unused and in its original packaging. To start a return, email
+  support@example.com with your order number. Shipping fees are not refundable.
+```
+
+The naive path matched a true sentence and starved the model: it never learns about the 30-day window or the "unused and in original packaging" condition that actually decides this question. Parent-document hands over the whole refund section. Same sharp match; far more to answer from. The matched child is an implementation detail. The parent you serve is the answer. The full runnable file, including a transparent fallback scorer so it runs without any model installed, is [rag_parent_document.py](/essays/advanced-retrieval-patterns/rag_parent_document.py).
+
+## Recap and what is next
+
+Step back and notice what changed. For eight parts we improved retrieval by improving the *query*, the *candidate set*, and the *ranking*. This part improved it by changing the *unit*: search on something small and sharp, generate from something large and clean, and stop pretending they must be the same text. That single move, decoupling, dissolves the chunk-size dilemma and gives you four concrete tools to apply it.
+
+But look at the pipeline we have built. For all its sophistication, it is still **static and linear**: one fixed path from query to answer, the same sequence of steps every time, no matter the question. It never asks "did that retrieval actually work?" It never tries again. Part 10 breaks that open. We move from pipelines to architectures that **reason, decide, loop, and self-correct**: agentic RAG, Corrective RAG (CRAG), Self-RAG, GraphRAG, and multi-modal RAG. The system stops being a conveyor belt and starts being a problem-solver.
+
+## Key takeaways
+
+- **The core move is decoupling.** The optimal unit to *search* on (small, focused, sharp) is rarely the optimal unit to *generate* from (large, context-rich). They do not have to be the same text, and once you separate them the chunk-size dilemma from Part 5 disappears.
+- **Parent-document and sentence-window both search small and return big**, differing in what "big" means: a fixed pre-defined parent unit, versus a dynamic window of neighbours that can cross structural boundaries.
+- **Self-querying turns natural language into a search plus a filter**, automating the metadata filtering you did by hand in Part 8 so users can express hard constraints in plain words.
+- **Contextual compression trims content within a chunk** after retrieval, where metadata filtering removes whole chunks before it; reach for it when good chunks arrive padded with noise.
+- **These patterns stack and are not free.** They coexist with hybrid search, filtering, and reranking. Add one when failure analysis points at the specific problem it solves, never by default, and confirm it helped by measuring (Part 11).
+
+## Glossary
+
+- **Decoupling the retrieval unit from the generation unit:** the central idea of this chapter, that the text you embed and search can and usually should be different from the text you hand to the model.
+- **Parent-document retrieval:** embed and search small child chunks, but on a hit return the larger parent chunk they belong to. "Index children, serve parents."
+- **Parent chunk:** the larger unit (paragraph, section, document) returned to the model for context.
+- **Child chunk:** the small unit (a sentence or two) that is embedded and searched; a pointer to its parent, never sent to the model alone.
+- **Sentence-window retrieval:** embed and retrieve single sentences, but on a hit return the matched sentence plus a window of N neighbouring sentences.
+- **Self-querying retrieval:** use an LLM to parse a natural-language question into a semantic search string plus a structured metadata filter, then run a filtered vector search.
+- **Contextual compression:** after retrieval, strip each chunk down to just the query-relevant content before generation.
+- **Extractive vs. abstractive compression:** extractive pulls out the relevant sentences verbatim; abstractive uses an LLM to rewrite them into a shorter, query-focused summary.
+- **Auto-merging retrieval:** a variant of parent-document that promotes children to their parent only when enough of that parent's children were retrieved, letting the amount of evidence decide how much context to return.
+- **Hierarchical (summary) indexing:** index short document summaries to route a query to the right document first, then retrieve among that document's chunks.
+
+Next: **Part 10, Advanced RAG Architectures**, where the pipeline stops being a straight line and learns to reason, loop, and correct itself.
