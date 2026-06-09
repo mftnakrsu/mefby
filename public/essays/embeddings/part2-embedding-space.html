@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Embedding Space: words as points in meaning-space</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 2 flagship animation
+     Self-contained: no external resources, no web fonts, inline SVG only.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+
+    --radius-card: 14px;
+    --radius-chip: 8px;
+
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 320ms;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .ex { max-width: 880px; margin: 0 auto; }
+
+  /* ---------- Header ---------- */
+  .ex-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 14px; }
+  .ex-eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--indigo-strong);
+  }
+  .ex-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .ex-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* ---------- Equation bar ---------- */
+  .ex-eq {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
+    margin: 4px 0 14px; font-family: var(--mono); font-size: 15px;
+  }
+  .eq-tok {
+    padding: 4px 10px; border-radius: 999px;
+    border: 1.5px solid var(--border); background: #fff; color: var(--muted);
+    font-weight: 600;
+    transition: all var(--dur) var(--ease);
+  }
+  .eq-op { color: var(--muted); font-weight: 700; padding: 0 1px; transition: color var(--dur) var(--ease); }
+  .eq-op.lit { color: var(--heading); }
+  .eq-tok.lit-roy { color: #fff; background: var(--indigo); border-color: var(--indigo); box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
+  .eq-tok.lit-ppl { color: #fff; background: var(--violet); border-color: var(--violet); box-shadow: 0 4px 12px rgba(139,92,246,0.3); }
+  .eq-tok.lit-win { color: #fff; background: var(--emerald); border-color: var(--emerald); box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
+
+  /* ---------- Plot card ---------- */
+  .ex-plotwrap {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: radial-gradient(120% 100% at 50% -10%, var(--surface-1) 0%, var(--bg) 60%);
+    overflow: hidden;
+  }
+  .ex-svg { display: block; width: 100%; height: auto; }
+
+  /* points */
+  .pt { cursor: pointer; }
+  .pt .dot { fill: var(--c); transition: opacity var(--dur) var(--ease); }
+  .pt .halo { fill: none; stroke: var(--c); stroke-width: 2.5; opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .pt .lbl { fill: var(--body); font-size: 12px; font-weight: 600; pointer-events: none; transition: fill var(--dur) var(--ease); }
+  .pt:hover .halo, .pt:focus-visible .halo, .pt.is-hot .halo { opacity: 0.5; }
+  .pt:hover .lbl, .pt:focus-visible .lbl, .pt.is-hot .lbl { fill: var(--heading); }
+  .pt.is-hot .dot { filter: drop-shadow(0 2px 6px rgba(15,23,42,0.18)); }
+  .pt:focus-visible { outline: none; }
+  .pt:focus-visible .halo { opacity: 0.7; stroke-dasharray: 3 3; }
+  .pt.is-faded { opacity: 0.32; transition: opacity var(--dur) var(--ease); }
+
+  /* cluster colors */
+  .c-roy  { --c: #6366f1; }
+  .c-ppl  { --c: #8b5cf6; }
+  .c-cty  { --c: #f59e0b; }
+  .c-ani  { --c: #14b8a6; }
+  .c-food { --c: #f43f5e; }
+
+  .cluster-label { fill: #94a3b8; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-anchor: middle; }
+
+  /* overlay (demo) */
+  .ov { opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .ov.on { opacity: 1; }
+  .ov-lbl { font-size: 11px; font-weight: 700; }
+
+  #travelG { transition: transform 900ms var(--ease); }
+  #travelG.move { transform: translate(60px, -40px); }
+
+  /* SVG tooltip */
+  #tip { opacity: 0; transition: opacity 140ms var(--ease); pointer-events: none; }
+  #tip.show { opacity: 1; }
+  #tipBox { fill: #0f172a; }
+  #tipWord { fill: #fff; font-size: 12.5px; font-weight: 700; }
+  #tipMeta { fill: #cbd5e1; font-size: 11px; font-family: var(--mono); }
+
+  /* legend */
+  .ex-legend { display: flex; flex-wrap: wrap; gap: 7px 14px; margin-top: 12px; }
+  .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .lg i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  /* ---------- Caption (aria-live) ---------- */
+  .ex-caption {
+    margin-top: 14px; display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius-card); padding: 13px 16px;
+  }
+  .ex-caption-dot {
+    flex: 0 0 auto; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--stage-accent, var(--indigo));
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--stage-accent, var(--indigo)) 18%, transparent);
+    transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .ex-caption-text { font-size: 14.5px; color: var(--body); }
+  .ex-caption-text b { color: var(--heading); }
+
+  /* ---------- Controls ---------- */
+  .ex-controls { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .ex-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ex-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease),
+                color 160ms var(--ease), transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .ex-btn svg { width: 15px; height: 15px; }
+  .ex-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .ex-btn:active { transform: translateY(1px); }
+  .ex-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); border-color: var(--indigo); }
+  .ex-btn.primary { color: #fff; background: var(--indigo-strong); border-color: var(--indigo-strong); }
+  .ex-btn.primary:hover { background: var(--indigo); border-color: var(--indigo); }
+  .ex-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .ex-status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .ex-stepcount { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ex-stepcount b { color: var(--heading); }
+  .ex-dots { display: flex; gap: 7px; }
+  .ex-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer;
+            transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .ex-dot:hover { background: #cbd5e1; }
+  .ex-dot.is-active { background: var(--stage-accent, var(--indigo)); transform: scale(1.35); }
+  .ex-dot.is-past { background: color-mix(in srgb, var(--indigo) 45%, var(--border)); }
+  .ex-dot:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+
+  .ex-hint { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .ex-hint kbd {
+    font-family: var(--mono); font-size: 11px; background: var(--surface-2);
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+    padding: 1px 5px; color: var(--body);
+  }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pt .halo, .pt .dot, .pt .lbl, .ov, .eq-tok, .eq-op,
+    .ex-caption-dot, .ex-dot, #tip { transition: opacity 1ms linear !important; }
+    #travelG { transition: none !important; }
+  }
+
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .ex-status { margin-left: 0; width: 100%; justify-content: space-between; }
+    .ex-title { font-size: 19px; }
+    .ex-eq { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+  <main class="ex" aria-label="Interactive embedding space walkthrough">
+
+    <header class="ex-head">
+      <span class="ex-eyebrow">RAG from First Principles &#183; Part 2</span>
+      <h1 class="ex-title">Words as points in meaning-space</h1>
+      <p class="ex-sub">Hover or focus any point to inspect it. Press Play to watch the arithmetic land.</p>
+    </header>
+
+    <!-- Equation bar -->
+    <div class="ex-eq" aria-hidden="true">
+      <span class="eq-tok" id="t-king">king</span>
+      <span class="eq-op" id="op-minus">&#8722;</span>
+      <span class="eq-tok" id="t-man">man</span>
+      <span class="eq-op" id="op-plus">+</span>
+      <span class="eq-tok" id="t-woman">woman</span>
+      <span class="eq-op" id="op-approx">&#8776;</span>
+      <span class="eq-tok" id="t-queen">queen</span>
+    </div>
+
+    <!-- Plot -->
+    <div class="ex-plotwrap">
+      <svg class="ex-svg" id="plot" viewBox="0 0 760 470" role="group"
+           aria-label="Scatter plot of words as points, grouped into clusters: royalty, people, countries, animals, and food">
+
+        <!-- cluster headings -->
+        <text class="cluster-label" x="150" y="58">COUNTRIES</text>
+        <text class="cluster-label" x="600" y="56">ROYALTY</text>
+        <text class="cluster-label" x="300" y="186">PEOPLE</text>
+        <text class="cluster-label" x="150" y="288">ANIMALS</text>
+        <text class="cluster-label" x="604" y="282">FOOD</text>
+
+        <!-- ===================== OVERLAY (drawn under points) ===================== -->
+        <defs>
+          <marker id="mvio" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M1,1 L9,5 L1,9" fill="none" stroke="#8b5cf6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </marker>
+          <marker id="mind" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M1,1 L9,5 L1,9" fill="none" stroke="#6366f1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </marker>
+        </defs>
+
+        <!-- man -> woman (the "minus man, plus woman" direction) -->
+        <g class="ov" id="ovMW">
+          <line x1="300" y1="250" x2="360" y2="210" stroke="#8b5cf6" stroke-width="2.2" marker-end="url(#mvio)" />
+          <text class="ov-lbl" x="304" y="244" fill="#7c3aed">&#8722; man + woman</text>
+        </g>
+
+        <!-- king -> result (same step, translated) -->
+        <g class="ov" id="ovKR">
+          <line x1="560" y1="150" x2="620" y2="110" stroke="#6366f1" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#mind)" />
+          <text class="ov-lbl" x="566" y="138" fill="#4f46e5">same step</text>
+        </g>
+
+        <!-- traveling dot king -> result -->
+        <g class="ov" id="travelWrap">
+          <g id="travelG">
+            <circle cx="560" cy="150" r="7" fill="#4f46e5" />
+            <circle cx="560" cy="150" r="13" fill="none" stroke="#4f46e5" stroke-width="2" opacity="0.4" />
+          </g>
+        </g>
+
+        <!-- result marker + queen match -->
+        <g class="ov" id="ovResult">
+          <circle cx="620" cy="110" r="9" fill="none" stroke="#4f46e5" stroke-width="2" stroke-dasharray="3 3" />
+        </g>
+        <g class="ov" id="ovQueen">
+          <circle cx="626" cy="104" r="16" fill="none" stroke="#10b981" stroke-width="2.5" />
+          <text class="ov-lbl" x="648" y="98" fill="#059669">&#8776; queen (closest)</text>
+        </g>
+
+        <!-- ===================== POINTS ===================== -->
+        <!-- Royalty -->
+        <g class="pt c-roy" tabindex="0" role="img" aria-label="king, cluster royalty" data-word="king" data-cluster="royalty" data-vx="0.76" data-vy="0.76">
+          <circle class="halo" cx="560" cy="150" r="12" /><circle class="dot" cx="560" cy="150" r="6.5" />
+          <text class="lbl" x="548" y="154" text-anchor="end">king</text>
+        </g>
+        <g class="pt c-roy" tabindex="0" role="img" aria-label="queen, cluster royalty" data-word="queen" data-cluster="royalty" data-vx="0.86" data-vy="0.90">
+          <circle class="halo" cx="626" cy="104" r="12" /><circle class="dot" cx="626" cy="104" r="6.5" />
+          <text class="lbl" x="638" y="108" text-anchor="start">queen</text>
+        </g>
+        <g class="pt c-roy" tabindex="0" role="img" aria-label="prince, cluster royalty" data-word="prince" data-cluster="royalty" data-vx="0.74" data-vy="0.90">
+          <circle class="halo" cx="540" cy="104" r="12" /><circle class="dot" cx="540" cy="104" r="6.5" />
+          <text class="lbl" x="540" y="92" text-anchor="middle">prince</text>
+        </g>
+        <g class="pt c-roy" tabindex="0" role="img" aria-label="princess, cluster royalty" data-word="princess" data-cluster="royalty" data-vx="0.82" data-vy="0.69">
+          <circle class="halo" cx="600" cy="176" r="12" /><circle class="dot" cx="600" cy="176" r="6.5" />
+          <text class="lbl" x="612" y="180" text-anchor="start">princess</text>
+        </g>
+
+        <!-- People -->
+        <g class="pt c-ppl" tabindex="0" role="img" aria-label="man, cluster people" data-word="man" data-cluster="people" data-vx="0.38" data-vy="0.47">
+          <circle class="halo" cx="300" cy="250" r="12" /><circle class="dot" cx="300" cy="250" r="6.5" />
+          <text class="lbl" x="300" y="272" text-anchor="middle">man</text>
+        </g>
+        <g class="pt c-ppl" tabindex="0" role="img" aria-label="woman, cluster people" data-word="woman" data-cluster="people" data-vx="0.47" data-vy="0.59">
+          <circle class="halo" cx="360" cy="210" r="12" /><circle class="dot" cx="360" cy="210" r="6.5" />
+          <text class="lbl" x="372" y="214" text-anchor="start">woman</text>
+        </g>
+
+        <!-- Countries -->
+        <g class="pt c-cty" tabindex="0" role="img" aria-label="France, cluster countries" data-word="France" data-cluster="countries" data-vx="0.12" data-vy="0.85">
+          <circle class="halo" cx="120" cy="120" r="12" /><circle class="dot" cx="120" cy="120" r="6.5" />
+          <text class="lbl" x="108" y="124" text-anchor="end">France</text>
+        </g>
+        <g class="pt c-cty" tabindex="0" role="img" aria-label="Japan, cluster countries" data-word="Japan" data-cluster="countries" data-vx="0.23" data-vy="0.92">
+          <circle class="halo" cx="195" cy="96" r="12" /><circle class="dot" cx="195" cy="96" r="6.5" />
+          <text class="lbl" x="207" y="100" text-anchor="start">Japan</text>
+        </g>
+        <g class="pt c-cty" tabindex="0" role="img" aria-label="Brazil, cluster countries" data-word="Brazil" data-cluster="countries" data-vx="0.10" data-vy="0.68">
+          <circle class="halo" cx="108" cy="180" r="12" /><circle class="dot" cx="108" cy="180" r="6.5" />
+          <text class="lbl" x="96" y="184" text-anchor="end">Brazil</text>
+        </g>
+        <g class="pt c-cty" tabindex="0" role="img" aria-label="Egypt, cluster countries" data-word="Egypt" data-cluster="countries" data-vx="0.22" data-vy="0.74">
+          <circle class="halo" cx="190" cy="160" r="12" /><circle class="dot" cx="190" cy="160" r="6.5" />
+          <text class="lbl" x="202" y="164" text-anchor="start">Egypt</text>
+        </g>
+
+        <!-- Animals -->
+        <g class="pt c-ani" tabindex="0" role="img" aria-label="dog, cluster animals" data-word="dog" data-cluster="animals" data-vx="0.12" data-vy="0.26">
+          <circle class="halo" cx="120" cy="320" r="12" /><circle class="dot" cx="120" cy="320" r="6.5" />
+          <text class="lbl" x="108" y="324" text-anchor="end">dog</text>
+        </g>
+        <g class="pt c-ani" tabindex="0" role="img" aria-label="cat, cluster animals" data-word="cat" data-cluster="animals" data-vx="0.21" data-vy="0.18">
+          <circle class="halo" cx="185" cy="350" r="12" /><circle class="dot" cx="185" cy="350" r="6.5" />
+          <text class="lbl" x="197" y="354" text-anchor="start">cat</text>
+        </g>
+        <g class="pt c-ani" tabindex="0" role="img" aria-label="horse, cluster animals" data-word="horse" data-cluster="animals" data-vx="0.10" data-vy="0.11">
+          <circle class="halo" cx="110" cy="372" r="12" /><circle class="dot" cx="110" cy="372" r="6.5" />
+          <text class="lbl" x="98" y="376" text-anchor="end">horse</text>
+        </g>
+        <g class="pt c-ani" tabindex="0" role="img" aria-label="lion, cluster animals" data-word="lion" data-cluster="animals" data-vx="0.23" data-vy="0.31">
+          <circle class="halo" cx="195" cy="306" r="12" /><circle class="dot" cx="195" cy="306" r="6.5" />
+          <text class="lbl" x="207" y="310" text-anchor="start">lion</text>
+        </g>
+
+        <!-- Food -->
+        <g class="pt c-food" tabindex="0" role="img" aria-label="banana, cluster food" data-word="banana" data-cluster="food" data-vx="0.79" data-vy="0.24">
+          <circle class="halo" cx="575" cy="330" r="12" /><circle class="dot" cx="575" cy="330" r="6.5" />
+          <text class="lbl" x="563" y="334" text-anchor="end">banana</text>
+        </g>
+        <g class="pt c-food" tabindex="0" role="img" aria-label="apple, cluster food" data-word="apple" data-cluster="food" data-vx="0.88" data-vy="0.17">
+          <circle class="halo" cx="635" cy="352" r="12" /><circle class="dot" cx="635" cy="352" r="6.5" />
+          <text class="lbl" x="647" y="356" text-anchor="start">apple</text>
+        </g>
+        <g class="pt c-food" tabindex="0" role="img" aria-label="bread, cluster food" data-word="bread" data-cluster="food" data-vx="0.76" data-vy="0.08">
+          <circle class="halo" cx="560" cy="382" r="12" /><circle class="dot" cx="560" cy="382" r="6.5" />
+          <text class="lbl" x="548" y="386" text-anchor="end">bread</text>
+        </g>
+        <g class="pt c-food" tabindex="0" role="img" aria-label="coffee, cluster food" data-word="coffee" data-cluster="food" data-vx="0.89" data-vy="0.31">
+          <circle class="halo" cx="648" cy="306" r="12" /><circle class="dot" cx="648" cy="306" r="6.5" />
+          <text class="lbl" x="660" y="310" text-anchor="start">coffee</text>
+        </g>
+
+        <!-- tooltip (drawn last so it sits on top) -->
+        <g id="tip" aria-hidden="true">
+          <rect id="tipBox" x="0" y="0" width="158" height="44" rx="8" />
+          <text id="tipWord" x="12" y="19">word</text>
+          <text id="tipMeta" x="12" y="35">meta</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- legend -->
+    <div class="ex-legend" aria-hidden="true">
+      <span class="lg"><i style="background:#6366f1"></i>royalty</span>
+      <span class="lg"><i style="background:#8b5cf6"></i>people</span>
+      <span class="lg"><i style="background:#f59e0b"></i>countries</span>
+      <span class="lg"><i style="background:#14b8a6"></i>animals</span>
+      <span class="lg"><i style="background:#f43f5e"></i>food</span>
+    </div>
+
+    <!-- inspector (aria-live) -->
+    <div class="ex-caption">
+      <span class="ex-caption-dot" aria-hidden="true"></span>
+      <p class="ex-caption-text" id="caption" aria-live="polite"></p>
+    </div>
+
+    <!-- controls -->
+    <div class="ex-controls">
+      <div class="ex-btns">
+        <button class="ex-btn primary" id="btnPlay" aria-label="Play animation">
+          <span id="playIcon" aria-hidden="true"></span><span id="playText">Play</span>
+        </button>
+        <button class="ex-btn" id="btnBack" aria-label="Previous step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="ex-btn" id="btnNext" aria-label="Next step">
+          Next
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="ex-btn" id="btnRestart" aria-label="Restart from the beginning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="ex-status">
+        <span class="ex-stepcount" id="stepCount" aria-hidden="true">Step 1 of 5</span>
+        <div class="ex-dots" id="dots" role="group" aria-label="Jump to step"></div>
+      </div>
+    </div>
+
+    <p class="ex-hint">
+      <kbd>Space</kbd> play / pause &nbsp;&#183;&nbsp; <kbd>&#8592;</kbd> back &nbsp;&#183;&nbsp; <kbd>&#8594;</kbd> next &nbsp;&#183;&nbsp; <kbd>Tab</kbd> to a point, then it is inspected
+    </p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var ACCENT = { indigo: "#6366f1", violet: "#8b5cf6", emerald: "#10b981" };
+
+  // The 5 steps of the king - man + woman demo.
+  var STEPS = [
+    { accent: ACCENT.indigo,
+      caption: "<b>The map.</b> Every word is a point, and related words cluster: royalty here, animals there, countries, food. Hover or Tab to any point to inspect it." },
+    { accent: ACCENT.violet,
+      caption: "<b>A direction with meaning.</b> The arrow from <b>man</b> to <b>woman</b> is the step &#8220;&#8722; man + woman.&#8221; In a good space this same step means roughly <i>change the gender, keep everything else.</i>" },
+    { accent: ACCENT.indigo,
+      caption: "<b>Take that exact step from king.</b> Start at <b>king</b> and travel the very same arrow. Subtract &#8220;man-ness,&#8221; add &#8220;woman-ness,&#8221; and watch where you land." },
+    { accent: ACCENT.emerald,
+      caption: "<b>You land next to queen.</b> The point you reach sits right beside <b>queen</b>, the closest word in the space. That is <code>king &#8722; man + woman &#8776; queen</code>: the direction itself carried the meaning." },
+    { accent: ACCENT.indigo,
+      caption: "<b>Why it matters.</b> Meaning became geometry: related words are near, and directions encode relationships. Remember this 2D view is a flattened shadow of a space with hundreds of dimensions." }
+  ];
+
+  var AUTO_MS = 2600;
+
+  var PLAY_ICON  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+  // DOM refs
+  var caption   = document.getElementById("caption");
+  var stepCount = document.getElementById("stepCount");
+  var dotsWrap  = document.getElementById("dots");
+  var btnPlay   = document.getElementById("btnPlay");
+  var btnBack   = document.getElementById("btnBack");
+  var btnNext   = document.getElementById("btnNext");
+  var btnRestart= document.getElementById("btnRestart");
+  var playIcon  = document.getElementById("playIcon");
+  var playText  = document.getElementById("playText");
+
+  var ovMW    = document.getElementById("ovMW");
+  var ovKR    = document.getElementById("ovKR");
+  var travelWrap = document.getElementById("travelWrap");
+  var travelG = document.getElementById("travelG");
+  var ovResult= document.getElementById("ovResult");
+  var ovQueen = document.getElementById("ovQueen");
+
+  var tKing  = document.getElementById("t-king");
+  var tMan   = document.getElementById("t-man");
+  var tWoman = document.getElementById("t-woman");
+  var tQueen = document.getElementById("t-queen");
+  var opMinus= document.getElementById("op-minus");
+  var opPlus = document.getElementById("op-plus");
+  var opApprox = document.getElementById("op-approx");
+
+  var pts = Array.prototype.slice.call(document.querySelectorAll(".pt"));
+  var byWord = {};
+  pts.forEach(function (p) { byWord[p.getAttribute("data-word")] = p; });
+
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------------- hover / focus inspection ---------------- */
+  var plot   = document.getElementById("plot");
+  var tip    = document.getElementById("tip");
+  var tipBox = document.getElementById("tipBox");
+  var tipWord= document.getElementById("tipWord");
+  var tipMeta= document.getElementById("tipMeta");
+  var TIP_W = 158, TIP_H = 44;
+
+  function dotCoords(p) {
+    var d = p.querySelector(".dot");
+    return { x: parseFloat(d.getAttribute("cx")), y: parseFloat(d.getAttribute("cy")) };
+  }
+
+  function inspect(p) {
+    var word = p.getAttribute("data-word");
+    var cluster = p.getAttribute("data-cluster");
+    var vx = p.getAttribute("data-vx");
+    var vy = p.getAttribute("data-vy");
+    var c = dotCoords(p);
+
+    // position the tooltip above the point, clamped to the viewBox
+    var bx = Math.max(6, Math.min(760 - TIP_W - 6, c.x - TIP_W / 2));
+    var by = c.y - TIP_H - 14;
+    if (by < 6) by = c.y + 16;             // flip below if near the top
+    tipBox.setAttribute("x", bx);
+    tipBox.setAttribute("y", by);
+    tipWord.setAttribute("x", bx + 12);
+    tipWord.setAttribute("y", by + 19);
+    tipMeta.setAttribute("x", bx + 12);
+    tipMeta.setAttribute("y", by + 35);
+    tipWord.textContent = word;
+    tipMeta.textContent = cluster + "  ≈ (" + vx + ", " + vy + ")";
+    tip.classList.add("show");
+
+    // announce to assistive tech
+    caption.innerHTML = '<b>Inspecting:</b> ' + word + ' &#183; <i>' + cluster +
+      '</i> &#183; <code>&#8776; (' + vx + ', ' + vy + ')</code>';
+  }
+
+  function clearInspect() {
+    tip.classList.remove("show");
+    render(current);   // restore the step caption
+  }
+
+  pts.forEach(function (p) {
+    p.addEventListener("mouseenter", function () { inspect(p); });
+    p.addEventListener("mouseleave", function () { clearInspect(); });
+    p.addEventListener("focus", function () { inspect(p); });
+    p.addEventListener("blur", function () { clearInspect(); });
+  });
+
+  /* ---------------- progress dots ---------------- */
+  var dotEls = [];
+  STEPS.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.className = "ex-dot";
+    b.type = "button";
+    b.setAttribute("aria-label", "Go to step " + (i + 1) + " of " + STEPS.length);
+    b.addEventListener("click", function () { pause(); go(i); });
+    dotsWrap.appendChild(b);
+    dotEls.push(b);
+  });
+
+  /* ---------------- render a step ---------------- */
+  var current = 0;
+
+  function setHot(words) {
+    pts.forEach(function (p) { p.classList.remove("is-hot", "is-faded"); });
+    if (!words) return;
+    var emph = words.length > 0;
+    pts.forEach(function (p) {
+      var w = p.getAttribute("data-word");
+      if (words.indexOf(w) !== -1) p.classList.add("is-hot");
+      else if (emph) p.classList.add("is-faded");
+    });
+  }
+
+  function lit(el, cls) { el.classList.add(cls); }
+  function clearEq() {
+    [tKing, tMan, tWoman, tQueen].forEach(function (e) {
+      e.classList.remove("lit-roy", "lit-ppl", "lit-win");
+    });
+    [opMinus, opPlus, opApprox].forEach(function (e) { e.classList.remove("lit"); });
+  }
+
+  function render(i) {
+    var step = STEPS[i];
+    plot.style.setProperty("--stage-accent", step.accent);
+    document.documentElement.style.setProperty("--stage-accent", step.accent);
+
+    // overlay visibility per step
+    ovMW.classList.toggle("on", i >= 1);
+    ovKR.classList.toggle("on", i >= 2);
+    travelWrap.classList.toggle("on", i >= 2);
+    travelG.classList.toggle("move", i >= 2);
+    ovResult.classList.toggle("on", i >= 3);
+    ovQueen.classList.toggle("on", i >= 3);
+
+    // equation highlighting
+    clearEq();
+    if (i >= 1) { lit(tMan, "lit-ppl"); lit(tWoman, "lit-ppl"); opMinus.classList.add("lit"); opPlus.classList.add("lit"); }
+    if (i >= 2) { lit(tKing, "lit-roy"); }
+    if (i >= 3) { lit(tQueen, "lit-win"); opApprox.classList.add("lit"); }
+
+    // point emphasis per step
+    if (i === 0)      setHot(null);
+    else if (i === 1) setHot(["man", "woman"]);
+    else if (i === 2) setHot(["king", "man", "woman"]);
+    else if (i === 3) setHot(["king", "queen", "man", "woman"]);
+    else              setHot(null);
+
+    // caption (announce position to screen readers)
+    caption.innerHTML =
+      '<span class="sr-only">Step ' + (i + 1) + ' of ' + STEPS.length + '. </span>' + step.caption;
+
+    stepCount.innerHTML = "Step <b>" + (i + 1) + "</b> of " + STEPS.length;
+    dotEls.forEach(function (d, di) {
+      d.classList.toggle("is-active", di === i);
+      d.classList.toggle("is-past", di < i);
+      if (di === i) d.setAttribute("aria-current", "step");
+      else d.removeAttribute("aria-current");
+    });
+
+    btnBack.disabled = (i === 0);
+    btnNext.disabled = (i === STEPS.length - 1);
+  }
+
+  function go(i) {
+    current = Math.max(0, Math.min(STEPS.length - 1, i));
+    tip.classList.remove("show");
+    render(current);
+  }
+
+  /* ---------------- playback ---------------- */
+  var timer = null, playing = false;
+
+  function tick() {
+    if (current >= STEPS.length - 1) { pause(); return; }
+    go(current + 1);
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function play() {
+    if (reduceMotion) return;
+    if (playing) return;
+    if (current >= STEPS.length - 1) go(0);
+    playing = true;
+    setPlayButton();
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function pause() {
+    playing = false;
+    if (timer) { window.clearTimeout(timer); timer = null; }
+    setPlayButton();
+  }
+  function toggle() { playing ? pause() : play(); }
+
+  function setPlayButton() {
+    if (reduceMotion) {
+      playIcon.innerHTML = PLAY_ICON;
+      playText.textContent = "Auto-play off";
+      btnPlay.setAttribute("aria-label", "Auto-play disabled (reduced motion)");
+      return;
+    }
+    playIcon.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    playText.textContent = playing ? "Pause" : "Play";
+    btnPlay.setAttribute("aria-label", playing ? "Pause animation" : "Play animation");
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /* ---------------- controls ---------------- */
+  btnPlay.addEventListener("click", toggle);
+  btnNext.addEventListener("click", function () { pause(); go(current + 1); });
+  btnBack.addEventListener("click", function () { pause(); go(current - 1); });
+  btnRestart.addEventListener("click", function () { pause(); go(0); });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if ((e.code === "Space" || e.key === " ") &&
+        !(e.target && e.target.closest && e.target.closest("button"))) {
+      e.preventDefault(); toggle();   // don't hijack Space from a focused control
+    }
+    else if (e.key === "ArrowRight") { e.preventDefault(); pause(); go(current + 1); }
+    else if (e.key === "ArrowLeft")  { e.preventDefault(); pause(); go(current - 1); }
+  });
+
+  document.addEventListener("visibilitychange", function () { if (document.hidden) pause(); });
+
+  if (reduceMotion) {
+    btnPlay.disabled = true;
+    btnPlay.title = "Auto-play disabled (reduced motion). Use Next / Back.";
+  }
+
+  /* ---------------- init ---------------- */
+  setPlayButton();
+  go(0);
+})();
+</script>
+</body>
+</html>

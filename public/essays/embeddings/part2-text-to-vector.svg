@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 440" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="t2arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M1,1 L9,5 L1,9" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </marker>
+  </defs>
+
+  <!-- Canvas -->
+  <rect x="0" y="0" width="1100" height="440" fill="#ffffff" />
+
+  <!-- Title -->
+  <text x="40" y="44" font-size="20" font-weight="700" fill="#0f172a">From text to vector</text>
+  <text x="40" y="66" font-size="13" fill="#64748b">An embedding model is a function: text in, a fixed-length list of numbers out</text>
+
+  <!-- ===== 1) Sentence card ===== -->
+  <rect x="38" y="158" width="252" height="118" rx="14" fill="#0f172a" opacity="0.04" />
+  <rect x="36" y="154" width="252" height="118" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" />
+  <text x="56" y="180" font-size="10" font-weight="700" fill="#64748b" letter-spacing="0.5">REFUND-POLICY.MD &#183; CHUNK 1</text>
+  <text x="56" y="208" font-size="13.5" fill="#334155">Refunds are accepted</text>
+  <text x="56" y="230" font-size="13.5" fill="#334155">within 30 days of</text>
+  <text x="56" y="252" font-size="13.5" fill="#334155">purchase.</text>
+
+  <!-- arrow -->
+  <line x1="296" y1="213" x2="338" y2="213" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#t2arrow)" />
+
+  <!-- ===== 2) Embedding model box (violet) ===== -->
+  <rect x="346" y="148" width="196" height="130" rx="14" fill="#f5f3ff" stroke="#ddd6fe" stroke-width="1.5" />
+  <text x="444" y="174" font-size="11" font-weight="700" fill="#7c3aed" letter-spacing="0.5" text-anchor="middle">EMBEDDING MODEL</text>
+
+  <!-- tiny neural-net glyph: 3 -> 4 -> 2 -->
+  <g stroke="#c4b5fd" stroke-width="1.2">
+    <line x1="392" y1="206" x2="438" y2="200" /><line x1="392" y1="206" x2="438" y2="218" /><line x1="392" y1="206" x2="438" y2="236" /><line x1="392" y1="206" x2="438" y2="254" />
+    <line x1="392" y1="228" x2="438" y2="200" /><line x1="392" y1="228" x2="438" y2="218" /><line x1="392" y1="228" x2="438" y2="236" /><line x1="392" y1="228" x2="438" y2="254" />
+    <line x1="392" y1="250" x2="438" y2="200" /><line x1="392" y1="250" x2="438" y2="218" /><line x1="392" y1="250" x2="438" y2="236" /><line x1="392" y1="250" x2="438" y2="254" />
+    <line x1="438" y1="200" x2="486" y2="216" /><line x1="438" y1="200" x2="486" y2="240" />
+    <line x1="438" y1="218" x2="486" y2="216" /><line x1="438" y1="218" x2="486" y2="240" />
+    <line x1="438" y1="236" x2="486" y2="216" /><line x1="438" y1="236" x2="486" y2="240" />
+    <line x1="438" y1="254" x2="486" y2="216" /><line x1="438" y1="254" x2="486" y2="240" />
+  </g>
+  <g fill="#8b5cf6">
+    <circle cx="392" cy="206" r="4.5" /><circle cx="392" cy="228" r="4.5" /><circle cx="392" cy="250" r="4.5" />
+    <circle cx="438" cy="200" r="4.5" /><circle cx="438" cy="218" r="4.5" /><circle cx="438" cy="236" r="4.5" /><circle cx="438" cy="254" r="4.5" />
+    <circle cx="486" cy="216" r="4.5" /><circle cx="486" cy="240" r="4.5" />
+  </g>
+
+  <!-- arrow -->
+  <line x1="548" y1="213" x2="590" y2="213" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#t2arrow)" />
+
+  <!-- ===== 3) Vector card ===== -->
+  <rect x="600" y="158" width="244" height="118" rx="14" fill="#0f172a" opacity="0.04" />
+  <rect x="598" y="154" width="244" height="118" rx="14" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.5" />
+  <text x="618" y="180" font-size="10" font-weight="700" fill="#7c3aed" letter-spacing="0.5">VECTOR &#183; LENGTH 384</text>
+  <text x="618" y="208" font-size="13" fill="#334155" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">[ 0.021, -0.34,</text>
+  <text x="618" y="230" font-size="13" fill="#334155" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">&#160;&#160;0.088, 0.12,</text>
+  <text x="618" y="252" font-size="13" fill="#334155" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">&#160;&#160;0.41, &#8230; ]</text>
+
+  <!-- arrow -->
+  <line x1="850" y1="213" x2="892" y2="213" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#t2arrow)" />
+
+  <!-- ===== 4) Meaning-space with the dropped point ===== -->
+  <rect x="900" y="118" width="186" height="200" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" />
+  <text x="916" y="140" font-size="10" font-weight="700" fill="#64748b" letter-spacing="0.4">MEANING-SPACE</text>
+  <!-- faint axes -->
+  <line x1="924" y1="156" x2="924" y2="300" stroke="#e2e8f0" stroke-width="1" />
+  <line x1="924" y1="300" x2="1070" y2="300" stroke="#e2e8f0" stroke-width="1" />
+  <!-- other points (light) -->
+  <circle cx="960" cy="200" r="4" fill="#cbd5e1" />
+  <circle cx="1010" cy="172" r="4" fill="#cbd5e1" />
+  <circle cx="1042" cy="232" r="4" fill="#cbd5e1" />
+  <circle cx="978" cy="268" r="4" fill="#cbd5e1" />
+  <circle cx="1030" cy="284" r="4" fill="#cbd5e1" />
+  <!-- the dropped point (violet, with ring) -->
+  <circle cx="996" cy="226" r="13" fill="none" stroke="#8b5cf6" stroke-width="1.6" opacity="0.45" />
+  <circle cx="996" cy="226" r="6.5" fill="#8b5cf6" />
+  <text x="996" y="262" font-size="11" font-weight="700" fill="#7c3aed" text-anchor="middle">this chunk</text>
+
+  <!-- bottom caption strip -->
+  <text x="40" y="352" font-size="13" fill="#64748b">Same model, same length, every time. Run the user's question through it too and the two vectors become directly comparable,</text>
+  <text x="40" y="374" font-size="13" fill="#64748b">because they now live as points in the one shared space.</text>
+</svg>
