@@ -49,7 +49,7 @@
   <!-- rose badge -->
   <rect x="84" y="386" width="206" height="26" rx="8" fill="#fff1f2" stroke="#fecdd3" stroke-width="1" />
   <text x="97" y="403" font-size="12.5" font-weight="700" fill="#e11d48">&#10007;</text>
-  <text x="113" y="403" font-size="12" font-weight="600" fill="#e11d48">Hallucinated &#8212; no source</text>
+  <text x="113" y="403" font-size="12" font-weight="600" fill="#e11d48">Hallucinated, no source</text>
 
   <text x="84" y="438" font-size="12" fill="#64748b">made up; sounds confident</text>
 
