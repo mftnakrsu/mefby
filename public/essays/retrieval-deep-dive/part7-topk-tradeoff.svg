@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 540" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <rect x="0" y="0" width="1080" height="540" fill="#ffffff" />
+
+  <!-- Title -->
+  <text x="30" y="40" font-size="20" font-weight="700" fill="#0f172a">The top-k dial</text>
+  <text x="30" y="62" font-size="13" fill="#64748b">Same ranked list, three cut-offs. The green chunk holds the answer. Too few misses it; too many buries it.</text>
+
+  <!-- =============== shared row helper note =============== -->
+  <!-- Each panel shows the same 12 retrieved chunks, ranked top to bottom. -->
+
+  <!-- ==================================================================== -->
+  <!-- PANEL 1: TOO SMALL (k = 1) -->
+  <!-- ==================================================================== -->
+  <g>
+    <rect x="18" y="86" width="332" height="424" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+    <rect x="18" y="86" width="6" height="424" rx="3" fill="#f43f5e" />
+    <text x="44" y="116" font-size="12.5" font-weight="700" letter-spacing="0.05em" fill="#e11d48">TOO SMALL &#183; k = 1</text>
+
+    <!-- kept band: only rank 1 -->
+    <rect x="40" y="134" width="288" height="34" rx="8" fill="#ecfdf5" stroke="#a7f3d0" />
+    <text x="320" y="155" font-size="10.5" font-weight="700" fill="#059669" text-anchor="end">KEPT</text>
+
+    <!-- rows -->
+    <rect x="50" y="138" width="170" height="14" rx="4" fill="#6366f1" />
+    <text x="232" y="149" font-size="10.5" fill="#475569">rank 1</text>
+
+    <rect x="50" y="178" width="150" height="14" rx="4" fill="#cbd5e1" />
+    <text x="232" y="189" font-size="10.5" fill="#94a3b8">rank 2</text>
+
+    <rect x="50" y="206" width="138" height="14" rx="4" fill="#cbd5e1" />
+    <text x="232" y="217" font-size="10.5" fill="#94a3b8">rank 3</text>
+
+    <!-- the answer chunk, dropped -->
+    <rect x="46" y="230" width="200" height="22" rx="6" fill="#ffffff" stroke="#f43f5e" stroke-dasharray="4 3" />
+    <rect x="50" y="234" width="130" height="14" rx="4" fill="#10b981" />
+    <text x="186" y="245" font-size="10.5" font-weight="700" fill="#059669">answer</text>
+    <text x="252" y="245" font-size="10.5" fill="#e11d48">rank 4, dropped</text>
+
+    <rect x="50" y="266" width="120" height="14" rx="4" fill="#cbd5e1" />
+    <rect x="50" y="294" width="108" height="14" rx="4" fill="#cbd5e1" />
+
+    <text x="44" y="356" font-size="13" font-weight="700" fill="#e11d48">Answer never retrieved.</text>
+    <text x="44" y="382" font-size="12.5" fill="#334155">Cut too tight and the chunk holding</text>
+    <text x="44" y="402" font-size="12.5" fill="#334155">the answer falls outside the net.</text>
+    <text x="44" y="422" font-size="12.5" fill="#334155">Low recall: the generator is starved</text>
+    <text x="44" y="442" font-size="12.5" fill="#334155">and can only guess.</text>
+  </g>
+
+  <!-- ==================================================================== -->
+  <!-- PANEL 2: TOO LARGE (k = 12) -->
+  <!-- ==================================================================== -->
+  <g>
+    <rect x="374" y="86" width="332" height="424" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+    <rect x="374" y="86" width="6" height="424" rx="3" fill="#f59e0b" />
+    <text x="400" y="116" font-size="12.5" font-weight="700" letter-spacing="0.05em" fill="#b45309">TOO LARGE &#183; k = 12</text>
+
+    <!-- kept band: all 12 -->
+    <rect x="396" y="134" width="288" height="232" rx="8" fill="#fffbeb" stroke="#fde68a" />
+    <text x="676" y="155" font-size="10.5" font-weight="700" fill="#b45309" text-anchor="end">ALL KEPT</text>
+
+    <!-- 12 rows; answer buried at rank 6 (middle), middle rows faded for "lost in the middle" -->
+    <rect x="406" y="142" width="150" height="11" rx="3" fill="#6366f1" />
+    <rect x="406" y="160" width="142" height="11" rx="3" fill="#6366f1" opacity="0.85" />
+    <rect x="406" y="178" width="134" height="11" rx="3" fill="#94a3b8" opacity="0.55" />
+    <rect x="406" y="196" width="128" height="11" rx="3" fill="#94a3b8" opacity="0.5" />
+    <rect x="406" y="214" width="122" height="11" rx="3" fill="#94a3b8" opacity="0.45" />
+    <!-- answer, buried in the faded middle -->
+    <rect x="406" y="232" width="120" height="11" rx="3" fill="#10b981" opacity="0.5" />
+    <text x="536" y="241" font-size="10" font-weight="700" fill="#94a3b8">answer, rank 6</text>
+    <rect x="406" y="250" width="116" height="11" rx="3" fill="#94a3b8" opacity="0.45" />
+    <rect x="406" y="268" width="112" height="11" rx="3" fill="#94a3b8" opacity="0.5" />
+    <rect x="406" y="286" width="108" height="11" rx="3" fill="#94a3b8" opacity="0.55" />
+    <rect x="406" y="304" width="104" height="11" rx="3" fill="#94a3b8" opacity="0.6" />
+    <rect x="406" y="322" width="100" height="11" rx="3" fill="#6366f1" opacity="0.8" />
+    <rect x="406" y="340" width="96" height="11" rx="3" fill="#6366f1" opacity="0.85" />
+
+    <text x="400" y="356" font-size="9.5" fill="#b45309" font-style="italic">faded band = attention sags in the middle</text>
+
+    <text x="400" y="392" font-size="13" font-weight="700" fill="#b45309">Answer buried in noise.</text>
+    <text x="400" y="418" font-size="12.5" fill="#334155">The right chunk is in there, but lost</text>
+    <text x="400" y="438" font-size="12.5" fill="#334155">among irrelevant ones, stranded in</text>
+    <text x="400" y="458" font-size="12.5" fill="#334155">the middle the model attends to least.</text>
+    <text x="400" y="478" font-size="12.5" fill="#334155">Wasted tokens; quality can drop.</text>
+  </g>
+
+  <!-- ==================================================================== -->
+  <!-- PANEL 3: SWEET SPOT (k = 5) -->
+  <!-- ==================================================================== -->
+  <g>
+    <rect x="730" y="86" width="332" height="424" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+    <rect x="730" y="86" width="6" height="424" rx="3" fill="#10b981" />
+    <text x="756" y="116" font-size="12.5" font-weight="700" letter-spacing="0.05em" fill="#059669">SWEET SPOT &#183; k = 5</text>
+
+    <!-- kept band: top 5 -->
+    <rect x="752" y="134" width="288" height="120" rx="8" fill="#ecfdf5" stroke="#a7f3d0" />
+    <text x="1032" y="155" font-size="10.5" font-weight="700" fill="#059669" text-anchor="end">KEPT</text>
+
+    <rect x="762" y="142" width="158" height="13" rx="4" fill="#6366f1" />
+    <text x="930" y="153" font-size="10.5" fill="#475569">rank 1</text>
+    <rect x="762" y="166" width="148" height="13" rx="4" fill="#6366f1" opacity="0.9" />
+    <text x="930" y="177" font-size="10.5" fill="#475569">rank 2</text>
+    <!-- answer, kept and near the top -->
+    <rect x="762" y="190" width="138" height="13" rx="4" fill="#10b981" />
+    <text x="912" y="201" font-size="10.5" font-weight="700" fill="#059669">answer</text>
+    <rect x="762" y="214" width="128" height="13" rx="4" fill="#6366f1" opacity="0.85" />
+    <text x="930" y="225" font-size="10.5" fill="#475569">rank 4</text>
+    <rect x="762" y="238" width="120" height="13" rx="4" fill="#6366f1" opacity="0.8" />
+    <text x="930" y="249" font-size="10.5" fill="#475569">rank 5</text>
+
+    <!-- dropped tail -->
+    <rect x="762" y="266" width="110" height="13" rx="4" fill="#cbd5e1" />
+    <rect x="762" y="290" width="102" height="13" rx="4" fill="#cbd5e1" />
+
+    <text x="756" y="356" font-size="13" font-weight="700" fill="#059669">Answer kept, noise trimmed.</text>
+    <text x="756" y="382" font-size="12.5" fill="#334155">Wide enough to catch the answer,</text>
+    <text x="756" y="402" font-size="12.5" fill="#334155">tight enough to keep the prompt clean.</text>
+    <text x="756" y="422" font-size="12.5" fill="#334155">The pattern that gets here: cast a</text>
+    <text x="756" y="442" font-size="12.5" fill="#334155">wide net, then rerank down (Part 8).</text>
+  </g>
+</svg>
