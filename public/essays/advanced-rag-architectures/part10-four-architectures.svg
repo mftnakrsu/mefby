@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 620" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p10-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="p10-arr-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f43f5e"/>
+    </marker>
+    <marker id="p10-arr-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#10b981"/>
+    </marker>
+    <marker id="p10-arr-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b5cf6"/>
+    </marker>
+    <marker id="p10-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#14b8a6"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="620" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">Four ways to add a brain</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">Each architecture restructures the same retrieve-generate flow differently.</text>
+
+  <!-- ===================================================================== -->
+  <!-- Panel 1: AGENTIC                                                       -->
+  <!-- ===================================================================== -->
+  <g transform="translate(40,92)">
+    <rect width="490" height="240" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <rect width="6" height="240" rx="3" fill="#8b5cf6"/>
+
+    <text x="26" y="34" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#64748b">AGENTIC</text>
+    <text x="26" y="54" font-size="11.5" fill="#64748b">Adds a reason loop that picks tools and acts.</text>
+
+    <!-- reason -> act -> observe cycle -->
+    <rect x="36" y="78" width="118" height="46" rx="8" fill="#f5f3ff" stroke="#8b5cf6"/>
+    <text x="95" y="100" font-size="11.5" font-weight="700" fill="#6d28d9" text-anchor="middle">Reason</text>
+    <text x="95" y="115" font-size="9.5" fill="#7c3aed" text-anchor="middle">what next?</text>
+
+    <rect x="194" y="78" width="118" height="46" rx="8" fill="#f5f3ff" stroke="#8b5cf6"/>
+    <text x="253" y="100" font-size="11.5" font-weight="700" fill="#6d28d9" text-anchor="middle">Act</text>
+    <text x="253" y="115" font-size="9.5" fill="#7c3aed" text-anchor="middle">call a tool</text>
+
+    <rect x="352" y="78" width="118" height="46" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+    <text x="411" y="100" font-size="11.5" font-weight="700" fill="#4f46e5" text-anchor="middle">Observe</text>
+    <text x="411" y="115" font-size="9.5" fill="#6366f1" text-anchor="middle">read result</text>
+
+    <line x1="156" y1="101" x2="192" y2="101" stroke="#8b5cf6" stroke-width="1.8" marker-end="url(#p10-arr-violet)"/>
+    <line x1="314" y1="101" x2="350" y2="101" stroke="#8b5cf6" stroke-width="1.8" marker-end="url(#p10-arr-violet)"/>
+    <!-- return arrow: observe back to reason -->
+    <path d="M411,126 V146 H95 V126" fill="none" stroke="#8b5cf6" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#p10-arr-violet)"/>
+    <text x="253" y="161" font-size="9.5" fill="#7c3aed" text-anchor="middle">loop until the answer is ready</text>
+
+    <!-- tool chips -->
+    <text x="36" y="190" font-size="10.5" font-weight="700" letter-spacing="0.04em" fill="#64748b">TOOLS THE AGENT CAN REACH FOR</text>
+    <g font-size="10.5" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">
+      <rect x="36" y="200" width="98" height="28" rx="8" fill="#f0fdfa" stroke="#14b8a6"/>
+      <text x="85" y="218" fill="#0f766e" text-anchor="middle">vector store</text>
+
+      <rect x="144" y="200" width="74" height="28" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="181" y="218" fill="#475569" text-anchor="middle">web</text>
+
+      <rect x="228" y="200" width="96" height="28" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="276" y="218" fill="#475569" text-anchor="middle">SQL / API</text>
+
+      <rect x="334" y="200" width="100" height="28" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="384" y="218" fill="#475569" text-anchor="middle">calculator</text>
+    </g>
+  </g>
+
+  <!-- ===================================================================== -->
+  <!-- Panel 2: CORRECTIVE (CRAG)                                             -->
+  <!-- ===================================================================== -->
+  <g transform="translate(550,92)">
+    <rect width="490" height="240" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <rect width="6" height="240" rx="3" fill="#f59e0b"/>
+
+    <text x="26" y="34" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#64748b">CORRECTIVE (CRAG)</text>
+    <text x="26" y="54" font-size="11.5" fill="#64748b">Adds a grade that branches on bad context.</text>
+
+    <!-- retrieve -->
+    <rect x="26" y="100" width="92" height="40" rx="8" fill="#ecfeff" stroke="#06b6d4"/>
+    <text x="72" y="124" font-size="11" font-weight="700" fill="#0e7490" text-anchor="middle">Retrieve</text>
+
+    <line x1="120" y1="120" x2="150" y2="120" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#p10-arr)"/>
+
+    <!-- grade diamond -->
+    <polygon points="202,90 248,120 202,150 156,120" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.6"/>
+    <text x="202" y="117" font-size="10.5" font-weight="700" fill="#b45309" text-anchor="middle">Grade</text>
+    <text x="202" y="131" font-size="9" fill="#b45309" text-anchor="middle">good?</text>
+
+    <!-- good branch -> generate -->
+    <line x1="248" y1="120" x2="290" y2="120" stroke="#10b981" stroke-width="1.8" marker-end="url(#p10-arr-emerald)"/>
+    <text x="269" y="111" font-size="9.5" font-weight="700" fill="#059669" text-anchor="middle">good</text>
+    <rect x="292" y="100" width="100" height="40" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+    <text x="342" y="124" font-size="11" font-weight="700" fill="#047857" text-anchor="middle">Generate</text>
+
+    <!-- bad branch down -> corrective action -->
+    <path d="M202,150 V178 H120" fill="none" stroke="#f43f5e" stroke-width="1.8" marker-end="url(#p10-arr-rose)"/>
+    <text x="226" y="170" font-size="9.5" font-weight="700" fill="#e11d48" text-anchor="middle">bad</text>
+    <rect x="26" y="160" width="92" height="40" rx="8" fill="#fff1f2" stroke="#f43f5e"/>
+    <text x="72" y="178" font-size="10" font-weight="700" fill="#e11d48" text-anchor="middle">Correct</text>
+    <text x="72" y="192" font-size="8.5" fill="#e11d48" text-anchor="middle">web / reformulate</text>
+
+    <!-- loop back from corrective to retrieve -->
+    <path d="M26,180 H14 V120 H24" fill="none" stroke="#f43f5e" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#p10-arr-rose)"/>
+    <text x="200" y="222" font-size="10.5" fill="#475569">Reject weak context before it reaches the model.</text>
+  </g>
+
+  <!-- ===================================================================== -->
+  <!-- Panel 3: SELF-RAG                                                      -->
+  <!-- ===================================================================== -->
+  <g transform="translate(40,352)">
+    <rect width="490" height="240" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <rect width="6" height="240" rx="3" fill="#6366f1"/>
+
+    <text x="26" y="34" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#64748b">SELF-RAG</text>
+    <text x="26" y="54" font-size="11.5" fill="#64748b">One model gates itself with reflection tokens.</text>
+
+    <!-- inline generate flow with token gates -->
+    <rect x="26" y="84" width="86" height="42" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+    <text x="69" y="103" font-size="10.5" font-weight="700" fill="#4f46e5" text-anchor="middle">Query</text>
+    <text x="69" y="117" font-size="9" fill="#6366f1" text-anchor="middle">into the LLM</text>
+
+    <line x1="114" y1="105" x2="146" y2="105" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#p10-arr)"/>
+
+    <!-- gate 1: retrieve? -->
+    <rect x="148" y="86" width="118" height="38" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="207" y="103" font-size="9" fill="#b45309" text-anchor="middle">gate: retrieve or not</text>
+    <text x="207" y="117" font-size="10" font-weight="700" fill="#b45309" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">Retrieve</text>
+
+    <line x1="268" y1="105" x2="300" y2="105" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#p10-arr)"/>
+
+    <!-- gate 2: relevant? -->
+    <rect x="302" y="86" width="118" height="38" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="361" y="103" font-size="9" fill="#b45309" text-anchor="middle">gate: is it relevant?</text>
+    <text x="361" y="117" font-size="10" font-weight="700" fill="#b45309" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">IsRel</text>
+
+    <!-- down to generate -->
+    <path d="M361,124 V146 H207" fill="none" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#p10-arr)"/>
+
+    <rect x="148" y="148" width="118" height="42" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+    <text x="207" y="167" font-size="10.5" font-weight="700" fill="#4f46e5" text-anchor="middle">Generate</text>
+    <text x="207" y="181" font-size="9" fill="#6366f1" text-anchor="middle">draft answer</text>
+
+    <!-- gate 3: grounded? -->
+    <rect x="302" y="148" width="118" height="42" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="361" y="166" font-size="9" fill="#b45309" text-anchor="middle">gate: is it grounded?</text>
+    <text x="361" y="180" font-size="10" font-weight="700" fill="#b45309" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">IsSup</text>
+
+    <line x1="266" y1="169" x2="300" y2="169" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#p10-arr)"/>
+
+    <text x="26" y="220" font-size="10.5" fill="#475569">The model emits tags that decide retrieve, relevance, and support.</text>
+  </g>
+
+  <!-- ===================================================================== -->
+  <!-- Panel 4: GRAPHRAG                                                      -->
+  <!-- ===================================================================== -->
+  <g transform="translate(550,352)">
+    <rect width="490" height="240" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <rect width="6" height="240" rx="3" fill="#14b8a6"/>
+
+    <text x="26" y="34" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#64748b">GRAPHRAG</text>
+    <text x="26" y="54" font-size="11.5" fill="#64748b">Builds an entity graph, then traverses it.</text>
+
+    <!-- corpus -> build graph -->
+    <rect x="26" y="92" width="80" height="40" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="66" y="112" font-size="10.5" font-weight="700" fill="#475569" text-anchor="middle">Corpus</text>
+    <text x="66" y="125" font-size="8.5" fill="#64748b" text-anchor="middle">documents</text>
+
+    <line x1="108" y1="112" x2="138" y2="112" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#p10-arr)"/>
+    <text x="123" y="103" font-size="8.5" fill="#64748b" text-anchor="middle">build</text>
+
+    <!-- graph: 4 entity nodes + labelled edges, highlighted traversal -->
+    <g>
+      <!-- edges -->
+      <line x1="200" y1="108" x2="300" y2="92" stroke="#14b8a6" stroke-width="2.4"/>
+      <line x1="300" y1="92" x2="372" y2="150" stroke="#14b8a6" stroke-width="2.4"/>
+      <line x1="200" y1="108" x2="266" y2="184" stroke="#cbd5e1" stroke-width="1.6"/>
+      <line x1="266" y1="184" x2="372" y2="150" stroke="#cbd5e1" stroke-width="1.6"/>
+
+      <!-- edge labels -->
+      <text x="248" y="92" font-size="8.5" fill="#0f766e" text-anchor="middle">covers</text>
+      <text x="348" y="113" font-size="8.5" fill="#0f766e" text-anchor="middle">excludes</text>
+
+      <!-- nodes (traversal path highlighted in cyan/teal) -->
+      <circle cx="200" cy="108" r="22" fill="#ecfeff" stroke="#06b6d4" stroke-width="2"/>
+      <text x="200" y="105" font-size="8.5" font-weight="700" fill="#0e7490" text-anchor="middle">Warranty</text>
+      <text x="200" y="116" font-size="8" fill="#0e7490" text-anchor="middle">1 year</text>
+
+      <circle cx="300" cy="92" r="22" fill="#ecfeff" stroke="#06b6d4" stroke-width="2"/>
+      <text x="300" y="89" font-size="8.5" font-weight="700" fill="#0e7490" text-anchor="middle">Defects</text>
+      <text x="300" y="100" font-size="8" fill="#0e7490" text-anchor="middle">mfg.</text>
+
+      <circle cx="372" cy="150" r="22" fill="#ecfeff" stroke="#06b6d4" stroke-width="2"/>
+      <text x="372" y="148" font-size="8.5" font-weight="700" fill="#0e7490" text-anchor="middle">Final</text>
+      <text x="372" y="159" font-size="8" fill="#0e7490" text-anchor="middle">sale</text>
+
+      <circle cx="266" cy="184" r="22" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+      <text x="266" y="182" font-size="8.5" font-weight="700" fill="#0f766e" text-anchor="middle">Refund</text>
+      <text x="266" y="193" font-size="8" fill="#0f766e" text-anchor="middle">30 days</text>
+    </g>
+
+    <text x="200" y="226" font-size="10.5" fill="#475569">Answers by walking relationships, not just matching text.</text>
+  </g>
+</svg>
