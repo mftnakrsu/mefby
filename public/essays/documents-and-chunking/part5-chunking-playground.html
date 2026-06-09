@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chunking Playground: strategy, size, and overlap</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 5 flagship animation
+     Self-contained: no external resources, no web fonts.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --radius-card: 14px;
+    --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 280ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .pl { max-width: 900px; margin: 0 auto; }
+
+  .pl-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 14px; }
+  .pl-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .pl-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .pl-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* controls */
+  .pl-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin: 6px 0 12px; }
+  .pl-modes { display: inline-flex; border: 1px solid var(--border); border-radius: 11px; padding: 3px; background: var(--surface-1); gap: 3px; }
+  .pl-mode {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--muted);
+    background: transparent; border: none; border-radius: 8px; padding: 7px 15px; cursor: pointer;
+    transition: background-color 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .pl-mode[aria-pressed="true"] { background: #fff; color: var(--heading); box-shadow: 0 1px 2px rgba(15,23,42,0.10); }
+  .pl-mode:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+
+  .pl-slider { display: flex; flex-direction: column; gap: 4px; min-width: 200px; }
+  .pl-slider label { font-size: 12.5px; font-weight: 600; color: var(--body); }
+  .pl-slider label span { font-family: var(--mono); color: var(--indigo-strong); font-variant-numeric: tabular-nums; }
+  .pl-slider input[type="range"] { width: 100%; accent-color: var(--indigo); cursor: pointer; }
+  .pl-slider input[type="range"]:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; border-radius: 4px; }
+
+  .pl-explain { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; min-height: 18px; }
+  .pl-explain b { color: var(--body); }
+
+  /* the document */
+  .pl-doc {
+    font-size: 15px; line-height: 2.0; white-space: pre-wrap; color: var(--heading);
+    border: 1px solid var(--border); border-radius: var(--radius-card); background: #fff;
+    padding: 16px 18px; word-break: normal; overflow-wrap: break-word;
+  }
+  .ck { transition: background-color var(--dur) var(--ease); padding: 3px 0; border-radius: 3px; }
+  .ck.ov { background: rgba(16,185,129,0.30); box-shadow: inset 0 -2px 0 0 var(--emerald); }
+
+  .pl-readout {
+    margin: 12px 0 0; font-size: 13px; color: var(--body);
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+  }
+  .pl-readout b { color: var(--heading); }
+
+  .pl-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; }
+  .lg { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .lg i { width: 16px; height: 12px; border-radius: 4px; display: inline-block; border: 1px solid var(--border); }
+  .lg i.swc { background: rgba(99,102,241,0.16); }
+  .lg i.swv { background: rgba(139,92,246,0.16); }
+  .lg i.swo { background: rgba(16,185,129,0.30); box-shadow: inset 0 -2px 0 0 var(--emerald); border-color: transparent; }
+
+
+  @media (prefers-reduced-motion: reduce) {
+    .ck, .pl-mode { transition: none !important; }
+  }
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .pl-title { font-size: 19px; }
+    .pl-slider { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+  <main class="pl" aria-label="Interactive chunking playground">
+    <header class="pl-head">
+      <span class="pl-eyebrow">RAG from First Principles &#183; Part 5</span>
+      <h1 class="pl-title">Chunking playground</h1>
+      <p class="pl-sub">Pick a strategy, drag the dials, and watch the document re-split live.</p>
+    </header>
+
+    <div class="pl-controls">
+      <div class="pl-modes" role="group" aria-label="Chunking strategy">
+        <button class="pl-mode" id="mFixed" type="button" aria-pressed="true">Fixed-size</button>
+        <button class="pl-mode" id="mRec" type="button" aria-pressed="false">Recursive</button>
+      </div>
+      <div class="pl-slider">
+        <label for="sizeR">Chunk size: <span id="sizeV">160</span> chars</label>
+        <input id="sizeR" type="range" min="60" max="320" step="20" value="160" />
+      </div>
+      <div class="pl-slider">
+        <label for="ovR">Overlap: <span id="ovV">20</span> chars</label>
+        <input id="ovR" type="range" min="0" max="80" step="10" value="20" />
+      </div>
+    </div>
+
+    <p class="pl-explain" id="explain"></p>
+
+    <div class="pl-doc" id="doc"></div>
+
+    <p class="pl-readout" id="readout" aria-live="polite"></p>
+
+    <div class="pl-legend" aria-hidden="true">
+      <span class="lg"><i class="swc"></i><i class="swv"></i>each chunk is a color band</span>
+      <span class="lg"><i class="swo"></i>overlap (text shared by two chunks)</span>
+    </div>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var DOC =
+    "Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging. To start a return, email our support team with your order number.\n\n" +
+    "Once we receive the item, your refund is processed to the original payment method within five business days. Shipping fees are non-refundable, and items marked final sale cannot be returned or exchanged.";
+
+  // low-opacity background per chunk index (cycles)
+  var PAL = [
+    "rgba(99,102,241,0.16)",   // indigo
+    "rgba(139,92,246,0.16)",   // violet
+    "rgba(20,184,166,0.16)",   // teal
+    "rgba(245,158,11,0.18)",   // amber
+    "rgba(244,63,94,0.15)",    // rose
+    "rgba(6,182,212,0.16)"     // cyan
+  ];
+
+  var docEl    = document.getElementById("doc");
+  var readout  = document.getElementById("readout");
+  var explain  = document.getElementById("explain");
+  var sizeR    = document.getElementById("sizeR");
+  var ovR      = document.getElementById("ovR");
+  var sizeV    = document.getElementById("sizeV");
+  var ovV      = document.getElementById("ovV");
+  var mFixed   = document.getElementById("mFixed");
+  var mRec     = document.getElementById("mRec");
+
+  var strategy = "fixed";
+
+  /* ---------- chunking ---------- */
+  function fixedSize(text, size, ov) {
+    var step = Math.max(1, size - ov), out = [];
+    for (var s = 0; s < text.length; s += step) {
+      var e = Math.min(text.length, s + size);
+      out.push([s, e]);
+      if (e >= text.length) break;
+    }
+    return out;
+  }
+
+  // split into sentence / paragraph units, each as [start, end) over the text
+  function segments(text) {
+    var segs = [], start = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      var sentEnd = (c === "." || c === "!" || c === "?") &&
+                    (i + 1 >= text.length || /\s/.test(text[i + 1]));
+      var nl = c === "\n";
+      if (sentEnd || nl) {
+        var j = i + 1;
+        while (j < text.length && /\s/.test(text[j])) j++;
+        segs.push([start, j]);
+        start = j; i = j - 1;
+      }
+    }
+    if (start < text.length) segs.push([start, text.length]);
+    return segs;
+  }
+
+  function wordSplit(text, a, b, size) {
+    var out = [], s = a;
+    while (s < b) {
+      var e = Math.min(b, s + size);
+      if (e < b) { var t = e; while (t > s && !/\s/.test(text[t - 1])) t--; if (t > s) e = t; }
+      out.push([s, e]); s = e;
+    }
+    return out;
+  }
+
+  function recursive(text, size, ov) {
+    var segs = segments(text), units = [];
+    segs.forEach(function (s) {
+      if (s[1] - s[0] <= size) units.push(s);
+      else { var w = wordSplit(text, s[0], s[1], size); for (var k = 0; k < w.length; k++) units.push(w[k]); }
+    });
+    if (!units.length) return [[0, text.length]];
+    var chunks = [], cs = units[0][0], ce = units[0][1];
+    for (var i = 1; i < units.length; i++) {
+      var u = units[i];
+      if (u[1] - cs <= size) { ce = u[1]; }
+      else { chunks.push([cs, ce]); cs = u[0]; ce = u[1]; }
+    }
+    chunks.push([cs, ce]);
+    if (ov > 0) {
+      for (var m = 1; m < chunks.length; m++) {
+        var target = Math.max(0, chunks[m][0] - ov), ns = target;
+        // snap forward to a word boundary so overlap never cuts a word
+        while (ns > 0 && ns < chunks[m][0] && !/\s/.test(text[ns - 1])) ns++;
+        if (ns < chunks[m][0]) chunks[m][0] = ns;
+      }
+    }
+    return chunks;
+  }
+
+  /* ---------- render ---------- */
+  function render() {
+    var size = +sizeR.value;
+    // keep overlap below the chunk size: the overlap slider's max tracks the size,
+    // so the label, readout, and rendering always agree on the value actually applied
+    var cap = Math.min(80, size - 10);
+    ovR.max = cap;
+    if (+ovR.value > cap) ovR.value = cap;
+    var ov = +ovR.value;
+    sizeV.textContent = size;
+    ovV.textContent = ov;
+
+    var ranges = (strategy === "fixed") ? fixedSize(DOC, size, ov) : recursive(DOC, size, ov);
+
+    // boundary points -> render runs, each covered by 1 chunk (color) or 2 (overlap)
+    var ptSet = {};
+    ptSet[0] = 1; ptSet[DOC.length] = 1;
+    ranges.forEach(function (r) { ptSet[r[0]] = 1; ptSet[r[1]] = 1; });
+    var bnd = Object.keys(ptSet).map(Number).sort(function (a, b) { return a - b; });
+
+    docEl.textContent = "";
+    for (var i = 0; i < bnd.length - 1; i++) {
+      var p = bnd[i], q = bnd[i + 1];
+      if (q <= p) continue;
+      var cov = [];
+      for (var r = 0; r < ranges.length; r++) if (ranges[r][0] <= p && ranges[r][1] >= q) cov.push(r);
+      var span = document.createElement("span");
+      span.textContent = DOC.slice(p, q);
+      if (cov.length >= 2) { span.className = "ck ov"; }
+      else if (cov.length === 1) { span.className = "ck"; span.style.background = PAL[cov[0] % PAL.length]; }
+      docEl.appendChild(span);
+    }
+
+    // readout
+    var sizes = ranges.map(function (r) { return r[1] - r[0]; });
+    var min = Math.min.apply(null, sizes), max = Math.max.apply(null, sizes);
+    var avg = Math.round(sizes.reduce(function (a, b) { return a + b; }, 0) / sizes.length);
+    readout.innerHTML = "<b>" + ranges.length + "</b> chunks &#183; sizes " + min + " to " + max +
+      " chars (avg " + avg + ") &#183; overlap " + ov + " chars";
+
+    explain.innerHTML = (strategy === "fixed")
+      ? "<b>Fixed-size:</b> cuts every N characters, even through the middle of a word or idea."
+      : "<b>Recursive:</b> prefers paragraph, then sentence, then word boundaries, so chunks read like coherent thoughts.";
+  }
+
+  /* ---------- wiring ---------- */
+  function setStrategy(s) {
+    strategy = s;
+    mFixed.setAttribute("aria-pressed", s === "fixed" ? "true" : "false");
+    mRec.setAttribute("aria-pressed", s === "rec" ? "true" : "false");
+    render();
+  }
+  mFixed.addEventListener("click", function () { setStrategy("fixed"); });
+  mRec.addEventListener("click", function () { setStrategy("rec"); });
+  sizeR.addEventListener("input", render);
+  ovR.addEventListener("input", render);
+
+  /* ---------- init ---------- */
+  render();
+})();
+</script>
+</body>
+</html>
