@@ -1,0 +1,53 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { fmtDate, readingTime, essayLangs, topicTags } from '../lib/essayMeta';
+
+interface Props {
+  essay: CollectionEntry<'essays'>;
+  featured?: boolean;
+}
+const { essay, featured = false } = Astro.props;
+const langs = essayLangs(essay.data.lang, !!essay.data.translationSlug);
+const tags = topicTags(essay.data.tags);
+---
+
+<li class="border-b border-zinc-100">
+  <a
+    href={`/essays/${essay.slug}`}
+    class={`group block py-5 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${featured ? '-ml-2 -mr-2 pl-3 pr-2 rounded-l-none border-l-2 border-emerald-300' : '-mx-2 px-2'}`}
+  >
+    <div class="flex items-baseline gap-2">
+      <h3 class={`font-medium text-zinc-900 leading-snug group-hover:text-emerald-700 transition-colors ${featured ? 'text-base' : 'text-[15px]'}`}>
+        {essay.data.title}
+      </h3>
+      {featured && (
+        <span class="shrink-0 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-medium uppercase tracking-wider text-emerald-700">
+          New<span class="sr-only"> — most recent essay</span>
+        </span>
+      )}
+      <span aria-hidden="true" class="ml-auto pl-2 text-zinc-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all">&rarr;</span>
+    </div>
+
+    <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-zinc-400">
+      <time datetime={essay.data.date.toISOString().slice(0, 10)}>{fmtDate(essay.data.date)}</time>
+      <span aria-hidden="true" class="text-zinc-300">&middot;</span>
+      <span>{readingTime(essay.body)} min read</span>
+      <span aria-hidden="true" class="text-zinc-300">&middot;</span>
+      <span aria-label={`Available in ${langs.join(' and ')}`}>{langs.join(' · ')}</span>
+    </div>
+
+    {essay.data.description && (
+      <p class="mt-2 text-[13px] leading-relaxed text-zinc-500 line-clamp-2">
+        {essay.data.description}
+      </p>
+    )}
+
+    {tags.length > 0 && (
+      <ul class="mt-2.5 flex flex-wrap gap-x-1.5 gap-y-1" aria-label="Topics">
+        {tags.map((tag) => (
+          <li class="text-[10px] font-mono text-zinc-400 group-hover:text-emerald-600/80 transition-colors">#{tag}</li>
+        ))}
+      </ul>
+    )}
+  </a>
+</li>
