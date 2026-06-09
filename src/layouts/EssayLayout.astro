@@ -146,6 +146,30 @@ const articleJsonLd = {
   }
   .prose-essay em { font-style: italic; }
   .prose-essay a { color: rgb(4 120 87); text-decoration: underline; }
+  /* Tables: clean, bordered, on-palette (used from Part 3 onward). */
+  .prose-essay table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.75rem 0;
+    font-size: 14px;
+    line-height: 1.55;
+    display: block;
+    overflow-x: auto;
+  }
+  .prose-essay th,
+  .prose-essay td {
+    border: 1px solid #e2e8f0;
+    padding: 0.5rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .prose-essay thead th {
+    background-color: #f1f5f9;
+    color: rgb(24 24 27);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .prose-essay tbody td code { white-space: nowrap; }
   .prose-essay blockquote {
     border-left: 2px solid rgb(52 211 153);
     padding-left: 1.25rem;

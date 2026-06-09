@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 480" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="cm-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1,1 L9,5 L1,9" fill="none" stroke="#8b5cf6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    </marker>
+    <marker id="cm-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1,1 L9,5 L1,9" fill="none" stroke="#06b6d4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="720" height="480" fill="#ffffff" />
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">Cosine ignores length; direction is everything</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">Same direction, very different lengths</text>
+
+  <!-- ===== grid ===== -->
+  <g stroke="#f1f5f9" stroke-width="1">
+    <line x1="50" y1="90" x2="50" y2="450"/><line x1="90" y1="90" x2="90" y2="450"/>
+    <line x1="130" y1="90" x2="130" y2="450"/><line x1="170" y1="90" x2="170" y2="450"/>
+    <line x1="210" y1="90" x2="210" y2="450"/><line x1="250" y1="90" x2="250" y2="450"/>
+    <line x1="290" y1="90" x2="290" y2="450"/><line x1="330" y1="90" x2="330" y2="450"/>
+    <line x1="50" y1="90" x2="350" y2="90"/><line x1="50" y1="130" x2="350" y2="130"/>
+    <line x1="50" y1="170" x2="350" y2="170"/><line x1="50" y1="210" x2="350" y2="210"/>
+    <line x1="50" y1="250" x2="350" y2="250"/><line x1="50" y1="290" x2="350" y2="290"/>
+    <line x1="50" y1="330" x2="350" y2="330"/><line x1="50" y1="370" x2="350" y2="370"/>
+    <line x1="50" y1="410" x2="350" y2="410"/><line x1="50" y1="450" x2="350" y2="450"/>
+  </g>
+  <!-- axes -->
+  <line x1="90" y1="450" x2="90" y2="80" stroke="#cbd5e1" stroke-width="1.5"/>
+  <line x1="50" y1="410" x2="360" y2="410" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <!-- ===== vectors (origin at 90,410; 40px per unit) ===== -->
+  <!-- C = [6,8] cyan, full ray -->
+  <line x1="90" y1="410" x2="330" y2="90" stroke="#06b6d4" stroke-width="3" marker-end="url(#cm-cyan)" />
+  <!-- A = [3,4] violet, the short version on the same ray -->
+  <line x1="90" y1="410" x2="210" y2="250" stroke="#8b5cf6" stroke-width="3.5" marker-end="url(#cm-violet)" />
+
+  <!-- Euclidean gap between the tips (210,250)-(330,90) -->
+  <line x1="210" y1="250" x2="330" y2="90" stroke="#475569" stroke-width="1.6" stroke-dasharray="6 5" />
+
+  <!-- tips -->
+  <circle cx="210" cy="250" r="4.5" fill="#8b5cf6"/>
+  <circle cx="330" cy="90" r="4.5" fill="#06b6d4"/>
+  <!-- origin -->
+  <circle cx="90" cy="410" r="4" fill="#0f172a"/>
+
+  <!-- vector labels -->
+  <text x="150" y="245" font-size="13" font-weight="700" fill="#7c3aed" text-anchor="end">A = [3, 4]</text>
+  <text x="300" y="78" font-size="13" font-weight="700" fill="#0e7490" text-anchor="middle">C = [6, 8]  (= 2A)</text>
+  <!-- euclidean label along the dashed gap -->
+  <text x="246" y="150" font-size="12" font-weight="600" fill="#334155" transform="rotate(-53 246 150)">Euclidean = 5  (big gap)</text>
+
+  <!-- angle = 0 note near origin -->
+  <text x="104" y="396" font-size="11.5" fill="#64748b">angle between them = 0&#176;</text>
+
+  <!-- ===== callout panel (right) ===== -->
+  <rect x="392" y="150" width="296" height="210" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <rect x="392" y="150" width="6" height="210" rx="3" fill="#10b981"/>
+
+  <text x="416" y="186" font-size="13" font-weight="700" fill="#0f172a">Same ray, so:</text>
+
+  <!-- cosine row (emerald, the "right" reading) -->
+  <text x="416" y="220" font-size="14" font-weight="700" fill="#059669">cosine = 1.00</text>
+  <text x="416" y="240" font-size="12.5" fill="#334155">identical direction =</text>
+  <text x="416" y="258" font-size="12.5" fill="#334155">treated as the same meaning</text>
+
+  <!-- euclidean row -->
+  <text x="416" y="292" font-size="14" font-weight="700" fill="#475569">Euclidean = 5</text>
+  <text x="416" y="312" font-size="12.5" fill="#334155">the tips are far apart,</text>
+  <text x="416" y="330" font-size="12.5" fill="#334155">fooled by the length gap</text>
+
+  <text x="416" y="350" font-size="11.5" font-style="italic" fill="#64748b">Length is noise; direction is meaning.</text>
+</svg>
