@@ -1,0 +1,182 @@
+---
+title: "Bir SLM'yi İHA muharebe doktrini üzerinde ince ayarlamak"
+description: "gpt-oss-20b üzerine kurulan 55 dolarlık bir LoRA çalışmasından uçtan uca notlar: veri hattı, eğitim koşusu, değerlendirme ve sürpriz; en büyük kazanç, bir muhakeme modeline muhakeme etmeyi bırakmayı öğretmekti."
+date: 2026-06-01
+tags: ["LLMs", "Fine-tuning", "LoRA", "SLM", "Reasoning", "MoE", "Türkçe"]
+lang: "tr"
+translationSlug: "uav-doctrine-slm-fine-tuning"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+
+## Manşet, asıl hikaye değil
+
+OpenAI'nin açık ağırlıklı `gpt-oss-20b` modelinin üzerine, İHA muharebe doktrini soru-cevabı için bir LoRA adaptörü ince ayarladım. 1.873 sorudan oluşan katmanlı (stratified) bir test kümesinde, ikili karşılaştırma yapan bir GPT‑5.4 hakem, adaptörü ("v4") uyarlanmamış temel modele karşı **vakaların %82,6'sında** seçti (%95 güven aralığı 80,9-84,4). Manşetlik bir sayı. Hikaye burada biter.
+
+Şu detay dışında: **temel modelin çıktılarının %91,8'i boştu.**
+
+Temel model, yani adaptörün eğitildiği aynı işleyici (renderer) üzerinden sunulan `gpt-oss-20b`, 300 token'lık çıktı bütçesinin tamamını `<|channel|>analysis|>` içinde tüketti ve hiçbir zaman bir `final` kanalı açmadı. 1.875 test vakasının 1.721'i boş dize (empty string) olarak geri döndü. Hakem de bunları sadakatle taban puanla puanladı ve kazanmayı v4'e verdi.
+
+Bu çalışmanın gerçek sonucu doktrinel doğruluk değildi. Bir davranış düzenlemesiydi: muhakeme için ince ayarlanmış bir modele, yüksek sesle muhakeme etmeyi bırakmayı öğrettim. Boş cevap temelini kontrol altına aldığınızda, v4'ün arı doktrin bilgisi avantajı %82,6'dan **%77,9'a** düşüyor, hâlâ gerçek bir üstünlük, ama artık manşet sayının anlattığı hikaye değil.
+
+Bu deneme, çalışmayı uçtan uca anlatıyor (külliyat, parçalar (chunk), soru-cevap üretimi, LoRA, ablasyon, değerlendirme ve yol boyunca düştüğüm metodoloji çukurları). Depo şurada: [`mftnakrsu/gpt-oss-20b-uav-doctrine`](https://github.com/mftnakrsu/gpt-oss-20b-uav-doctrine); canlı demo ise [HuggingFace Spaces](https://huggingface.co/spaces/meftun/gpt-oss-20b-uav-doctrine-demo) üzerinde.
+
+## Neyi eğittim
+
+- **Temel model:** `openai/gpt-oss-20b`, açık ağırlıklı bir uzman karışımı (mixture-of-experts) modeli, toplam ~21B parametre, token başına ~3,6B aktif, 32 uzman.
+- **Görev:** İHA / İHS (UAS) muharebe doktrini soru-cevabı. Tek tur, doğrudan-cevap tarzı.
+- **Adaptör:** LoRA, rank 16, α 32, tüm doğrusal katmanlar (all-linear) + lm_head üzerinde, uzman başına MoE izdüşümleri (projections) dahil.
+- **Eğitim verisi:** 58 herkese açık, gizlilik dereceli olmayan doktrin belgesinden GPT-5.4 tarafından üretilmiş 18.730 sentetik soru-cevap çifti.
+- **Altyapı:** Her şey [Tinker](https://thinkingmachines.ai/tinker) yönetilen API'si üzerinden sunuldu, hem eğitim hem örnekleme. **Hiçbir aşamada yerel GPU yok.** Bir dizüstü bilgisayar API'yi sürdü, veri kümelerini oluşturdu ve değerlendirmeyi çalıştırdı.
+- **Toplam harcama:** Tek koşu için ~55 dolar, dört varyantlı bir ablasyonla birlikte ~62 dolar. Faturayı, soru-cevap üretimi + hakem için kullanılan Azure OpenAI domine etti (53,45 dolar). Tinker LoRA eğitimi ADR-0001 yer tutucu tarifesiyle ~1,59 dolardı.
+
+Bunu bir araştırma eseri olarak değerlendirin. Herhangi bir operasyonel, hedefleme veya uçuş güvenliği amacı için doğrulanmamıştır. Külliyat kasıtlı ve tamamen kamuya açıktır: FOUO yok, CUI yok, NOFORN yok. Çıktılar ayrıntıları atlayabilir veya teknik terimleri başka sözcüklerle ifade edebilir; her zaman atıf yapılan yayına karşı doğrulayın.
+
+## PDF'ten parçaya, parçadan çifte
+
+Hat mekaniktir: 58 gizlilik dereceli olmayan PDF girer, 18.730 soru-cevap çifti çıkar.
+
+<Diagram number="1" caption="Huni: 58 gizlilik dereceli olmayan PDF → temizlenmiş metin → 4.051 parça → kalite filtresinden sonra 3.747 → 18.730 sentetik soru-cevap çifti (parça başına 5, GPT-5.4 tarafından üretildi).">
+  <img src="/essays/uav-doctrine-slm-fine-tuning/01-pipeline.svg" alt="PDF'lerden soru-cevap çiftlerine veri dönüşümlerini gösteren hat hunisi" class="w-full" />
+</Diagram>
+
+Külliyat katmanlıdır. **Katman 1 (resmi doktrin):** ABD ortak ve kuvvet yayınları (JP serisi, ADP, ATP, AFDP, FM), NATO AJP'leri, BK JDP'leri, FAA / EASA / ICAO'dan sivil havacılık referansları, ayrıca DoDD 3000.09 ve DoD Sözlüğü. **Katman 2 (akademik ve harp akademisi):** NPS tezleri, DTIC raporları, HDIAC. **Katman 3 (düşünce kuruluşları):** ICRC, CNAS, CRS, RUSI. **Katman 4 (modern vaka çalışmaları):** RUSI ve LIIA Ukrayna analizleri, US Army Infantry Magazine. Orijinal 98 MB'lık temel üzerine 60,8 MB'lık bir genişleme, gpt-oss-20b token'layıcısı (tokenizer) altında toplam ~2,37 milyon külliyat token'ı.
+
+Temizleme, `pypdf` çıkarımı artı bir başlık/altbilgi sezgiseli (heuristic); tutma oranı **%95,2**, yani ham çıkarılan token'ların %4,8'i, aynı satır sayfaların ≥%30'unda tekrarlandığı için ayıklanır (sayfa numaraları, gizlilik damgaları, belge kimlikleri). Parçalama 150 token örtüşmeyle 1.200 token'ı hedefler; çıktı, 924 token medyanında 4.051 parçadır.
+
+Kalite filtresi, hattaki en görünmez adım ve atlayamayacağınızı savunduğum adımdır. Her parça üzerinde soru-cevap çifti üretmek için GPT-5.4'ten geçirilen ilk tur, hatırı sayılır miktarda düşük sinyalli girdi üretti: içindekiler tabloları (TOC), kaynakçalar, "© 2023 …" yeniden basım bildirimleri, "Bu sayfa kasıtlı olarak boş bırakılmıştır." İki uçlu bir filtre (sezgisel + minik LLM sınıflandırıcı) 304 parçayı (%7,5) eledi, geriye 3.747 (%92,5) kaldı. Kaldırdığınız %7,5, soru-cevap çiftleri *yanlış* olanlar değildir; çiftleri *boş içerikli (vapid)* olanlardır: doğru, ama hiçbir şey aktarmayan. Boş içerikli çiftler, modeli boş içerikli tamamlamalar üretmesi için eğitir.
+
+Soru-cevap üretimi, GPT-5.4 (Azure) aracılığıyla parça başına 5 çifttir, dört soru türü üzerinde (olgusal, tanımsal, prosedürel, kavramsal) kabaca eşit oranlarda (her biri %23-27) hedeflenmiştir. 81 dakika gerçek süre, ~48 dolar toplam, çift başına 0,0026 dolar. Bir parça Azure içerik politikası filtresine takıldı ve sıfır çift verdi; geri kalan her şey temiz ayrıştırıldı.
+
+`data/processed/qa/` konumundaki kaydedilmiş bölümler (eğitim 15.905 / doğrulama 935 / test 1.875 / dışta-tutulan-kaynak 15) rastgele-katmanlı değil, parça-katmanlıdır (chunk-stratified), yani her parça tamamen tek bir bölümde yaşar. Bu, değerlendirmenin, eğitim sorularının test içinde oturan yakın-açımlamalarıyla (near-paraphrases) şişmesini önler.
+
+## Eğitim koşusu
+
+Tinker üzerinde LoRA. İşleyici `gpt_oss_no_sysprompt`, dolayısıyla sistem mesajı gpt-oss `developer` rolüne `# Instructions` olarak eşlenir. r=16, α=32, tüm doğrusal katmanlar + lm_head, 2 epoch, yığın boyutu 32, maksimum dizi uzunluğu 512, lr 2e-4, 100 adımlık ısınma (warmup) ve kosinüs azalmasıyla, AdamW β₂=0,95 (gpt-oss biçimli).
+
+<Diagram number="2" caption="Eğitim boyunca doğrulama NLL'i (994 adım, 2 epoch). Güçlü bir erken iniş, kosinüs öğrenme oranı azaldıkça epoch-1/epoch-2 sınırı civarında belirgin bir dirsek (knee) ile.">
+  <img src="/essays/uav-doctrine-slm-fine-tuning/02-nll-curve.svg" alt="994 eğitim adımı boyunca 2,25'ten 1,47'ye inen doğrulama negatif-log-olabilirlik eğrisi" class="w-full" />
+</Diagram>
+
+994 adım, 2 epoch, 3,98 milyon token işlendi, 1sa07dk gerçek süre. Doğrulama NLL'i, adım 50'de 2,2539'dan adım 994'te 1,4706'ya gidiyor, 0,78 nat'lık bir iyileşme ve ıraksama (divergence) yok. ADR-0001 yer tutucu tarifesiyle maliyet (1 milyon eğitim token'ı başına 0,40 dolar): **1,59 dolar**. Hiçbir koruma tetiklenmedi, ne maliyet üst sınırı, ne gerçek süre üst sınırı, ne de ıraksama serisi eşiği. `scripts/train_phase_a.py` üzerinden, `configs/tinker/phase_a_qa/run_v1.yaml` konfigürasyonuyla yeniden üretilebilir.
+
+MoE LoRA yerleşimi üzerine bir not. Adaptör, gpt-oss MoE'sinin uzman-başına izdüşümlerinin üzerine, artı dikkat (attention), artı `lm_head` üzerine oturur. Bazı `transformers` / `peft` sürümleri gpt-oss uzmanlarını tek bir kaynaşmış (fused) modül olarak temsil eder ve sade yükleme, uzman-başına LoRA'yı temiz biçimde uygulamaz. Model, Tinker'ın örnekleme API'si üzerinden eğitildi ve değerlendirildi; yayımlanan HuggingFace adaptörü, uzman-başına bağlantının doğru olduğu ortamlarda temelin üzerine yüklemek içindir. Space demosu, onu çalıştırmanın referans, bilinen-iyi yoludur.
+
+## Önemli olmayan ablasyon
+
+Tek-eksenli 4 varyantlı bir ablasyon çalıştırdım (her varyant, deltaların atfedilebilir olması için v1 temelinden *tek* bir hiperparametreyi kaydırır):
+
+| varyant | δ          | min düzleştirilmiş eğitim NLL | son doğrulama NLL | test NLL | Δ vs v1 |
+| ------- | ---------- | -------------------: | ------------: | -------: | ------: |
+| v1      | temel      | 1.6380               | 1.4706        | 2.0037   | +0.0000 |
+| v2      | r 16 → 32  | 1.6356               | 1.4515        | 2.0026   | -0.0011 |
+| v3      | 2 → 3 ep   | 1.3620               | 1.1418        | 2.0811   | +0.0774 |
+| v4      | lr → 2e-4  | 1.5230               | 1.2808        | 1.9868   | -0.0168 |
+
+v3 ilginç: taramadaki en düşük eğitim NLL'i, ama en yüksek test NLL'i. 18,7 bin çiftin 3. epoch'unda klasik ezberleme. v2'deki kapasite artışı kayda değer biçimde yardımcı olmadı. v4, testte 0,02 nat ile kazandı, üretim kontrol noktası (checkpoint) olarak seçildi ve ardından bu denemenin geri kalanı tarafından unutuldu, çünkü varyant seçimi hikayenin yaşadığı yer değil.
+
+Tüm 4 varyantlı tarama için, v3'ün ekstra epoch'u dahil maliyet: Tinker eğitiminde ~7,16 dolar. Gerçek fatura, ve gerçek sinyal, ardından gelen değerlendirmedeydi.
+
+## Hakem koşusu, ve boş cevaplar
+
+Değerlendirme, üç eksende (olgusal doğruluk, eksiksizlik, dayanak) ikili karşılaştırma yapan bir GPT-5.4 hakemidir, her biri 1-5, artı kategorik bir kazanan (A, B veya berabere). Model A her zaman v4'tür, Model B her zaman uyarlanmamış temeldir. Konum yanlılığı (position bias) henüz dengelenmemiştir (bkz. §konum yanlılığı). 1.875 test vakası, 5 eşzamanlılık (concurrency), 40 dolar sert maliyet üst sınırı. Toplam hakem maliyeti **5,64 dolar** olarak oturdu.
+
+Toplam çıktı:
+
+- v4 kazanır: **%82,6** (%95 güven aralığı 80,9-84,4, n=1.873)
+- temel kazanır: %1,3
+- berabere: %16,1
+
+Testte eksen başına:
+
+| metrik          | v4    | temel | delta  |
+| --------------- | ----: | -------: | -----: |
+| factual_accuracy_mean | 2.719 | 1.081 | +1.638 |
+| completeness_mean    | 2.340 | 1.061 | +1.279 |
+| grounding_mean       | 2.613 | 1.054 | +1.559 |
+
+Sonra temel modelin çıktılarına baktım. İşleyici, gpt-oss'u `Reasoning: medium` durumuna koyar. Temel model `<|channel|>analysis|>` bloğuna girdi, 300 token'lık bütçenin tamamını soruyu muhakeme ederek harcadı ve hiçbir zaman bir `final` kanalı açmadı. **1.875 çıktının 1.721'i (%91,8) kanal ayıklamasından sonra boş döndü.** 15 vakalık dışta-tutulan-kaynak bölümünde, temel model sıfır nihai cevap üretti.
+
+<Diagram number="3" caption="Her model, test kümesinde 300 token'lık çıktı bütçesiyle ne yaptı. Temel, bütçenin tamamını gizli CoT'de yaktı (ortalama 297 / 300 token, vakaların ~%92'si boş döndü). v4, doğrudan-cevap çiftleri üzerinde eğitildi ve analiz kanalını atlamayı öğrendi, ortalama 49 token, hepsi nihai kanalda.">
+  <img src="/essays/uav-doctrine-slm-fine-tuning/03-token-budget.svg" alt="Çubuk karşılaştırması: temel çıktı bütçesi analiz CoT'siyle dolu ve nihai kanal boş, v4 bütçesi çoğunlukla kullanılmamış küçük bir doğrudan cevapla" class="w-full" />
+</Diagram>
+
+Hakem `Model B = ""` görür ve onu tabana sabitler. v4 varsayılan olarak kazanır. "%82,6" manşetinin çoğu, *cevap verme* ile *cevap vermeme* arasındaki açıktır, doğru ve yanlış cevaplar arasındaki açık değil.
+
+## Uyarlanmamış temel aslında ne yapıyor
+
+gpt-oss bir muhakeme modelidir. Önce bir `analysis` kanalı içinde düşünmek, sonra kullanıcıya görünen yanıtı bir `final` kanalı içinde işlemek üzere eğitildi. İşleyicinin ayarladığı `medium` muhakeme çabasında, model cevaplamadan önce hatırı sayılır müzakereye varsayılan olarak gider, ki bu çıktı bütçesi cömert olduğunda ve soru adım-adım düşünceyi ödüllendirdiğinde gayet iyi işler, ve tek paragraflık bir cevap isteyen bir alan-bilgisi sorusunda onu 300 token'la sınırladığınızda hiç işlemez.
+
+(soru, doğrudan-cevap) çiftleri üzerindeki SFT'nin yaptığı şey, modele bir İHA-doktrini sorusunun cevabının bir düşünce zinciri değil, bir paragraf olduğunu öğretmektir. Eğitim verisinde analiz kanalı yoktur. Kayıp (loss) yalnızca doğrudan-cevap token'larında ateşlenir. 994 adım boyunca model, sohbet-şablonu komut isteminden sonra doğru eylemin `analysis` açıp müzakere etmek değil, `final` açıp cevaplamak olduğunu öğrenir.
+
+Sayısal kanıt nettir: temel ortalama çıktı 297,5 token, neredeyse her zaman 300 üst sınırında; v4 ortalama çıktı 49,4 token. v4'ün tüm test kümesindeki maksimum çıktısı **123 token**, ve üst sınıra yaklaşmıyor çünkü buna ihtiyacı yok.
+
+Bu, temel modeldeki bir hata değil. Model, eğitildiği şey için doğru biçimde davranıyor. İlginç gözlem şu: **doğrudan-cevap çiftleri üzerindeki SFT, muhakeme-modu davranışını geçersiz kılmanın dikkat çekici biçimde kaldıraçlı bir yoludur**, küçük bir LoRA ve küçük bir bütçeyle bile. Bir muhakeme-bastırma tercih veri kümesi eklemeniz gerekmez ve RLHF'e ihtiyacınız yoktur. `(komut istemi, doğrudan cevap)` biçiminde birkaç bin soru-cevap çifti, iki epoch, ve model "hemen cevapla"yı davranışsal bir ön bilgi (prior) olarak edinir. Doktrin bilgisi de bunun yanında bir yan fayda olarak özümsenir.
+
+Bununla birlikte, bu hikayenin hata-biçimli sürümüdür. Daha adil sürüm: temel modelin daha büyük bir çıktı bütçesiyle veya farklı bir işleyiciyle aynı kaliteye ulaşıp ulaşamayacağını hiç doğrulamadım. Benzer bir görev için gpt-oss-20b dağıtan bir uygulayıcı, muhtemelen üst sınırı 800-1000 token'a yükselterek, model `analysis`ini bitirdikten sonra `final` kanalını ayrıştırarak ve ince ayarı tamamen atlayarak saygın cevaplar alabilir. Aktardığım kazanma oranı gerçek, ama kendisi de tartışılır olan bir mühendislik seçimiyle (300 token üst sınırı, tek-seferlik çıkarım) parantez içine alınmıştır.
+
+## Dürüst yeniden çerçeveleme
+
+Yalnızca temel modelin nihai bir cevap *ürettiği* 154 test vakasını alın. Bu, değerlendirmenin desteklediği en temiz, eşdeğeri-eşdeğerle karşılaştıran (apples-to-apples) doktrin-bilgisi kıyaslamasıdır:
+
+| metrik                  | v4    | temel | delta  |
+| ----------------------- | ----: | -------: | -----: |
+| factual_accuracy_mean   | 3.227 | 1.981    | +1.247 |
+| completeness_mean       | 2.773 | 1.740    | +1.032 |
+| grounding_mean          | 2.994 | 1.662    | +1.331 |
+| **v4 kazanma oranı (n=154)** | **%77,9** | (temel %16,2, berabere %5,8) | n/a |
+
+%77,9 hâlâ önemli bir kazanımdır. Adaptör gerçek doktrin bilgisi özümsemiştir (bunlar oyuncak deltalar değil) ve her iki model de gerçekten bir cevap ürettiğinde daha doğru, daha eksiksiz, daha iyi dayanakla cevap verir.
+
+<Diagram number="4" caption="Manşet sayı ayrıştırıldı. Tam-küme v4 kazanma oranı (%82,6), temel modelin bütçe tükenmesiyle şişirilmiş; boş-olmayan-temel alt kümesi (%77,9) daha temiz doktrin-bilgisi sinyalidir; dışta-tutulan-kaynak genelleştirmesi (%66,7, n=15) yalnızca yönelimseldir.">
+  <img src="/essays/uav-doctrine-slm-fine-tuning/04-win-rate.svg" alt="v4 kazanma oranlarını tam test kümesi (%82,6), boş-olmayan temel alt kümesi (%77,9) ve dışta-tutulan-kaynak (%66,7) arasında karşılaştıran çubuk grafiği" class="w-full" />
+</Diagram>
+
+Dışta-tutulan-kaynak bölümü (eğitim sırasında hiç görülmeyen kaynaklar: CRS karşı-İHS ve FAA İHS bağlantı-kaybı), v4'e n=15'te, %95 güven aralığı 40-93 ile %66,7'lik bir kazanma oranı verir. Anekdotsal, istatistiksel değil, ama yönelimsel olarak olumlu: adaptör, eğitim külliyatında olmayan komşu doktrine, en azından tür içinde, genelleşiyor.
+
+## Bilmeye değer iki bulgu daha
+
+Bunlar metodoloji çukurlarıydı, ikisi de benzer bir SFT deneyi yürüten herkes için mayın.
+
+**(1) Eğitim-zamanı doğrulama NLL'i, çıkarım-yolu değerlendirme NLL'i değildir.** Farklı ölçeklerdedirler ve farklı kod yolları üzerinden hesaplanırlar.
+
+<Diagram number="5" caption="Aynı görünen ve olmayan iki NLL. Eğitim-zamanı val_nll, ileri/geri (forward/backward) yolundan geçer ve v4 için 1,28'di. Aynı kontrol noktası, Tinker'ın çıkarım-yolu compute_logprobs'u üzerinden puanlandığında 1,99 verdi, 0,71 nat'lık bir açık. Eğitim-zamanı doğrulama NLL'ine göre bir kontrol noktası seçmek, yanlış ölçüme göre seçmektir.">
+  <img src="/essays/uav-doctrine-slm-fine-tuning/05-nll-paths.svg" alt="Aynı kontrol noktası ve aynı veriden farklı NLL'ler üreten iki paralel ölçüm yolu" class="w-full" />
+</Diagram>
+
+v4'ün eğitim-zamanı `val_nll`'i (1,28), aynı kontrol noktasının çıkarım-yolu test NLL'inin (1,99) ~0,71 nat altında oturdu. Aynı veri, aynı kontrol noktası, farklı yol. Eğitim-zamanı değeri, optimize edicinin ileri/geri geçişi üzerinden hesaplanır; çıkarım-zamanı değeri, örnekleme API'sinin `compute_logprobs` uç noktası üzerinden hesaplanır. İkisi de dürüsttür, ikisi de meşru bir şey ölçer, ama aynı şeyi ölçmezler ve sabit ofset, eğer bir yolda yakın ve diğer yolda uzak olan iki varyantı karşılaştırıyorsanız bir kontrol noktası seçimini tersine çevirecek kadar büyüktür. **Asla eğitim-zamanı doğrulama NLL'ine göre bir kontrol noktası seçmeyin; bir kazanan ilan etmeden önce her adayı çıkarım yolu üzerinden yeniden puanlayın.**
+
+Bu denemede daha önceki ablasyon tablosunun sessizce gösterdiği sonuç şu: **değerlendirme NLL'i, hakemin algıladığı kaliteyi de izlemez**. `procedural` (prosedürel) sorular dört varyantın hepsinde en yüksek NLL'e sahipti (v4 prosedürel test NLL'i: 2,04, tanımsal: 1,77), ama `procedural`, hakem altında *en düşük* puanlı kategori *değildi*. `factual` (olgusal) öyleydi. Kayıp, kalite değildir.
+
+**(2) Yapılandırılmış-değerlendirme-ölçütü (structured-rubric) hakemliğinde konum yanlılığı yoktu.** Manşet %82,6, v4'ü her zaman A konumunda kullandı. Konumların çağrı başına rastgeleleştirildiği (4242 RNG tohumu, aynı 7 No'lu Komut İstemi birebir) 300 örneklik katmanlı bir örneği yeniden değerlendirdim ve şunu elde ettim:
+
+- A-konumu tercih oranı: **%48,5** (600 çağrıda n=511 berabere-olmayan karar)
+- Model-uyum oranı: **%94,7** (300 örneğin 284'ünde orijinal ve takas, hangi modelin kazandığında hemfikirdi)
+- Yanlılık-düzeltilmiş v4 kazanma oranı: **%80,7** (%95 güven aralığı 76,3-85,0)
+
+%48,5, %50'den ayırt edilemez. Sohbet-arena literatürü, serbest-biçimli tercih hakemliğinde A'ya doğru ≈5-10 yüzde puanı bildiriyor; bu değerlendirme ölçütü (1-5 puanlanan üç eksen artı katı bir kazanan alanı) büyük ölçüde konum-simetrik görünüyor. Kazanma oranındaki yeniden üretilebilirlik deltası (82,6 → 80,7, yani -1,9 yüzde puanı) da orijinal güven aralığının içinde. **Konum yanlılığı, katı değerlendirme ölçütü hakemliğinin değil, serbest-biçimli tercih hakemliğinin bir özelliği olabilir.** Bunun gibi bir değerlendirme ölçütü üzerinde hakemlik yapıyorsanız, her koşu için simetri-ile-rastgeleleştirme maliyetini ödemeye değmeyebilir.
+
+## Dürüst sınırlamalar
+
+- **Özgüllük kayması (Specificity drift).** v4, bir cevabın *biçimini* güvenilir biçimde doğru alır ama özgüllükleri düşürebilir veya uydurabilir: yanlış CPDLC mesaj kodları, prosedürel bir kuralda eksik koşullar, yaklaşık sayfa-atıflı rakamlar. Herhangi bir özgül terimi, sayıyı veya mesaj kimliğini, bitmiş bir olgu olarak değil, kaynak doktrine karşı doğrulanacak bir şey olarak değerlendirin.
+- **Kazanma oranı, temel modelin bütçe tükenmesiyle şişmiştir.** Yukarıda yeniden çerçevelendi; teknik ortamlarda aktardığım sayı %77,9'dur.
+- **Dışta-tutulan-kaynak genelleştirmesi anekdotsaldır.** 15 görülmemiş-kaynak örneği; geniş güven aralığı bunu yansıtır.
+- **Güvenlik / red-teaming turu yok.** Bu, bir doktrin-soru-cevap SFT adaptörüdür (kilometre taşı M1), güvenlik-ayarlı bir asistan değil. Külliyat, herhangi bir gizlilik dereceli, FOUO, CUI veya NOFORN materyali dışlar, dolayısıyla modelin sızdıracak uygunsuz bir bilgisi yok, ama aynı zamanda komut-enjeksiyonu (prompt-injection) dayanıklılığı veya güvensiz-reddetme davranışı açısından da denetlenmemiştir.
+- **Yalnızca İngilizce**, ve **doktrinin Mayıs 2026 itibarıyla bir anlık görüntüsü.** Daha yeni baskılar yansıtılmamıştır.
+
+## Bunun İHA doktrini ötesinde neden önemli olduğu
+
+Bir sonraki ince ayara taşıyacağım ders, doktrinle ilgili değil. Muhakeme modellerinde token ekonomisiyle ilgili.
+
+2026'da gpt-oss ailesi, ve daha geniş açık-ağırlıklı muhakeme katmanı, cevaplamadan önce hatırı sayılır gizli muhakemeye varsayılan olarak gider. Bu, düşünce zincirinin yük taşıdığı ve kullanıcının onu gecikmeyle ödemekte sorun görmediği matematik ve kod için bir özelliktir. Modelin yapması gereken işin çoğunun müzakere değil *anımsama (recall)* olduğu ve kullanıcının doğrudan bir cevap beklediği, dar çıktı bütçeli alan-bilgisi soru-cevabı için ise bir başarısızlık modudur.
+
+`(komut istemi, doğrudan cevap)` çiftleri üzerindeki SFT, mevcut en yüksek-kaldıraçlı ucuz davranış düzenlemesidir. Birkaç bin çift, birkaç epoch, ~2 dolarlık Tinker eğitimi, ve model bütçesini analize harcamayı bırakıp cevaplamaya başlar. Bu sırada edindiği alan bilgisi gerçektir, ama ikincildir. Token-ekonomisi düzenlemesi, ince ayarın birincil ürünüdür.
+
+2026'da bir muhakeme temelinin üzerine küçük bir LLM alan asistanı kuruyorsanız, ince ayardan *önce* alabileceğiniz en değerli ölçüm, hedef çıktı bütçenizde temel modelin boş-cevap oranıdır. Eğer bu kayda değerse, diyelim %20'nin üzerinde herhangi bir şey, ince ayarın size satın alacağı ilk şey nihai-kanal disiplinidir ve kazanma-oranı beklentilerinizi ve eğitim verinizin biçimini bu bulgu etrafında boyutlandırmalısınız.
+
+## Deneyin
+
+Canlı HF Space, [`meftun/gpt-oss-20b-uav-doctrine-demo`](https://huggingface.co/spaces/meftun/gpt-oss-20b-uav-doctrine-demo), Tinker API üzerinden her iki modeli kafa kafaya çalıştırır. Kurulum yok; ilk yanıt soğuk durumda ~8 saniye, sonra daha hızlı. Adaptör şurada yayımlandı: [`meftun/gpt-oss-20b-uav-doctrine`](https://huggingface.co/meftun/gpt-oss-20b-uav-doctrine); tüm 14 çalışma günlüğü ve değerlendirme verisi dahil tam yeniden üretilebilir depo şurada: [`mftnakrsu/gpt-oss-20b-uav-doctrine`](https://github.com/mftnakrsu/gpt-oss-20b-uav-doctrine).
+
+Bu bir araştırma eseridir. Bir karar otoritesi değildir, herhangi bir operasyonel, hedefleme veya uçuş güvenliği amacı için doğrulanmamıştır ve asla yetkili doktrinel yayınların veya döngüdeki nitelikli bir insanın yerini almamalıdır. Herhangi bir özgül terimi, sayıyı veya kuralı, ona güvenmeden önce kaynağına karşı doğrulayın.

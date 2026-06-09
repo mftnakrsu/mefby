@@ -1,15 +1,17 @@
 ---
-title: "ASELSAN TOYGUN — Platform Bütünleşik EOTS Teknik İncelemesi"
-description: "TOYGUN'un nasıl gördüğünü, hedefi nasıl tanıyıp izlediğini, lazerle nasıl ölçüp işaretlediğini ve uçağın radar izini bozmadan tüm bunları nasıl yaptığını — kademe kademe, sinyal zinciri ve alt sistemler ile."
+title: "ASELSAN TOYGUN: Platform Bütünleşik EOTS Teknik İncelemesi"
+description: "TOYGUN'un nasıl gördüğünü, hedefi nasıl tanıyıp izlediğini, lazerle nasıl ölçüp işaretlediğini ve uçağın radar izini bozmadan tüm bunları nasıl yaptığını kademe kademe, sinyal zinciri ve alt sistemler ile anlatır."
 date: 2026-06-01
 tags: ["ASELSAN", "TOYGUN", "EOTS", "Savunma Teknolojisi", "MWIR", "Stealth", "KIZILELMA", "KAAN"]
+lang: "tr"
+translationSlug: "aselsan-toygun-teknik-inceleme-en"
 ---
 
 import Diagram from '../../components/essay/Diagram.astro';
 
 ## Giriş: Türkiye'nin gömülü EOTS'si
 
-2025'in son aylarında ASELSAN'ın **TOYGUN** sistemi, Bayraktar **KIZILELMA** insansız savaş uçağına entegre edilip uçtu. Bu, kulağa basit bir entegrasyon haberi gibi gelse de aslında bir mühendislik eşiğinin atlanması anlamına geliyor: **dünyada bir insansız savaş uçağına platform bütünleşik (gövdeye gömülü) bir Elektro-Optik Hedefleme Sistemi takılması ilk kez başarıldı.** İnsanlı muadili F-35'in EOTS'siyle aynı mimari felsefeyi — sensörü uçağın gövdesine gömmek, fasetli pencerenin arkasına gizlemek, hiçbir radar dalgası yaymadan görmek — TAI'nin geliştirdiği yeni nesil platformlara taşıyan ASELSAN, bu kabiliyete sahip dünyadaki üç ülkeden birine Türkiye'yi soktu.
+2025'in son aylarında ASELSAN'ın **TOYGUN** sistemi, Bayraktar **KIZILELMA** insansız savaş uçağına entegre edilip uçtu. Bu, kulağa basit bir entegrasyon haberi gibi gelse de aslında bir mühendislik eşiğinin atlanması anlamına geliyor: **dünyada bir insansız savaş uçağına platform bütünleşik (gövdeye gömülü) bir Elektro-Optik Hedefleme Sistemi takılması ilk kez başarıldı.** İnsanlı muadili F-35'in EOTS'siyle aynı mimari felsefeyi (sensörü uçağın gövdesine gömmek, fasetli pencerenin arkasına gizlemek, hiçbir radar dalgası yaymadan görmek) TAI'nin geliştirdiği yeni nesil platformlara taşıyan ASELSAN, bu kabiliyete sahip dünyadaki üç ülkeden birine Türkiye'yi soktu.
 
 TOYGUN'u bir habercilik nesnesi olarak değil, bir mühendislik problemi olarak ele almak istiyorum. Bu yazı, sistemin nasıl çalıştığını alt sistem alt sistem açıyor: hedef sahnesinden gelen kızılötesi fotonların fasetli pencereden girmesinden, dahili boresight ile lazerin termal kamerayla milimetrik eş-eksenli tutulmasına; iki katmanlı (mekanik + optik) stabilizasyondan, kapalı çevrim takip mantığına; uçuş süresi (time of flight) mesafe ölçümünden, NATO STANAG 3733 standardına uygun kodlu lazer işaretlemeye; geolocation vektör geometrisinden, MIL-STD-1553B üzerinden uçağın görev bilgisayarıyla haberleşmeye kadar. Belgenin sonunda F-35 EOTS ile kavramsal karşılaştırma, geliştirme yol haritası, sınırlamalar ve açık kaynak listesi yer alıyor.
 
@@ -21,11 +23,11 @@ Yazıdaki tüm sayısal değerler **açık kaynaklardan** derlenmiştir; ASELSAN
 
 Üç temel yetenek tek küçük pakete sıkıştırılmıştır:
 
-- **Gece-gündüz gören pasif bir kızılötesi kamera** — orta dalga kızılötesi (MWIR, ~3–5 μm) bandında çalışan, kriyojenik soğutmalı, 1280×1024 piksel çözünürlüklü staring dizisi.
-- **Mesafe ölçüp hedef işaretleyen aktif bir lazer takımı** — uçuş süresi (ToF) ile menzile kadar ölçen ve NATO STANAG 3733 uyumlu kodlu darbe katarıyla hedefe lazer ışıltısı bindiren bir göstericiden oluşur.
-- **Görüntüden hedef bulup tanıyan/izleyen bir işlemci** — düzgünsüzlük düzeltmesi (NUC), kızılötesi arama-takip (IRST), otomatik hedef tanıma (ATR) ve kapalı çevrim takip algoritmalarıyla "bu sıcak leke nedir, nereye gidiyor, hangi sınıfa giriyor" sorularını sürekli yanıtlar.
+- **Gece-gündüz gören pasif bir kızılötesi kamera:** orta dalga kızılötesi (MWIR, ~3–5 μm) bandında çalışan, kriyojenik soğutmalı, 1280×1024 piksel çözünürlüklü staring dizisi.
+- **Mesafe ölçüp hedef işaretleyen aktif bir lazer takımı:** uçuş süresi (ToF) ile menzile kadar ölçen ve NATO STANAG 3733 uyumlu kodlu darbe katarıyla hedefe lazer ışıltısı bindiren bir göstericiden oluşur.
+- **Görüntüden hedef bulup tanıyan/izleyen bir işlemci:** düzgünsüzlük düzeltmesi (NUC), kızılötesi arama-takip (IRST), otomatik hedef tanıma (ATR) ve kapalı çevrim takip algoritmalarıyla "bu sıcak leke nedir, nereye gidiyor, hangi sınıfa giriyor" sorularını sürekli yanıtlar.
 
-Tam ürün adı **TOYGUN 100**'dür. Sistem; KAAN (Millî Muharip Uçak), KIZILELMA, AKINCI ve AKSUNGUR gibi platformlar için optimize ediliyor. TOYGUN'u sıradan bir hedefleme sisteminden ayıran asıl yenilik, **gövdeye gömülü mimarisidir**. Geleneksel sistemler uçağa harici bir "pod" olarak asılır (LITENING, Sniper ATP, vb.); bu hem sürüklemeyi (drag) hem de radar görünürlüğünü (RCS, *radar cross section*) artırır. TOYGUN ise sensörü gövdenin içine, düz parçalı (fasetli) bir pencerenin arkasına gizler — böylece uçağın düşük radar izi (stealth) tasarımını bozmadan gelişmiş hedefleme yapılabilir. İnsanlı uçaklarda bu yetenek bugüne dek yalnızca F-35 gibi 5. nesil platformlarda vardı.
+Tam ürün adı **TOYGUN 100**'dür. Sistem; KAAN (Millî Muharip Uçak), KIZILELMA, AKINCI ve AKSUNGUR gibi platformlar için optimize ediliyor. TOYGUN'u sıradan bir hedefleme sisteminden ayıran asıl yenilik, **gövdeye gömülü mimarisidir**. Geleneksel sistemler uçağa harici bir "pod" olarak asılır (LITENING, Sniper ATP, vb.); bu hem sürüklemeyi (drag) hem de radar görünürlüğünü (RCS, *radar cross section*) artırır. TOYGUN ise sensörü gövdenin içine, düz parçalı (fasetli) bir pencerenin arkasına gizler; böylece uçağın düşük radar izi (stealth) tasarımını bozmadan gelişmiş hedefleme yapılabilir. İnsanlı uçaklarda bu yetenek bugüne dek yalnızca F-35 gibi 5. nesil platformlarda vardı.
 
 <Diagram number="1" caption="TOYGUN işlevsel sinyal zinciri. Yeşil kutular sistemin iç birimleri (pasif zincir), turuncu aktif lazer, gri ise dış giriş/çıkış. Oklar bilgi/ışık akışını gösterir; lazer ile gimbal çift yönlüdür çünkü aynı açıklığı paylaşırlar.">
   <img src="/essays/aselsan-toygun-teknik-inceleme/01-signal-chain.svg" alt="TOYGUN sinyal zinciri: hedef sahnesinden fasetli pencere, gimbal stabilizasyon, MWIR FPA, görüntü işleyici ve görev bilgisayarına uzanan blok diyagram." class="w-full" />
@@ -37,32 +39,32 @@ Yukarıdaki şema sistemin nasıl çalıştığını özetliyor: dış sahneden 
 
 Her alt sistemi anlamadan önce, hepsinin birlikte çözdüğü asıl problemi netleştirelim:
 
-> Titreşen ve yüksek hızda manevra yapan bir uçaktan, onlarca kilometre uzaktaki küçük ve sıcak bir nesneyi *gör*; ne olduğunu *tanı*; üstüne santimetrik bir lazer noktası *koy* — ve tüm bunları uçağın radar izini ele vermeden, *sessizce* yap.
+> Titreşen ve yüksek hızda manevra yapan bir uçaktan, onlarca kilometre uzaktaki küçük ve sıcak bir nesneyi *gör*; ne olduğunu *tanı*; üstüne santimetrik bir lazer noktası *koy*; ve tüm bunları uçağın radar izini ele vermeden, *sessizce* yap.
 
-Bu tek cümlede aslında birbiriyle çatışan birçok gereksinim gizli. **Uzaklık,** çok hassas optik ve düşük gürültülü bir algılayıcı ister. **Platform titreşimi,** mikro-radyan seviyesinde bir stabilizasyon ister — çünkü 35 km'de saç teli kadar bir açısal sapma, görüntüyü bulanıklaştırır ve lazer noktasını hedeften kaydırır. **Hedefi tanıma,** akıllı görüntü işleme ve yapay zekâ ister. **Hassas vuruş,** tüm alt sensörlerin milimetrik eş-hizada olmasını ister. Ve **gizlilik,** sistemin uçağın aerodinamik ve radar şeklini bozmamasını ister.
+Bu tek cümlede aslında birbiriyle çatışan birçok gereksinim gizli. **Uzaklık,** çok hassas optik ve düşük gürültülü bir algılayıcı ister. **Platform titreşimi,** mikro-radyan seviyesinde bir stabilizasyon ister; çünkü 35 km'de saç teli kadar bir açısal sapma, görüntüyü bulanıklaştırır ve lazer noktasını hedeften kaydırır. **Hedefi tanıma,** akıllı görüntü işleme ve yapay zekâ ister. **Hassas vuruş,** tüm alt sensörlerin milimetrik eş-hizada olmasını ister. Ve **gizlilik,** sistemin uçağın aerodinamik ve radar şeklini bozmamasını ister.
 
-Bu listede, çatışan optimizasyon eksenleri net görülür: küçük açıklık ↔ uzun menzil; hızlı yönlendirme ↔ düşük titreşim; basit optik ↔ stealth-uyumlu pencere; tek-fonksiyonlu hızlı işlemci ↔ AI/ATR'nin gerektirdiği karmaşıklık. TOYGUN bu eksenleri tek tek çözmüyor — birlikte çözmek zorunda. Belgenin ilerleyen bölümleri, listedeki her bir gereksinimin sistemde hangi alt sistemle karşılandığını gösteriyor:
+Bu listede, çatışan optimizasyon eksenleri net görülür: küçük açıklık ↔ uzun menzil; hızlı yönlendirme ↔ düşük titreşim; basit optik ↔ stealth-uyumlu pencere; tek-fonksiyonlu hızlı işlemci ↔ AI/ATR'nin gerektirdiği karmaşıklık. TOYGUN bu eksenleri tek tek çözmüyor; birlikte çözmek zorunda. Belgenin ilerleyen bölümleri, listedeki her bir gereksinimin sistemde hangi alt sistemle karşılandığını gösteriyor:
 
-- **Gör (uzaktan)** — Soğutmalı MWIR algılayıcı + hassas optik
-- **Sabit tut (titreşimde)** — İki katmanlı gimbal + optik stabilizasyon
-- **Tanı ve izle** — Görüntü işleme, ATR, kapalı takip çevrimi
-- **Ölç ve işaretle** — Lazer mesafe ölçer + kodlu gösterici
-- **Eş-hizada kal** — Dahili boresight (IBS)
-- **Görünme** — Gömülü fasetli pencere + pasif sensör
+- **Gör (uzaktan):** Soğutmalı MWIR algılayıcı + hassas optik
+- **Sabit tut (titreşimde):** İki katmanlı gimbal + optik stabilizasyon
+- **Tanı ve izle:** Görüntü işleme, ATR, kapalı takip çevrimi
+- **Ölç ve işaretle:** Lazer mesafe ölçer + kodlu gösterici
+- **Eş-hizada kal:** Dahili boresight (IBS)
+- **Görünme:** Gömülü fasetli pencere + pasif sensör
 
 ## Gizlilik mantığı: gömülü mimari ve fasetli pencere
 
 TOYGUN'un dışarıya baktığı pencere düz değil, **çok sayıda düz (fasetli) parçadan** oluşur. Bu tasarım kararının arkasında saf radar fiziği vardır.
 
-*Eğri* (kubbe biçimli) bir yüzey, üstüne gelen radar dalgasını çok geniş bir açı yelpazesinde geri saçar — yani tehdit radarına bol miktarda enerji geri döner ve uçak "parlar" (radar ekranında belirir). *Düz* bir faset ise dalgayı **aynasal yansımayla** tek bir yöne sapıtır; uçağın açılı stealth yüzeyleri gibi, enerjiyi tehdidin olmadığı tarafa yollar. Pencereyi birçok düz fasetten oluşturmak, bu "sapıtma" mantığını eğri bir açıklığa uygulamanın yoludur. Aynı sebepten F-35'in EOTS'i de gövdeye fasetli safir pencereyle gömülüdür.
+*Eğri* (kubbe biçimli) bir yüzey, üstüne gelen radar dalgasını çok geniş bir açı yelpazesinde geri saçar; yani tehdit radarına bol miktarda enerji geri döner ve uçak "parlar" (radar ekranında belirir). *Düz* bir faset ise dalgayı **aynasal yansımayla** tek bir yöne sapıtır; uçağın açılı stealth yüzeyleri gibi, enerjiyi tehdidin olmadığı tarafa yollar. Pencereyi birçok düz fasetten oluşturmak, bu "sapıtma" mantığını eğri bir açıklığa uygulamanın yoludur. Aynı sebepten F-35'in EOTS'i de gövdeye fasetli safir pencereyle gömülüdür.
 
 <Diagram number="2" caption="Eğri yüzey radar enerjisini geniş bir açıyla geri saçar (yüksek RCS, sol); düz fasetler enerjiyi tek bir yöne sapıtır (düşük RCS, sağ). Çizim yansıma yönünü temsil eder; ölçekli değildir.">
   <img src="/essays/aselsan-toygun-teknik-inceleme/02-faseted-stealth.svg" alt="Sol: eğri yüzeyden çok yönlü radar geri saçılımı. Sağ: fasetli yüzeyden tek-yön sapma." class="w-full" />
 </Diagram>
 
-Pencere malzemesi de bu işe göre seçilir: orta dalga kızılötesini (MWIR) geçirecek kadar **saydam**, ama yüksek hızda yağmur ve kum erozyonuna dayanacak kadar **sert** olmalıdır — bu yüzden tipik olarak **safir** veya özel kızılötesi camı (germanium, ZnS, ZnSe veya çok katmanlı kompozit) kullanılır. TOYGUN'un açık teknik verilerinde bu modül ayrı bir kalem olarak, yaklaşık **22 kg**'lık "fasetli cam modülü" şeklinde geçer.
+Pencere malzemesi de bu işe göre seçilir: orta dalga kızılötesini (MWIR) geçirecek kadar **saydam**, ama yüksek hızda yağmur ve kum erozyonuna dayanacak kadar **sert** olmalıdır; bu yüzden tipik olarak **safir** veya özel kızılötesi camı (germanium, ZnS, ZnSe veya çok katmanlı kompozit) kullanılır. TOYGUN'un açık teknik verilerinde bu modül ayrı bir kalem olarak, yaklaşık **22 kg**'lık "fasetli cam modülü" şeklinde geçer.
 
-**Neden harici pod değil de gömülü?** Harici pod hem büyük bir radar yansıtıcısıdır hem de sürükleme üretir. Sensörü gövdeye, fasetli pencerenin arkasına gizlemek, uçağın düşük radar izi şeklini korur. Ayrıca kamera **pasiftir** (radar gibi sinyal yaymaz) — yani sistem hedefi bulup izlerken bile uçağın yerini ele vermez. Gizliliğin iki ayağı budur: **şekil** (fasetli pencere) ve **sessizlik** (pasif algılama). Bu ikisi birleşince, gelişmiş hedefleme yeteneği uçağın stealth doğasından ödün vermeden elde edilir. TOYGUN'un asıl tasarım felsefesi budur.
+**Neden harici pod değil de gömülü?** Harici pod hem büyük bir radar yansıtıcısıdır hem de sürükleme üretir. Sensörü gövdeye, fasetli pencerenin arkasına gizlemek, uçağın düşük radar izi şeklini korur. Ayrıca kamera **pasiftir** (radar gibi sinyal yaymaz); yani sistem hedefi bulup izlerken bile uçağın yerini ele vermez. Gizliliğin iki ayağı budur: **şekil** (fasetli pencere) ve **sessizlik** (pasif algılama). Bu ikisi birleşince, gelişmiş hedefleme yeteneği uçağın stealth doğasından ödün vermeden elde edilir. TOYGUN'un asıl tasarım felsefesi budur.
 
 Tasarım kararının bedeli yok mu? Var. Gövdeye gömülü EOTS, soğutma ve titreşim yönetimi açısından harici poda göre daha zorludur (uçağın hava akışı ve yapısal yükleri sensörü doğrudan etkiler); ayrıca pencere bölgesinde gözle görülmeyen ama önemli IR/MMW kayıpları olabilir. Bu maliyetler, mühendislik tarafında daha karmaşık termal yönetim ve daha sıkı yapısal entegrasyon ile kapatılır.
 
@@ -72,7 +74,7 @@ Sensörü hedefe çevirmek bir iş; onu titreyen bir uçakta mikro-radyan hassas
 
 ### Kaba + ince mimarisi
 
-Jiroskoplar bozulmayı (titreşim, manevra) sürekli ölçer ve bu bilgi iki paralel düzeltme yoluna gider. **Kaba katman** iki eksenli mekanik gimbaldir; düşük frekanslı, büyük açılı hareketleri karşılar. **İnce katman** ise hafif bir *hızlı yönlendirme aynası* (fast steering mirror, FSM) — yüksek frekanslı, küçük genlikli titreşimi (jitter) yüksek bant genişliğinde bastırır.
+Jiroskoplar bozulmayı (titreşim, manevra) sürekli ölçer ve bu bilgi iki paralel düzeltme yoluna gider. **Kaba katman** iki eksenli mekanik gimbaldir; düşük frekanslı, büyük açılı hareketleri karşılar. **İnce katman** ise hafif bir *hızlı yönlendirme aynasıdır* (fast steering mirror, FSM): yüksek frekanslı, küçük genlikli titreşimi (jitter) yüksek bant genişliğinde bastırır.
 
 <Diagram number="3" caption="Stabilizasyonun iki katmanı. Mekanik gimbal kaba/yavaş düzeltmeyi, optik ayna (FSM) ince/hızlı düzeltmeyi yapar. İkisi birlikte mikro-radyan seviyesinde kararlı bir bakış hattı üretir. 'Yönel komutu' ise hedefe nereye bakılacağını söyler (takip çevriminden ya da operatörden gelir).">
   <img src="/essays/aselsan-toygun-teknik-inceleme/03-two-tier-stab.svg" alt="Bozulma → jiroskoplar → paralel iki düzeltme yolu (mekanik gimbal + FSM) → kararlı LOS şeması." class="w-full" />
@@ -82,7 +84,7 @@ Jiroskoplar bozulmayı (titreşim, manevra) sürekli ölçer ve bu bilgi iki par
 
 ### Bakış alanı (field of regard)
 
-Gimbalin ulaşabildiği açısal hacme "bakış alanı" denir. TOYGUN'da bu, yatayda tam tur (azimut 360° sürekli) ve dikeyde aşağıya doğru geniş bir sektör (yaklaşık −90° dik aşağı ile +10° hafif yukarı arası) şeklindedir — tam değerler uçak entegrasyonuna göre değişir.
+Gimbalin ulaşabildiği açısal hacme "bakış alanı" denir. TOYGUN'da bu, yatayda tam tur (azimut 360° sürekli) ve dikeyde aşağıya doğru geniş bir sektör (yaklaşık −90° dik aşağı ile +10° hafif yukarı arası) şeklindedir; tam değerler uçak entegrasyonuna göre değişir.
 
 <Diagram number="4" caption="Bakış alanı. Solda üstten görünüm: azimutta tam tur tarama. Sağda yandan görünüm: elevasyonda dik aşağıdan (−90°) hafif yukarıya (+10°) kadar süren kapsama sektörü. Açısal değerler temsilîdir.">
   <img src="/essays/aselsan-toygun-teknik-inceleme/04-field-of-regard.svg" alt="Bakış alanı: üstten 360° azimut taraması, yandan -90 ila +10 derece elevasyon sektörü." class="w-full" />
@@ -96,7 +98,7 @@ Sistemin kalbinde, orta dalga kızılötesinde çalışan ve gece-gündüz göre
 
 ### Foton dedektörü ve neden soğutulur?
 
-Bu bir **foton dedektörüdür** — tipik olarak **InSb** (indiyum antimonid), **HgCdTe** (cıva-kadmiyum-tellür) ya da yeni nesil **T2SL** (tip-II süperörgü) malzemeden yapılır. Bu malzemeler gelen kızılötesi fotonları doğrudan elektrik sinyaline çevirir. Ancak sıcakken kendi ısıl titreşimleri "**karanlık akım**" denen bir gürültü üretir ve bu gürültü, görmek istediğiniz uzak/zayıf hedef sinyalini boğar. Sinyal/gürültü oranını (SNR) sıçratabilmek için dedektörü **kriyojenik olarak ~77 K** (sıvı azot mertebesi) civarına soğutmak gerekir. Bunu, entegre bir **Stirling soğutucu** ve sızdırmaz bir **vakum Dewar** kapsülü yapar.
+Bu bir **foton dedektörüdür**; tipik olarak **InSb** (indiyum antimonid), **HgCdTe** (cıva-kadmiyum-tellür) ya da yeni nesil **T2SL** (tip-II süperörgü) malzemeden yapılır. Bu malzemeler gelen kızılötesi fotonları doğrudan elektrik sinyaline çevirir. Ancak sıcakken kendi ısıl titreşimleri "**karanlık akım**" denen bir gürültü üretir ve bu gürültü, görmek istediğiniz uzak/zayıf hedef sinyalini boğar. Sinyal/gürültü oranını (SNR) sıçratabilmek için dedektörü **kriyojenik olarak ~77 K** (sıvı azot mertebesi) civarına soğutmak gerekir. Bunu, entegre bir **Stirling soğutucu** ve sızdırmaz bir **vakum Dewar** kapsülü yapar.
 
 Bu mimari, savunma EO/IR sistemlerinin imza işidir: Stirling motoru kapalı çevrim termodinamik bir ısı pompasıdır; helyum çalışma gazıyla, dedektör çipinin oturduğu *soğuk parmağı* sahnenin sıcaklığından bağımsız olarak ~80 K civarında tutar. Sistem ilk açıldığında "cool-down" süresi (tipik olarak birkaç dakika) yaşanır; bu süre boyunca FPA gözlem yapamaz, ısıl dengeye gelmesi beklenir. Bu süreyi kısaltmak (rapid cooldown) ASELSAN gibi tedarikçiler için ayrı bir mühendislik problemidir ve görev yanıt süresini doğrudan etkiler.
 
@@ -110,7 +112,7 @@ Bu mimari, savunma EO/IR sistemlerinin imza işidir: Stirling motoru kapalı çe
 
 Peki neden MWIR bandı? Üç sebep birlikte:
 
-1. **Termal kontrast.** Motor, egzoz ve sürtünmeyle ısınan yüzeyler (jet egzozları, tank motorları, sıcak namlular) tam bu bantta parlak görünür — yani sıcak hedefleri yakalamak için idealdir.
+1. **Termal kontrast.** Motor, egzoz ve sürtünmeyle ısınan yüzeyler (jet egzozları, tank motorları, sıcak namlular) tam bu bantta parlak görünür; yani sıcak hedefleri yakalamak için idealdir.
 2. **Atmosferik geçirgenlik.** MWIR, atmosferin görece şeffaf olduğu bir "pencere" bandıdır (yaklaşık 3.5–5.0 μm aralığı düşük absorbsiyon gösterir); uzun mesafelerden görmeyi mümkün kılar.
 3. **Pasif görüntüleme.** Sistem hiçbir ışık yaymadan, sadece ortamdaki ısıl ışımayı toplayarak gece de gündüz de görür. Aktif aydınlatma yok = gizliliğe yardım.
 
@@ -122,7 +124,7 @@ Alternatif olan **LWIR** (8–12 μm), düşük kontrastlı sahnelerde (oda sıc
 
 Ham dedektör sinyali tek başına işe yaramaz; bir işlem hattından geçip "anlaşılır" hale gelir ve hedef bir kez seçilince **kapalı bir çevrimle** izlenir.
 
-İlk adım **NUC** (non-uniformity correction, düzgünsüzlük düzeltmesi): her pikselin kazanç ve offset farkı, fabrikada veya saha-içi shutter kalibrasyonuyla oluşturulan tablolarla eşitlenir; bozuk pikseller komşularından onarılır. Bu, FPA'nın doğal düzgünsüzlüğünü görüntüden temizleyen kritik bir adımdır — onsuz görüntü "duş perdesi" görünümünde sabit desenli gürültüyle dolu olur. Ardından **iyileştirme** gelir: histogram eşitleme, kenar keskinleştirme ve atmosferik bulanıklık (sis/pus) azaltma gibi işlemler görüntünün ayırt ediciliğini artırır. Bu temiz görüntü üzerinde **tespit** çalışır: **IRST** (kızılötesi arama-takip) ve **ATR** (otomatik hedef tanıma) algoritmaları sıcak imzaları ve potansiyel hedefleri ayıklar.
+İlk adım **NUC** (non-uniformity correction, düzgünsüzlük düzeltmesi): her pikselin kazanç ve offset farkı, fabrikada veya saha-içi shutter kalibrasyonuyla oluşturulan tablolarla eşitlenir; bozuk pikseller komşularından onarılır. Bu, FPA'nın doğal düzgünsüzlüğünü görüntüden temizleyen kritik bir adımdır; onsuz görüntü "duş perdesi" görünümünde sabit desenli gürültüyle dolu olur. Ardından **iyileştirme** gelir: histogram eşitleme, kenar keskinleştirme ve atmosferik bulanıklık (sis/pus) azaltma gibi işlemler görüntünün ayırt ediciliğini artırır. Bu temiz görüntü üzerinde **tespit** çalışır: **IRST** (kızılötesi arama-takip) ve **ATR** (otomatik hedef tanıma) algoritmaları sıcak imzaları ve potansiyel hedefleri ayıklar.
 
 <Diagram number="6" caption="Üstte ham görüntüden tespite uzanan işlem hattı (NUC → iyileştirme → tespit → takip kapısı). Altta kapalı takip çevrimi: takip kapısı hedefin görüntü merkezinden sapmasını ölçer, bu hatayı gimbal/FSM'ye gönderir, LOS düzeltilir ve hedef tekrar ortalanır. Çıktı (video + iz verisi) görev bilgisayarına aktarılır.">
   <img src="/essays/aselsan-toygun-teknik-inceleme/06-image-processing.svg" alt="Görüntü işleme hattı + kapalı çevrim takip diyagramı." class="w-full" />
@@ -132,46 +134,46 @@ Ham dedektör sinyali tek başına işe yaramaz; bir işlem hattından geçip "a
 
 Bir hedef seçilince etrafına bir **takip kapısı** (track gate) konur ve kareler arasında izlenir. İki yaygın yöntem vardır:
 
-- **Centroid takibi** — sıcak lekenin ağırlık merkezini izler. Hızlı, basit; ancak hedef sahnede başka bir sıcak nesneyle birleşince izi kaybetme riski vardır.
-- **Korelasyon takibi** — referans görüntü yamasını her karede eşleştirir. Daha sağlam ama hesaplama maliyeti yüksektir.
+- **Centroid takibi:** sıcak lekenin ağırlık merkezini izler. Hızlı, basit; ancak hedef sahnede başka bir sıcak nesneyle birleşince izi kaybetme riski vardır.
+- **Korelasyon takibi:** referans görüntü yamasını her karede eşleştirir. Daha sağlam ama hesaplama maliyeti yüksektir.
 
 Buradaki kilit fikir **kapalı çevrimdir**: izleyici, hedefin görüntü merkezinden ne kadar saptığını ölçer, bu hatayı gimbal ve hızlı yönlendirme aynasına komut olarak gönderir, böylece hedef sürekli merkezde tutulur. Sistem **tekli ve çoklu hedef takibini** bir arada sunar; aynı anda birden fazla iz dosyası yönetebilir. **ATR** (otomatik hedef tanıma) ve yapay zekâ katmanı ise "bu bir tank mı, kamyon mu, bina mı" sorusunu otomatik yanıtlamaya çalışarak operatörün yükünü azaltır ve tepki süresini kısaltır.
 
-ATR'nin gerçek dünyada güvenilirliği derin bir konudur: sınıflandırma sahne koşullarına (gündüz/gece, hava durumu, gizleme), bakış açısına, hedef sınıfının eğitim setinde temsil edilip edilmediğine ve düşmanın gizleme/aldatma tedbirlerine güçlü şekilde bağlıdır. Olgun sistemlerde ATR çıktısı bir "öneri" olarak sunulur, son kararı her zaman operatör verir — özellikle ölümcül angajmanlarda *human-in-the-loop* korunur. TOYGUN'un yapay zekâ destekli görüntü işleme katmanı bu mimarinin Türk savunma sanayisindeki yansımasıdır.
+ATR'nin gerçek dünyada güvenilirliği derin bir konudur: sınıflandırma sahne koşullarına (gündüz/gece, hava durumu, gizleme), bakış açısına, hedef sınıfının eğitim setinde temsil edilip edilmediğine ve düşmanın gizleme/aldatma tedbirlerine güçlü şekilde bağlıdır. Olgun sistemlerde ATR çıktısı bir "öneri" olarak sunulur, son kararı her zaman operatör verir; özellikle ölümcül angajmanlarda *human-in-the-loop* korunur. TOYGUN'un yapay zekâ destekli görüntü işleme katmanı bu mimarinin Türk savunma sanayisindeki yansımasıdır.
 
 ## Lazer takımı: ölçme ve işaretleme
 
-Buraya kadar her şey pasifti — yalnızca ışık alıyorduk. Lazer birimi ise **aktiftir** ve üç farklı iş yapar: mesafe ölçer, hedef işaretler, başkasının işaretlediği noktayı izler.
+Buraya kadar her şey pasifti; yalnızca ışık alıyorduk. Lazer birimi ise **aktiftir** ve üç farklı iş yapar: mesafe ölçer, hedef işaretler, başkasının işaretlediği noktayı izler.
 
 ### Mesafe ölçme: uçuş süresi (time of flight)
 
-Sistem kısa bir lazer darbesi gönderir, hedeften dönen yankının **gidiş-dönüş süresini** ölçer ve mesafeyi basit bir bağıntıyla bulur. Işık hızı sabit olduğundan, süreyi bilmek mesafeyi bilmek demektir. Menzil 35 km'ye kadar çıkar — bu da çok hassas bir zamanlama elektroniği gerektirir.
+Sistem kısa bir lazer darbesi gönderir, hedeften dönen yankının **gidiş-dönüş süresini** ölçer ve mesafeyi basit bir bağıntıyla bulur. Işık hızı sabit olduğundan, süreyi bilmek mesafeyi bilmek demektir. Menzil 35 km'ye kadar çıkar; bu da çok hassas bir zamanlama elektroniği gerektirir.
 
 <Diagram number="7" caption="Uçuş süresi ile mesafe ölçümü. Giden darbe ile dönen yankı arasındaki süre, mesafeyi doğrudan verir. Pasif kameranın aksine bu işlem aktiftir; ancak ışın dar ve atış kısa sürelidir.">
   <img src="/essays/aselsan-toygun-teknik-inceleme/07-laser-tof.svg" alt="Lazer ToF: TOYGUN → giden darbe → hedef → dönen yankı, süreden mesafeye." class="w-full" />
 </Diagram>
 
-Bağıntı: **d = c · t / 2**, burada *c* ışık hızı, *t* gidiş-dönüş süresidir. İkiye bölünür çünkü ışık yolu hedefe gidip geri döner. Örnek: 35 km için *t* ≈ 233 mikrosaniye. Bu sürede 233 nanosaniyelik bir zamanlama hatası 35 metrelik mesafe hatasına denk gelir — yani saatleme elektroniği nanosaniye sınıfı olmak zorundadır.
+Bağıntı: **d = c · t / 2**, burada *c* ışık hızı, *t* gidiş-dönüş süresidir. İkiye bölünür çünkü ışık yolu hedefe gidip geri döner. Örnek: 35 km için *t* ≈ 233 mikrosaniye. Bu sürede 233 nanosaniyelik bir zamanlama hatası 35 metrelik mesafe hatasına denk gelir; yani saatleme elektroniği nanosaniye sınıfı olmak zorundadır.
 
 Birkaç pratik incelik: hedef bulutun arkasındaysa veya yağmurda darbe çok soğurulur ve geri dönmez (mesafe ölçüm kaybı); sahnede birden çok yansıtıcı yüzey varsa (camlar, koruyuculu binalar) çoklu yankı oluşur ve sistem bunlar arasından doğru olanı seçmek için "first/last pulse logic" kullanır. Üstelik hava molekülleri tarafından oluşan saçılım, atış-azaltıcı (eye-safe) dalga boyunda daha da belirgindir.
 
 ### İşaretleme: kodlu darbe ve güdüm
 
-Hedefin üstüne **kodlu bir darbe katarı** (belirli bir PRF — pulse repetition frequency, darbe tekrarlama frekansı kodu) düşürülür. Bu enerji hedeften saçılır; lazer güdümlü mühimmatın başlığındaki **dört bölmeli (quadrant) dedektör** yansıyan noktayı görür ve ona doğru yönelir. Mühimmat, göstericiyle *aynı PRF koduna* ayarlandığından ortamdaki diğer lazer kaynaklarını yok sayar — bu, karışıklığı ve dost ateşini önler.
+Hedefin üstüne **kodlu bir darbe katarı** (belirli bir PRF, yani pulse repetition frequency, darbe tekrarlama frekansı kodu) düşürülür. Bu enerji hedeften saçılır; lazer güdümlü mühimmatın başlığındaki **dört bölmeli (quadrant) dedektör** yansıyan noktayı görür ve ona doğru yönelir. Mühimmat, göstericiyle *aynı PRF koduna* ayarlandığından ortamdaki diğer lazer kaynaklarını yok sayar; bu, karışıklığı ve dost ateşini önler.
 
 <Diagram number="8" caption="İşaretleme ve güdüm. TOYGUN kodlu darbeyle hedefi 'boyar'; enerji saçılır; aynı koda ayarlı mühimmatın kadran arayıcısı yansıyan noktaya kilitlenir. Sağ alttaki kesit: nokta merkezden saparsa kadran dedektörü hangi yöne dönüleceğini hesaplar.">
   <img src="/essays/aselsan-toygun-teknik-inceleme/08-laser-designation.svg" alt="Kodlu lazer işaretleme + güdümlü mühimmat + kadran dedektör şeması." class="w-full" />
 </Diagram>
 
-**Standart ve dalga boyları.** Kod kümesi NATO **STANAG 3733** ile standartlaştırılır — birlikte çalışabilirlik (interoperability) için bu kritiktir; bir Türk uçağı tarafından işaretlenen hedefi bir NATO müttefiki mühimmatı vurabilmelidir. TOYGUN iki dalga boyu kullanır: **1064 nm** muharebe içindir (Nd:YAG ailesi, klasik askerî lazer dalga boyu); **1570 nm** ise göze daha güvenli olduğundan eğitim/atış sahasında kullanılır (eye-safe sınıfa girer). 1570 nm'lik bandın seçimi, sivil havacılık üst trafiğinden gelen göz hasarı riskini tatbikat ortamlarında düşürür.
+**Standart ve dalga boyları.** Kod kümesi NATO **STANAG 3733** ile standartlaştırılır; birlikte çalışabilirlik (interoperability) için bu kritiktir; bir Türk uçağı tarafından işaretlenen hedefi bir NATO müttefiki mühimmatı vurabilmelidir. TOYGUN iki dalga boyu kullanır: **1064 nm** muharebe içindir (Nd:YAG ailesi, klasik askerî lazer dalga boyu); **1570 nm** ise göze daha güvenli olduğundan eğitim/atış sahasında kullanılır (eye-safe sınıfa girer). 1570 nm'lik bandın seçimi, sivil havacılık üst trafiğinden gelen göz hasarı riskini tatbikat ortamlarında düşürür.
 
 ### Lazer nokta takibi (LST)
 
-Bu işin tersi de mümkündür. Sistem, **başka bir platformun** (yerdeki bir gözcü/JTAC ya da başka bir uçak) işaretlediği lazer noktasını algılayıp ona dönebilir. Buna **lazer nokta takibi** (laser spot tracking, LST) denir; iş birlikçi hedeflemeyi ve hedefin bir birimden diğerine devrini mümkün kılar. Yerdeki bir özel kuvvetler timi tehdidi belirleyip işaretler; havadaki TOYGUN bu noktayı bulup üstüne kilitlenir, sonra mühimmat atılır — bu, modern joint operations doktrininin temel angajman akışlarından biridir.
+Bu işin tersi de mümkündür. Sistem, **başka bir platformun** (yerdeki bir gözcü/JTAC ya da başka bir uçak) işaretlediği lazer noktasını algılayıp ona dönebilir. Buna **lazer nokta takibi** (laser spot tracking, LST) denir; iş birlikçi hedeflemeyi ve hedefin bir birimden diğerine devrini mümkün kılar. Yerdeki bir özel kuvvetler timi tehdidi belirleyip işaretler; havadaki TOYGUN bu noktayı bulup üstüne kilitlenir, sonra mühimmat atılır; bu, modern joint operations doktrininin temel angajman akışlarından biridir.
 
 ## Boresight: dahili hizalama
 
-Kameranın merkezlediği yer ile lazerin vurduğu yer milimetrik aynı olmazsa, tüm hassasiyet boşa gider. TOYGUN'un içindeki tüm alt sensörler — termal kamera, lazer mesafe ölçer, lazer gösterici ve lazer nokta takipçisi — **kusursuz biçimde eş-eksenli** olmak zorundadır. Operatör ekranda bir noktayı merkeze aldığında, lazer tam o noktaya gitmelidir. Aralarındaki çok küçük bir açısal kayma bile 35 km'de metrelerce sapma demektir; yani isabeti öldürür.
+Kameranın merkezlediği yer ile lazerin vurduğu yer milimetrik aynı olmazsa, tüm hassasiyet boşa gider. TOYGUN'un içindeki tüm alt sensörler (termal kamera, lazer mesafe ölçer, lazer gösterici ve lazer nokta takipçisi) **kusursuz biçimde eş-eksenli** olmak zorundadır. Operatör ekranda bir noktayı merkeze aldığında, lazer tam o noktaya gitmelidir. Aralarındaki çok küçük bir açısal kayma bile 35 km'de metrelerce sapma demektir; yani isabeti öldürür.
 
 Sorun şu ki optik elemanlar sabit kalmaz: sıcaklık (−40 °C ile +70 °C arası çalışma aralığı) ve sürekli titreşim, mercekleri ve aynaları mikroskobik ölçüde kaydırır. Çözüm **dahili boresight** (internal boresight, IBS) sistemidir: sistem, harici saha/kalibrasyon ekipmanına ihtiyaç duymadan kendi içinde sürekli bir referansla kamerayı ve lazer eksenini karşılaştırıp hizalamayı düzeltir. Tipik uygulama, dahili bir referans kaynağı (örneğin bir kalibre kaynak veya bilinen noktasal hedef) ile kapalı bir döngüde drift'i sürekli ölçüp düzeltmektir.
 
@@ -185,10 +187,10 @@ Sistem hedefi gördüğünde elinde aslında bir yön, bir uzunluk ve uçağın 
 
 TOYGUN bir hedefi merkezlediğinde dört bilgi bilinir:
 
-- **Bakış hattı açıları** — gimbal enkoderlerinden, uçağa göre azimut/elevasyon
-- **Uçağın anlık konumu** — GPS'ten enlem/boylam/yükseklik
-- **Uçağın tutumu** — INS/IMU'dan yaw-pitch-roll (uçağın gövde eksenleri ile dünya çerçevesi arasındaki dönüşüm)
-- **Eğik menzil** — lazer mesafe ölçerden, uçaktan hedefe doğrudan mesafe
+- **Bakış hattı açıları:** gimbal enkoderlerinden, uçağa göre azimut/elevasyon
+- **Uçağın anlık konumu:** GPS'ten enlem/boylam/yükseklik
+- **Uçağın tutumu:** INS/IMU'dan yaw-pitch-roll (uçağın gövde eksenleri ile dünya çerçevesi arasındaki dönüşüm)
+- **Eğik menzil:** lazer mesafe ölçerden, uçaktan hedefe doğrudan mesafe
 
 Bu dördü, basit bir vektör geometrisiyle hedefin yerini verir.
 
@@ -198,17 +200,17 @@ Bu dördü, basit bir vektör geometrisiyle hedefin yerini verir.
 
 Mantık şudur: uçağın GPS konumu vektörün *başlangıç noktasını*, lazer menzili R *uzunluğunu*, bakış hattı açıları (uçağın tutumuyla düzeltilerek yer/coğrafi çerçeveye döndürülmüş haliyle) *yönünü* verir. Bu üçü, hedefin **enlem, boylam ve irtifasını** hesaplar. TOYGUN bunu dahili GPS + ataletsel ölçüm birimi ile uçağın seyrüsefer sistemini birlikte kullanarak yapar. Üretilen koordinat, GPS güdümlü mühimmat (JDAM benzeri, ya da Türkiye'deki KGK / SOM gibi muadiller) atmak veya hedefi başka bir birime devretmek için kritik öneme sahiptir.
 
-İncelik: koordinat hassasiyeti zincirin **en zayıf halkasıyla** sınırlıdır. Lazer menzil hatası ±5 m, GPS konum hatası ±3 m, INS yön hatası 0.1°, gimbal enkoder hatası 0.05° ise — bunların birleşik etkisi 35 km'lik bir atışta yaklaşık 70 m'lik bir konum belirsizliğine yol açabilir. JDAM/KGK sınıfı mühimmatlar bunu kabul edebilir; nokta vuruşu (CEP < 5 m) isteyen mühimmat sınıfları için lazer güdümü kullanılarak nihai vuruş hatası bağımsız bir döngüde sıkılaştırılır.
+İncelik: koordinat hassasiyeti zincirin **en zayıf halkasıyla** sınırlıdır. Lazer menzil hatası ±5 m, GPS konum hatası ±3 m, INS yön hatası 0.1°, gimbal enkoder hatası 0.05° ise, bunların birleşik etkisi 35 km'lik bir atışta yaklaşık 70 m'lik bir konum belirsizliğine yol açabilir. JDAM/KGK sınıfı mühimmatlar bunu kabul edebilir; nokta vuruşu (CEP < 5 m) isteyen mühimmat sınıfları için lazer güdümü kullanılarak nihai vuruş hatası bağımsız bir döngüde sıkılaştırılır.
 
 ## Uçakla haberleşme ve pasiflik felsefesi
 
 TOYGUN tek başına bir ada değildir; ürettiği her şeyi uçağa aktarır ve bunu yaparken uçağı ele vermez.
 
-Sistemin ürettiği **video, takip (iz) verisi, hedef koordinatı ve işaretleme durumu**, standart askerî arayüzler üzerinden uçağın görev bilgisayarına aktarılır. Bunun omurgası **MIL-STD-1553B** veri yoludur — 1970'lerden bu yana savunma platformlarının omurgası olan, 1 Mbps hızında, yüksek güvenilirlikli, dual-redundant bir bus protokolüdür. Daha yüksek bant genişlikli video için **RS-422** veya **Fiber Channel** gibi seri arayüzler de kullanılır. Böylece pilot/operatör ve uçağın silah sistemleri TOYGUN'un gördüğünü ve hesapladığını gerçek zamanlı kullanır.
+Sistemin ürettiği **video, takip (iz) verisi, hedef koordinatı ve işaretleme durumu**, standart askerî arayüzler üzerinden uçağın görev bilgisayarına aktarılır. Bunun omurgası **MIL-STD-1553B** veri yoludur: 1970'lerden bu yana savunma platformlarının omurgası olan, 1 Mbps hızında, yüksek güvenilirlikli, dual-redundant bir bus protokolüdür. Daha yüksek bant genişlikli video için **RS-422** veya **Fiber Channel** gibi seri arayüzler de kullanılır. Böylece pilot/operatör ve uçağın silah sistemleri TOYGUN'un gördüğünü ve hesapladığını gerçek zamanlı kullanır.
 
-Asıl önemli nokta **pasifliktir**. Termal kamera hiçbir sinyal yaymaz; yalnızca ortamdaki kızılötesi ışımayı toplar. Radar gibi aktif bir sistem, dışarı enerji yaydığı için uçağın yerini düşmana ele verebilir — oysa TOYGUN sessizdir. Bunun üstüne, gömülü fasetli pencere de uçağın düşük radar izi şeklini bozmaz. Sonuç: uçak, **radarını hiç açmadan** hedef bulup tanıyabilir, koordinat üretebilir ve lazerle işaretleyebilir.
+Asıl önemli nokta **pasifliktir**. Termal kamera hiçbir sinyal yaymaz; yalnızca ortamdaki kızılötesi ışımayı toplar. Radar gibi aktif bir sistem, dışarı enerji yaydığı için uçağın yerini düşmana ele verebilir; oysa TOYGUN sessizdir. Bunun üstüne, gömülü fasetli pencere de uçağın düşük radar izi şeklini bozmaz. Sonuç: uçak, **radarını hiç açmadan** hedef bulup tanıyabilir, koordinat üretebilir ve lazerle işaretleyebilir.
 
-**Gizliliğin iki ayağı.** *Şekil* (gömülü fasetli pencere → düşük radar izi) ve *sessizlik* (pasif algılama → emisyon yok). Bu ikisi birleşince, gelişmiş hedefleme yeteneği uçağın stealth doğasından ödün vermeden elde edilir. Tek "ses çıkaran" an, lazerin işaretleme yaptığı dar zaman penceresidir — ve o da yön/kapsama açısından dar bir koni içinde kalır. F-35'in EOTS felsefesi de aynıdır; TOYGUN bu felsefeyi Türk platformlarına taşır.
+**Gizliliğin iki ayağı.** *Şekil* (gömülü fasetli pencere → düşük radar izi) ve *sessizlik* (pasif algılama → emisyon yok). Bu ikisi birleşince, gelişmiş hedefleme yeteneği uçağın stealth doğasından ödün vermeden elde edilir. Tek "ses çıkaran" an, lazerin işaretleme yaptığı dar zaman penceresidir; ve o da yön/kapsama açısından dar bir koni içinde kalır. F-35'in EOTS felsefesi de aynıdır; TOYGUN bu felsefeyi Türk platformlarına taşır.
 
 ## Tek bir angajman, baştan sona
 
@@ -218,16 +220,16 @@ Asıl önemli nokta **pasifliktir**. Termal kamera hiçbir sinyal yaymaz; yalnı
   <img src="/essays/aselsan-toygun-teknik-inceleme/10-end-to-end.svg" alt="Uçtan uca angajman akışı: tarama → tespit → kilitlenme → menzil → işaretleme → vuruş/devir." class="w-full" />
 </Diagram>
 
-Aşağıdaki akış, bir hedefin tespitinden vuruşuna (ya da başka bir birime devrine) kadar olan tipik adımları gösteriyor. Dikkat edilmesi gereken şey, tüm bu adımlar boyunca uçağın **radarının kapalı** kalabilmesidir — sistem baştan sona pasif çalışır, yalnızca işaretleme anında dar bir lazer ışını dışarı çıkar.
+Aşağıdaki akış, bir hedefin tespitinden vuruşuna (ya da başka bir birime devrine) kadar olan tipik adımları gösteriyor. Dikkat edilmesi gereken şey, tüm bu adımlar boyunca uçağın **radarının kapalı** kalabilmesidir; sistem baştan sona pasif çalışır, yalnızca işaretleme anında dar bir lazer ışını dışarı çıkar.
 
-1. **Tarama** — MWIR ile sahneyi gözle (IRST), sıcak imzaları topla.
-2. **Tespit & tanı** — ATR hedefi bulur ve sınıflandırır; operatör doğrulama eşiğine göre değerlendirir.
-3. **Kilitlenme** — Takip kapısı kapanır; kapalı çevrim takip başlar.
-4. **Menzil & koordinat** — Lazer mesafe ölçer + GPS/IMU birlikte hedef konumunu hesaplar.
-5. **İşaretleme** — Kodlu lazerle hedefi "boya" (kısa süreli, dar konide).
-6. **Vuruş / devir** — Güdümlü mühimmat kilitlenir; ya da üretilen koordinat başka bir birime devredilir (bir başka uçak, bir batarya, vb.).
+1. **Tarama:** MWIR ile sahneyi gözle (IRST), sıcak imzaları topla.
+2. **Tespit & tanı:** ATR hedefi bulur ve sınıflandırır; operatör doğrulama eşiğine göre değerlendirir.
+3. **Kilitlenme:** Takip kapısı kapanır; kapalı çevrim takip başlar.
+4. **Menzil & koordinat:** Lazer mesafe ölçer + GPS/IMU birlikte hedef konumunu hesaplar.
+5. **İşaretleme:** Kodlu lazerle hedefi "boya" (kısa süreli, dar konide).
+6. **Vuruş / devir:** Güdümlü mühimmat kilitlenir; ya da üretilen koordinat başka bir birime devredilir (bir başka uçak, bir batarya, vb.).
 
-Bu sıralama, "ne zaman pasif ne zaman aktif" sorusunu da yanıtlar: 1–4. adımlarda sistem sessizdir, hiçbir emisyon yoktur. Tek aktif moment, 5. adımdaki kısa lazer atışıdır — ve onun da yön/zaman dilimi dardır. Lazer dalga boyu (1064 nm muharebede) tipik düşman ESM/RWR sensörleriyle değil özel lazer uyarı alıcılarıyla (LWR) algılanabilir; yani angajmanın görünür ayak izi minimumdur.
+Bu sıralama, "ne zaman pasif ne zaman aktif" sorusunu da yanıtlar: 1–4. adımlarda sistem sessizdir, hiçbir emisyon yoktur. Tek aktif moment, 5. adımdaki kısa lazer atışıdır; ve onun da yön/zaman dilimi dardır. Lazer dalga boyu (1064 nm muharebede) tipik düşman ESM/RWR sensörleriyle değil özel lazer uyarı alıcılarıyla (LWR) algılanabilir; yani angajmanın görünür ayak izi minimumdur.
 
 ## Teknik özellikler & F-35 EOTS karşılaştırması
 
@@ -262,31 +264,31 @@ Açık kaynaklardan derlenen sayısal değerler, kavramsal bir F-35 EOTS karşı
 | Lazer fonksiyonları | Mesafe ölçme + işaretleme + nokta takibi | Mesafe ölçme + işaretleme + nokta takibi |
 | Çalışma şekli | Pasif (düşük RCS korunur) | Pasif (düşük RCS korunur) |
 | Hedef platform | KAAN, KIZILELMA, AKINCI, AKSUNGUR | F-35 (insanlı 5. nesil) |
-| İnsansız savaş uçağı entegrasyonu | **Evet — KIZILELMA (dünyada ilk)** | Hayır |
+| İnsansız savaş uçağı entegrasyonu | **Evet, KIZILELMA (dünyada ilk)** | Hayır |
 
-F-35 EOTS'in kesin sayısal özellikleri (çözünürlük vb.) burada verilmemiştir; karşılaştırma yalnızca kavramsal yaklaşım benzerliğini gösterir. Northrop Grumman'ın AN/AAQ-37 DAS sistemi (F-35'in tamamlayıcı 360° pasif EO küresi) ile karıştırılmamalıdır — EOTS atış kalitesinde dar bakışlı bir hedefleme alt sistemi, DAS ise küresel durum farkındalığı sağlar. TOYGUN bu sınıflandırmada EOTS'tir; küresel farkındalık için TAI/ASELSAN'ın paralel programları (örneğin KARAT IRST sistemi) çalışmaktadır.
+F-35 EOTS'in kesin sayısal özellikleri (çözünürlük vb.) burada verilmemiştir; karşılaştırma yalnızca kavramsal yaklaşım benzerliğini gösterir. Northrop Grumman'ın AN/AAQ-37 DAS sistemi (F-35'in tamamlayıcı 360° pasif EO küresi) ile karıştırılmamalıdır: EOTS atış kalitesinde dar bakışlı bir hedefleme alt sistemi, DAS ise küresel durum farkındalığı sağlar. TOYGUN bu sınıflandırmada EOTS'tir; küresel farkındalık için TAI/ASELSAN'ın paralel programları (örneğin KARAT IRST sistemi) çalışmaktadır.
 
 **Geliştirme durumu ve yol haritası:**
 
 | Aşama | Durum |
 |---|---|
-| KIZILELMA entegrasyonu | 2025 sonunda entegre edilip uçtu — gömülü EOTS'in insansız savaş uçağındaki dünya ilki |
+| KIZILELMA entegrasyonu | 2025 sonunda entegre edilip uçtu, gömülü EOTS'in insansız savaş uçağındaki dünya ilki |
 | Küresel konum | Türkiye bu kabiliyete sahip dünyadaki 3 ülkeden biri |
 | Seri üretim | 2026 hedefi (KARAT IRST sistemiyle birlikte) |
 | KAAN entegrasyonu | Sistem entegrasyon laboratuvarı çalışmaları başladı; uçuş 2026 hedefi |
-| İlişkili sistem | KARAT — ASELSAN'ın kızılötesi arama-takip (IRST) sistemi |
+| İlişkili sistem | KARAT, ASELSAN'ın kızılötesi arama-takip (IRST) sistemi |
 
 ## Stratejik ve sınai bağlam
 
 TOYGUN'u sadece bir alt sistem olarak değil, Türk savunma sanayisinin yer aldığı geniş bağlam içinde de okumak gerekir. Birkaç gözlem önemli:
 
-**Birinci nokta: bu bir endüstriyel olgunluk eşiğidir.** Gömülü EOTS'in mühendislik ön koşulları zincirlemedir — kriyojenik FPA üretim/test kabiliyeti, hassas optik üretimi, fasetli stealth pencere imalatı, mikro-radyan seviyesinde stabilizasyon, gerçek zamanlı görüntü işleme silikonu, nanosaniye sınıfı zamanlama elektroniği, dahili boresight referans kaynağı, ATR algoritmaları. Bu zincirin her bir halkası kendi başına 10+ yıllık bir yetenek birikimi ister. Türkiye'nin bu kabiliyete sahip "dünyadaki üç ülkeden biri" konumuna gelmesi, herhangi bir tek bir mühendislik atılımının değil; ASELSAN'ın 1975'ten bu yana topladığı sistematik birikimin ürünüdür. Bu bağlamda 1990'larda başlayan FLIR ailesi (FLIR-1, FLIR-2, ASELFLIR-300T, ASELPOD), 2010'larda olgunlaşan CATS (Common Aperture Targeting System) ve şimdi gelen TOYGUN, doğal bir evrim çizgisi oluşturur.
+**Birinci nokta: bu bir endüstriyel olgunluk eşiğidir.** Gömülü EOTS'in mühendislik ön koşulları zincirlemedir: kriyojenik FPA üretim/test kabiliyeti, hassas optik üretimi, fasetli stealth pencere imalatı, mikro-radyan seviyesinde stabilizasyon, gerçek zamanlı görüntü işleme silikonu, nanosaniye sınıfı zamanlama elektroniği, dahili boresight referans kaynağı, ATR algoritmaları. Bu zincirin her bir halkası kendi başına 10+ yıllık bir yetenek birikimi ister. Türkiye'nin bu kabiliyete sahip "dünyadaki üç ülkeden biri" konumuna gelmesi, herhangi bir tek bir mühendislik atılımının değil; ASELSAN'ın 1975'ten bu yana topladığı sistematik birikimin ürünüdür. Bu bağlamda 1990'larda başlayan FLIR ailesi (FLIR-1, FLIR-2, ASELFLIR-300T, ASELPOD), 2010'larda olgunlaşan CATS (Common Aperture Targeting System) ve şimdi gelen TOYGUN, doğal bir evrim çizgisi oluşturur.
 
-**İkinci nokta: insansız sistemler tarafındaki dünya ilki, "evdeki entegrasyon" avantajının görünür bir örneğidir.** F-35 EOTS olgun ve dünyanın en gelişmiş hedefleme sistemlerinden biri olmasına rağmen ABD'nin insansız muharip uçak (UCAV) tarafında doğrudan benzer bir entegrasyon yok — çünkü ABD'nin operasyonel UCAV programları (MQ-25, CCA) farklı bir mimari yörüngede ilerliyor. ASELSAN ise hem EOTS'i hem hedef platformları (KIZILELMA, KAAN) aynı sanayi çatısı altında geliştirebildiği için "EOTS-platform" entegrasyonunu üreticilerle çok daha sıkı bir iş birliğinde yapabiliyor. Bayraktar KIZILELMA gibi bir UCAV'a TOYGUN takmak için ASELSAN ve Baykar'ın aynı görev yükü, aynı veri yolu, aynı tutum referansları üzerinde anlaşması gerekiyor — ve bu, milli üretici olmanın getirdiği bir koordinasyon avantajıdır.
+**İkinci nokta: insansız sistemler tarafındaki dünya ilki, "evdeki entegrasyon" avantajının görünür bir örneğidir.** F-35 EOTS olgun ve dünyanın en gelişmiş hedefleme sistemlerinden biri olmasına rağmen ABD'nin insansız muharip uçak (UCAV) tarafında doğrudan benzer bir entegrasyon yok; çünkü ABD'nin operasyonel UCAV programları (MQ-25, CCA) farklı bir mimari yörüngede ilerliyor. ASELSAN ise hem EOTS'i hem hedef platformları (KIZILELMA, KAAN) aynı sanayi çatısı altında geliştirebildiği için "EOTS-platform" entegrasyonunu üreticilerle çok daha sıkı bir iş birliğinde yapabiliyor. Bayraktar KIZILELMA gibi bir UCAV'a TOYGUN takmak için ASELSAN ve Baykar'ın aynı görev yükü, aynı veri yolu, aynı tutum referansları üzerinde anlaşması gerekiyor; ve bu, milli üretici olmanın getirdiği bir koordinasyon avantajıdır.
 
 **Üçüncü nokta: ihracat senaryosu.** Eğer TOYGUN'un seri üretimi 2026'da olgunlaşırsa, Türk savunma sanayisinin orta vadeli ihracat sepeti içinde önemli bir kalem haline gelebilir. Bayraktar TB2'nin uluslararası satışlarındaki başarı modeline benzer şekilde, KIZILELMA + TOYGUN paketi, gelişmiş hedefleme yeteneği isteyen ancak F-35 erişimi bulunmayan veya bunu istemeyen ülkeler için cazip olabilir. NATO STANAG 3733 uyumluluğu ve MIL-STD-1553B arayüzleri, üçüncü taraf entegrasyonu için kapıları zaten açık tutuyor.
 
-**Dördüncü nokta: KARAT ile sinerji.** TOYGUN, ASELSAN'ın kızılötesi arama-takip (IRST) sistemi KARAT ile birlikte konuşlandırılıyor. Bu mimari hesap basittir: TOYGUN dar bakışlı, atış kalitesinde hedefleme sağlar; KARAT geniş kapsamlı IRST ile hava-hava tarama yapar. Bu ikisi tek bir görev bilgisayarı arkasında birleşince, uçak hem küresel farkındalık (KARAT) hem de hassas angajman (TOYGUN) yeteneğine birlikte sahip olur — F-35'in EOTS + DAS kombinasyonunun mimari analoğu.
+**Dördüncü nokta: KARAT ile sinerji.** TOYGUN, ASELSAN'ın kızılötesi arama-takip (IRST) sistemi KARAT ile birlikte konuşlandırılıyor. Bu mimari hesap basittir: TOYGUN dar bakışlı, atış kalitesinde hedefleme sağlar; KARAT geniş kapsamlı IRST ile hava-hava tarama yapar. Bu ikisi tek bir görev bilgisayarı arkasında birleşince, uçak hem küresel farkındalık (KARAT) hem de hassas angajman (TOYGUN) yeteneğine birlikte sahip olur; F-35'in EOTS + DAS kombinasyonunun mimari analoğu.
 
 ## Sınırlamalar ve dürüst notlar
 
@@ -300,39 +302,39 @@ Bu yazının dayandığı veri tabanı açık kaynaklardır; resmî/gizli mühen
 
 ## Kaynaklar
 
-### Birincil — Türk savunma sanayisi açık kaynakları
+### Birincil: Türk savunma sanayisi açık kaynakları
 
-- **ASELSAN resmî kurumsal bilgileri** — [aselsan.com](https://www.aselsan.com)
-- **KÜRE Ansiklopedi**, TOYGUN teknik özellikler — [kureansiklopedi.com](https://www.kureansiklopedi.com)
-- **DefenceTurk** — [defenceturk.net](https://www.defenceturk.net)
-- **SavunmaTR** / savunma sanayii haber portalları — [savunmatr.com](https://savunmatr.com)
-- **DonanımHaber savunma bölümü** — [donanimhaber.com](https://www.donanimhaber.com)
+- **ASELSAN resmî kurumsal bilgileri:** [aselsan.com](https://www.aselsan.com)
+- **KÜRE Ansiklopedi**, TOYGUN teknik özellikler: [kureansiklopedi.com](https://www.kureansiklopedi.com)
+- **DefenceTurk:** [defenceturk.net](https://www.defenceturk.net)
+- **SavunmaTR** / savunma sanayii haber portalları: [savunmatr.com](https://savunmatr.com)
+- **DonanımHaber savunma bölümü:** [donanimhaber.com](https://www.donanimhaber.com)
 - **C4Defence**, **DefenceHub** ve **Yeni Şafak savunma sayfaları** (ek kapsama için)
 
 ### F-35 EOTS ve uluslararası karşılaştırma için
 
-- **Lockheed Martin** — F-35 EOTS resmî sayfası, [lockheedmartin.com](https://www.lockheedmartin.com)
-- **GlobalSecurity.org** — F-35 ve sensor suite teknik incelemeleri
-- **Defense-Update** ve **Janes** — EOTS/DAS karşılaştırma analizleri
-- **Northrop Grumman** — AN/AAQ-37 DAS dokümantasyonu (EOTS'in tamamlayıcı küresel sensör küresi)
+- **Lockheed Martin:** F-35 EOTS resmî sayfası, [lockheedmartin.com](https://www.lockheedmartin.com)
+- **GlobalSecurity.org:** F-35 ve sensor suite teknik incelemeleri
+- **Defense-Update** ve **Janes:** EOTS/DAS karşılaştırma analizleri
+- **Northrop Grumman:** AN/AAQ-37 DAS dokümantasyonu (EOTS'in tamamlayıcı küresel sensör küresi)
 
 ### Standartlar ve mühendislik referansları
 
-- **NATO STANAG 3733** — Lazer hedef gösterici kodlaması ve birlikte çalışabilirlik
-- **MIL-STD-1553B** — Askerî veri yolu standartı (avionics bus)
-- **Holst, G. C.**, *Electro-Optical Imaging System Performance* — MWIR sensör mühendisliği temel referansı
-- **Driggers, R. G., Friedman, M. H., Nichols, J. M.**, *Introduction to Infrared and Electro-Optical Systems* — soğutmalı dedektör fiziği, gimbal stabilizasyonu
+- **NATO STANAG 3733:** Lazer hedef gösterici kodlaması ve birlikte çalışabilirlik
+- **MIL-STD-1553B:** Askerî veri yolu standartı (avionics bus)
+- **Holst, G. C.**, *Electro-Optical Imaging System Performance*: MWIR sensör mühendisliği temel referansı
+- **Driggers, R. G., Friedman, M. H., Nichols, J. M.**, *Introduction to Infrared and Electro-Optical Systems*: soğutmalı dedektör fiziği, gimbal stabilizasyonu
 - **Manolakis, D., Lockwood, R., Cooley, T.**, *Hyperspectral Imaging Remote Sensing* (ek perspektif)
-- **Jha, A. R.**, *Infrared Technology: Applications to Electro-Optics, Photonic Devices, and Sensors* — InSb, HgCdTe, T2SL malzeme bilimi
+- **Jha, A. R.**, *Infrared Technology: Applications to Electro-Optics, Photonic Devices, and Sensors*: InSb, HgCdTe, T2SL malzeme bilimi
 
 ### İlişkili Türk savunma ürünleri (bağlam için)
 
-- **ASELSAN CATS** — Common Aperture Targeting System (TOYGUN'un evrimsel öncüsü olarak okunabilecek harici-pod EO/IR sistemi)
-- **ASELSAN ASELPOD** — gelişmiş hedefleme podu
-- **ASELSAN KARAT** — kızılötesi arama-takip (IRST), TOYGUN ile birlikte konuşlandırılıyor
-- **Bayraktar KIZILELMA** — TOYGUN'un dünya ilki entegrasyonunun gerçekleştiği insansız savaş uçağı
-- **TAI KAAN** — Türkiye'nin 5. nesil insanlı muharip uçak programı, TOYGUN entegrasyonu yol haritasında
-- **TAI AKSUNGUR**, **Bayraktar AKINCI** — TOYGUN'un planlanan diğer hedef platformları
+- **ASELSAN CATS:** Common Aperture Targeting System (TOYGUN'un evrimsel öncüsü olarak okunabilecek harici-pod EO/IR sistemi)
+- **ASELSAN ASELPOD:** gelişmiş hedefleme podu
+- **ASELSAN KARAT:** kızılötesi arama-takip (IRST), TOYGUN ile birlikte konuşlandırılıyor
+- **Bayraktar KIZILELMA:** TOYGUN'un dünya ilki entegrasyonunun gerçekleştiği insansız savaş uçağı
+- **TAI KAAN:** Türkiye'nin 5. nesil insanlı muharip uçak programı, TOYGUN entegrasyonu yol haritasında
+- **TAI AKSUNGUR**, **Bayraktar AKINCI:** TOYGUN'un planlanan diğer hedef platformları
 
 ### Hazırlık notu
 

@@ -3,7 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import { EXPERIENCE, PROJECTS, PROFILE, PUBLICATIONS, EDUCATION, CERTIFICATIONS, WRITING } from '../../constants';
 import { getCollection } from 'astro:content';
 
-const essays = (await getCollection('essays', ({ data }) => !data.draft && !(data.lang === 'tr' && data.translationSlug)))
+const essays = (await getCollection('essays', ({ data }) => !data.draft && !data.isTranslation))
   .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 ---
 

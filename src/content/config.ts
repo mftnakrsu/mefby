@@ -8,11 +8,14 @@ const essays = defineCollection({
     date: z.coerce.date(),
     tags: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
-    // i18n: a translated copy sets lang:'tr' + translationSlug pointing to its
-    // counterpart. Translation variants are hidden from listings (reachable via
-    // the in-essay language toggle) so each essay appears once.
+    // i18n: an essay and its translation point at each other via translationSlug
+    // (the counterpart's slug) and declare their own `lang`. The secondary copy
+    // sets isTranslation:true and is hidden from listings (reachable via the
+    // in-essay language toggle) so each essay appears exactly once. The canonical
+    // copy may be in either language, so hiding is flag-based, not language-based.
     lang: z.enum(['en', 'tr']).default('en'),
     translationSlug: z.string().optional(),
+    isTranslation: z.boolean().default(false),
   }),
 });
 

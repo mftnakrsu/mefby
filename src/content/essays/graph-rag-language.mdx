@@ -1,8 +1,10 @@
 ---
 title: "The Silent Variable in Graph RAG: Why Corpus Language Matters More Than You Think"
-description: "Chunk size, embeddings, re-rankers — the usual suspects. But the language of your corpus quietly shapes every layer of the pipeline, and reasoning models make it decisive."
+description: "Chunk size, embeddings, re-rankers: the usual suspects. But the language of your corpus quietly shapes every layer of the pipeline, and reasoning models make it decisive."
 date: 2026-04-21
 tags: ["Graph RAG", "LLMs", "Multilingual", "Reasoning"]
+lang: "en"
+translationSlug: "graph-rag-language-tr"
 ---
 
 When we talk about RAG systems, the conversation usually orbits around chunk size, embedding models, retrieval strategy, and re-rankers. But there's one variable that quietly shapes every layer of the pipeline and rarely gets the attention it deserves: **the language of your corpus.** The effect is visible even in classical vector RAG. Move to Graph RAG, and it becomes decisive. Bring reasoning models into the mix, and it moves to the center of your design decisions.
@@ -11,7 +13,7 @@ When we talk about RAG systems, the conversation usually orbits around chunk siz
 
 At the core of Graph RAG lies entity extraction, relation extraction, and triplet generation. The quality of these steps is directly tied to the language of the source text.
 
-In English, pulling entities out of "students from our school" is a relatively clean job. In an agglutinative language like Turkish, the same idea becomes "okulumuzun öğrencilerinden" — a single token train carrying possessive markers, an ablative case ending, and a noun-compound structure, all of which affect entity boundaries. Finnish, Hungarian, Korean, and Japanese raise similar flags. When the extractor — whether a classical NER model or an LLM-based one — has to guess where one entity ends and the next begins, entity resolution starts to crack. Different morphological variants of the same concept get written to the graph as separate nodes. Relations between them become noisy.
+In English, pulling entities out of "students from our school" is a relatively clean job. In an agglutinative language like Turkish, the same idea becomes "okulumuzun öğrencilerinden": a single token train carrying possessive markers, an ablative case ending, and a noun-compound structure, all of which affect entity boundaries. Finnish, Hungarian, Korean, and Japanese raise similar flags. When the extractor (whether a classical NER model or an LLM-based one) has to guess where one entity ends and the next begins, entity resolution starts to crack. Different morphological variants of the same concept get written to the graph as separate nodes. Relations between them become noisy.
 
 And this matters, because **everything downstream in Graph RAG depends on the topology of this graph.** A messy graph produces messy communities, messy summaries, and messy multi-hop paths. You don't notice it in metrics at first; you notice it when answers feel subtly off.
 
@@ -19,27 +21,27 @@ And this matters, because **everything downstream in Graph RAG depends on the to
 
 Multilingual embedding models have come a long way. E5, BGE-M3, Cohere's multilingual offerings, and the open-source cohort have narrowed the gap impressively over the last two years. But "narrowed" isn't "closed." On most benchmarks, English-to-English retrieval still outperforms same-language retrieval in lower-resource languages, often by a meaningful margin on recall@k.
 
-Graph RAG's community-detection steps — Leiden clustering, hierarchical summarization, and so on — look language-agnostic on paper. In practice, they inherit whatever noise the extraction and embedding stages produce. Garbage-in, garbage-clustered.
+Graph RAG's community-detection steps, Leiden clustering, hierarchical summarization, and so on, look language-agnostic on paper. In practice, they inherit whatever noise the extraction and embedding stages produce. Garbage-in, garbage-clustered.
 
 ## Reasoning models and the language-mixing problem
 
 Here's where things get interesting, and where most teams get caught off guard.
 
-Reasoning models — the ones generating explicit chains of thought before producing an answer — were trained on CoT traces that are overwhelmingly English (and to a lesser extent Chinese, depending on the lab). Multiple lines of research now suggest these models effectively "think in English" internally, even when prompted in another language. They translate the input, reason in their training-dominant language, then translate the answer back.
+Reasoning models, the ones generating explicit chains of thought before producing an answer, were trained on CoT traces that are overwhelmingly English (and to a lesser extent Chinese, depending on the lab). Multiple lines of research now suggest these models effectively "think in English" internally, even when prompted in another language. They translate the input, reason in their training-dominant language, then translate the answer back.
 
 But the problem is messier than a clean round-trip translation. Anyone who has actually stared at reasoning traces has seen it: **the models mix languages mid-thought.** Ask in Turkish, watch the chain of thought drift into English after the second step. Ask in English, catch a cluster of Chinese tokens showing up in the middle of a math derivation. Ask in Italian, get reasoning that code-switches between Italian and English paragraph by paragraph. Sometimes the final answer comes back in the wrong language entirely.
 
-This isn't a rumor — DeepSeek explicitly documented the issue in the R1 paper. Their first-generation R1-Zero produced reasoning traces that constantly mixed languages, and they had to introduce a dedicated "language consistency reward" during reinforcement learning just to keep the model's CoT in a single language. Users of o1, Qwen's reasoning variants, and others have reported similar behavior across languages.
+This isn't a rumor. DeepSeek explicitly documented the issue in the R1 paper. Their first-generation R1-Zero produced reasoning traces that constantly mixed languages, and they had to introduce a dedicated "language consistency reward" during reinforcement learning just to keep the model's CoT in a single language. Users of o1, Qwen's reasoning variants, and others have reported similar behavior across languages.
 
 For a Graph RAG system this has concrete consequences:
 
-- **Context nuance gets lost in implicit translation.** A legal clause in Turkish, a medical note in Japanese, a technical spec in German — each carries connotations that don't survive the round trip.
+- **Context nuance gets lost in implicit translation.** A legal clause in Turkish, a medical note in Japanese, a technical spec in German: each carries connotations that don't survive the round trip.
 - **Retrieved context and reasoning drift apart.** You retrieve a Turkish passage, the model reasons over it in English, and entity names, quoted phrases, or domain terms get paraphrased along the way. The "evidence" the model thinks it's using isn't quite the evidence you retrieved.
-- **Terminology drifts.** Domain-specific terms get back-translated into near-synonyms that subtly shift meaning — "tazminat" becoming "compensation" when the legally correct English term is "indemnity."
+- **Terminology drifts.** Domain-specific terms get back-translated into near-synonyms that subtly shift meaning: "tazminat" becoming "compensation" when the legally correct English term is "indemnity."
 - **Multi-hop reasoning compounds the error.** Each hop is a chance for translation drift to worsen. Three hops in, you're reasoning over a paraphrase of a paraphrase.
 - **Output language becomes non-deterministic.** A non-trivial portion of production bug reports in multilingual RAG setups boil down to: the model randomly answered in the wrong language.
 
-The kicker: the final answer, rendered back in the user's language, often looks fluent. Fluency masks drift. You don't catch the problem unless you audit the reasoning trace against the original-language source — which almost nobody does at scale.
+The kicker: the final answer, rendered back in the user's language, often looks fluent. Fluency masks drift. You don't catch the problem unless you audit the reasoning trace against the original-language source, which almost nobody does at scale.
 
 ## Practical patterns that actually work
 
@@ -49,12 +51,12 @@ A few approaches have emerged among teams building production Graph RAG in non-E
 
 **Hybrid pipelines.** Keep retrieval in the native language (users search how they think), but bridge to English for summarization and reasoning-heavy steps. This preserves recall on local terms while letting the reasoning model operate closer to its strong suit.
 
-**Native-first with heavy curation.** Accept the quality ceiling, but invest in a high-quality domain ontology, hand-curated entity aliases, and a domain-tuned extractor. Slower to build, but keeps the system honest in the source language — often the right call for regulated domains.
+**Native-first with heavy curation.** Accept the quality ceiling, but invest in a high-quality domain ontology, hand-curated entity aliases, and a domain-tuned extractor. Slower to build, but keeps the system honest in the source language, often the right call for regulated domains.
 
-**Dual-graph setups.** Build two graphs — one native, one English — and route queries based on type. Factual lookup goes native; multi-hop reasoning goes English. More infrastructure, but the quality delta is worth it for some teams.
+**Dual-graph setups.** Build two graphs, one native and one English, and route queries based on type. Factual lookup goes native; multi-hop reasoning goes English. More infrastructure, but the quality delta is worth it for some teams.
 
 ## The takeaway
 
-Corpus language isn't a preprocessing detail. In Graph RAG, it shapes the graph itself; in reasoning-heavy pipelines, it shapes the quality of every inference made on top of that graph. Before tuning your chunk size for the fifth time, it's worth asking a simpler question: in what language is my system actually thinking — and is that the same language my users are speaking?
+Corpus language isn't a preprocessing detail. In Graph RAG, it shapes the graph itself; in reasoning-heavy pipelines, it shapes the quality of every inference made on top of that graph. Before tuning your chunk size for the fifth time, it's worth asking a simpler question: in what language is my system actually thinking, and is that the same language my users are speaking?
 
 The answer often isn't what teams assume. And the gap between assumption and reality is where silent quality problems live.
