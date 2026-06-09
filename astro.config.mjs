@@ -7,6 +7,11 @@ import rehypeKatex from 'rehype-katex';
 
 export default defineConfig({
   site: 'https://mefby.vercel.app',
+  // Light Shiki theme so fenced code blocks match the clean/minimal palette
+  // (the MDX integration inherits this markdown config by default).
+  markdown: {
+    shikiConfig: { theme: 'github-light' },
+  },
   integrations: [
     mdx({
       remarkPlugins: [remarkMath],
