@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diagnose a RAG failure</title>
+<style>
+  :root{
+    --bg:#ffffff; --surface:#f8fafc; --surface2:#f1f5f9; --border:#e2e8f0;
+    --heading:#0f172a; --body:#334155; --muted:#64748b;
+    --indigo:#6366f1; --indigo-d:#4f46e5; --cyan:#06b6d4; --teal:#14b8a6;
+    --emerald:#10b981; --emerald-d:#059669; --amber:#f59e0b; --rose:#f43f5e;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--body); font-family:var(--sans);
+    font-size:15px; line-height:1.5; padding:18px;
+  }
+  .wrap{max-width:840px; margin:0 auto}
+
+  .topbar{display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:14px}
+  .scn{display:inline-flex; flex-wrap:wrap; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:3px; gap:2px}
+  .scn button{
+    appearance:none; border:0; background:transparent; cursor:pointer;
+    font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--muted);
+    padding:7px 11px; border-radius:8px; transition:all .15s ease;
+  }
+  .scn button[aria-pressed="true"]{background:var(--bg); color:var(--indigo-d); box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .legend{display:flex; gap:13px; font-size:11.5px; color:var(--muted); align-items:center; flex-wrap:wrap}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .chip{width:11px; height:11px; border-radius:3px; display:inline-block}
+  .chip.pass{background:var(--emerald)}
+  .chip.fail{background:var(--rose)}
+  .chip.block{background:var(--surface2); border:1.5px dashed #cbd5e1}
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start}
+  @media (max-width:680px){ .grid{grid-template-columns:1fr} }
+
+  .panel{border:1px solid var(--border); border-radius:14px; background:var(--bg); padding:12px}
+  .panel h3{
+    margin:0 0 9px; font-size:10.5px; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted);
+  }
+
+  /* left: the example */
+  .qrow{
+    font-family:var(--mono); font-size:12.5px; color:var(--heading);
+    background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--indigo);
+    border-radius:8px; padding:9px 11px; margin-bottom:11px;
+  }
+  .qrow .lab{display:block; font-family:var(--sans); font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--indigo-d); margin-bottom:4px}
+  .clab{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin:2px 0 6px}
+  .ctx{display:flex; flex-direction:column; gap:6px; margin-bottom:11px}
+  .ck{
+    position:relative; font-size:12.5px; color:var(--body);
+    padding:7px 9px 7px 11px; border-radius:8px;
+    background:var(--surface); border:1px solid var(--border);
+    transition:background .3s ease, border-color .3s ease;
+  }
+  .ck::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:8px 0 0 8px; background:#cbd5e1}
+  .ck.gold{background:rgba(16,185,129,.10); border-color:rgba(16,185,129,.5)}
+  .ck.gold::before{background:var(--emerald)}
+  .ck.gold .tag{color:var(--emerald-d)}
+  .ck.noise::before{background:#cbd5e1}
+  .ck .tag{display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-left:8px}
+  .ck.missing{
+    background:repeating-linear-gradient(135deg, #fff5f6, #fff5f6 7px, #ffeaed 7px, #ffeaed 14px);
+    border:1.5px dashed rgba(244,63,94,.55); color:#9f1239;
+  }
+  .ck.missing::before{background:var(--rose)}
+  .ck.missing .tag{color:var(--rose)}
+
+  .ans{
+    font-size:13px; color:var(--heading); border-radius:8px; padding:9px 11px;
+    border:1px solid var(--border); background:var(--surface); border-left:3px solid var(--muted);
+    transition:border-color .3s ease, background .3s ease;
+  }
+  .ans .lab{display:block; font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin-bottom:4px}
+  .ans.good{border-left-color:var(--emerald); background:rgba(16,185,129,.06)}
+  .ans.bad{border-left-color:var(--rose); background:rgba(244,63,94,.05)}
+  .ans mark{background:rgba(244,63,94,.18); color:#9f1239; border-radius:3px; padding:0 2px; font-weight:600}
+
+  /* right: the metrics */
+  .metric{margin-bottom:12px}
+  .metric:last-child{margin-bottom:2px}
+  .mhead{display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:5px}
+  .mname{font-size:12.5px; font-weight:600; color:var(--heading)}
+  .medge{font-size:9.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted)}
+  .medge.retr{color:var(--teal)}
+  .medge.gen{color:var(--indigo-d)}
+  .mscore{font-family:var(--mono); font-size:12px; font-weight:700; color:var(--muted); margin-left:auto}
+  .track{height:9px; border-radius:999px; background:var(--surface2); overflow:hidden}
+  .bar{height:100%; width:0; border-radius:999px; background:var(--emerald); transition:width .55s cubic-bezier(.4,0,.2,1), background .3s ease}
+  .metric.fail .bar{background:var(--rose)}
+  .metric.fail .mscore{color:var(--rose)}
+  .metric.pass .mscore{color:var(--emerald-d)}
+  .metric.blocked .track{background:repeating-linear-gradient(135deg,#f1f5f9,#f1f5f9 6px,#e2e8f0 6px,#e2e8f0 12px)}
+  .metric.blocked .bar{width:0 !important}
+  .metric.blocked .mscore{color:#94a3b8}
+  .metric.blocked .mname{color:var(--muted)}
+  .culprit{
+    display:none; font-size:9.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+    color:#fff; background:var(--rose); border-radius:999px; padding:1px 7px; margin-left:7px; vertical-align:1px;
+  }
+  .metric.culprit-on .culprit{display:inline-block}
+  .mhint{font-size:10.5px; color:var(--muted); margin-top:3px; min-height:1px}
+
+  /* pipeline strip */
+  .pipe{display:flex; align-items:center; gap:9px; margin:15px 0 0; flex-wrap:wrap}
+  .stage{
+    display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600;
+    color:var(--muted); background:var(--surface); border:1.5px solid var(--border);
+    border-radius:10px; padding:7px 12px; transition:all .3s ease;
+  }
+  .stage .ico{width:9px; height:9px; border-radius:50%; background:#cbd5e1}
+  .stage.on{color:#fff; background:var(--rose); border-color:var(--rose)}
+  .stage.on .ico{background:#fff}
+  .stage.ship{color:#fff; background:var(--emerald); border-color:var(--emerald)}
+  .stage.ship .ico{background:#fff}
+  .arrow{color:#cbd5e1; font-size:15px; font-weight:700}
+
+  .verdict{
+    margin-top:14px; font-size:13.5px; color:var(--body);
+    background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--muted);
+    border-radius:8px; padding:11px 13px;
+  }
+  .verdict.fix{border-left-color:var(--rose)}
+  .verdict.ok{border-left-color:var(--emerald)}
+  .verdict b{color:var(--heading)}
+  .verdict .stamp{font-weight:700}
+  .verdict.fix .stamp{color:var(--rose)}
+  .verdict.ok .stamp{color:var(--emerald-d)}
+
+  .hint{margin-top:12px; font-size:11.5px; color:var(--muted); text-align:center}
+  kbd{font-family:var(--mono); font-size:10.5px; background:var(--surface2); border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; padding:1px 5px; color:var(--body)}
+  .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+
+  @media (prefers-reduced-motion: reduce){
+    .ck, .ans, .stage, .bar, .track, .scn button, .mscore{ transition:none !important }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="scn" id="scn" role="group" aria-label="Failure scenario">
+      <button data-s="a" aria-pressed="true">Retrieval miss</button>
+      <button data-s="b" aria-pressed="false">Hallucination</button>
+      <button data-s="c" aria-pressed="false">Wandering</button>
+      <button data-s="d" aria-pressed="false">All pass</button>
+    </div>
+    <div class="legend">
+      <span><i class="chip pass"></i> pass</span>
+      <span><i class="chip fail"></i> fail</span>
+      <span><i class="chip block"></i> can't judge yet</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: the example -->
+    <div class="panel">
+      <h3>One answered query</h3>
+      <div class="qrow"><span class="lab">Question</span><span id="q-text">How many days do I have to return an item for a refund?</span></div>
+      <div class="clab">Retrieved context</div>
+      <div class="ctx" id="ctx"></div>
+      <div class="ans" id="ans"><span class="lab">Generated answer</span><span id="ans-text"></span></div>
+    </div>
+
+    <!-- RIGHT: the metrics -->
+    <div class="panel" aria-label="Evaluation metrics">
+      <h3>The four core metrics</h3>
+      <div id="metrics"></div>
+    </div>
+  </div>
+
+  <div class="pipe" id="pipe" aria-hidden="true">
+    <span class="stage" id="st-retr"><i class="ico"></i>Retrieval</span>
+    <span class="arrow">&rsaquo;</span>
+    <span class="stage" id="st-gen"><i class="ico"></i>Generation</span>
+    <span class="arrow">&rsaquo;</span>
+    <span class="stage" id="st-ship"><i class="ico"></i>Answer</span>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+
+  <p class="hint">Toggle a scenario above, or use <kbd>&larr;</kbd> <kbd>&rarr;</kbd>. Each one fails on purpose so you can read <em>where</em> it broke.</p>
+  <p class="sr" aria-live="polite" id="srlive"></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // The four metrics, in pipeline order. edge = which failure surface they probe.
+  var METRICS = [
+    {key:"cp", name:"Context Precision", edge:"retr", edgeLabel:"Retrieval"},
+    {key:"cr", name:"Context Recall",    edge:"retr", edgeLabel:"Retrieval"},
+    {key:"fa", name:"Faithfulness",      edge:"gen",  edgeLabel:"Generation"},
+    {key:"ar", name:"Answer Relevance",  edge:"gen",  edgeLabel:"Generation"}
+  ];
+  var PASS = 0.6; // a score at/above this passes; "block" means we can't judge it yet
+
+  // Each scenario: the retrieved context, the answer, the four scores, and the verdict.
+  // A score of null = "blocked" (can't fairly judge generation when retrieval failed).
+  var SCEN = {
+    a: {
+      label:"Retrieval miss",
+      ctx:[
+        {t:"Standard shipping takes 3 to 5 business days; express arrives the next business day.", cls:"noise", tag:"off-topic"},
+        {t:"All electronics include a one-year limited warranty for manufacturing defects.", cls:"noise", tag:"off-topic"},
+        {t:"Shipping fees are non-refundable; final-sale items cannot be returned.", cls:"noise", tag:"near miss"},
+        {t:'"Refunds are accepted within 30 days of purchase..."  (never retrieved)', cls:"missing", tag:"the answer, missed"}
+      ],
+      ans:{t:"I couldn't find the return window in the provided documents.", cls:""},
+      scores:{cp:0.16, cr:0.08, fa:null, ar:null},
+      culprit:"cr",
+      stage:"retr",
+      verdict:["RETRIEVAL failure","The retriever never fetched the 30-day refund chunk, so <b>Context Recall</b> craters and generation has nothing to answer from. The generation metrics are greyed out: you cannot fairly judge an answer built on missing context. Do not touch the prompt. Fix <b>retrieval</b>: raise top-k, add hybrid search (Part 7) or a reranker (Part 8)."]
+    },
+    b: {
+      label:"Hallucination",
+      ctx:[
+        {t:"Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.", cls:"gold", tag:"golden chunk"},
+        {t:"To start a return, email support@example.com with your order number.", cls:"", tag:""}
+      ],
+      ans:{t:"You have <mark>60 days</mark> to return an item, and a <mark>20% restocking fee</mark> applies.", cls:"bad"},
+      scores:{cp:0.92, cr:0.95, fa:0.27, ar:0.86},
+      culprit:"fa",
+      stage:"gen",
+      verdict:["GENERATION failure","Retrieval did its job: the 30-day chunk is right there (<b>Context Recall</b> high). But the answer invents '60 days' and a restocking fee the context never states, so <b>Faithfulness</b> collapses. That is hallucination. Fix <b>generation</b>: tighten the grounding instruction, drop the temperature, or use a stronger model."]
+    },
+    c: {
+      label:"Wandering",
+      ctx:[
+        {t:"Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.", cls:"gold", tag:"golden chunk"},
+        {t:"Standard shipping takes 3 to 5 business days; express arrives the next business day.", cls:"", tag:""},
+        {t:"All electronics include a one-year limited warranty for manufacturing defects.", cls:"", tag:""}
+      ],
+      ans:{t:"Thanks for reaching out! Standard shipping takes 3 to 5 business days, and our electronics carry a one-year warranty. Our support team is always happy to help with your order.", cls:"bad"},
+      scores:{cp:0.90, cr:0.93, fa:0.95, ar:0.23},
+      culprit:"ar",
+      stage:"gen",
+      verdict:["GENERATION failure","Good context, and every claim it makes is grounded (<b>Faithfulness</b> high). But the answer talks about shipping and warranties and never states the 30-day window, so <b>Answer Relevance</b> tanks. It wandered. Fix <b>generation</b>: instruct the model to answer the question directly and concisely."]
+    },
+    d: {
+      label:"All pass",
+      ctx:[
+        {t:"Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.", cls:"gold", tag:"golden chunk"},
+        {t:"To start a return, email support@example.com with your order number.", cls:"", tag:""}
+      ],
+      ans:{t:"You have 30 days from the date of purchase to return an item for a refund, as long as it is unused and in its original packaging.", cls:"good"},
+      scores:{cp:0.95, cr:0.98, fa:0.97, ar:0.94},
+      culprit:null,
+      stage:"ship",
+      verdict:["PASS","Retrieval fetched the right chunk and ranked it high; the answer is faithful and on-point. Ship it, and add this case to your eval set so a future 'improvement' cannot silently break it."]
+    }
+  };
+  var ORDER = ["a","b","c","d"];
+
+  var ctxEl   = document.getElementById("ctx");
+  var ansT    = document.getElementById("ans-text");
+  var ansEl   = document.getElementById("ans");
+  var metEl   = document.getElementById("metrics");
+  var verdEl  = document.getElementById("verdict");
+  var srEl    = document.getElementById("srlive");
+  var reduce  = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var current = "a";
+
+  // Build the metric rows once.
+  var rows = {};
+  METRICS.forEach(function(m){
+    var row = document.createElement("div");
+    row.className = "metric";
+    row.innerHTML =
+      '<div class="mhead">'+
+        '<span class="mname">'+m.name+'<span class="culprit">root cause</span></span>'+
+        '<span class="medge '+m.edge+'">'+m.edgeLabel+'</span>'+
+        '<span class="mscore"></span>'+
+      '</div>'+
+      '<div class="track"><div class="bar"></div></div>';
+    metEl.appendChild(row);
+    rows[m.key] = {row:row, bar:row.querySelector(".bar"), score:row.querySelector(".mscore")};
+  });
+
+  function render(){
+    var s = SCEN[current];
+
+    // context cards
+    ctxEl.innerHTML = "";
+    s.ctx.forEach(function(c){
+      var d = document.createElement("div");
+      d.className = "ck" + (c.cls ? " "+c.cls : "");
+      d.innerHTML = '<span class="txt"></span>' + (c.tag ? '<span class="tag">'+c.tag+'</span>' : '');
+      d.querySelector(".txt").innerHTML = c.t;
+      ctxEl.appendChild(d);
+    });
+
+    // answer
+    ansT.innerHTML = s.ans.t;
+    ansEl.className = "ans" + (s.ans.cls ? " "+s.ans.cls : "");
+
+    // metrics
+    METRICS.forEach(function(m){
+      var r = rows[m.key];
+      var v = s.scores[m.key];
+      r.row.classList.remove("pass","fail","blocked","culprit-on");
+      if(v === null){
+        r.row.classList.add("blocked");
+        r.score.textContent = "n/a";
+      } else {
+        var pass = v >= PASS;
+        r.row.classList.add(pass ? "pass" : "fail");
+        r.score.textContent = v.toFixed(2);
+        var setW = function(){ r.bar.style.width = (v*100).toFixed(0) + "%"; };
+        if(reduce){ r.bar.style.transition = "none"; setW(); }
+        else { r.bar.style.width = "0%"; requestAnimationFrame(function(){ requestAnimationFrame(setW); }); }
+        if(m.key === s.culprit) r.row.classList.add("culprit-on");
+      }
+    });
+
+    // pipeline strip
+    ["st-retr","st-gen","st-ship"].forEach(function(id){
+      var el = document.getElementById(id);
+      el.classList.remove("on","ship");
+    });
+    if(s.stage === "retr") document.getElementById("st-retr").classList.add("on");
+    else if(s.stage === "gen") document.getElementById("st-gen").classList.add("on");
+    else if(s.stage === "ship") document.getElementById("st-ship").classList.add("ship");
+
+    // verdict
+    verdEl.className = "verdict " + (s.stage === "ship" ? "ok" : "fix");
+    verdEl.innerHTML = '<span class="stamp">' + s.verdict[0] + '.</span> ' + s.verdict[1];
+
+    // a11y announce
+    srEl.textContent = "Scenario " + s.label + ". " + s.verdict[0] + ". " +
+      verdEl.textContent.replace(s.verdict[0]+".", "");
+
+    // toggle buttons
+    Array.prototype.forEach.call(document.querySelectorAll("#scn button"), function(b){
+      b.setAttribute("aria-pressed", b.dataset.s === current ? "true" : "false");
+    });
+  }
+
+  document.querySelectorAll("#scn button").forEach(function(b){
+    b.addEventListener("click", function(){ current = b.dataset.s; render(); });
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    var i = ORDER.indexOf(current);
+    i = e.key === "ArrowRight" ? (i+1) % ORDER.length : (i-1+ORDER.length) % ORDER.length;
+    current = ORDER[i];
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

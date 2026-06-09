@@ -1,0 +1,223 @@
+---
+title: "Evaluating RAG"
+description: "How to replace vibes with numbers. Part 11 of a from-scratch series on Retrieval-Augmented Generation: the two failure surfaces of a RAG system, the core metrics that probe each one (context precision and recall, faithfulness, answer relevance), LLM-as-a-judge and its biases, the frameworks that automate it, how to build an evaluation set, and the disciplined loop that turns guessing into engineering."
+date: 2026-06-17
+tags: ["RAG", "Evaluation", "RAGAS", "LLM-as-a-judge", "Faithfulness", "LLM", "AI", "Retrieval"]
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*RAG from First Principles. Part 11 of the series.*
+
+## What you'll learn
+
+For ten parts we built a RAG system and then made it smarter: better chunking, hybrid search, reranking, advanced retrieval patterns, and finally architectures that can decide, retry, and reason. Every one of those changes raised the same quiet question, and we kept deferring it: how do you actually know it helped? This part answers it. You will learn to measure a RAG system with numbers instead of impressions, to split a wrong answer into the two places it can come from, retrieval or generation, and to locate which one broke so you fix the right thing. By the end you can say "this version is better than that one" and prove it.
+
+## Prerequisites
+
+Parts 1 through 10. Three matter most here: [Why RAG Exists](/essays/why-rag-exists) (Part 1), because faithfulness is just a number for the anti-hallucination promise we made there; [Retrieval Deep Dive](/essays/retrieval-deep-dive) (Part 7) and [Making Retrieval Smarter](/essays/making-retrieval-smarter) (Part 8), because the retrieval metrics below are how you tell whether top-k, hybrid search, and reranking were worth it. Keep the hand-built app from [Build Your First RAG](/essays/build-your-first-rag) (Part 6) in mind; we measure that exact pipeline. No new math, one short eval-loop sketch in Python.
+
+## The anti-pattern: evaluation by vibes
+
+Here is how almost every RAG system is judged in its first weeks of life. You build it, you type a few questions you happen to think of, you read the answers, you nod, "seems good," and you ship. That is **vibes-based evaluation**: assessing quality by spot-checking a handful of queries and trusting your gut. It feels responsible because you did look at the output. It is not.
+
+Vibes fail for three concrete reasons. They **hide regressions**: you change the chunk size to "obviously" improve things, your three test questions still look fine, and you never notice that a different class of question quietly got worse. They give you **no way to compare**: when version A and version B both "seem good," you have nothing to choose between them but taste, and taste does not survive a disagreement with a colleague. And they **cannot justify complexity**: the whole discipline of this series has been "measure before adding complexity, add a lever only where failure analysis demands it." That sentence is empty without measurement. You cannot earn the right to add a reranker, or a full agent from Part 10, if you cannot show the number it moved.
+
+Evaluation replaces the nod with a score, and a score with a delta. By the end of this part you will be able to answer "is it good?" with a number, and the more useful question, "where is it broken?", with a pointer to the exact stage that needs work.
+
+## Why evaluating RAG is uniquely hard
+
+If evaluation were easy we would already be doing it. It is worth being honest about why a RAG system resists measurement, because each difficulty shapes the solution.
+
+**There is no single ground truth.** For most real questions there are many correct answers, phrased many valid ways. "You have 30 days to return an item" and "Refunds are accepted within a month of purchase" are both right. So the obvious idea, compare the answer to a reference string and check they match, is useless: **exact match** (a metric that scores 1 only if the output equals the reference word for word) gives a 0 to a perfectly good paraphrase. Meaning, not surface text, is what we need to score.
+
+**There are two failure surfaces.** This is the central idea of the whole part, so hold onto it. When a RAG answer is wrong, the fault lives in exactly one of two places. Either retrieval failed (the system never fetched the context that holds the answer), or generation failed (the right context was sitting in the prompt and the model still answered wrong). These are different bugs with different fixes, and a single "the answer was bad" verdict cannot tell them apart.
+
+**"Good" is subjective and multi-dimensional.** A good answer is correct, but it is also complete, relevant, and appropriately worded. An answer can be perfectly faithful to the documents and still unhelpful because it buried the one fact you wanted. Quality is a blend, and you have to decide which strands of it you are measuring.
+
+**It is a pipeline, so errors compound.** Retrieval feeds generation, and a single end-to-end "quality" score smears the two together. If your one number is 6 out of 10, you have learned almost nothing actionable: you do not know whether to touch the retriever or the prompt.
+
+The last two difficulties point straight at the solution. Because the failure can be in retrieval or in generation, and because a blended score hides which, you evaluate **component by component**: retrieval on its own metrics, generation on its own metrics, and the system end to end. Measure the halves separately and the failure surface reveals itself.
+
+## The core metrics
+
+Almost every modern RAG metric is, at heart, a comparison between two of just three things: the **question** the user asked, the **context** retrieval fetched, and the **answer** the model generated. Lay those three out as a triangle and each metric is one edge.
+
+<Diagram number={1} caption="The three things a RAG metric can compare, and which edge each metric lives on. Context precision and recall sit on the retrieval edge, scoring the context (recall is judged against a reference answer or golden chunks). Faithfulness checks the answer against the context, and answer relevance checks the answer against the question; both are generation edges. Answer correctness, when you have a reference, compares the answer to a known-good one.">
+  <img src="/essays/evaluating-rag/part11-metrics-map.svg" alt="A triangle with three labelled nodes: QUESTION at the top, CONTEXT at the bottom left, and ANSWER at the bottom right. The edge between question and context is labelled the retrieval edge and carries two metrics, Context Precision (are the relevant chunks ranked on top) and Context Recall (did we fetch all the info we needed). The edge between context and answer is a generation edge labelled Faithfulness (is every claim in the answer supported by the context). The edge between question and answer is a generation edge labelled Answer Relevance (does the answer address the question without wandering). A dashed optional node below the answer shows Answer Correctness, comparing the answer to a reference answer." class="w-full rounded-lg" />
+</Diagram>
+
+### Retrieval metrics
+
+These two live on the retrieval edge and judge the context, before generation ever runs.
+
+**Context precision** is the signal-to-noise of what you retrieved: of the chunks you pulled back, how many are actually relevant, and are the relevant ones ranked near the top? A retriever that returns one perfect chunk and four irrelevant ones has poor precision, and it makes generation work harder by burying the answer in distraction (remember "lost in the middle" from Part 7). In practice it is computed in a ranking-aware way, rewarding relevant chunks for appearing early, with the relevance of each chunk judged by a person, a label, or, increasingly, an LLM.
+
+**Context recall** asks the opposite, and it is the more important of the two for diagnosis: of the information needed to answer the question, how much did we actually retrieve? Did we miss something essential? Recall is the metric that catches a retrieval that came back empty-handed, the failure no amount of prompt engineering can repair. It ties directly to the levers of Parts 7 and 8: too small a top-k, or pure lexical search on a semantic query, or no reranking, and recall drops because the chunk that holds the answer never made the cut. Computing recall needs a notion of what the answer required, which is why it is usually measured against a reference answer or a set of known-relevant "golden" chunks.
+
+### Generation metrics
+
+These judge the answer, given the context. They only make sense once retrieval has done its job; an answer built on missing context is not the generator's fault.
+
+**Faithfulness**, also called **groundedness**, is the anti-hallucination metric, and it is the direct descendant of the promise from Part 1. It asks: is every claim in the answer actually supported by the retrieved context? An answer is faithful if you can trace each thing it asserts back to a chunk that was in the prompt. The usual recipe is to break the answer into atomic claims and check each one against the context (a small entailment test, sometimes called **NLI**, natural language inference: does the context entail this claim?), then score the fraction that hold up. A confident answer that invents a fact the documents never mention scores low here, exactly as it should.
+
+**Answer relevance** asks whether the answer actually addresses the question, without wandering off or padding itself with things you did not ask for. Note that it measures relevance, not correctness: an answer can be perfectly grounded in the context and still score low here because it talked about shipping when you asked about refunds. A clever way to estimate it without a reference is to have a model generate questions from the answer and measure how close those land to the original question; an answer that addresses the real question produces questions that look like it.
+
+**Answer correctness** is the one metric that needs a reference. When you have a known-good answer to compare against, correctness measures how well the generated answer matches it in substance, typically blending an overlap of facts with a semantic-similarity check so paraphrases still count. It is the closest thing to a single "did it get the right answer" grade, and you can only compute it where you have done the work to write down the right answer.
+
+### From metrics to a diagnosis
+
+Here is where the two failure surfaces turn the metrics into a tool instead of a report card. Read them in pipeline order and they localize the bug:
+
+- **Low context recall means a retrieval problem.** The answer never reached the model. No prompt change can fix it; go work on the retriever (chunking, embeddings, top-k, hybrid search, reranking).
+- **High recall but low faithfulness means a generation problem.** The right context was there and the model still made something up. Leave the retriever alone; fix the prompt, lower the temperature, or use a stronger model.
+- **High recall, faithful, but low answer relevance means generation wandered.** It stayed grounded but never answered the question. Again a generation fix: tell the model to answer directly.
+
+This diagnostic loop is the single most valuable thing in this part. The widget below walks one answered question, the same store-policy example, through four scenarios: toggle between them and watch which metric lights up and which half of the pipeline it indicts.
+
+<Diagram number={2} caption="One answered query, four ways it can go. Toggle the scenarios: a retrieval miss craters context recall and greys out the generation metrics (you cannot judge an answer built on missing context); a hallucination keeps recall high but collapses faithfulness; a wandering answer stays faithful but fails answer relevance; and a clean pass lights everything green. The failing metric names the half of the pipeline to fix.">
+  <IframeFigure
+    src="/essays/evaluating-rag/part11-diagnose-failure.html"
+    title="Interactive RAG failure diagnoser: a single question, its retrieved context, and the generated answer shown beside the four core metrics (context precision, context recall, faithfulness, answer relevance). A scenario toggle switches between a retrieval miss (low context recall, generation metrics blocked, verdict fix retrieval), a hallucinated answer (high recall, low faithfulness, verdict fix generation), a wandering answer (faithful but low answer relevance, verdict fix generation), and a clean pass (all metrics green, verdict ship it). The failing metric is highlighted and a pipeline strip names the stage to fix."
+    height={900}
+  />
+</Diagram>
+
+That is the engine of evaluation: not a grade, but a pointer at the thing to change.
+
+## Measuring at scale: LLM-as-a-judge
+
+The metrics above keep saying "judged by a person, or by a model." A person does not scale to thousands of test cases on every commit, and exact-string comparison cannot handle the many-valid-phrasings problem. The pragmatic answer the field settled on is **LLM-as-a-judge**: use a capable language model as the grader. You hand it a question, the context, and the answer, give it a rubric ("is every claim in the answer supported by the context? rate 0 to 1 and explain"), and read back a structured judgment.
+
+It is used because it scales cheaply and, unlike word-overlap metrics, it understands meaning, so a correct paraphrase passes and a fluent-but-wrong answer does not. Carefully built judges correlate reasonably well with human raters, which is what makes them a usable proxy. Nearly every framework in the next section runs an LLM judge under the hood.
+
+But a judge is a model, and models have biases. Treat its scores with the same suspicion you would treat any measurement instrument you had not calibrated. The well-documented failure modes include:
+
+- **Verbosity bias**: judges tend to prefer longer, more elaborate answers even when the extra words add nothing.
+- **Position bias**: when comparing two answers, a judge often favors whichever it sees first. The mitigation is to run both orderings and only count a win that survives the swap.
+- **Self-preference bias**: a judge tends to rate text that resembles its own style more highly. Frame it carefully, the evidence points to a preference for familiar-looking text rather than literal self-recognition, but the practical caution stands: do not let a model be the sole judge of its own family's output.
+
+On top of the biases, judges are not perfectly consistent: the same input can score slightly differently across runs, even at temperature zero, so a single judged number has noise in it. And this list is representative, not exhaustive; new biases and mitigations are an active research area. The discipline that keeps all of this honest is to **validate the judge against humans**: label a sample of cases by hand, then measure how well the judge agrees with you (a chance-corrected agreement score is better than raw percentage here). A judge you have not checked against human labels is a number you have not earned. Re-check it whenever you change the judge model.
+
+It is worth saying why the old lexical metrics are not the answer here. **BLEU** (built for machine translation, measuring n-gram precision against a reference) and **ROUGE** (built for summarization, measuring n-gram recall) score surface word overlap with a reference string. That is not the same as meaning or grounding: a wrong answer that reuses the reference's words can score well, a right answer phrased differently scores badly, and crucially, neither one ever looks at whether the answer is supported by the retrieved context. For RAG, where grounding is the entire game, surface overlap measures the wrong thing.
+
+## Evaluation frameworks
+
+You do not have to wire all of this by hand. A small ecosystem of tools packages the metrics, runs the judges, and gives you dashboards and run-to-run comparisons. A snapshot of the landscape as of writing:
+
+- **RAGAS** is the open-source Python library most associated with RAG metrics specifically: context precision and recall, faithfulness, answer (response) relevance, and synthetic test-set generation, mostly LLM-as-judge underneath.
+- **TruLens** centers on the "RAG triad", its own naming for context relevance, groundedness, and answer relevance, with tracing to inspect each step.
+- **DeepEval** offers a large, Pytest-style metric library so you can write eval assertions like unit tests.
+- **Arize Phoenix** and **LangSmith** lean toward observability: tracing live runs, building datasets from real traffic, and attaching evaluators to them. The big cloud platforms have their own RAG-evaluation offerings as well.
+
+A blunt freshness caveat, because it matters: this space moves very fast, and I have a knowledge cutoff. Tool names, metric names, licenses, and APIs all churn between releases (RAGAS alone has renamed its metrics more than once). Two specific traps. First, the vocabularies are not interchangeable: TruLens "groundedness" is RAGAS "faithfulness," but "context relevance" is not exactly "context precision," so a score from one framework is not comparable to a same-sounding score from another. Second, pin a version before you build on any of these, and verify the current metric definitions against the live docs rather than trusting this paragraph. Treat the list as a map of the territory, not a spec.
+
+## You need a dataset: the evaluation set
+
+Every metric so far quietly assumed something to measure against. That something is an **evaluation set** (also called a test set): a curated collection of representative questions, ideally each paired with a reference answer and the **golden chunks**, the specific pieces of your corpus that genuinely answer it. The reference answer is your **ground truth**, the known-correct target. With those labels you can compute recall (did we fetch the golden chunks?), correctness (did we match the reference?), and the rest.
+
+Your evaluation is only ever as trustworthy as this set. An unrepresentative set gives confident, misleading scores: optimize against easy questions and you will happily ship a system that falls apart on the hard ones it was never tested on. So build the set deliberately:
+
+- **Cover the real distribution.** Include easy single-fact lookups, hard multi-part questions, and multi-hop questions that need several chunks stitched together. Critically, include **out-of-scope questions that should be refused**, the battery-life question against a policy-only corpus. A system that always answers is not good; it is reckless, and only an eval set with unanswerable cases will catch it.
+- **Hand-curate from reality.** The best questions are the ones real users actually ask. Mine your support queue, your logs, your own list of "things it got wrong last week." A small set of fifty real, painful cases beats a thousand synthetic ones.
+- **Bootstrap with synthetic generation, then review.** You can grow a set faster with **synthetic data generation**: point an LLM at a chunk of your own docs and ask it to write a question that chunk answers, plus the reference answer, which hands you the golden chunk for free. RAGAS and others automate a richer version of this. But the non-negotiable step is human review: an LLM left alone will write questions that sound like documentation, not like your users, so a person keeps the good ones and throws out the rest. Generate to scale, review to trust.
+
+## Human-in-the-loop and online evaluation
+
+Everything so far is **offline evaluation**: running your system against a fixed, labeled set before you ship, in CI, reproducibly. Offline is where you make like-for-like comparisons and catch regressions. But a fixed set, however good, cannot anticipate the messy, novel, slightly adversarial things real users will type. That is the job of **online evaluation**: measuring quality on live production traffic.
+
+The two are complements. Online evaluation leans on reference-free metrics (you have no ground truth for a brand-new question, but you can still score faithfulness and relevance) and, more powerfully, on user signals. Some are explicit: thumbs up and down, star ratings, high-signal but sparse. Most are implicit and have to be read in aggregate: a user who immediately rephrases the same question, or abandons the session, is telling you the answer missed, while a user who copies the answer out probably got what they needed. None of these is reliable alone; together, at scale, they are a live quality gauge.
+
+Humans stay in this loop too, in three roles: spot-checking production answers, doing expert annotation on hard cases, and, as above, providing the labels that validate your automated judge. And when you want to know whether a change really helped real users rather than just your test set, you **A/B test** it: ship the new version to a fraction of traffic and compare the two on your live metrics.
+
+All of this exists to power one disciplined loop, the thing the entire series has been pointing at. It is the difference between engineering and guessing.
+
+<Diagram number={3} caption="The improvement loop. Build a stable eval set, measure a baseline, change exactly one thing, re-measure on the same set, and keep the change only if it beat the baseline or revert it if not. Offline evaluation (a fixed set, in CI) feeds the measurements; online evaluation (live traffic, user signals, A/B tests) validates kept changes and feeds new failures back into the set.">
+  <img src="/essays/evaluating-rag/part11-improvement-loop.svg" alt="A flow diagram of a cycle. Four cards left to right: Build the eval set, Measure a baseline, Change ONE thing (highlighted), Re-measure on the same set, leading into a decision diamond Beat the baseline? A yes branch goes up to a KEEP: new baseline box; a no branch and an amber return arc both loop back to Change ONE thing, labelled then change the next one thing. Below, two panels: OFFLINE before you ship (fixed golden plus synthetic set, reproducible, runs in CI, like-for-like A/B) and ONLINE in production (live traffic, reference-free metrics, thumbs up/down plus implicit signals, A/B tests, fold new failures back into the set), with dashed arrows feeding the loop." class="w-full rounded-lg" />
+</Diagram>
+
+The loop is simple to state and hard to hold to: **build an eval set, measure a baseline, change one thing, re-measure, keep it if it improves, revert it if it does not.** Two parts of that sentence do all the work. "Change one thing" is what lets you attribute the result; change three things at once and you will never know which helped. And "keep it if it improves" means the only number that matters is the delta against your last known-good baseline. A faithfulness of 0.82 in isolation is meaningless. A faithfulness that went from 0.82 to 0.88 because you added a reranker, on the same set, is a decision you can defend.
+
+{/* From experience: replace the story below with a real one of your own. The brief's [INSERT YOUR OWN STORY HERE] placeholder lives here, intentionally kept out of the shipped prose per the no-raw-placeholder convention. */}
+
+> 💡 **From experience** The first time an eval set really earned its keep for me, it did so by humiliating me. I had a change I was certain about, a richer prompt that "obviously" made answers better, and on my five favorite test questions it clearly did. I almost shipped it on the spot. Running it against the full set first, mostly out of habit, faithfulness dropped several points: the friendlier prompt had quietly given the model permission to embellish, and it was now adding helpful-sounding details the documents never contained. My "obvious improvement" was a regression in the one metric that mattered most for that product. I reverted it, and I stopped trusting changes that had only been tested on the questions I happened to like.
+
+## A small eval loop
+
+To make this concrete, here is the shape of an offline eval loop over the Part 6 app. It is deliberately tiny, not a framework: a handful of cases, each with its golden chunk and a reference answer, scored on two metrics, context recall (retrieval) and a faithfulness check (generation). The full runnable file is [`rag_eval.py`](/essays/evaluating-rag/rag_eval.py); it uses only the standard library so it runs with no API key, with a transparent fallback standing in for the LLM judge.
+
+```python
+# input: a few labelled cases, each with the "golden" chunk that answers it
+EVAL_SET = [
+    {"q": "How many days do I have to return an item for a refund?",
+     "golden": ["doc_0"],
+     "answer": "You have 30 days from purchase to return an item..."},      # faithful
+    {"q": "How do I start a return?",
+     "golden": ["doc_1"],
+     "answer": "Call our hotline at 1-800-RETURNS for an instant refund."},  # invented
+    # ... plus a retrieval-miss case and an out-of-scope case
+]
+
+# code: score each case on the two failure surfaces, then diagnose
+for case in EVAL_SET:
+    retrieved = retrieve(case["q"], k=3)                  # your Part 6 retriever
+    context   = "\n".join(d["text"] for d in retrieved)  # the chunks, as one string
+    recall = context_recall(case["golden"], retrieved)   # RETRIEVAL: got the golden chunk?
+    faith  = judge_faithfulness(case["q"], context, case["answer"])   # GENERATION: grounded?
+    refused      = "don't know" in case["answer"].lower()
+    out_of_scope = not case["golden"]
+    print(case["q"], recall, faith, diagnose(recall, faith, refused, out_of_scope))
+```
+
+Running the full file prints a small score table, and the table, not any single number, is the point:
+
+```text
+# expected output (deterministic)
+question                                        recall   faith   verdict
+How many days do I have to return an item for     1.00    1.00   pass
+How do I start a return?                          1.00    0.00   FIX generation (faithfulness)
+Will you repair my earbuds if they stop workin    0.00    1.00   FIX retrieval
+What is the battery life of the X1 wireless ea    n/a     1.00   correct refusal
+```
+
+Look at the last two rows. They produce the identical answer, "I don't know," and to a vibes check they are indistinguishable. But context recall pulls them apart: the battery-life question is a correct refusal, because nothing in the corpus could answer it, while the earbud-repair question is a retrieval miss, because the warranty chunk that does answer it was in the corpus and lexical search simply failed to find it (precisely the dense-versus-sparse gap from Part 7). That distinction, invisible to the eye, decides whether you touch the retriever or leave it alone. It is the entire reason to measure. (A real harness would add answer relevance and correctness; two metrics are enough to show the shape, and remember that judge APIs and libraries move fast.)
+
+## Recap and forward
+
+You can now do the thing the whole series has quietly depended on. You can put a number on quality, you can split a failure into retrieval or generation and point at the half that broke, and you can improve a system methodically, one measured change at a time, instead of by feel. Vibes are out; deltas are in.
+
+There is one frontier left. We have made the system smart (Parts 6 through 10) and we have made it measurable (this part). What remains is making it survive contact with the real world: latency and cost under load, scaling the index, monitoring quality in production, and the security questions that come with putting a retrieval system in front of users. That is where we finish.
+
+## Key takeaways
+
+- **Vibes do not scale.** Spot-checking a few queries hides regressions, cannot compare two versions, and cannot justify added complexity. Replace it with numbers, and then with deltas against a baseline.
+- **A wrong answer has exactly two sources: retrieval or generation.** The entire purpose of evaluation is to tell which, so you fix the right thing. Measure the two halves separately, not just end to end.
+- **The core metrics map onto that split.** Context precision and recall judge retrieval; faithfulness and answer relevance judge generation; answer correctness needs a reference. Low recall points at the retriever; high recall with low faithfulness points at the prompt or model.
+- **LLM-as-a-judge is how you measure at scale, but it is biased** (verbosity, position, self-preference) and inconsistent, so validate it against human labels before you trust it. Lexical metrics like BLEU and ROUGE miss meaning and grounding entirely.
+- **Your evaluation is only as good as your evaluation set.** Cover the real distribution, including out-of-scope questions that should be refused; bootstrap with synthetic generation but always review by hand.
+- **The loop is the deliverable:** build an eval set, measure a baseline, change one thing, re-measure, keep or revert. This field moves fast, so treat every named tool and metric here as a snapshot and verify the current state.
+
+## Glossary
+
+- **Evaluation set (test set)**: a curated collection of representative questions used to measure a system, ideally with reference answers and the relevant golden chunks for each.
+- **Ground truth**: the known-correct answer (or known-relevant chunks) for a test question, the target you measure against.
+- **Golden chunks**: the specific pieces of the corpus that genuinely answer a given question; used to measure whether retrieval fetched what it needed.
+- **Context precision**: a retrieval metric, the signal-to-noise of the retrieved set, rewarding relevant chunks that are ranked near the top.
+- **Context recall**: a retrieval metric, how much of the information needed to answer was actually retrieved; the one that catches a retriever that missed the answer.
+- **Faithfulness (groundedness)**: a generation metric, whether every claim in the answer is supported by the retrieved context; the anti-hallucination measure.
+- **Answer relevance**: a generation metric, whether the answer actually addresses the question, without wandering or padding; measures relevance, not correctness.
+- **Answer correctness**: how well the answer matches a reference answer in substance; the one core metric that requires ground truth.
+- **LLM-as-a-judge**: using a capable language model as an automated grader of answers or context against a rubric, the scalable scoring engine behind most eval frameworks.
+- **Judge bias**: the systematic errors of an LLM judge, including preferring longer answers (verbosity), favoring whichever candidate it sees first (position), and rating text like its own more highly (self-preference).
+- **NLI (natural language inference)**: checking whether one text entails another; used in faithfulness to test whether the context supports a claim.
+- **BLEU / ROUGE**: older lexical metrics scoring n-gram overlap with a reference (BLEU precision, for translation; ROUGE recall, for summarization); weak for RAG because surface overlap is not meaning or grounding.
+- **RAGAS**: an open-source Python library of RAG-specific evaluation metrics (context precision and recall, faithfulness, answer relevance) plus synthetic test-set generation.
+- **Synthetic data generation**: using an LLM to draft question-and-answer pairs from your own documents to bootstrap an evaluation set, followed by human review.
+- **Offline vs online evaluation**: offline runs against a fixed, labeled set before shipping (reproducible, used in CI); online measures quality on live production traffic using reference-free metrics and user signals.
+- **A/B testing**: shipping a change to a fraction of traffic and comparing the two versions on live metrics to confirm an improvement holds with real users.
+
+---
+
+**Next up, Part 12: RAG in Production.** The system is smart and now it is measurable. The last step is keeping it alive under real load: latency, cost, scaling, monitoring, and security. We tie the whole series together.
