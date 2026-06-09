@@ -1,6 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
+import EssayRow from '../../components/EssayRow.astro';
 
 const essays = (await getCollection('essays', ({ data }) => !data.draft && !data.isTranslation))
   .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
@@ -11,19 +12,14 @@ const essays = (await getCollection('essays', ({ data }) => !data.draft && !data
     <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
       <a href="/" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors mb-12 inline-block">&larr; back</a>
 
-      <h1 class="text-2xl font-semibold text-zinc-900 mb-10">Essays</h1>
+      <h1 class="text-2xl font-semibold text-zinc-900 mb-1">Essays</h1>
+      <p class="text-sm text-zinc-400 mb-10">{essays.length} essays · available in English &amp; Türkçe</p>
 
-      <div class="space-y-8">
-        {essays.map(essay => (
-          <a href={`/essays/${essay.slug}`} class="block group">
-            <div class="flex items-baseline justify-between gap-4 mb-1">
-              <h2 class="text-[15px] text-zinc-900 font-medium group-hover:text-emerald-600 transition-colors">{essay.data.title}</h2>
-              <span class="text-[11px] text-zinc-400 font-mono shrink-0">{essay.data.date.toISOString().slice(0, 10)}</span>
-            </div>
-            <p class="text-[13px] text-zinc-500 leading-relaxed">{essay.data.description}</p>
-          </a>
+      <ul class="border-t border-zinc-100">
+        {essays.map((essay, i) => (
+          <EssayRow essay={essay} featured={i === 0} />
         ))}
-      </div>
+      </ul>
     </div>
   </div>
 </Layout>
