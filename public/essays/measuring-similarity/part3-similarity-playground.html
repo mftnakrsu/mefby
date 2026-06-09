@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Similarity Playground: cosine, dot product, Euclidean</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 3 flagship animation
+     Self-contained: no external resources, no web fonts, inline SVG only.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --radius-card: 14px;
+    --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 320ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .pg { max-width: 900px; margin: 0 auto; }
+
+  .pg-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 16px; }
+  .pg-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .pg-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .pg-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  .pg-main { display: flex; flex-wrap: wrap; gap: 18px; align-items: stretch; }
+  .pg-canvas {
+    flex: 1 1 380px;
+    min-width: 300px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: radial-gradient(120% 100% at 50% -10%, var(--surface-1) 0%, var(--bg) 60%);
+    padding: 10px;
+  }
+  .pg-svg { display: block; width: 100%; height: auto; touch-action: none; }
+
+  /* vectors + handles */
+  .vecA { stroke: var(--violet); }
+  .vecB { stroke: var(--cyan); }
+  .handle { cursor: grab; }
+  .handle:active { cursor: grabbing; }
+  .handle .hit { fill: transparent; }
+  .handle .knob { stroke: #fff; stroke-width: 2; transition: r 140ms var(--ease); }
+  .handle.hA .knob { fill: var(--violet); }
+  .handle.hB .knob { fill: var(--cyan); }
+  .handle:hover .knob, .handle:focus-visible .knob { r: 10; }
+  .handle:focus-visible { outline: none; }
+  .handle:focus-visible .ring { opacity: 1; }
+  .handle .ring { fill: none; stroke-width: 2; opacity: 0; stroke-dasharray: 3 3; }
+  .handle.hA .ring { stroke: var(--violet); }
+  .handle.hB .ring { stroke: var(--cyan); }
+  #unitCircle { opacity: 0; transition: opacity var(--dur) var(--ease); }
+  #unitCircle.on { opacity: 1; }
+
+  /* metrics panel */
+  .pg-panel { flex: 1 1 300px; min-width: 260px; display: flex; flex-direction: column; gap: 10px; }
+  .metric {
+    border: 1px solid var(--border); border-radius: 12px; background: #fff;
+    padding: 11px 14px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  }
+  .metric .m-label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .metric .m-val { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--heading); font-variant-numeric: tabular-nums; }
+  .metric.m-cos { border-color: color-mix(in srgb, var(--indigo) 35%, var(--border)); }
+  .metric.m-cos .m-label { color: var(--indigo-strong); }
+  .metric.m-cos .m-val { font-size: 22px; color: var(--indigo-strong); }
+  .metric.m-dot .m-label { color: #b45309; }
+  .metric.m-euc .m-label { color: #0f766e; }
+  /* when normalized, dot + cosine are highlighted as equal */
+  .converged.metric.m-cos, .converged.metric.m-dot {
+    border-color: var(--emerald);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--emerald) 16%, transparent);
+  }
+  .conv-note {
+    font-size: 12.5px; color: #047857; font-weight: 600;
+    background: color-mix(in srgb, var(--emerald) 9%, #fff);
+    border: 1px solid color-mix(in srgb, var(--emerald) 30%, var(--border));
+    border-radius: 10px; padding: 8px 11px; display: none;
+  }
+  .conv-note.on { display: block; }
+
+  .pg-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+  .pg-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease), color 160ms var(--ease), transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .pg-btn svg { width: 15px; height: 15px; }
+  .pg-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .pg-btn:active { transform: translateY(1px); }
+  .pg-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); border-color: var(--indigo); }
+  .pg-btn[aria-pressed="true"] { color: #fff; background: var(--emerald); border-color: var(--emerald); }
+  .pg-btn[aria-pressed="true"]:hover { background: #0ea371; border-color: #0ea371; }
+
+  .pg-hint { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .pg-hint kbd {
+    font-family: var(--mono); font-size: 11px; background: var(--surface-2);
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; color: var(--body);
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .handle .knob, #unitCircle, .metric { transition: none !important; }
+  }
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .pg-title { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+  <main class="pg" aria-label="Interactive vector similarity playground">
+    <header class="pg-head">
+      <span class="pg-eyebrow">RAG from First Principles &#183; Part 3</span>
+      <h1 class="pg-title">Similarity playground</h1>
+      <p class="pg-sub">Drag either vector's tip. Watch the four scores change.</p>
+    </header>
+
+    <div class="pg-main">
+      <!-- ===== canvas ===== -->
+      <div class="pg-canvas">
+        <svg class="pg-svg" id="svg" viewBox="0 0 420 420" role="application"
+             aria-label="Two vectors drawn from the origin on a grid; drag a tip to change a vector">
+          <defs>
+            <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+              <path d="M30 0 H0 V30" fill="none" stroke="#f1f5f9" stroke-width="1"/>
+            </pattern>
+            <marker id="pg-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M1,1 L9,5 L1,9" fill="none" stroke="#8b5cf6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+            <marker id="pg-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M1,1 L9,5 L1,9" fill="none" stroke="#06b6d4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="0" y="0" width="420" height="420" fill="url(#grid)"/>
+          <!-- axes -->
+          <line x1="210" y1="6" x2="210" y2="414" stroke="#cbd5e1" stroke-width="1.5"/>
+          <line x1="6" y1="210" x2="414" y2="210" stroke="#cbd5e1" stroke-width="1.5"/>
+
+          <!-- unit circle (shown when normalized) -->
+          <circle id="unitCircle" cx="210" cy="210" r="30" fill="none" stroke="#10b981" stroke-width="1.4" stroke-dasharray="4 4"/>
+
+          <!-- angle arc -->
+          <path id="arc" d="" fill="none" stroke="#6366f1" stroke-width="2.5"/>
+
+          <!-- vectors -->
+          <line id="lineA" class="vecA" x1="210" y1="210" x2="300" y2="90" stroke-width="3" marker-end="url(#pg-violet)"/>
+          <line id="lineB" class="vecB" x1="210" y1="210" x2="330" y2="270" stroke-width="3" marker-end="url(#pg-cyan)"/>
+
+          <!-- labels -->
+          <text id="lblA" x="300" y="80" font-size="12.5" font-weight="700" fill="#7c3aed" text-anchor="middle">A</text>
+          <text id="lblB" x="338" y="284" font-size="12.5" font-weight="700" fill="#0e7490" text-anchor="middle">B</text>
+
+          <!-- draggable handles (hit area + visible knob + focus ring) -->
+          <g id="handleA" class="handle hA" tabindex="0" role="button" aria-label="Vector A tip. Use arrow keys to move.">
+            <circle class="hit" cx="300" cy="90" r="18"/>
+            <circle class="ring" cx="300" cy="90" r="13"/>
+            <circle class="knob" cx="300" cy="90" r="7"/>
+          </g>
+          <g id="handleB" class="handle hB" tabindex="0" role="button" aria-label="Vector B tip. Use arrow keys to move.">
+            <circle class="hit" cx="330" cy="270" r="18"/>
+            <circle class="ring" cx="330" cy="270" r="13"/>
+            <circle class="knob" cx="330" cy="270" r="7"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- ===== metrics + controls ===== -->
+      <div class="pg-panel">
+        <div class="metric m-cos" id="rowCos">
+          <span class="m-label">Cosine similarity</span><span class="m-val" id="mCos">0.00</span>
+        </div>
+        <div class="metric m-dot" id="rowDot">
+          <span class="m-label">Dot product</span><span class="m-val" id="mDot">0.00</span>
+        </div>
+        <div class="metric m-euc">
+          <span class="m-label">Euclidean distance</span><span class="m-val" id="mEuc">0.00</span>
+        </div>
+        <div class="metric m-ang">
+          <span class="m-label">Angle</span><span class="m-val" id="mAng">0&#176;</span>
+        </div>
+
+        <div class="conv-note" id="convNote">Unit length, so dot product = cosine similarity.</div>
+
+        <div class="pg-controls">
+          <button class="pg-btn" id="btnNorm" type="button" aria-pressed="false">Normalize vectors</button>
+          <button class="pg-btn" id="btnReset" type="button" aria-label="Reset vectors">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            Reset
+          </button>
+        </div>
+
+        <p class="pg-hint">
+          Drag a tip, or <kbd>Tab</kbd> to a tip and use <kbd>&#8592;</kbd><kbd>&#8593;</kbd><kbd>&#8595;</kbd><kbd>&#8594;</kbd>.
+        </p>
+        <p class="sr-only" id="liveStatus" aria-live="polite"></p>
+      </div>
+    </div>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var OX = 210, OY = 210, SCALE = 30;       // origin + pixels-per-unit
+  var LIMIT = 6.6;                          // max |coord| in data units
+  var MIN_R = 0.4;                          // keep tips off the exact origin
+
+  var DEFAULT_A = { x: 3, y: 4 };
+  var DEFAULT_B = { x: 4, y: -2 };
+
+  var A = { x: DEFAULT_A.x, y: DEFAULT_A.y };
+  var B = { x: DEFAULT_B.x, y: DEFAULT_B.y };
+  var normalized = false;
+
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // DOM
+  var svg      = document.getElementById("svg");
+  var lineA    = document.getElementById("lineA");
+  var lineB    = document.getElementById("lineB");
+  var lblA     = document.getElementById("lblA");
+  var lblB     = document.getElementById("lblB");
+  var handleA  = document.getElementById("handleA");
+  var handleB  = document.getElementById("handleB");
+  var arc      = document.getElementById("arc");
+  var unitCircle = document.getElementById("unitCircle");
+  var mCos = document.getElementById("mCos");
+  var mDot = document.getElementById("mDot");
+  var mEuc = document.getElementById("mEuc");
+  var mAng = document.getElementById("mAng");
+  var rowCos = document.getElementById("rowCos");
+  var rowDot = document.getElementById("rowDot");
+  var convNote = document.getElementById("convNote");
+  var btnNorm = document.getElementById("btnNorm");
+  var btnReset = document.getElementById("btnReset");
+  var liveStatus = document.getElementById("liveStatus");
+
+  /* ---------- math helpers ---------- */
+  function mag(v) { return Math.sqrt(v.x * v.x + v.y * v.y); }
+  function unit(v) { var m = mag(v) || 1; return { x: v.x / m, y: v.y / m }; }
+  function disp(v) { return normalized ? unit(v) : v; }   // displayed/measured vector
+  function toPx(v) { return { x: OX + v.x * SCALE, y: OY - v.y * SCALE }; }
+
+  /* ---------- render ---------- */
+  function arcPath(va, vb) {
+    var aA = Math.atan2(va.y, va.x);
+    var aB = Math.atan2(vb.y, vb.x);
+    var d = aB - aA;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    var r = 34, N = 22, out = "";
+    for (var i = 0; i <= N; i++) {
+      var ang = aA + d * i / N;
+      var px = OX + Math.cos(ang) * r;
+      var py = OY - Math.sin(ang) * r;
+      out += (i ? "L" : "M") + px.toFixed(1) + " " + py.toFixed(1) + " ";
+    }
+    return out.trim();
+  }
+
+  function render() {
+    var dA = disp(A), dB = disp(B);
+    var pA = toPx(dA), pB = toPx(dB);
+
+    lineA.setAttribute("x2", pA.x); lineA.setAttribute("y2", pA.y);
+    lineB.setAttribute("x2", pB.x); lineB.setAttribute("y2", pB.y);
+
+    setHandle(handleA, pA);
+    setHandle(handleB, pB);
+
+    // labels offset just beyond each tip
+    placeLabel(lblA, dA, pA);
+    placeLabel(lblB, dB, pB);
+
+    arc.setAttribute("d", arcPath(dA, dB));
+
+    // metrics on the displayed vectors
+    var dot = dA.x * dB.x + dA.y * dB.y;
+    var mA = mag(dA), mB = mag(dB);
+    var cos = (mA > 1e-9 && mB > 1e-9) ? dot / (mA * mB) : 0;
+    cos = Math.max(-1, Math.min(1, cos));
+    var euc = Math.sqrt((dA.x - dB.x) * (dA.x - dB.x) + (dA.y - dB.y) * (dA.y - dB.y));
+    var deg = Math.acos(cos) * 180 / Math.PI;
+
+    mCos.textContent = cos.toFixed(2);
+    mDot.textContent = dot.toFixed(2);
+    mEuc.textContent = euc.toFixed(2);
+    mAng.textContent = Math.round(deg) + "°";
+
+    var conv = normalized;
+    convNote.classList.toggle("on", conv);
+    rowCos.classList.toggle("converged", conv);
+    rowDot.classList.toggle("converged", conv);
+
+    last = { cos: cos, dot: dot, euc: euc, deg: deg, conv: conv };
+  }
+
+  // The aria-live region is announced on a debounce (and flushed on
+  // pointerup / arrow keyup), never on every drag frame, so a polite
+  // screen-reader queue isn't flooded with dozens of stale sentences.
+  var last = { cos: 0, dot: 0, euc: 0, deg: 0, conv: false };
+  var annTimer = null;
+  function announce() {
+    if (annTimer) { window.clearTimeout(annTimer); annTimer = null; }
+    liveStatus.textContent =
+      "Cosine " + last.cos.toFixed(2) + ", dot product " + last.dot.toFixed(2) +
+      ", Euclidean distance " + last.euc.toFixed(2) + ", angle " + Math.round(last.deg) + " degrees" +
+      (last.conv ? ". Vectors normalized; dot product equals cosine." : "");
+  }
+  function scheduleAnnounce() {
+    if (annTimer) window.clearTimeout(annTimer);
+    annTimer = window.setTimeout(function () { annTimer = null; announce(); }, 260);
+  }
+
+  function setHandle(g, p) {
+    var cs = g.querySelectorAll("circle");
+    for (var i = 0; i < cs.length; i++) { cs[i].setAttribute("cx", p.x); cs[i].setAttribute("cy", p.y); }
+  }
+  function placeLabel(t, v, p) {
+    var m = mag(v) || 1;
+    t.setAttribute("x", (p.x + (v.x / m) * 16).toFixed(1));
+    t.setAttribute("y", (p.y - (v.y / m) * 16 + 4).toFixed(1));
+  }
+
+  /* ---------- pointer dragging ---------- */
+  function clientToData(evt) {
+    var r = svg.getBoundingClientRect();
+    var sx = r.width / 420, sy = r.height / 420;
+    var vbx = (evt.clientX - r.left) / sx;
+    var vby = (evt.clientY - r.top) / sy;
+    return { x: (vbx - OX) / SCALE, y: (OY - vby) / SCALE };
+  }
+  function clampData(v) {
+    var x = Math.max(-LIMIT, Math.min(LIMIT, v.x));
+    var y = Math.max(-LIMIT, Math.min(LIMIT, v.y));
+    var w = { x: x, y: y };
+    if (mag(w) < MIN_R) w = { x: MIN_R, y: 0 };     // never collapse to origin
+    return w;
+  }
+  function applyDrag(which, dataPt) {
+    var w = clampData(dataPt);
+    if (normalized) w = unit(w);                    // in normalized mode, direction only
+    if (which === "A") A = w; else B = w;
+    render();
+    scheduleAnnounce();
+  }
+
+  function makeDraggable(handle, which) {
+    handle.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add("dragging");
+    });
+    handle.addEventListener("pointermove", function (e) {
+      if (!handle.hasPointerCapture || !handle.hasPointerCapture(e.pointerId)) return;
+      applyDrag(which, clientToData(e));
+    });
+    function end(e) {
+      if (handle.hasPointerCapture && handle.hasPointerCapture(e.pointerId)) {
+        handle.releasePointerCapture(e.pointerId);
+      }
+      handle.classList.remove("dragging");
+      announce();   // flush the final value promptly when the drag ends
+    }
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+    handle.addEventListener("keyup", function (e) {
+      if (e.key && e.key.indexOf("Arrow") === 0) announce();   // flush after a nudge
+    });
+
+    // keyboard: arrow keys nudge the tip
+    handle.addEventListener("keydown", function (e) {
+      var step = 0.5, cur = (which === "A") ? A : B, nv = { x: cur.x, y: cur.y };
+      if (e.key === "ArrowLeft") nv.x -= step;
+      else if (e.key === "ArrowRight") nv.x += step;
+      else if (e.key === "ArrowUp") nv.y += step;
+      else if (e.key === "ArrowDown") nv.y -= step;
+      else return;
+      e.preventDefault();
+      applyDrag(which, nv);
+    });
+  }
+  makeDraggable(handleA, "A");
+  makeDraggable(handleB, "B");
+
+  /* ---------- normalize toggle (with a brief snap tween) ---------- */
+  function tweenTo(targetA, targetB, done) {
+    if (reduceMotion) { A = targetA; B = targetB; render(); if (done) done(); return; }
+    var startA = { x: A.x, y: A.y }, startB = { x: B.x, y: B.y };
+    var t0 = null, DUR = 240;
+    function frame(ts) {
+      if (t0 === null) t0 = ts;
+      var k = Math.min(1, (ts - t0) / DUR);
+      var e = 1 - Math.pow(1 - k, 3);   // ease-out cubic
+      A = { x: startA.x + (targetA.x - startA.x) * e, y: startA.y + (targetA.y - startA.y) * e };
+      B = { x: startB.x + (targetB.x - startB.x) * e, y: startB.y + (targetB.y - startB.y) * e };
+      render();
+      if (k < 1) requestAnimationFrame(frame);
+      else if (done) done();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  btnNorm.addEventListener("click", function () {
+    normalized = !normalized;
+    btnNorm.setAttribute("aria-pressed", normalized ? "true" : "false");
+    unitCircle.classList.toggle("on", normalized);
+    if (normalized) {
+      tweenTo(unit(A), unit(B), announce);   // snap to unit length, then announce
+    } else {
+      render();
+      announce();
+    }
+  });
+
+  btnReset.addEventListener("click", function () {
+    normalized = false;
+    btnNorm.setAttribute("aria-pressed", "false");
+    unitCircle.classList.remove("on");
+    A = { x: DEFAULT_A.x, y: DEFAULT_A.y };
+    B = { x: DEFAULT_B.x, y: DEFAULT_B.y };
+    render();
+    announce();
+  });
+
+  /* ---------- init ---------- */
+  render();
+  announce();
+})();
+</script>
+</body>
+</html>
