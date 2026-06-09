@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The cost / latency / quality triangle, live</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 12 flagship interactive figure.
+     Self-contained: no external resources, no web fonts, no CDN.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --radius-card: 14px;
+    --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 420ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .co { max-width: 980px; margin: 0 auto; }
+
+  .co-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 14px; }
+  .co-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .co-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .co-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* controls */
+  .co-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; margin: 0 0 18px; }
+  .co-controls .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .co-modes { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 11px; padding: 3px; background: var(--surface-1); gap: 3px; }
+  .co-mode {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--muted);
+    background: transparent; border: none; border-radius: 8px; padding: 7px 14px; cursor: pointer;
+    transition: background-color 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .co-mode[aria-pressed="true"] { background: #fff; color: var(--heading); box-shadow: 0 1px 2px rgba(15,23,42,0.10); }
+  .co-mode[aria-pressed="true"] .pip { background: var(--indigo); border-color: var(--indigo); }
+  .co-mode .pip {
+    display: inline-block; width: 11px; height: 11px; border-radius: 4px; margin-right: 7px;
+    border: 1.5px solid var(--muted); background: transparent; vertical-align: -1px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease);
+  }
+  .co-mode:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); }
+  .co-reset {
+    font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted);
+    background: transparent; border: 1px solid var(--border); border-radius: 9px; padding: 7px 13px; cursor: pointer;
+    transition: color 160ms var(--ease), border-color 160ms var(--ease), background-color 160ms var(--ease);
+  }
+  .co-reset:hover { color: var(--heading); border-color: var(--muted); background: var(--surface-1); }
+  .co-reset:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); }
+
+  /* main split: stage bars + readout panel */
+  .co-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; align-items: start; }
+
+  .co-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px 18px; }
+  .co-card h2 {
+    font-size: 12px; font-weight: 700; margin: 0 0 14px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+  }
+
+  /* per-stage block: two bars */
+  .co-stage { margin: 0 0 16px; }
+  .co-stage:last-child { margin-bottom: 0; }
+  .co-stage-head { display: flex; align-items: center; gap: 7px; margin: 0 0 7px; }
+  .co-stage-head .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .co-stage-head .nm { font-size: 12.5px; font-weight: 700; color: var(--heading); }
+  .dot-embed  { background: var(--violet); }
+  .dot-search { background: var(--teal); }
+  .dot-rerank { background: var(--cyan); }
+  .dot-llm    { background: var(--indigo); }
+
+  .co-bar-line { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 9px; margin: 0 0 5px; }
+  .co-bar-line:last-child { margin-bottom: 0; }
+  .co-bar-tag { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); text-align: right; }
+  .co-track { position: relative; height: 16px; background: var(--surface-2); border-radius: 6px; overflow: visible; }
+  .co-fill {
+    position: absolute; top: 0; left: 0; bottom: 0; border-radius: 6px; min-width: 2px;
+    transition: width var(--dur) var(--ease);
+    will-change: width;
+  }
+  .fill-lat  { background: linear-gradient(90deg, rgba(99,102,241,0.55), var(--indigo)); }
+  .fill-cost { background: linear-gradient(90deg, rgba(139,92,246,0.45), var(--violet)); }
+  /* per-stage fill tints keyed to the stage dot for the latency bar */
+  .co-stage[data-k="embed"]  .fill-lat { background: linear-gradient(90deg, rgba(139,92,246,0.45), var(--violet)); }
+  .co-stage[data-k="search"] .fill-lat { background: linear-gradient(90deg, rgba(20,184,166,0.45), var(--teal)); }
+  .co-stage[data-k="rerank"] .fill-lat { background: linear-gradient(90deg, rgba(6,182,212,0.45), var(--cyan)); }
+  .co-stage[data-k="llm"]    .fill-lat { background: linear-gradient(90deg, rgba(99,102,241,0.55), var(--indigo)); }
+  .co-stage[data-k="embed"]  .fill-cost { background: linear-gradient(90deg, rgba(139,92,246,0.30), rgba(139,92,246,0.85)); }
+  .co-stage[data-k="search"] .fill-cost { background: linear-gradient(90deg, rgba(20,184,166,0.30), rgba(20,184,166,0.85)); }
+  .co-stage[data-k="rerank"] .fill-cost { background: linear-gradient(90deg, rgba(6,182,212,0.30), rgba(6,182,212,0.85)); }
+  .co-stage[data-k="llm"]    .fill-cost { background: linear-gradient(90deg, rgba(99,102,241,0.40), rgba(99,102,241,0.95)); }
+
+  /* baseline ghost marker */
+  .co-ghost {
+    position: absolute; top: -2px; bottom: -2px; width: 2px;
+    background: var(--muted); opacity: 0.45; border-radius: 2px;
+    transition: left var(--dur) var(--ease);
+  }
+  .co-bar-val { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--body); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 64px; text-align: right; }
+
+  .co-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 14px 0 0; font-size: 11px; color: var(--muted); }
+  .co-legend .it { display: inline-flex; align-items: center; gap: 6px; }
+  .co-legend .sw { width: 18px; height: 9px; border-radius: 3px; display: inline-block; }
+  .co-legend .sw.lat  { background: var(--indigo); }
+  .co-legend .sw.cost { background: var(--violet); }
+  .co-legend .sw.ghost { background: var(--muted); opacity: 0.45; width: 2px; height: 12px; }
+
+  /* readout panel */
+  .co-read { display: flex; flex-direction: column; gap: 0; }
+  .co-metric { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--border); }
+  .co-metric:first-of-type { padding-top: 0; }
+  .co-metric .k { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .co-metric .v { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--heading); font-variant-numeric: tabular-nums; }
+  .co-metric .v .u { font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+  .co-metric .sub { display: block; font-family: var(--sans); font-size: 10.5px; font-weight: 600; color: var(--muted); text-align: right; }
+
+  .co-cache {
+    margin: 12px 0 0; padding: 11px 12px; border-radius: var(--radius-chip);
+    border: 1px solid var(--border); background: #fff;
+    transition: border-color 200ms var(--ease), box-shadow 200ms var(--ease), background-color 200ms var(--ease);
+  }
+  .co-cache.on { border-color: var(--cyan); background: #ecfeff; box-shadow: 0 2px 10px rgba(6,182,212,0.14); }
+  .co-cache .ttl { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0 0 7px; }
+  .co-cache.on .ttl { color: #0e7490; }
+  .co-cache .pair { display: flex; justify-content: space-between; gap: 10px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--body); font-variant-numeric: tabular-nums; }
+  .co-cache .pair span:first-child { font-family: var(--sans); font-weight: 600; color: var(--muted); }
+  .co-cache.on .pair { color: #0e7490; }
+
+  /* quality bar */
+  .co-quality { margin: 14px 0 0; }
+  .co-quality .qrow { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 6px; }
+  .co-quality .qk { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .co-quality .qv { font-family: var(--mono); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .co-qtrack { position: relative; height: 12px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+  .co-qfill { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 6px; transition: width var(--dur) var(--ease), background-color var(--dur) var(--ease); }
+
+  .co-note { font-size: 12.5px; color: var(--muted); margin: 16px 0 0; min-height: 18px; line-height: 1.55; }
+  .co-note b { color: var(--body); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .co-fill, .co-ghost, .co-qfill, .co-cache { transition-duration: 1ms; }
+  }
+  @media (max-width: 720px) {
+    .co-grid { grid-template-columns: 1fr; }
+    .co-bar-val { min-width: 58px; }
+  }
+</style>
+</head>
+<body>
+  <main class="co" aria-label="Interactive cost, latency and quality optimizer for a RAG request">
+    <header class="co-head">
+      <span class="co-eyebrow">RAG from First Principles &#183; Part 12</span>
+      <h1 class="co-title">The cost / latency / quality triangle</h1>
+      <p class="co-sub">One RAG request, four stages, two bars each. Toggle the levers and watch a corner move.</p>
+    </header>
+
+    <div class="co-controls">
+      <span class="lbl">Optimizations</span>
+      <div class="co-modes" role="group" aria-label="Optimizations">
+        <button class="co-mode" id="tStream"  type="button" aria-pressed="false"><span class="pip" aria-hidden="true"></span>Streaming</button>
+        <button class="co-mode" id="tCache"   type="button" aria-pressed="false"><span class="pip" aria-hidden="true"></span>Semantic cache</button>
+        <button class="co-mode" id="tSmall"   type="button" aria-pressed="false"><span class="pip" aria-hidden="true"></span>Smaller model</button>
+        <button class="co-mode" id="tTrim"    type="button" aria-pressed="false"><span class="pip" aria-hidden="true"></span>Trim context (lower top-k)</button>
+      </div>
+      <button class="co-reset" id="reset" type="button">Reset</button>
+    </div>
+
+    <div class="co-grid">
+      <section class="co-card" aria-label="Per-stage latency and cost bars">
+        <h2>Per request, by stage</h2>
+        <div id="stages"></div>
+        <div class="co-legend" aria-hidden="true">
+          <span class="it"><span class="sw lat"></span>latency</span>
+          <span class="it"><span class="sw cost"></span>cost</span>
+          <span class="it"><span class="sw ghost"></span>baseline marker</span>
+        </div>
+      </section>
+
+      <aside class="co-card co-read" aria-label="Live readouts">
+        <h2>Readout</h2>
+        <div class="co-metric">
+          <span class="k">Latency / request</span>
+          <span class="v"><span id="rLat">2000</span><span class="u">ms</span></span>
+        </div>
+        <div class="co-metric">
+          <span class="k">First token</span>
+          <span class="v" style="text-align:right;"><span id="rFt">2000</span><span class="u">ms</span><span class="sub" id="rFtSub">&nbsp;</span></span>
+        </div>
+        <div class="co-metric">
+          <span class="k">Cost / request</span>
+          <span class="v"><span id="rCost">1.000</span><span class="u">cents</span></span>
+        </div>
+
+        <div class="co-cache" id="cacheBox">
+          <p class="ttl">With cache (avg, 35% hit)</p>
+          <div class="pair"><span>latency</span><span id="rCacheLat">2000 ms</span></div>
+          <div class="pair" style="margin-top:4px;"><span>cost</span><span id="rCacheCost">1.000 cents</span></div>
+        </div>
+
+        <div class="co-quality">
+          <div class="qrow">
+            <span class="qk">Answer quality</span>
+            <span class="qv" id="rQualV">100</span>
+          </div>
+          <div class="co-qtrack"><div class="co-qfill" id="qFill"></div></div>
+        </div>
+      </aside>
+    </div>
+
+    <p class="co-note" id="note" aria-live="polite"></p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- baseline pipeline (illustrative, hard-coded) ----------------------
+  // Each stage carries a latency (ms) and a cost (cents). The LLM generation
+  // stage dominates both, so the bars are scaled to its baseline.
+  var STAGES = [
+    { k: "embed",  name: "Embed query",    dotCls: "dot-embed",  lat: 40,   cost: 0.01 },
+    { k: "search", name: "Vector search",  dotCls: "dot-search", lat: 30,   cost: 0.00 },
+    { k: "rerank", name: "Rerank",         dotCls: "dot-rerank", lat: 130,  cost: 0.04 },
+    { k: "llm",    name: "LLM generation", dotCls: "dot-llm",    lat: 1800, cost: 0.95 }
+  ];
+
+  var LAT_MAX  = 1800;   // bars scale to the LLM baseline so it dwarfs the rest
+  var COST_MAX = 0.95;
+  var BASE_TOTAL_LAT  = 2000; // 40 + 30 + 130 + 1800
+  var BASE_TOTAL_COST = 1.00; // 0.01 + 0.00 + 0.04 + 0.95
+
+  var CACHE_HIT = 0.35;     // amortized hit rate
+  var CACHE_MISS = 0.65;
+  var CACHE_HIT_LAT = 6;    // ms to answer from cache
+  var STREAM_TAIL = 150;    // ms from first-token after the retrieval stages
+
+  // quality deltas (subtracted from 100 when active)
+  var Q = { stream: 0, cache: -5, small: -18, trim: -12 };
+
+  // one-line trade notes, ordered most impactful first when concatenated
+  var NOTES = {
+    small:  "Smaller model: latency and cost fall hard, but answer quality takes the biggest hit.",
+    trim:   "Trim context: fewer tokens in means cheaper, faster generation, at some recall risk.",
+    cache:  "Semantic cache: a 35% hit rate slashes average latency and cost, at a small staleness risk.",
+    stream: "Streaming: total work is unchanged, but the user sees the first token far sooner."
+  };
+
+  var state = { stream: false, cache: false, small: false, trim: false };
+
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- build the stage bars once -----------------------------------------
+  var stagesEl = document.getElementById("stages");
+  var rowRefs = {}; // k -> { latFill, latGhost, latVal, costFill, costGhost, costVal }
+
+  function fmtLat(ms) { return Math.round(ms) + " ms"; }
+
+  STAGES.forEach(function (s) {
+    var wrap = document.createElement("div");
+    wrap.className = "co-stage";
+    wrap.setAttribute("data-k", s.k);
+    wrap.innerHTML =
+      '<div class="co-stage-head"><span class="dot ' + s.dotCls + '"></span><span class="nm">' + s.name + '</span></div>' +
+      '<div class="co-bar-line">' +
+        '<span class="co-bar-tag">latency</span>' +
+        '<span class="co-track"><span class="co-fill fill-lat"></span><span class="co-ghost"></span></span>' +
+        '<span class="co-bar-val js-latval"></span>' +
+      '</div>' +
+      '<div class="co-bar-line">' +
+        '<span class="co-bar-tag">cost</span>' +
+        '<span class="co-track"><span class="co-fill fill-cost"></span><span class="co-ghost"></span></span>' +
+        '<span class="co-bar-val js-costval"></span>' +
+      '</div>';
+    stagesEl.appendChild(wrap);
+    var lines = wrap.querySelectorAll(".co-bar-line");
+    rowRefs[s.k] = {
+      latFill:  lines[0].querySelector(".co-fill"),
+      latGhost: lines[0].querySelector(".co-ghost"),
+      latVal:   lines[0].querySelector(".js-latval"),
+      costFill: lines[1].querySelector(".co-fill"),
+      costGhost:lines[1].querySelector(".co-ghost"),
+      costVal:  lines[1].querySelector(".js-costval")
+    };
+    // baseline ghost markers are fixed at the baseline value position
+    var latGhostPct  = Math.min(100, (s.lat / LAT_MAX) * 100);
+    var costGhostPct = Math.min(100, (s.cost / COST_MAX) * 100);
+    rowRefs[s.k].latGhost.style.left  = latGhostPct + "%";
+    rowRefs[s.k].costGhost.style.left = costGhostPct + "%";
+  });
+
+  // readout refs
+  var rLat = document.getElementById("rLat");
+  var rFt = document.getElementById("rFt");
+  var rFtSub = document.getElementById("rFtSub");
+  var rCost = document.getElementById("rCost");
+  var cacheBox = document.getElementById("cacheBox");
+  var rCacheLat = document.getElementById("rCacheLat");
+  var rCacheCost = document.getElementById("rCacheCost");
+  var rQualV = document.getElementById("rQualV");
+  var qFill = document.getElementById("qFill");
+  var note = document.getElementById("note");
+
+  var btnStream = document.getElementById("tStream");
+  var btnCache  = document.getElementById("tCache");
+  var btnSmall  = document.getElementById("tSmall");
+  var btnTrim   = document.getElementById("tTrim");
+  var btnReset  = document.getElementById("reset");
+
+  // ---- the core computation ----------------------------------------------
+  function computeStages() {
+    // Apply Smaller model and Trim context to the per-stage values first.
+    var out = STAGES.map(function (s) { return { k: s.k, name: s.name, lat: s.lat, cost: s.cost }; });
+    var get = function (k) { return out.filter(function (o) { return o.k === k; })[0]; };
+
+    if (state.small) {
+      var llm = get("llm");
+      llm.lat  *= 0.45;  // 1800 -> 810
+      llm.cost *= 0.25;  // 0.95 -> 0.2375
+    }
+    if (state.trim) {
+      var rr = get("rerank");
+      rr.lat  *= 0.6;    // 130 -> 78
+      rr.cost *= 0.6;    // 0.04 -> 0.024
+      var llm2 = get("llm");
+      llm2.lat  *= 0.8;
+      llm2.cost *= 0.6;
+    }
+    return out;
+  }
+
+  function render() {
+    var stages = computeStages();
+
+    var totalLat = 0, totalCost = 0, nonLlmLat = 0;
+    stages.forEach(function (o) {
+      totalLat += o.lat;
+      totalCost += o.cost;
+      if (o.k !== "llm") nonLlmLat += o.lat;
+
+      var r = rowRefs[o.k];
+      var latPct  = Math.max(0.5, Math.min(100, (o.lat / LAT_MAX) * 100));
+      var costPct = Math.max(0.5, Math.min(100, (o.cost / COST_MAX) * 100));
+      r.latFill.style.width  = latPct + "%";
+      r.costFill.style.width = costPct + "%";
+      r.latVal.textContent  = fmtLat(o.lat);
+      r.costVal.textContent = o.cost.toFixed(3) + " c";
+    });
+
+    // per-request totals (cache-miss pipeline)
+    var perReqLat = totalLat;
+    var perReqCost = totalCost;
+
+    // Streaming: perceived first-token time from the resulting stage values.
+    var firstToken = perReqLat;
+    var streaming = state.stream;
+    if (streaming) {
+      firstToken = nonLlmLat + STREAM_TAIL;
+    }
+
+    // Semantic cache: amortize per-request totals into averages.
+    var avgLat = CACHE_MISS * perReqLat + CACHE_HIT * CACHE_HIT_LAT;
+    var avgCost = CACHE_MISS * perReqCost;
+
+    // readouts
+    rLat.textContent = Math.round(perReqLat);
+    rCost.textContent = perReqCost.toFixed(3);
+    rFt.textContent = Math.round(firstToken);
+    rFtSub.innerHTML = streaming ? "perceived" : "&nbsp;";
+
+    rCacheLat.textContent = Math.round(avgLat) + " ms";
+    rCacheCost.textContent = avgCost.toFixed(3) + " cents";
+    cacheBox.classList.toggle("on", state.cache);
+
+    // quality: start at 100, subtract active deltas, floor at 0
+    var qual = 100;
+    if (state.stream) qual += Q.stream;
+    if (state.cache)  qual += Q.cache;
+    if (state.small)  qual += Q.small;
+    if (state.trim)   qual += Q.trim;
+    if (qual < 0) qual = 0;
+    rQualV.textContent = qual;
+    qFill.style.width = qual + "%";
+    var qColor, qText;
+    if (qual >= 85) { qColor = "var(--emerald)"; qText = "#047857"; }
+    else if (qual >= 60) { qColor = "var(--amber)"; qText = "#b45309"; }
+    else { qColor = "var(--rose)"; qText = "#e11d48"; }
+    qFill.style.background = qColor;
+    rQualV.style.color = qText;
+
+    // note line
+    var active = [];
+    // most impactful first: smaller model, trim, cache, streaming
+    if (state.small)  active.push(NOTES.small);
+    if (state.trim)   active.push(NOTES.trim);
+    if (state.cache)  active.push(NOTES.cache);
+    if (state.stream) active.push(NOTES.stream);
+
+    if (active.length === 0) {
+      note.innerHTML = "All optimizations off. The <b>LLM stage dominates both latency and cost</b>. " +
+        "Toggle the levers and watch the triangle move.";
+    } else {
+      note.innerHTML = active.join(" ") + " <b>Every lever trades one corner of the triangle for another.</b>";
+    }
+  }
+
+  function syncButtons() {
+    btnStream.setAttribute("aria-pressed", state.stream ? "true" : "false");
+    btnCache.setAttribute("aria-pressed", state.cache ? "true" : "false");
+    btnSmall.setAttribute("aria-pressed", state.small ? "true" : "false");
+    btnTrim.setAttribute("aria-pressed", state.trim ? "true" : "false");
+  }
+
+  function toggle(key) {
+    state[key] = !state[key];
+    syncButtons();
+    render();
+  }
+
+  btnStream.addEventListener("click", function () { toggle("stream"); });
+  btnCache.addEventListener("click",  function () { toggle("cache"); });
+  btnSmall.addEventListener("click",  function () { toggle("small"); });
+  btnTrim.addEventListener("click",   function () { toggle("trim"); });
+  btnReset.addEventListener("click", function () {
+    state.stream = state.cache = state.small = state.trim = false;
+    syncButtons();
+    render();
+  });
+
+  syncButtons();
+  render();
+})();
+</script>
+</body>
+</html>
