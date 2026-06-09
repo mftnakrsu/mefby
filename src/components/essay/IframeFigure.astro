@@ -1,0 +1,52 @@
+---
+// Embeds a self-contained, same-origin HTML figure (e.g. an interactive
+// animation) and auto-fits the iframe to its content height so there is no
+// inner scrollbar. Falls back to the `height` prop if the script can't run.
+interface Props {
+  src: string;
+  title: string;
+  height?: number;
+}
+const { src, title, height = 760 } = Astro.props;
+---
+
+<iframe
+  src={src}
+  title={title}
+  loading="lazy"
+  scrolling="no"
+  data-autofit
+  class="w-full block rounded-lg"
+  style={`height:${height}px;border:0;`}
+></iframe>
+
+<script>
+  // Auto-fit same-origin figure iframes to their content height.
+  const frames = document.querySelectorAll<HTMLIFrameElement>('iframe[data-autofit]');
+  frames.forEach((f) => {
+    const fit = () => {
+      try {
+        const doc = f.contentWindow?.document;
+        if (!doc) return;
+        const h = Math.max(
+          doc.documentElement.scrollHeight,
+          doc.body ? doc.body.scrollHeight : 0
+        );
+        if (h) f.style.height = h + 'px';
+      } catch {
+        /* not ready yet, or cross-origin — keep the fallback height */
+      }
+    };
+    f.addEventListener('load', () => {
+      fit();
+      // a couple of delayed refits in case fonts/layout settle after load
+      setTimeout(fit, 300);
+      setTimeout(fit, 1000);
+    });
+    let t: number | undefined;
+    window.addEventListener('resize', () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(fit, 150);
+    });
+  });
+</script>
