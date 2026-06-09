@@ -1,0 +1,63 @@
+---
+title: "Graph RAG'deki Sessiz Değişken: Korpus Dili Neden Sandığınızdan Daha Önemli"
+description: "Chunk boyutu, embedding'ler, re-ranker'lar: olağan şüpheliler. Ama korpusunuzun dili pipeline'ın her katmanını sessizce şekillendiriyor ve reasoning modelleri bu etkiyi belirleyici hale getiriyor."
+date: 2026-04-21
+tags: ["Graph RAG", "LLMs", "Multilingual", "Reasoning", "Türkçe"]
+lang: "tr"
+translationSlug: "graph-rag-language"
+isTranslation: true
+---
+
+RAG sistemlerinden konuştuğumuzda, sohbet genellikle chunk boyutu, embedding modelleri, retrieval stratejisi ve re-ranker'lar etrafında döner. Ama pipeline'ın her katmanını sessizce şekillendiren ve hak ettiği ilgiyi nadiren gören bir değişken var: **korpusunuzun dili.** Bu etki klasik vektör RAG'de bile görünür. Graph RAG'e geçtiğinizde belirleyici hale gelir. İşin içine reasoning modellerini kattığınızda ise tasarım kararlarınızın tam merkezine oturur.
+
+## Graf inşası: her şey burada başlar
+
+Graph RAG'in merkezinde varlık çıkarımı (entity extraction), ilişki çıkarımı (relation extraction) ve triplet üretimi yatar. Bu adımların kalitesi doğrudan kaynak metnin diline bağlıdır.
+
+İngilizcede "students from our school" ifadesinden varlıkları çıkarmak nispeten temiz bir iştir. Türkçe gibi sondan eklemeli (agglutinative) bir dilde aynı fikir "okulumuzun öğrencilerinden" haline gelir: iyelik ekleri, bir çıkma (ablative) hal eki ve isim tamlaması yapısı taşıyan tek bir token treni; hepsi de varlık sınırlarını etkiler. Fince, Macarca, Korece ve Japonca da benzer bayrakları kaldırır. Çıkarıcı (ister klasik bir NER modeli ister LLM tabanlı biri olsun) bir varlığın nerede bitip diğerinin nerede başladığını tahmin etmek zorunda kaldığında, varlık çözümlemesi (entity resolution) çatlamaya başlar. Aynı kavramın farklı morfolojik varyantları grafa ayrı düğümler olarak yazılır. Aralarındaki ilişkiler gürültülü hale gelir.
+
+Ve bu önemlidir, çünkü **Graph RAG'de aşağı akıştaki (downstream) her şey bu grafın topolojisine bağlıdır.** Dağınık bir graf dağınık topluluklar (communities), dağınık özetler ve dağınık çok adımlı (multi-hop) yollar üretir. Bunu metriklerde ilk başta fark etmezsiniz; cevaplar ince bir biçimde yanlış hissettirdiğinde fark edersiniz.
+
+## Retrieval katmanı: çok dilli, ama eşit değil
+
+Çok dilli embedding modelleri uzun bir yol kat etti. E5, BGE-M3, Cohere'in çok dilli sunumları ve açık kaynak grubu son iki yılda aradaki farkı etkileyici biçimde daralttı. Ama "daralttı" demek "kapattı" demek değil. Çoğu benchmark'ta İngilizceden İngilizceye retrieval, daha düşük kaynaklı dillerdeki aynı dil retrieval'ından hâlâ daha iyi performans gösterir; çoğu zaman recall@k üzerinde anlamlı bir farkla.
+
+Graph RAG'in topluluk tespiti (community detection) adımları, yani Leiden kümeleme, hiyerarşik özetleme vesaire, kâğıt üzerinde dilden bağımsız görünür. Pratikte ise çıkarım ve embedding aşamalarının ürettiği gürültüyü ne ise miras alırlar. Çöp girdi, çöp kümelenmiş çıktı.
+
+## Reasoning modelleri ve dil karıştırma problemi
+
+İşlerin ilginçleştiği ve çoğu ekibin hazırlıksız yakalandığı yer burası.
+
+Reasoning modelleri, yani bir cevap üretmeden önce açık düşünce zincirleri (chain of thought) üretenler, ezici çoğunlukla İngilizce olan (ve laboratuvara bağlı olarak daha az ölçüde Çince) CoT izleri üzerinde eğitildi. Artık birden çok araştırma çizgisi, bu modellerin başka bir dilde prompt verildiğinde bile içsel olarak fiilen "İngilizce düşündüğünü" öne sürüyor. Girdiyi çevirir, eğitimde baskın olan dillerinde akıl yürütür, sonra cevabı geri çevirirler.
+
+Ama problem temiz bir gidiş-dönüş çevirisinden daha karmaşık. Reasoning izlerine gerçekten bakmış olan herkes bunu görmüştür: **modeller düşüncenin ortasında dilleri karıştırır.** Türkçe sorun, ikinci adımdan sonra düşünce zincirinin İngilizceye kaydığını izleyin. İngilizce sorun, bir matematik türetmesinin ortasında bir küme Çince token'ın belirdiğini yakalayın. İtalyanca sorun, paragraf paragraf İtalyanca ile İngilizce arasında dil değiştiren (code-switch) bir akıl yürütme alın. Bazen nihai cevap tamamen yanlış dilde geri gelir.
+
+Bu bir söylenti değil. DeepSeek, sorunu R1 makalesinde açıkça belgeledi. İlk nesil R1-Zero, sürekli dilleri karıştıran reasoning izleri üretti ve modelin CoT'sini tek bir dilde tutmak için pekiştirmeli öğrenme (reinforcement learning) sırasında özel bir "dil tutarlılığı ödülü" (language consistency reward) eklemek zorunda kaldılar. o1, Qwen'in reasoning varyantları ve diğerlerinin kullanıcıları diller arasında benzer davranışlar bildirdi.
+
+Bir Graph RAG sistemi için bunun somut sonuçları var:
+
+- **Bağlam nüansı örtük çeviride kaybolur.** Türkçe bir hukuki madde, Japonca bir tıbbi not, Almanca bir teknik şartname: her biri gidiş-dönüş yolculuğundan sağ çıkmayan çağrışımlar taşır.
+- **Getirilen bağlam ile akıl yürütme birbirinden uzaklaşır.** Türkçe bir pasaj getirirsiniz, model bunun üzerinde İngilizce akıl yürütür ve varlık adları, alıntılanan ifadeler ya da alan terimleri bu süreçte yeniden ifade edilir (paraphrase). Modelin kullandığını sandığı "kanıt", sizin getirdiğiniz kanıtla tam olarak aynı değildir.
+- **Terminoloji kayar.** Alana özgü terimler, anlamı ince biçimde değiştiren yakın eş anlamlılara geri çevrilir: hukuken doğru İngilizce terim "indemnity" iken "tazminat"ın "compensation" haline gelmesi gibi.
+- **Çok adımlı akıl yürütme hatayı katlar.** Her adım (hop), çeviri kaymasının kötüleşmesi için bir fırsattır. Üç adım sonra, bir yeniden ifadenin yeniden ifadesi üzerinde akıl yürütüyor olursunuz.
+- **Çıktı dili belirlenimsiz (non-deterministic) hale gelir.** Çok dilli RAG kurulumlarındaki üretim hata raporlarının azımsanmayacak bir kısmı şuna iner: model rastgele yanlış dilde cevap verdi.
+
+İşin can alıcı noktası: nihai cevap, kullanıcının diline geri dönüştürülünce çoğu zaman akıcı görünür. Akıcılık kaymayı maskeler. Reasoning izini orijinal dildeki kaynakla karşılaştırarak denetlemediğiniz sürece problemi yakalayamazsınız; ki bunu neredeyse hiç kimse ölçekli biçimde yapmaz.
+
+## Gerçekten işe yarayan pratik desenler
+
+İngilizce olmayan ortamlarda üretim seviyesinde Graph RAG inşa eden ekipler arasında birkaç yaklaşım ortaya çıktı:
+
+**Önce-çevir-sonra-inşa et.** Korpusu İngilizceye çevirin, grafı orada inşa edin ve yalnızca nihai cevabı geri çevirin. Çıkarım ve akıl yürütme kalitesi gözle görülür biçimde zıplar. Yine de ödünleşim gerçek: kültürel, hukuki ve dilbilimsel bağlam çeviride düzleşebilir ve özel adlar (named entities) bazen bozulur.
+
+**Hibrit pipeline'lar.** Retrieval'ı ana dilde tutun (kullanıcılar düşündükleri gibi arar), ama özetleme ve akıl yürütme ağırlıklı adımlar için İngilizceye köprü kurun. Bu, yerel terimlerde recall'u korurken reasoning modelinin güçlü olduğu alana daha yakın çalışmasına izin verir.
+
+**Önce-ana-dil, yoğun küratörlükle.** Kalite tavanını kabul edin, ama yüksek kaliteli bir alan ontolojisine, elle düzenlenmiş varlık takma adlarına (entity aliases) ve alana göre ayarlanmış bir çıkarıcıya yatırım yapın. İnşası daha yavaştır, ama sistemi kaynak dilde dürüst tutar; düzenlemeye tabi alanlar için çoğu zaman doğru tercihtir.
+
+**Çift-graf kurulumları.** İki graf inşa edin, biri ana dilde biri İngilizce, ve sorguları türüne göre yönlendirin. Olgusal arama ana dile gider; çok adımlı akıl yürütme İngilizceye gider. Daha fazla altyapı gerektirir, ama bazı ekipler için kalite farkı buna değer.
+
+## Çıkarım
+
+Korpus dili bir ön işleme ayrıntısı değildir. Graph RAG'de grafın kendisini şekillendirir; akıl yürütme ağırlıklı pipeline'larda ise o grafın üzerinde yapılan her çıkarımın kalitesini şekillendirir. Chunk boyutunuzu beşinci kez ayarlamadan önce, daha basit bir soru sormaya değer: sistemim aslında hangi dilde düşünüyor, ve bu, kullanıcılarımın konuştuğu dille aynı mı?
+
+Cevap çoğu zaman ekiplerin varsaydığı şey değildir. Ve varsayım ile gerçeklik arasındaki boşluk, sessiz kalite problemlerinin yaşadığı yerdir.

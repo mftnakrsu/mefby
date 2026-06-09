@@ -1,0 +1,342 @@
+---
+title: "ASELSAN TOYGUN: A Technical Review of the Platform-Integrated EOTS"
+description: "How TOYGUN sees, how it recognizes and tracks a target, how it measures and marks it with a laser, and how it does all of this without giving away the aircraft's radar signature: step by step, through the signal chain and subsystems."
+date: 2026-06-01
+tags: ["ASELSAN", "TOYGUN", "EOTS", "Savunma Teknolojisi", "MWIR", "Stealth", "KIZILELMA", "KAAN", "English"]
+lang: "en"
+translationSlug: "aselsan-toygun-teknik-inceleme"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+
+## Introduction: Turkey's embedded EOTS
+
+In the closing months of 2025, ASELSAN's **TOYGUN** system was integrated into the Bayraktar **KIZILELMA** unmanned combat aircraft and flew. This may sound like a simple integration announcement, but it actually marks the crossing of an engineering threshold: **for the first time in the world, a platform-integrated (fuselage-embedded) Electro-Optical Targeting System was fitted to an unmanned combat aircraft.** By carrying the same architectural philosophy as the EOTS of its manned counterpart, the F-35 (embedding the sensor into the aircraft's fuselage, hiding it behind a faceted window, seeing without emitting a single radar wave) onto the new-generation platforms developed by TAI, ASELSAN placed Turkey among the only three countries in the world to possess this capability.
+
+I want to approach TOYGUN not as a news item, but as an engineering problem. This article opens up how the system works subsystem by subsystem: from the infrared photons of the target scene entering through the faceted window, to keeping the laser coaxially aligned with the thermal camera down to the millimeter via internal boresight; from the two-tier (mechanical + optical) stabilization, to closed-loop tracking logic; from time-of-flight range measurement, to coded laser designation compliant with the NATO STANAG 3733 standard; from geolocation vector geometry, to communication with the aircraft's mission computer over MIL-STD-1553B. At the end of the document you will find a conceptual comparison with the F-35 EOTS, a development roadmap, limitations, and an open-source reference list.
+
+All numerical values in the article have been compiled from **open sources**; they have been cross-validated against ASELSAN's official corporate information, Turkish defense industry news portals, and international references. The diagrams are simplified educational drawings prepared to convey the engineering principle intuitively; they are not scaled technical drawings or classified design details.
+
+## What is TOYGUN?
+
+**In one sentence:** TOYGUN is a passive thermal camera + an active laser suite + an image-processing brain, all embedded in the fuselage of a combat aircraft and mounted on a stabilized gimbal.
+
+Three core capabilities are packed into a single small package:
+
+- **A passive infrared camera that sees day and night:** a cryogenically cooled staring array operating in the mid-wave infrared (MWIR, ~3–5 μm) band with a resolution of 1280×1024 pixels.
+- **An active laser suite that measures range and marks targets:** it consists of a designator that measures range out to its maximum via time of flight (ToF) and paints the target with laser energy using a coded pulse train compliant with NATO STANAG 3733.
+- **A processor that finds, recognizes, and tracks targets from the image:** with non-uniformity correction (NUC), infrared search and track (IRST), automatic target recognition (ATR), and closed-loop tracking algorithms, it continuously answers the questions "what is this hot blob, where is it going, which class does it belong to."
+
+The full product name is **TOYGUN 100**. The system is being optimized for platforms such as KAAN (the National Combat Aircraft), KIZILELMA, AKINCI, and AKSUNGUR. The true innovation that sets TOYGUN apart from an ordinary targeting system is its **fuselage-embedded architecture**. Conventional systems are hung externally on the aircraft as a "pod" (LITENING, Sniper ATP, etc.); this increases both drag and radar visibility (RCS, *radar cross section*). TOYGUN, by contrast, hides the sensor inside the fuselage, behind a flat-faceted window; this allows advanced targeting without compromising the aircraft's low-radar-signature (stealth) design. On manned aircraft, this capability has until now existed only on 5th-generation platforms such as the F-35.
+
+<Diagram number="1" caption="TOYGUN functional signal chain. Green boxes are the system's internal units (the passive chain), orange is the active laser, and gray is the external input/output. Arrows show the flow of information/light; the link between the laser and the gimbal is bidirectional because they share the same aperture.">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/01-signal-chain.svg" alt="TOYGUN signal chain: a block diagram running from the target scene through the faceted window, gimbal stabilization, MWIR FPA, image processor, and on to the mission computer." class="w-full" />
+</Diagram>
+
+The diagram above summarizes how the system works: infrared radiation from the external scene enters through the faceted window, is held stable in the gimbal/stabilization unit, is converted into an electrical signal in the cooled MWIR detector, passes through the detection-tracking-recognition steps in the image processor, and the result is transferred to the mission computer. The active laser unit shares the same aperture as the gimbal; the navigation unit (GPS+IMU) is connected to the processor to produce the target coordinate. The rest of the document opens up each link of this chain one by one.
+
+## The engineering problem being solved
+
+Before understanding each subsystem, let us clarify the core problem they all solve together:
+
+> From a vibrating aircraft maneuvering at high speed, *see* a small, hot object tens of kilometers away; *recognize* what it is; *place* a centimeter-precise laser spot on it; and do all of this *silently*, without giving away the aircraft's radar signature.
+
+Hidden within this single sentence are many requirements that conflict with one another. **Distance** demands very precise optics and a low-noise detector. **Platform vibration** demands stabilization at the micro-radian level; because at 35 km an angular deviation as fine as a strand of hair blurs the image and shifts the laser spot off the target. **Recognizing the target** demands intelligent image processing and artificial intelligence. **A precise strike** demands that all the sub-sensors be aligned to the millimeter. And **stealth** demands that the system not disrupt the aircraft's aerodynamic and radar shape.
+
+In this list, the conflicting optimization axes are clearly visible: small aperture ↔ long range; fast slewing ↔ low vibration; simple optics ↔ stealth-compatible window; a single-function fast processor ↔ the complexity that AI/ATR requires. TOYGUN does not solve these axes one at a time; it must solve them together. The later sections of the document show which subsystem in the system satisfies each requirement in the list:
+
+- **See (from afar):** Cooled MWIR detector + precision optics
+- **Hold steady (under vibration):** Two-tier gimbal + optical stabilization
+- **Recognize and track:** Image processing, ATR, closed tracking loop
+- **Measure and mark:** Laser range finder + coded designator
+- **Stay aligned:** Internal boresight (IBS)
+- **Stay unseen:** Embedded faceted window + passive sensor
+
+## The stealth logic: embedded architecture and the faceted window
+
+The window through which TOYGUN looks out is not flat; it is made up of **many flat (faceted) segments**. Behind this design decision lies pure radar physics.
+
+A *curved* (dome-shaped) surface scatters an incoming radar wave back across a very wide range of angles; that is, a great deal of energy returns to the threat radar and the aircraft "glows" (appears on the radar screen). A *flat* facet, on the other hand, deflects the wave into a single direction by **specular reflection**; like the angled stealth surfaces of the aircraft, it sends the energy off toward a direction where there is no threat. Building the window out of many flat facets is the way to apply this "deflection" logic to a curved aperture. For the same reason, the F-35's EOTS is also embedded in the fuselage with a faceted sapphire window.
+
+<Diagram number="2" caption="A curved surface scatters radar energy back over a wide angle (high RCS, left); flat facets deflect the energy into a single direction (low RCS, right). The drawing represents the direction of reflection; it is not to scale.">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/02-faseted-stealth.svg" alt="Left: multi-directional radar backscatter from a curved surface. Right: single-direction deflection from a faceted surface." class="w-full" />
+</Diagram>
+
+The window material is also chosen to suit this task: it must be **transparent** enough to pass mid-wave infrared (MWIR), yet **hard** enough to withstand rain and sand erosion at high speed; this is why **sapphire** or special infrared glass (germanium, ZnS, ZnSe, or a multilayer composite) is typically used. In TOYGUN's published technical data, this module appears as a separate line item, roughly a **22 kg** "faceted glass module."
+
+**Why embedded rather than an external pod?** An external pod is both a large radar reflector and a source of drag. Hiding the sensor in the fuselage, behind the faceted window, preserves the aircraft's low-radar-signature shape. Moreover, the camera is **passive** (it does not emit a signal like a radar); that is, even while the system is finding and tracking a target, it does not give away the aircraft's position. These are the two pillars of stealth: **shape** (the faceted window) and **silence** (passive sensing). When these two combine, advanced targeting capability is obtained without sacrificing the aircraft's stealth nature. This is TOYGUN's true design philosophy.
+
+Is there no cost to this design decision? There is. A fuselage-embedded EOTS is more challenging than an external pod in terms of cooling and vibration management (the aircraft's airflow and structural loads directly affect the sensor); in addition, there can be unseen but significant IR/MMW losses in the window region. These costs are offset on the engineering side with more complex thermal management and tighter structural integration.
+
+## Pointing and stabilization: two-tier control
+
+Slewing the sensor toward the target is one job; holding it steady to micro-radian precision on a vibrating aircraft is an entirely different job. The sensor rotates on a **gimbal**. The two-axis mechanical gimbal turns the line of sight (LOS) in the desired direction: it can look 360° continuously in azimuth and roughly between −90° and +10° in elevation. But the gimbal alone is not enough; because the aircraft vibrates, there is engine vibration, and maneuvers are performed. This is precisely why TOYGUN has a **two-tier stabilization**.
+
+### The coarse + fine architecture
+
+Gyroscopes continuously measure the disturbance (vibration, maneuver), and this information goes to two parallel correction paths. The **coarse tier** is the two-axis mechanical gimbal; it handles low-frequency, large-angle motions. The **fine tier** is a lightweight *fast steering mirror* (FSM); it suppresses high-frequency, small-amplitude vibration (jitter) at high bandwidth.
+
+<Diagram number="3" caption="The two tiers of stabilization. The mechanical gimbal performs the coarse/slow correction, and the optical mirror (FSM) performs the fine/fast correction. Together they produce a stable line of sight at the micro-radian level. The 'point command' tells the system where to look at the target (it comes from the tracking loop or from the operator).">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/03-two-tier-stab.svg" alt="Disturbance → gyroscopes → two parallel correction paths (mechanical gimbal + FSM) → stable LOS diagram." class="w-full" />
+</Diagram>
+
+**Why are two tiers needed?** Because at 35 km even an angular jitter on the order of *micro-radians* blurs the image and, worse, shifts the laser spot off the target. The heavy mechanical gimbal physically cannot keep up with high-frequency vibration (its inertia is too high); the lightweight mirror, on the other hand, can react within milliseconds. The **coarse + fine division of labor** is the only practical way to provide both wide coverage (the ability to look in any direction) and micro-radian stability at the same time. This approach is the classic structure known in the defense industry as "two-loop control"; it is the fundamental secret behind the camera's ability to produce a sharp image even while in motion.
+
+### Field of regard
+
+The angular volume the gimbal can reach is called the "field of regard." On TOYGUN this is a full turn horizontally (360° continuous azimuth) and, vertically, a wide downward sector (roughly between −90° straight down and +10° slightly up); the exact values vary with the aircraft integration.
+
+<Diagram number="4" caption="Field of regard. On the left, a top-down view: full-turn scanning in azimuth. On the right, a side view: the coverage sector in elevation running from straight down (−90°) up to slightly up (+10°). The angular values are representative.">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/04-field-of-regard.svg" alt="Field of regard: 360° azimuth scan from the top, -90 to +10 degree elevation sector from the side." class="w-full" />
+</Diagram>
+
+This angular coverage supports both air-to-ground and air-to-air combat profiles: the wide elevation coverage that can look downward to strike a ground target is used together with the +10° slight upward look that can scan above the horizon line for low-altitude reconnaissance/surveillance.
+
+## The MWIR cooled detector
+
+At the heart of the system is a **cooled** thermal camera that operates in the mid-wave infrared and sees day and night. TOYGUN produces imagery with a thermal camera at a resolution of **1280 × 1024 pixels** in the MWIR (mid-wave infrared, roughly 3–5 μm) band. From an engineering standpoint, three points are critical: the type of detector, why it must be cooled, and why exactly this band was chosen.
+
+### The photon detector and why is it cooled?
+
+This is a **photon detector**; it is typically made of **InSb** (indium antimonide), **HgCdTe** (mercury-cadmium-telluride), or the newer-generation **T2SL** (type-II superlattice) material. These materials convert incoming infrared photons directly into an electrical signal. However, when warm, their own thermal vibrations produce a noise called "**dark current**," and this noise drowns out the distant/weak target signal you want to see. To boost the signal-to-noise ratio (SNR), the detector must be cooled **cryogenically to around ~77 K** (the order of liquid nitrogen). An integrated **Stirling cooler** and a sealed **vacuum Dewar** enclosure do this.
+
+This architecture is the signature work of defense EO/IR systems: the Stirling engine is a closed-cycle thermodynamic heat pump; with helium as its working gas, it holds the *cold finger* on which the detector chip sits at around ~80 K, independent of the scene temperature. When the system is first turned on, there is a "cool-down" period (typically a few minutes); during this time the FPA cannot observe, and it must wait to reach thermal equilibrium. Shortening this period (rapid cooldown) is a separate engineering problem for suppliers like ASELSAN and directly affects mission response time.
+
+<Diagram number="5" caption="Cross-section of the cooled detector. The optics focus incoming IR onto the FPA chip inside the vacuum Dewar; the Stirling cooler brings the chip down to ≈77 K via the cold finger; the readout circuit (ROIC) converts the signal into a digital image. Below: the MWIR band in which TOYGUN operates is marked on the electromagnetic spectrum.">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/05-mwir-detector.svg" alt="Cross-section of a cooled FPA + Stirling cooler and the position of the MWIR band on the electromagnetic spectrum." class="w-full" />
+</Diagram>
+
+### The "staring" array and why MWIR?
+
+The second critical point: TOYGUN's array is a **"staring" array**. All 1280 × 1024 pixels image the scene in a single frame, just like a digital camera. Older-generation FLIRs formed an image by mechanically *scanning* a single row of detectors across the scene; a staring array is far more sensitive and faster, has no mechanical wear, and has a high frame rate.
+
+So why the MWIR band? Three reasons together:
+
+1. **Thermal contrast.** Surfaces heated by engines, exhaust, and friction (jet exhausts, tank engines, hot gun barrels) appear bright in exactly this band; that is, it is ideal for catching hot targets.
+2. **Atmospheric transmittance.** MWIR is a "window" band where the atmosphere is relatively transparent (the roughly 3.5–5.0 μm range shows low absorption); it makes seeing from long distances possible.
+3. **Passive imaging.** The system sees both night and day without emitting any light, simply by collecting the ambient thermal radiation. No active illumination = an aid to stealth.
+
+The alternative, **LWIR** (8–12 μm), is better in low-contrast scenes (objects at room temperature, cold targets); however, since the heat signature is dominant in combat aircraft scenarios, MWIR is preferred. For comparison, the F-35's EOTS is also a cooled MWIR system for the same reason.
+
+**In summary, this stage:** Incoming photons → focused onto the FPA by the optics → the cooled detector converts them into a clean electrical signal → the ROIC (readout integrated circuit) turns it into a digital image. This raw image goes to the next stage, the image processor.
+
+## Understanding: image processing and tracking
+
+The raw detector signal is useless on its own; it passes through a processing pipeline to become "understandable," and once a target is selected, it is tracked with a **closed loop**.
+
+The first step is **NUC** (non-uniformity correction): the gain and offset difference of each pixel is equalized using tables generated in the factory or by in-field shutter calibration; defective pixels are repaired from their neighbors. This is a critical step that cleans the FPA's natural non-uniformity out of the image; without it, the image is filled with fixed-pattern noise resembling a "shower curtain." Then comes **enhancement**: operations such as histogram equalization, edge sharpening, and atmospheric haze (fog/mist) reduction increase the image's discriminability. On this clean image, **detection** runs: **IRST** (infrared search and track) and **ATR** (automatic target recognition) algorithms sift out hot signatures and potential targets.
+
+<Diagram number="6" caption="At the top, the processing pipeline running from the raw image to detection (NUC → enhancement → detection → track gate). At the bottom, the closed tracking loop: the track gate measures the target's deviation from the image center, sends this error to the gimbal/FSM, the LOS is corrected, and the target is re-centered. The output (video + track data) is transferred to the mission computer.">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/06-image-processing.svg" alt="Image processing pipeline + closed-loop tracking diagram." class="w-full" />
+</Diagram>
+
+### Closed-loop tracking and recognition
+
+Once a target is selected, a **track gate** is placed around it and it is tracked across frames. There are two common methods:
+
+- **Centroid tracking:** it tracks the center of gravity of the hot blob. Fast and simple; but there is a risk of losing the track when the target merges with another hot object in the scene.
+- **Correlation tracking:** it matches a reference image patch in every frame. More robust, but the computational cost is high.
+
+The key idea here is the **closed loop**: the tracker measures how far the target has deviated from the image center, sends this error as a command to the gimbal and the fast steering mirror, and thus the target is continuously kept centered. The system provides **single- and multiple-target tracking** together; it can manage more than one track file at the same time. The **ATR** (automatic target recognition) and artificial-intelligence layer, in turn, tries to automatically answer the question "is this a tank, a truck, or a building," reducing the operator's workload and shortening the reaction time.
+
+The real-world reliability of ATR is a deep subject: classification depends strongly on scene conditions (day/night, weather, concealment), viewing angle, whether the target class is represented in the training set, and the enemy's concealment/deception measures. In mature systems, the ATR output is presented as a "suggestion," and the final decision is always made by the operator; especially in lethal engagements, the *human-in-the-loop* is preserved. TOYGUN's AI-assisted image-processing layer is the reflection of this architecture in the Turkish defense industry.
+
+## The laser suite: measuring and marking
+
+Up to this point, everything has been passive; we have only been receiving light. The laser unit, by contrast, is **active** and does three different jobs: it measures range, it marks targets, and it tracks a point marked by someone else.
+
+### Range measurement: time of flight
+
+The system sends a short laser pulse, measures the **round-trip time** of the echo returning from the target, and finds the distance with a simple relation. Since the speed of light is constant, knowing the time means knowing the distance. The range reaches up to 35 km; this in turn requires very precise timing electronics.
+
+<Diagram number="7" caption="Range measurement by time of flight. The time between the outgoing pulse and the returning echo directly gives the distance. Unlike the passive camera, this process is active; however, the beam is narrow and the shot is brief.">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/07-laser-tof.svg" alt="Laser ToF: TOYGUN → outgoing pulse → target → returning echo, from time to distance." class="w-full" />
+</Diagram>
+
+The relation: **d = c · t / 2**, where *c* is the speed of light and *t* is the round-trip time. It is divided by two because the light path goes to the target and comes back. Example: for 35 km, *t* ≈ 233 microseconds. In this duration, a timing error of 233 nanoseconds corresponds to a range error of 35 meters; that is, the timing electronics must be of the nanosecond class.
+
+A few practical subtleties: if the target is behind a cloud, or in rain, the pulse is heavily absorbed and does not return (loss of range measurement); if there are multiple reflective surfaces in the scene (glass, protected buildings), multiple echoes occur, and the system uses "first/last pulse logic" to select the correct one among them. Furthermore, the scattering caused by air molecules is even more pronounced at the eye-safe wavelength.
+
+### Designation: coded pulse and guidance
+
+A **coded pulse train** (a specific PRF, that is, pulse repetition frequency, code) is dropped onto the target. This energy scatters off the target; the **four-quadrant detector** in the seeker head of the laser-guided munition sees the reflected spot and steers toward it. Because the munition is tuned to the *same PRF code* as the designator, it ignores other laser sources in the environment; this prevents confusion and friendly fire.
+
+<Diagram number="8" caption="Designation and guidance. TOYGUN 'paints' the target with a coded pulse; the energy scatters; the quadrant seeker of the munition tuned to the same code locks onto the reflected spot. The inset at lower right: if the spot drifts from the center, the quadrant detector computes which way to turn.">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/08-laser-designation.svg" alt="Coded laser designation + guided munition + quadrant detector diagram." class="w-full" />
+</Diagram>
+
+**The standard and wavelengths.** The code set is standardized by NATO **STANAG 3733**; this is critical for interoperability; a munition of a NATO ally must be able to strike a target marked by a Turkish aircraft. TOYGUN uses two wavelengths: **1064 nm** is for combat (the Nd:YAG family, the classic military laser wavelength); **1570 nm**, being safer for the eye, is used at the training/firing range (it falls into the eye-safe class). The choice of the 1570 nm band lowers, in exercise environments, the risk of eye damage from civil aviation traffic overhead.
+
+### Laser spot tracking (LST)
+
+The reverse of this job is also possible. The system can detect a laser spot marked by **another platform** (a spotter/JTAC on the ground or another aircraft) and turn toward it. This is called **laser spot tracking** (LST); it makes collaborative targeting and the handover of a target from one unit to another possible. A special forces team on the ground identifies and marks the threat; the airborne TOYGUN finds this point and locks onto it, then the munition is fired; this is one of the fundamental engagement flows of modern joint operations doctrine.
+
+## Boresight: internal alignment
+
+If the spot the camera centers on and the spot the laser hits are not identical to the millimeter, all that precision goes to waste. All of the sub-sensors inside TOYGUN (the thermal camera, the laser range finder, the laser designator, and the laser spot tracker) must be **perfectly coaxial**. When the operator centers a point on the screen, the laser must go to exactly that point. Even a very small angular shift between them means meters of deviation at 35 km; that is, it kills accuracy.
+
+The trouble is that optical elements do not stay fixed: temperature (the operating range from −40 °C to +70 °C) and constant vibration shift the lenses and mirrors by microscopic amounts. The solution is the **internal boresight** (IBS) system: without needing external field/calibration equipment, the system continuously compares the camera and the laser axis against an internal reference and corrects the alignment. The typical implementation is to continuously measure and correct the drift in a closed loop using an internal reference source (for example, a calibrated source or a known point target).
+
+Thus throughout the mission, despite changing conditions, the equality "**the point seen = the point hit**" is preserved.
+
+**Why is this so important?** Geolocation (Section 10) and laser guidance (Section 7) rely on the assumption that the camera and the laser *look in the same direction*. Boresight is the quiet but critical subsystem that keeps this assumption continuously valid; without it, both coordinate generation and designation become unreliable. On platforms like the F-35, the IBS is a subsystem of the same criticality; a significant portion of the Block 4 upgrades is aimed at improving this alignment discipline.
+
+## Geolocation: turning an angle into a coordinate
+
+When the system sees a target, what it actually holds is a direction, a length, and the information about where and how the aircraft is positioned. When these combine, the target's geographic coordinate emerges.
+
+When TOYGUN centers on a target, four pieces of information are known:
+
+- **Line-of-sight angles:** from the gimbal encoders, azimuth/elevation relative to the aircraft
+- **The aircraft's instantaneous position:** latitude/longitude/altitude from GPS
+- **The aircraft's attitude:** yaw-pitch-roll from the INS/IMU (the transformation between the aircraft's body axes and the world frame)
+- **Slant range:** from the laser range finder, the direct distance from the aircraft to the target
+
+These four, with simple vector geometry, give the target's location.
+
+<Diagram number="9" caption="From angle to coordinate. At the top, a side view: the tip of the vector, drawn from a known point (the aircraft's GPS position), in a known direction (the LOS angles, rotated into the earth frame by the aircraft's attitude), and of a known length (the slant range R), is the target. At the bottom: the inputs combine in a solver to produce the target coordinate.">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/09-geolocation.svg" alt="Geolocation vector geometry: GPS+IMU+LOS angles+range → target latitude/longitude." class="w-full" />
+</Diagram>
+
+The logic is this: the aircraft's GPS position gives the *starting point* of the vector, the laser range R gives its *length*, and the line-of-sight angles (in their form rotated into the earth/geographic frame after correction by the aircraft's attitude) give its *direction*. These three compute the target's **latitude, longitude, and altitude**. TOYGUN does this by using its internal GPS + inertial measurement unit together with the aircraft's navigation system. The coordinate produced is critically important for releasing GPS-guided munitions (JDAM-like, or equivalents in Turkey such as KGK / SOM) or for handing the target over to another unit.
+
+A subtlety: the coordinate accuracy is limited by the **weakest link** in the chain. If the laser range error is ±5 m, the GPS position error is ±3 m, the INS heading error is 0.1°, and the gimbal encoder error is 0.05°, then their combined effect can lead to a position uncertainty of roughly 70 m for a shot at 35 km. JDAM/KGK-class munitions can accept this; for munition classes that require a point strike (CEP < 5 m), laser guidance is used to tighten the final strike error in an independent loop.
+
+## Communication with the aircraft and the philosophy of passivity
+
+TOYGUN is not an island unto itself; it transfers everything it produces to the aircraft, and it does so without giving the aircraft away.
+
+The **video, track data, target coordinate, and designation status** that the system produces are transferred to the aircraft's mission computer over standard military interfaces. The backbone of this is the **MIL-STD-1553B** data bus; it is a dual-redundant bus protocol of high reliability, running at 1 Mbps, which has been the backbone of defense platforms since the 1970s. For higher-bandwidth video, serial interfaces such as **RS-422** or **Fiber Channel** are also used. Thus the pilot/operator and the aircraft's weapon systems use what TOYGUN sees and computes in real time.
+
+The truly important point is **passivity**. The thermal camera emits no signal; it only collects the ambient infrared radiation. An active system like radar, because it emits energy outward, can give the aircraft's position away to the enemy; TOYGUN, by contrast, is silent. On top of this, the embedded faceted window does not disrupt the aircraft's low-radar-signature shape either. The result: the aircraft can find and recognize a target, produce a coordinate, and mark it with a laser **without ever turning on its radar**.
+
+**The two pillars of stealth.** *Shape* (the embedded faceted window → low radar signature) and *silence* (passive sensing → no emission). When these two combine, advanced targeting capability is obtained without sacrificing the aircraft's stealth nature. The only moment that "makes a sound" is the narrow time window in which the laser performs designation; and that too stays within a narrow cone in terms of direction/coverage. The F-35's EOTS philosophy is the same; TOYGUN carries this philosophy onto Turkish platforms.
+
+## A single engagement, from start to finish
+
+Let us now line up all the subsystems described so far in the order they occur in a real mission.
+
+<Diagram number="10" caption="A typical end-to-end engagement. Scanning and recognition are entirely passive; only in step 5 does a brief, narrow laser beam go out. In step 6, either the guided munition locks onto the target or the produced coordinate is handed over to another platform.">
+  <img src="/essays/aselsan-toygun-teknik-inceleme/10-end-to-end.svg" alt="End-to-end engagement flow: scan → detect → lock → range → designate → strike/handover." class="w-full" />
+</Diagram>
+
+The flow below shows the typical steps from the detection of a target to its strike (or its handover to another unit). The thing to note is that throughout all of these steps the aircraft's **radar can remain off**; the system operates passively from start to finish, and only at the moment of designation does a narrow laser beam go out.
+
+1. **Scan:** Survey the scene with MWIR (IRST), collect hot signatures.
+2. **Detect & recognize:** ATR finds and classifies the target; the operator evaluates it against the verification threshold.
+3. **Lock:** The track gate closes; closed-loop tracking begins.
+4. **Range & coordinate:** The laser range finder + GPS/IMU together compute the target position.
+5. **Designate:** "Paint" the target with the coded laser (brief, in a narrow cone).
+6. **Strike / handover:** The guided munition locks on; or the produced coordinate is handed over to another unit (another aircraft, a battery, etc.).
+
+This sequence also answers the question "when passive, when active": in steps 1–4 the system is silent, there is no emission. The only active moment is the brief laser shot in step 5; and its direction/time window is narrow too. The laser wavelength (1064 nm in combat) is detectable not by typical enemy ESM/RWR sensors but by dedicated laser warning receivers (LWR); that is, the engagement's visible footprint is minimal.
+
+## Technical specifications & F-35 EOTS comparison
+
+Numerical values compiled from open sources, a conceptual comparison with the F-35 EOTS, and the development status are given below. All values are approximate and may change with the platform integration/version.
+
+**Salient technical specifications of TOYGUN 100:**
+
+| Specification | Value |
+|---|---|
+| System type | Platform-integrated electro-optical targeting system (EOTS) |
+| Thermal camera band | MWIR (mid-wave infrared, ~3-5 μm), cooled |
+| FPA resolution | 1280 × 1024 pixels (staring array) |
+| Laser wavelengths | 1064 nm (combat) · 1570 nm (training, eye-safe) |
+| Laser range | up to 35 km (slant range) |
+| Laser designation standard | NATO STANAG 3733 compliant coding |
+| Stabilization | 2-axis mechanical + 2-axis optical (4 axes total) |
+| Field of regard | Azimuth 360° continuous · elevation −90° … +10° |
+| Data interfaces | MIL-STD-1553B · RS-422 |
+| Power | 270 V DC, ~1000 W |
+| Sensor unit weight | ≤ 120 kg |
+| Faceted glass module | ~22 kg |
+| Dimensions | 710 × 550 × 815 mm |
+| Operating temperature | −40 °C … +70 °C |
+| Core capabilities | ATR · single/multiple-target tracking · laser spot tracking · internal boresight (IBS) · AI-assisted image processing · geolocation |
+
+**Conceptual comparison: TOYGUN with the F-35 EOTS (similarity of approach):**
+
+| Dimension | TOYGUN (ASELSAN) | F-35 EOTS (Lockheed Martin) |
+|---|---|---|
+| Mounting architecture | Fuselage-embedded, faceted window | Fuselage-embedded, faceted sapphire window |
+| Camera band | Cooled MWIR (FLIR + IRST) | Cooled MWIR (FLIR + IRST) |
+| Laser functions | Range measurement + designation + spot tracking | Range measurement + designation + spot tracking |
+| Mode of operation | Passive (low RCS preserved) | Passive (low RCS preserved) |
+| Target platform | KAAN, KIZILELMA, AKINCI, AKSUNGUR | F-35 (manned 5th generation) |
+| Unmanned combat aircraft integration | **Yes, KIZILELMA (a world first)** | No |
+
+The exact numerical specifications of the F-35 EOTS (resolution, etc.) are not given here; the comparison shows only the conceptual similarity of approach. It should not be confused with Northrop Grumman's AN/AAQ-37 DAS system (the F-35's complementary 360° passive EO sphere): the EOTS is a narrow-field targeting subsystem of strike quality, whereas the DAS provides spherical situational awareness. TOYGUN is an EOTS in this classification; for spherical awareness, the parallel programs of TAI/ASELSAN (for example, the KARAT IRST system) are at work.
+
+**Development status and roadmap:**
+
+| Phase | Status |
+|---|---|
+| KIZILELMA integration | Integrated and flown at the end of 2025, a world first for an embedded EOTS on an unmanned combat aircraft |
+| Global position | Turkey is one of the 3 countries in the world to possess this capability |
+| Serial production | 2026 target (together with the KARAT IRST system) |
+| KAAN integration | System integration laboratory work has begun; flight targeted for 2026 |
+| Related system | KARAT, ASELSAN's infrared search and track (IRST) system |
+
+## Strategic and industrial context
+
+TOYGUN should be read not merely as a subsystem, but also within the broad context in which the Turkish defense industry sits. A few observations matter:
+
+**First point: this is a threshold of industrial maturity.** The engineering prerequisites for an embedded EOTS are a chain: cryogenic FPA production/test capability, precision optics manufacturing, faceted stealth window fabrication, stabilization at the micro-radian level, real-time image-processing silicon, nanosecond-class timing electronics, an internal boresight reference source, ATR algorithms. Each link of this chain on its own demands 10+ years of accumulated capability. Turkey's arrival at the position of "one of the three countries in the world" to possess this capability is the product not of any single engineering breakthrough, but of the systematic accumulation ASELSAN has gathered since 1975. In this context the FLIR family that began in the 1990s (FLIR-1, FLIR-2, ASELFLIR-300T, ASELPOD), the CATS (Common Aperture Targeting System) that matured in the 2010s, and now TOYGUN form a natural line of evolution.
+
+**Second point: the world first on the unmanned-systems side is a visible example of the "in-house integration" advantage.** Although the F-35 EOTS is mature and one of the most advanced targeting systems in the world, there is no directly comparable integration on the US side for unmanned combat aircraft (UCAV); this is because the US's operational UCAV programs (MQ-25, CCA) are proceeding along a different architectural trajectory. ASELSAN, by contrast, because it can develop both the EOTS and the target platforms (KIZILELMA, KAAN) under the same industrial roof, can perform the "EOTS-platform" integration in much closer cooperation with the manufacturers. To fit TOYGUN onto a UCAV like the Bayraktar KIZILELMA, ASELSAN and Baykar must agree on the same payload, the same data bus, the same attitude references; and this is a coordination advantage brought by being a domestic manufacturer.
+
+**Third point: the export scenario.** If TOYGUN's serial production matures in 2026, it could become a significant item in the Turkish defense industry's medium-term export basket. Similar to the success model of the Bayraktar TB2's international sales, the KIZILELMA + TOYGUN package could be attractive to countries that want advanced targeting capability but do not have access to the F-35, or do not want it. NATO STANAG 3733 compliance and the MIL-STD-1553B interfaces already keep the doors open for third-party integration.
+
+**Fourth point: synergy with KARAT.** TOYGUN is being deployed together with KARAT, ASELSAN's infrared search and track (IRST) system. This architectural calculus is simple: TOYGUN provides narrow-field, strike-quality targeting; KARAT performs air-to-air scanning with a wide-coverage IRST. When these two combine behind a single mission computer, the aircraft simultaneously has both spherical awareness (KARAT) and precise engagement (TOYGUN) capability; the architectural analog of the F-35's EOTS + DAS combination.
+
+## Limitations and honest notes
+
+The data base this article rests on consists of open sources; it is not an official/classified engineering document. The following limitations should be kept clear:
+
+- **The diagrams are for educational purposes.** The 10 diagrams in the article are simplified drawings prepared to convey the operating principle intuitively; they are not scaled technical drawings or classified design details.
+- **The numerical values are approximate.** Values such as range, weight, and resolution have been compiled from open sources and may change with the platform integration/version. The actual operational performance (system MTBF, typical cool-down time, detection distance under real conditions, etc.) is found in ASELSAN's unpublished technical catalogs.
+- **A numerical comparison with the F-35 EOTS has not been made.** Specific values of the Lockheed Martin EOTS such as resolution are not publicly available; the comparison shows only the similarity of architectural and conceptual approach.
+- **The physics is generally valid.** The photon detector, cryogenic cooling, range measurement by time of flight, PRF-coded laser guidance, gimbal stabilization, and geolocation are all established engineering principles of electro-optical targeting systems. This article shows how these principles are applied on TOYGUN; it does not go into the details of ASELSAN's proprietary/patented improvements.
+- **Operational rules of engagement, mission software details, cryptographic code sets, and the electronic warfare context are outside the scope of this article.**
+
+## Sources
+
+### Primary: Turkish defense industry open sources
+
+- **ASELSAN official corporate information:** [aselsan.com](https://www.aselsan.com)
+- **KÜRE Ansiklopedi**, TOYGUN technical specifications: [kureansiklopedi.com](https://www.kureansiklopedi.com)
+- **DefenceTurk:** [defenceturk.net](https://www.defenceturk.net)
+- **SavunmaTR** / defense industry news portals: [savunmatr.com](https://savunmatr.com)
+- **DonanımHaber defense section:** [donanimhaber.com](https://www.donanimhaber.com)
+- **C4Defence**, **DefenceHub**, and **Yeni Şafak defense pages** (for additional coverage)
+
+### For the F-35 EOTS and international comparison
+
+- **Lockheed Martin:** F-35 EOTS official page, [lockheedmartin.com](https://www.lockheedmartin.com)
+- **GlobalSecurity.org:** F-35 and sensor suite technical reviews
+- **Defense-Update** and **Janes:** EOTS/DAS comparison analyses
+- **Northrop Grumman:** AN/AAQ-37 DAS documentation (the EOTS's complementary spherical sensor sphere)
+
+### Standards and engineering references
+
+- **NATO STANAG 3733:** Laser target designator coding and interoperability
+- **MIL-STD-1553B:** Military data bus standard (avionics bus)
+- **Holst, G. C.**, *Electro-Optical Imaging System Performance*: a foundational reference for MWIR sensor engineering
+- **Driggers, R. G., Friedman, M. H., Nichols, J. M.**, *Introduction to Infrared and Electro-Optical Systems*: cooled detector physics, gimbal stabilization
+- **Manolakis, D., Lockwood, R., Cooley, T.**, *Hyperspectral Imaging Remote Sensing* (additional perspective)
+- **Jha, A. R.**, *Infrared Technology: Applications to Electro-Optics, Photonic Devices, and Sensors*: InSb, HgCdTe, T2SL material science
+
+### Related Turkish defense products (for context)
+
+- **ASELSAN CATS:** Common Aperture Targeting System (an external-pod EO/IR system that can be read as TOYGUN's evolutionary predecessor)
+- **ASELSAN ASELPOD:** advanced targeting pod
+- **ASELSAN KARAT:** infrared search and track (IRST), being deployed together with TOYGUN
+- **Bayraktar KIZILELMA:** the unmanned combat aircraft on which TOYGUN's world-first integration took place
+- **TAI KAAN:** Turkey's 5th-generation manned combat aircraft program, on the roadmap for TOYGUN integration
+- **TAI AKSUNGUR**, **Bayraktar AKINCI:** TOYGUN's other planned target platforms
+
+### Preparation note
+
+This compilation was prepared to explain TOYGUN's operating logic at an engineer's level, step by step. Each subsystem has been described on the basis of principles cross-validated against open-literature references. Differences between the specific technical data in ASELSAN's official catalogs and the numerical values in this article are normal and stem from version/integration variables. Detail beyond the open sources is possible only with access to the relevant classified engineering documents and is outside the scope of this article.

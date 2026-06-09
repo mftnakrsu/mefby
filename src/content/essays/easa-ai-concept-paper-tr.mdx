@@ -1,0 +1,78 @@
+---
+title: "Yardımcı Pilot Bir Algoritma Olduğunda: Avrupa Havacılık Yapay Zekasını Nasıl Güvenilir Kılmayı Planlıyor"
+description: "AB'nin havacılık düzenleyicisi, yapay zekayı uçacak kadar güvenli kılma üzerine 239 sayfalık bir konsept belgesi yayımladı. Dar kapsamlı yapay zekadan öğrenme güvencesine ve W-şekilli sürece kadar, güvenilir havacılık yapay zekasının arkasındaki zihinsel model, uzman olmayanlar için açıklandı."
+date: 2026-06-04
+tags: ["EASA", "Aviation", "AI Safety", "Trustworthy AI", "Machine Learning", "EU AI Act", "Türkçe"]
+lang: "tr"
+translationSlug: "easa-ai-concept-paper"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+
+Otomatik pilotlar onlarca yıldır uçakları uçuruyor, ama yalnızca bir insanın kural kural, kod içinde tek tek belirttiği şeyi yapıyorlar. Yeni yapay zeka dalgası ise farklı bir canlı. Kurallara uymaktan çok onları *çıkarsıyor*: ona yeterince örnek gösterin, bir cevaba ulaşmanın kendi yolunu bulup çıkarsın. Modern yapay zekayı bu kadar güçlü kılan da, bir güvenlik düzenleyicisinin sırtından soğuk terler boşalmasına yol açan da tam olarak budur. Her kararı birinin yazdığı bir satıra kadar izleyemediğinizde, bir sistemi "uçmaya güvenli" diye nasıl kutsarsınız?
+
+İşte bu tek soru, **Avrupa Birliği Havacılık Emniyeti Ajansı (EASA)**'nın, yani uçakların, ekipmanların ve operasyonların uçup uçamayacağına karar veren Avrupa'nın havacılık emniyeti düzenleyicisinin, *Konsept Belge: yapay zeka uygulamaları için rehberlik* gibi gösterişsiz bir başlık taşıyan 239 sayfalık bir belge yayımlamasının nedenidir. Bu yazı yalnızca belgenin açılış bölümlerini, yani önsöz ve girişi inceliyor; EASA burada teknik ayrıntılara girmeden önce tüm zihinsel modeli ortaya koyuyor.
+
+<Diagram caption="Onlarca yıllık kokpit otomasyonu hala bir insanın satır satır yazdığı kurallar üzerinde çalışıyor. EASA'nın konsept belgesi, sistem bunun yerine kendi cevaplarını çıkarsamaya başladığında nelerin değiştiğiyle ilgili. Fotoğraf: Oleg V. Belyakov tarafından çekilen Airbus A400M kokpiti, CC BY-SA 3.0." source="https://commons.wikimedia.org/wiki/File:Airbus_A400M_cockpit_ILA2014.jpg">
+  <img src="/essays/easa-ai-concept-paper/01-cockpit.jpg" alt="Birden fazla çok işlevli ekrana ve fly-by-wire yan kumanda kollarına sahip bir Airbus A400M'in cam kokpiti" class="w-full rounded-lg" />
+</Diagram>
+
+## Yüksek sesle düşünen bir düzenleyici
+
+İlk anlaşılması gereken şey, bir **konsept belgesinin** gerçekte ne olduğudur: bir düzenleyicinin henüz var olmayan kurallar hakkında kamuoyu önünde akıl yürüttüğü bir belge. Bu *bağlayıcı bir yasa değildir*. EASA bu konuda açık sözlüdür: belge "uygulanabilir hedefler" sunar ama "bu aşamada kesin veya ayrıntılı bir rehberlik teşkil etmez." Bunu düzenleme için bir hava tahmini gibi düşünün: uçak üreticilerinin ve havayollarının kabaca neyin geldiğini görüp, herhangi bir şey zorunlu hale gelmeden yıllar önce hazırlanmaya başlamasının bir yolu. Resmi olarak bu belge, EASA'nın **AI Roadmap 2.0** (Yapay Zeka Yol Haritası 2.0) yapısını ve bürokratik kod adı RMT.0742 olan gelecekteki bir kural yapım görevini (EASA'nın fikirleri bağlayıcı düzenlemeye dönüştürdüğü resmi süreci) besler.
+
+Belge tek başına da var olmuyor. 2024'te AB, yapay zeka üzerine Avrupa'nın geniş kapsamlı yatay yasası olan **AI Act**'i (Yapay Zeka Yasası) çıkardı. Yasanın 108. Maddesi özellikle EASA'ya, Yasanın gerekliliklerini havacılık kurallarına katmasını emrediyor. Yani bu belge, EASA'nın iki treni, havacılık emniyeti düzenlemesi ile yeni Yapay Zeka Yasasını aynı ray üzerinde tutma girişimidir.
+
+## Aslında hangi "yapay zekadan" söz ediyoruz?
+
+"Yapay zeka" kaygan bir kelime, bu yüzden EASA onu daraltıyor. Kapsam, **dar kapsamlı yapay zeka** (artificial narrow intelligence), yani tanımlı bağlamlarda belirli işler için kurulmuş sistemlerdir ve belgenin "şu anda sertifikalandırılabilecek olanın sınırları dışında kalır" dediği genel yapay zeka (artificial general intelligence, yani varsayımsal her işi yapan makine) açıkça *kapsam dışıdır*. Bunun içinde EASA, Yapay Zeka Yasasının tanımını ödünç alır: belirli bir amaç için, girdilerinden, tahminler, öneriler veya kararlar gibi çıktılar üretmenin yolunu *çıkarsayan* bir sistem.
+
+Belge ardından alanı ikiye ayırır. Bir tarafta **makine öğrenmesi** (veri odaklı yapay zeka olarak da adlandırılır), yani performansı veriye maruz kaldıkça gelişen algoritmalar vardır; derin sinir ağlarını içeren aile budur. Diğer tarafta ise **mantık ve bilgi tabanlı yapay zeka** veya **LKB** (sembolik yapay zeka olarak da adlandırılır), yani eski tarz bir uzman sisteminin yapacağı gibi, açık bir mantık ve bilgi tabanı üzerinden akıl yürüterek sonuçlara ulaşan sistemler vardır. EASA burada dikkatlidir: bir LKB sistemi, her kuralın kodun içine elle yazıldığı ve tam olarak izlenebildiği geleneksel kural tabanlı bir programla *aynı şey değildir*. Bir LKB sisteminde, bir akıl yürütme motoru bilgi tabanından *kendi çıkarımlarını yapar*, yeni gözetim gerektirmesinin nedeni de tam olarak budur. İki aile birleştirilebilir de (**hibrit yapay zeka**) ve günümüzün üretken büyük dil modelleri (**LLM'ler**) de açıkça kapsam içine çekilir. Hepsi sayılır.
+
+## Bırakmanın dört seviyesi
+
+Çerçevenin kalbinde, insanın makineye ne kadarını devrettiğini tarif eden bir merdiven var. EASA, her biri alt seviyelere sahip **dört yapay zeka seviyesi** tanımlar ve aralarındaki sınırlar son derece basit bir mantık üzerine çizilmiştir: *bir kişi doğrudan döngünün içinde mi → kararı asıl kim veriyor → yapay zekaya ne kadar yetki devredildi?*
+
+- **Seviye 0, düşük otomasyon.** Yapay zeka arka planda sessizce bilgi toplar ve analiz eder; doğrudan kullanıcı etkileşimi yoktur ve bir kararla bağlantısı yoktur. Sensör verilerini işleyen ama kimseyle hiç konuşmayan bir sistem düşünün.
+- **Seviye 1, insana yardım.** Artık bir kişi doğrudan yapay zekayla etkileşime giriyor, ama her kararı yine insan veriyor. Bu seviye **1A** (insan *zenginleştirme*, kişinin algıladığını keskinleştirme) ve **1B** (kişinin bir karar veya eylem *seçmesine* yardım etme) olarak ayrılır. Seviye 0 ile Seviye 1 arasındaki çizgi tamamen bir son kullanıcının doğrudan temasta olup olmadığıyla ilgilidir; karar verme süreci aynıdır.
+- **Seviye 2, insan-yapay zeka iş birliği veya ortaklık.** Burada yapay zeka eylemleri *otomatik olarak seçip yürütebilir*, ama insan tam kontrolü elinde tutar ve her an, "kısmi yetkinin kademeli devri" içinde devreye girip geçersiz kılabilir. **2A** *iş birliğidir* (yapay zeka *sizin* hedefinize ulaşmanıza yardım eder); **2B** ise *ortaklıktır*, insan-yapay zeka takım çalışması olarak da adlandırılır; burada insan ve makine birlikte *ortak* bir hedefin peşinden gider.
+- **Seviye 3, ileri otomasyon.** Artık yapay zekaya kararları verme ve yürütme konusunda *tam* yetki verilmiştir. **3A**'da bir insan onu hala uzaktan koruyup, uyarıldığında devreye girebilir; **3B**'de ise hiç insan dahil değildir.
+
+En önemli sıçrama, Seviye 2'den Seviye 3'edir: 2B'de insan hala ağırlıklı olarak sorumludur, Seviye 3'te ise gerçekten yapay zeka sorumludur.
+
+## Ayarları çevirmek: kritiklik ve orantılılık
+
+Bakım ipucu öneren bir sohbet robotu ile bir uçağı uçuran bir yapay zeka çılgınca farklı risklerdir, bu yüzden EASA onları aynı şekilde ele almayı reddeder. Her yapay zeka (alt)sistemi, bir arızanın ne kadar zarara yol açabileceğini yansıtan bir **güvence seviyesi** alır: uçuşa elverişlilik ve hava operasyonları için bir **DAL** (geliştirme güvence seviyesi, development assurance level) veya hava trafik yönetimi ile hava seyrüsefer hizmetleri (ATM/ANS) için bir **SWAL** (yazılım güvence seviyesi, software assurance level). Ardından tüm kural kitabı buna uyacak şekilde ölçeklenir; EASA'nın **orantılılık** dediği bir ilke: uygulama ne kadar kritikse, inceleme o kadar derinleşir. Hayati önemdeki bir işlev için yukarı, önemsiz bir işlev için aşağı çevirdiğiniz bir dizi ayar düğmesi hayal edin.
+
+<Diagram caption="Hava trafik yönetimi ile hava seyrüsefer hizmetleri (ATM/ANS) tam anlamıyla kapsam içinde yer alıyor; bu, EASA'nın bir yazılım güvence seviyesi (SWAL) atadığı alanlardan biri. Fotoğraf: Benlisquare tarafından çekilen Pekin Daxing Uluslararası Havaalanı'ndaki kontrol kulesi, CC BY-SA 4.0." source="https://commons.wikimedia.org/wiki/File:Air_traffic_control_at_Beijing_Daxing_International_Airport.jpg">
+  <img src="/essays/easa-ai-concept-paper/02-atc.jpg" alt="Apronda park etmiş yolcu uçaklarıyla Pekin Daxing Uluslararası Havaalanı'ndaki kontrol kulesi" class="w-full rounded-lg" />
+</Diagram>
+
+## Güvenilir yapay zekanın dört yapı taşı
+
+EASA her şeyi dört **yapı taşına**, yani güvenilir yapay zeka çerçevesinin taşıyıcı sütunlarına düzenler ve bunların bir araya geliş biçimi belgenin temel felsefesini ortaya koyar.
+
+İlk taş, **güvenilirlik analizi**, giriş kapısıdır. Uygulama ne olursa olsun *daima* tüm yelpazesiyle gerçekleştirilir: önce yapay zekayı karakterize edersiniz, ardından her şeyden önce emniyet/risk, güvenlik ve etik değerlendirmelerini yürütürsünüz ve bu, sistemi hizmete girdikten çok sonra bile izlemeye devam eden *sürekli* risk değerlendirmesini de tohumlar. Diğer üç taş ise daha önceki ayar düğmeleridir; derinlikleri uygulamanın kritikliğine ve seviyesine göre esner. Bunlar **yapay zeka güvencesi** (yapay zekanın kendisinin doğru inşa edildiğini kanıtlamak), **insan merkezli tasarım** (insanların ve makinelerin güvenli şekilde etkileşmesini sağlamak) ve **yapay zeka emniyet risk azaltma** (çok az doğrudan insan gözetimiyle veya hiç olmadan çalışan ileri otomasyonun tehlikelerini yönetmek) taşlarıdır.
+
+Bunların altında ise hepsini birbirine bağlayan felsefe yatar. EASA açıkça, öğrenen veya akıl yürüten bir sistemin her davranışını *asla* eksiksiz biçimde doğrulayamayacağınızı kabul eder; çünkü olası girdiler basitçe fazlasıyla çoktur. Dolayısıyla amaç kusursuz kanıt değil, **sınırlandırılmış ve yönetilen belirsizliktir**: okyanustaki her dalgayı haritalayamazsınız, bunun yerine hangi sularda seyredeceğinizi tam olarak işaretler ve geri kalanı için korkuluklar koyarsınız.
+
+## Akıllıca yeni fikirler
+
+Bu felsefeyi işler kılmak için belge, gerçekten yenilikçi birkaç kavram getirir.
+
+En büyüğü **öğrenme güvencesidir** (ve onun kardeşi **LKB güvencesi**): yapay zekayla birlikte güven yükünün *koddan veriye ve bilgiye* kaydığının kabulü. Geleneksel yazılım, her satırı bir gerekliliğe kadar izleyerek yargılanır. Ama bir yapay zekanın davranışı öğrendiği şeyden gelir, bu yüzden güvence; eğitim verilerinin, senaryoların veya bilgi tabanının *doğruluğuna, eksiksizliğine ve temsil ediciliğine* döner, ayrıca modelin hiç görmediği durumlara genelleyebildiğine dair kanıta da. Bu, bir öğrencinin beynini okumak ile bunun yerine doğru materyali çalıştığını ve yeni problemler içeren bir sınavı geçebildiğini denetlemek arasındaki farktır. (Aynı mantık, LLM'ler gibi hazır modellere bile, katı kritiklik sınırları ve dikkatli performans değerlendirmesi altında, temkinli bir kapı aralar.)
+
+Ama davranışı gerekliliklere kadar izleyemiyorsanız, bir vekile ihtiyacınız vardır. İşte bu **operasyonel alan (OD, operational domain)** ve **operasyonel tasarım alanıdır (ODD, operational design domain)**, yani yapay zekanın başa çıkmak üzere inşa edildiği koşulların kesin bir tarifi (OD sistem seviyesinde, ODD ise yapay zeka seviyesinde daha ince ayrıntılı bir versiyon). EASA bu OD/ODD ikilisini izlenebilirlik için bir "vekil" olarak adlandırır: "bu çıktı şu kuraldan geldi" yerine, "bu çıktı, sistemin başa çıkabileceğini ilan ettiğimiz sınırların içinde gerçekleşti" ifadesini elde edersiniz.
+
+Geliştirme sürecini tüm bunların etrafında yeniden inşa etmek için EASA, klasik mühendislik şablonunu büker. Geleneksel güvence bir **V-şeklini** izler (bir tarafta aşağı doğru gereklilikler, diğer tarafta yukarı doğru doğrulama). Yapay zekaya veri tarafı için ikinci bir V eklenerek bir **W-şekli** üretilir: ilk V, modeli şekillendiren verileri, senaryoları ve bilgiyi yönetir; ikinci V ise asıl uygulamayı ele alır. Yapay zekayı saran şey ise yeni bir mimari fikirdir, **yapay zeka bileşeni** (AI constituent): bir bileşenin küçük bir diliminden bütün bir kümeye kadar her şeyi içinde tutabilen esnek bir "kutu", ama dışarıdan bakıldığında sıradan bir parça (bir "öğe") gibi davranır, böylece mevcut havacılık mühendisliği pratiğine düzgünce oturur. Bu, dağınık yapay zekanın derli toplu, standart şekilli bir kartuşun içine mühürlenmiş halidir.
+
+Bir de **açıklanabilirlik** var: bir yapay zekanın bir sonuca nasıl ulaştığını bir insana *yeterince* anlatabilme yeteneği. Önemli olan şu: bu "her şeyi göster" anlamına gelmez. Derin bir sinir ağının tam şeffaflığı, uçuş ortasındaki bir pilot için işe yaramaz olurdu. Bunun yerine belge bunu ikiye ayırır: **operasyonel açıklanabilirlik** (sistemi gerçekten kullanan son kullanıcı için, doğru bilgiyi, doğru ayrıntı düzeyinde, doğru anda vermek) ve **geliştirme açıklanabilirliği** (mühendislerin, sertifikalandırıcıların ve kaza araştırmacılarının ihtiyaç duyduğu derin teknik bakış). Açıklamayı belirleyen şey, hitap edilen kitledir.
+
+İnsan tarafında EASA, **iş birliğini** (Seviye 2A, yapay zeka *sizin* hedefinize ulaşmanıza yardım etmek için çalışır, tıpkı ona doğrulttuğunuz şeyi yapan akıllı bir elektrikli alet gibi) **ortaklıktan** (Seviye 2B, insan ve yapay zeka bir hedefi paylaşır, durum farkındalığını paylaşır ve iletişim kurar, tıpkı gerçek bir takım arkadaşı gibi) özenle ayırır. Ve insanların geri çekildiği Seviye 3 için iki yeni gözetim fikri ekler: **uzaktan gözetim**, burada bir kişi yalnızca sistem onu uyardığında müdahale eder, ve **yetkilendirilmiş gözetim**, burada bağımsız bir "operasyonel gözetim sistemi" tetikte duran insanı *taklit etmek* üzere inşa edilir; her ikisi de Yapay Zeka Yasasının, yapay zekanın etkili insan gözetimi altında kalmasını isteyen 14. Maddesini karşılamak için tasarlanmıştır.
+
+Son olarak, ferahlatıcı derecede iyimser bir fikir: **net emniyet faydası** (net safety benefit). Tarihsel olarak sertifikalandırma yalnızca "bu bozulduğunda ne olur?" diye sorardı ve bir sistemin *kurtarabileceği* canlar için hiçbir kredi vermezdi. EASA bunu tersine çevirmeyi önerir: eğer bir yapay zeka operasyonları genel olarak gözle görülür biçimde daha güvenli hale getiriyorsa, özel bir EASA yönetişim kurulu tarafından değerlendirilerek, gerekli güvence seviyesinde (katı sınırlar içinde, asla en felaket boyutlu arıza koşulları için değil ve asla tanımlı bir tabanın altına inmeden) bir seviyelik indirim kazanabilir. Belge ayrıca **hizmet deneyimine** de yer açar; sistemlerin gerçek dünya verisi toplamak için "gölge operasyonlarda" çalışmasına izin verir, ve havacılığın yapay zeka gözetimini, Yapay Zeka Yasasını tekrarlamak yerine onunla tutarlı tutmaya da yer verir.
+
+## Bu neden önemli
+
+Kısaltmaları ve W-şekillerini bir kenara bırakın; bu belge aslında bir mesleğin, henüz tam olarak anlamadığı bir teknolojiye "evet" demeyi öğrenmesiyle ilgilidir, hem de uçmayı seyahatin en güvenli yolu haline getiren çıtayı düşürmeden. EASA'nın bahsi şudur: yapay zekayı, imkansızı talep ederek değil, makinenin yapabileceklerini *sınırlandırarak* ve incelemeyi riskin büyüklüğüne göre ölçekleyerek evcilleştirirsiniz. Bu, emniyet ile yenilik arasında kasıtlı bir denge kurma eylemidir ve kokpitte yapay zeka çağının artık bir *eğer* sorusu değil, bir *ne kadar dikkatli* sorusu olduğunun sessiz bir işaretidir.
