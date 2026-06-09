@@ -1,0 +1,162 @@
+---
+title: "Documents and Chunking"
+description: "We have a retrieval engine, but it rests on one quiet assumption: that documents arrive as tidy chunks. Part 5 of a from-scratch series on Retrieval-Augmented Generation: getting clean text out of messy formats, why we chunk at all, the too-small versus too-large tension, the main splitting strategies (fixed-size, recursive, structure-aware, semantic), and the two dials that quietly decide retrieval quality, chunk size and overlap. Bad chunks poison everything downstream."
+date: 2026-06-11
+tags: ["RAG", "Chunking", "Document Processing", "Vector Search", "NLP", "AI"]
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*RAG from First Principles. Part 5 of the series.*
+
+## What you'll learn
+
+For four parts we have been improving the same machine. We turn text into **embeddings** (Part 2), score a query against them with cosine similarity and keep the **top-k** (Part 3), and do that retrieval fast at scale with a vector database and approximate nearest-neighbor search (Part 4). And the whole time we leaned on one word without ever earning it: *chunks*. We kept saying "the chunks" as if our documents arrived pre-cut into tidy, self-contained pieces. They do not. This part is about the cut itself: how raw documents become the chunks we embed, why that decision is one of the highest-leverage and most underrated choices in all of RAG, and how to make it well. By the end you'll know how to get clean text out of messy files, why we chunk at all, the central too-small versus too-large tension, the main strategies for splitting, and the two dials, **chunk size** and **chunk overlap**, that quietly decide how good your retrieval can ever be.
+
+## Prerequisites
+
+Parts 1 through 4: [Why RAG Exists](/essays/why-rag-exists), [Embeddings, Truly Understood](/essays/embeddings), [Measuring Similarity](/essays/measuring-similarity), and [Vector Databases and Indexing](/essays/vector-databases). You should be comfortable that text becomes a vector, that similar meanings sit close together, that we rank by similarity and keep the top-k, and that a vector database retrieves those neighbors quickly. Basic Python helps for the one short snippet, but this is a concept chapter: we lead with intuition and pictures.
+
+## The quiet assumption: where do chunks come from?
+
+Here is the uncomfortable truth that this part exists to fix. Everything we built sits on top of the chunks, and we never said where they come from. A real source is not a **chunk**. It is a forty-page PDF, a sprawling web page, a thread of support messages, a slide deck. Someone, namely us, has to decide where to slice that source into the pieces we embed and store. That decision is **chunking**, and it is one of the highest-leverage and most underrated steps in the entire pipeline.
+
+Why so high-leverage? Because chunking sits at the very bottom of the stack, so its mistakes propagate up through everything. If the chunk that should answer *"What is our refund window?"* never cleanly contained the sentence *"Refunds are accepted within 30 days of purchase,"* then no embedding model, no similarity metric, no clever index, and no large language model can retrieve an answer that your chunking destroyed. Garbage chunks in, garbage retrieval out. People reach for a fancier reranker or a bigger model when their RAG underperforms, and the real culprit is often sitting three steps upstream, in how the documents were split. Get this right and the rest of the system has a chance. Get it wrong and nothing downstream can save you.
+
+## First, get clean text out
+
+Before you can chunk a document, you have to turn it into text, and that step is quietly treacherous. **Document loading** (or **parsing**) is the work of extracting clean, readable text from a source's native format. It sounds boring. It is not, because the quality of that extraction is a hard ceiling on everything above it.
+
+Each format fights back in its own way. A **PDF** may be laid out in two columns, so a naive reader interleaves the left and right columns into scrambled nonsense; it carries running headers and footers that, left in, pollute every chunk; and its tables, flattened to a single stream of text, can turn a clean grid of numbers into meaningless soup. **HTML** is wrapped in navigation menus, cookie banners, sidebars, and footers that are pure boilerplate, none of which you want embedded as if it were content. **Word** documents, **slides**, and **Markdown** each carry their own structure worth preserving. And **scanned images** have no text at all until you run **OCR** (optical character recognition) to recover it, introducing its own errors.
+
+The lesson is blunt: if extraction mangles the source, retrieval is doomed no matter how good the rest of your stack is. A table turned to gibberish or two columns shuffled together will quietly poison the chunks that come from them, and you will spend days tuning embeddings and `nprobe` chasing a problem that was born at the very first step. So treat loading as a real task. Handle tables, images, and the document's structure deliberately, and verify that what comes out actually reads like the source went in.
+
+## Why chunk at all?
+
+Suppose the text is clean. Why not embed each document as a single vector and skip the splitting entirely? Three concrete reasons force our hand.
+
+- **Embedding input limits.** Embedding models cap how much text they will turn into one vector, from a few hundred tokens up to several thousand (8k or more on long-context models), depending on the model. Either way the cap is finite: you cannot feed a whole book to the model and get a single embedding back. The input has to be broken down.
+- **Retrieval precision.** Even if you could embed a huge document at once, you should not want to. A single vector for a long document is a *blurry average* of everything inside it: refunds, shipping, warranties, contact details, all smeared into one point in space. A query about refunds matches that average only weakly. Smaller chunks each capture one focused idea, so they produce far sharper, more targeted matches. Precision lives in small pieces.
+- **Generation-time economy.** The chunks we retrieve do not just get scored; the winners get stuffed into the language model's prompt as context (the context-window wall from Part 1 is still very real). Smaller, relevant chunks pack more useful signal into that limited budget and waste fewer tokens on text the question never needed.
+
+So we chunk because we must (input limits), because it sharpens retrieval (precision), and because it spends the context budget wisely (economy).
+
+## The central tension: too small, too large, just right
+
+Chunking would be easy if smaller were simply better. It is not, and the reason is a genuine tension that every strategy below is trying to navigate.
+
+Cut **too small** and you destroy context. A chunk that reads only *"within 30 days"* is useless: thirty days of what, from when? Ripped from its sentence, the fragment is ambiguous, and its embedding points nowhere useful. Cut **too large** and you blur the meaning: the embedding becomes that averaged smear again, retrieval gets imprecise, and you spend context budget on filler. The goal is neither extreme. It is to cut along **semantically coherent units**, pieces that each hold one complete, self-contained idea, the way a good paragraph does. The figure below puts the three cases side by side so the trade-off is impossible to miss.
+
+<Diagram number={1} caption="The same passage cut three ways: a too-small chunk that is ambiguous out of context, a too-large chunk whose embedding is a blurry average of several topics, and a just-right chunk holding one self-contained idea that matches sharply.">
+  <img src="/essays/documents-and-chunking/part5-too-small-too-large.svg" alt="Three side-by-side panels on the same refund-policy passage. The first, labelled too small, shows the fragment within 30 days alone with a note that it is ambiguous out of context. The second, labelled too large, shows a long block covering refunds, shipping, and final-sale rules with a note that its embedding is a blurry average of many topics. The third, labelled just right, shows a single coherent sentence about the 30-day refund window with a note that it matches sharply." class="w-full rounded-lg" />
+</Diagram>
+
+## Strategies for splitting
+
+There is no single correct way to chunk; there is a ladder of strategies, each smarter and a little more expensive than the last. Here are the four you will actually meet, plus one on the horizon.
+
+**Fixed-size chunking** splits the text every `N` tokens or characters, full stop. It is the simplest, fastest, and most predictable approach, and it is blind: it will happily cut through the middle of a sentence, a word, or an idea, because it counts characters and nothing else. Good for a quick baseline, rough on meaning.
+
+**Recursive character chunking** fixes most of that blindness. It tries a hierarchy of separators in order, paragraphs first, then sentences, then words, splitting on the coarsest boundary that keeps chunks under the size limit. The effect is that it respects natural boundaries when it can and only resorts to finer cuts when a piece is still too big. This is the sensible default for most prose, and it is what most people should reach for first.
+
+**Document-structure-aware chunking** goes a step further by splitting along the document's *own* structure rather than generic punctuation: Markdown headers, HTML sections, the functions in a source file, the slides in a deck. It respects the boundaries the author actually intended, which often map perfectly onto coherent units.
+
+**Semantic chunking** is the smartest and the slowest. It uses embeddings to detect where the topic shifts: it walks through the text keeping adjacent sentences together while they stay similar in meaning, and cuts precisely where that similarity drops. The boundaries land on genuine changes of subject, but you pay for it in compute and in unpredictability (chunk sizes vary, and you are embedding just to decide how to chunk).
+
+| Strategy | How it splits | Reach for it when |
+|---|---|---|
+| Fixed-size | Every `N` tokens or characters, blindly | You want a fast, predictable baseline and content is uniform |
+| Recursive character | Paragraphs, then sentences, then words, under a size cap | The sensible default for most prose |
+| Structure-aware | Along the document's own structure (headings, sections, functions, slides) | The source has clear, meaningful structure to follow |
+| Semantic | Where the embedding similarity between neighboring pieces drops | Boundaries matter a lot and you can afford the extra compute |
+
+On the horizon is **LLM-based** (or agent-based) **chunking**: handing the text to a model and letting it decide the boundaries directly. It is an advanced frontier, promising but costly, and we will leave it as a pointer rather than dig in here.
+
+## The two dials: chunk size and overlap
+
+Pick a strategy and you still have two knobs to set, and they matter enormously. The first is **chunk size**: roughly how big each chunk is, in tokens or characters. Small chunks are precise but risk losing context; large chunks hold more context but blur and cost more. That is the central tension again, now expressed as a number you choose.
+
+The second dial is **chunk overlap**, and it is the fix for the worst failure of the first. When you cut a document into adjacent pieces, an idea that happens to straddle a boundary gets sliced in half, and neither chunk holds it whole. Overlap solves this with a **sliding window**: consecutive chunks deliberately share some text at their seams, so a sentence sitting on a boundary survives intact in at least one chunk. A little overlap is cheap insurance against cutting an answer in two.
+
+<Diagram number={2} caption="Chunk overlap as a sliding window: consecutive chunks share text at their seams, so an idea that lands on a boundary is captured whole by at least one chunk instead of being split between two.">
+  <img src="/essays/documents-and-chunking/part5-overlap-window.svg" alt="A single line of text with three chunk windows drawn as rounded rectangles beneath it. Adjacent windows overlap at their seams, and the overlapping regions are shaded. A key phrase that sits on the boundary between the first and second chunk is shown fully contained inside the second chunk because the overlap captured it, with a note contrasting the split result when there is no overlap." class="w-full rounded-lg" />
+</Diagram>
+
+Here is the hard part, and the only rule that really matters: **the right values depend on your content and your embedding model, so measure, do not guess.** Dense legal text packs a lot of meaning into few words and tends to want smaller, careful chunks; chatty support docs can take larger ones; source code wants to be split along functions, not by character count at all. The common rules of thumb (chunks of a few hundred tokens, overlap of roughly ten to twenty percent of the size) are starting points, not answers. Try a few settings, look at the chunks they produce, and evaluate retrieval on real questions. The playground below lets you feel exactly how the strategy and the two dials reshape the boundaries on a sample document; drag the sliders and watch the chunks redraw.
+
+<Diagram number={3} caption="Switch strategy and drag the two dials. The sample document re-splits live: each chunk gets its own color, the shaded seams show overlap, and the readout reports how many chunks you get and how big they are.">
+  <IframeFigure
+    src="/essays/documents-and-chunking/part5-chunking-playground.html"
+    title="Interactive chunking playground: a sample document re-splits live as you toggle between fixed-size and recursive strategies and drag a chunk-size slider and an overlap slider, with each chunk color-coded, overlap regions shaded, and a readout of the chunk count and sizes"
+    height={680}
+  />
+</Diagram>
+
+{/* From experience callout: drop in a real first-person anecdote here (e.g. the time a too-large or mis-set chunk size silently tanked retrieval quality and you burned days blaming the embedding model or reranker before tracing it back to chunking), then wrap it as: > 💡 **From experience** ...story... */}
+
+## Give every chunk metadata, and a little context
+
+A chunk is more than its text. When you store it, attach **metadata**: the source document, the section or heading it came from, the page number, the date, the author. This is not bookkeeping for its own sake. It is exactly what powers the **metadata filtering** from Part 4 ("search only documents tagged `2024`"), and it is what lets you show clean citations later ("this came from `refund-policy.md`, the Returns section"). Enriching chunks with metadata at split time, a step often called **metadata enrichment**, is what makes the whole system trustworthy and debuggable downstream.
+
+There is a lighter trick worth knowing too. An isolated chunk can lose the thread of what it is about, so prepending a little context, the document title or the section heading, keeps it self-explanatory. A chunk that begins *"Refund Policy, Returns:"* before its sentence is far easier to retrieve correctly than the bare sentence alone. This is the seed of the "contextual" techniques that later parts explore; for now, just remember that a chunk should carry enough of its origin to stand on its own.
+
+## See the boundaries shift, in code
+
+To make the difference concrete, here is the same short document split two ways. This is illustrative only, not a pipeline to build (that is Part 6), but it shows how the boundaries move.
+
+```python
+text = open("refund-policy.md").read()
+
+# Fixed-size: blind cuts every 200 characters
+fixed = [text[i:i + 200] for i in range(0, len(text), 200)]
+
+# Recursive: prefer paragraph, then sentence, then word boundaries
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=200,
+    chunk_overlap=20,
+    separators=["\n\n", "\n", ". ", " ", ""],
+)
+recursive = splitter.split_text(text)
+
+for c in recursive:
+    print(repr(c), "\n")
+```
+
+The `fixed` list will contain pieces that stop mid-sentence, even mid-word. The `recursive` list, given the same size budget, will break at paragraph and sentence boundaries instead, so each chunk reads like a coherent thought, with a small overlap so nothing on a seam is lost. Same document, same size limit, very different chunks.
+
+## What's next: assembling the whole thing
+
+Step back and look at what we now hold. We can extract clean text, split it into coherent chunks with the right strategy and the right dials, and enrich each chunk with metadata. Combined with the earlier parts, that completes every ingredient of a retrieval system: embeddings (Part 2), similarity scoring (Part 3), fast retrieval at scale (Part 4), and now well-formed, well-described chunks (this part). Good chunks are the foundation the rest of RAG stands on, the quiet decision that decides the ceiling for everything above it. With all the pieces finally in hand, Part 6 assembles them into a complete, working RAG application, end to end.
+
+## Key takeaways
+
+- **Chunking** is one of the highest-leverage and most underrated steps in RAG: it sits at the bottom of the stack, so its mistakes propagate everywhere. Garbage chunks in, garbage retrieval out, and no reranker or bigger model rescues a chunk that never held the answer.
+- Chunking starts with **document loading**: extracting clean text from messy formats (PDF columns and tables, HTML boilerplate, OCR on scans). Extraction quality is a hard ceiling on everything downstream.
+- We chunk for three reasons: embedding **input limits**, retrieval **precision** (small chunks beat a blurry whole-document average), and generation-time **economy** (relevant chunks spend the context budget well).
+- The central tension: too small loses context and turns ambiguous; too large blurs the embedding and wastes budget. Aim for **semantically coherent units**.
+- The strategies climb a ladder: **fixed-size** (fast, blind), **recursive character** (the sensible default), **structure-aware** (follows the document's own boundaries), and **semantic** (cuts on meaning, slower). LLM-based chunking is an emerging frontier.
+- The two dials are **chunk size** and **chunk overlap** (a sliding window that protects ideas on a boundary). The right values depend on your content and embedding model, so measure, do not guess, and attach **metadata** to every chunk.
+
+## Glossary
+
+- **Document loading (parsing)**: extracting clean, readable text from a source's native format (PDF, HTML, Word, slides, scanned images); the first step before chunking, and a hard ceiling on retrieval quality.
+- **OCR (optical character recognition)**: recovering text from an image or scanned page so it can be loaded and chunked.
+- **Chunk**: a single piece of a document, embedded and stored as one vector; the unit that retrieval returns.
+- **Chunking**: the process of splitting a loaded document into chunks; one of the highest-leverage decisions in a RAG system.
+- **Fixed-size chunking**: splitting every `N` tokens or characters regardless of content; simple, fast, and predictable, but blind to sentence and idea boundaries.
+- **Recursive character chunking**: splitting on a hierarchy of separators (paragraphs, then sentences, then words) to respect natural boundaries under a size limit; the sensible default for prose.
+- **Document-structure-aware chunking**: splitting along the document's own structure (Markdown headers, HTML sections, code functions, slides) to honor authored boundaries.
+- **Semantic chunking**: using embeddings to detect topic shifts and cut where the similarity between neighboring pieces drops; accurate but slower and less predictable.
+- **LLM-based (agent-based) chunking**: letting a language model decide the chunk boundaries directly; an emerging and costly frontier, noted here as a pointer rather than a default.
+- **Chunk size**: roughly how large each chunk is, in tokens or characters; small is precise but context-poor, large holds context but blurs and costs more.
+- **Chunk overlap**: text shared between consecutive chunks so an idea on a boundary survives intact in at least one of them.
+- **Sliding window**: the overlapping scheme that produces chunk overlap, advancing by less than the chunk size so neighbors share their seams.
+- **Metadata enrichment**: attaching structured fields (source, section, page, date, author) to each chunk, powering metadata filtering and clean citations.
+
+---
+
+**Next up, Part 6: Build Your First RAG.** We finally have every piece: clean chunks, embeddings, similarity, and fast retrieval. Next we stop explaining and start building, assembling a complete, working RAG application from end to end.
