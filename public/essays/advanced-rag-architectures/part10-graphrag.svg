@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="gr-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1,1 L9,5 L1,9" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    </marker>
+    <marker id="gr-path" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M1,1 L9,5 L1,9" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="560" fill="#ffffff" />
+
+  <!-- Title -->
+  <text x="40" y="40" font-size="20" font-weight="700" fill="#0f172a">Connecting scattered facts</text>
+  <text x="40" y="62" font-size="13" fill="#64748b">A flat list of chunks cannot link facts that live apart. A knowledge graph traverses the relationships between them.</text>
+
+  <!-- ===================== LEFT PANEL ===================== -->
+  <rect x="40" y="84" width="430" height="396" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+  <text x="62" y="112" font-size="12" font-weight="700" letter-spacing="0.05em" fill="#64748b">VECTOR RAG : ISOLATED CHUNKS</text>
+
+  <!-- Query diamond (left) -->
+  <path d="M120,150 L132,162 L120,174 L108,162 Z" fill="#6366f1" stroke="#fff" stroke-width="1.5" />
+  <text x="148" y="159" font-size="12" font-weight="700" fill="#4f46e5">"Who leads the company</text>
+  <text x="148" y="174" font-size="12" font-weight="700" fill="#4f46e5">that makes the X1 Earbuds?"</text>
+
+  <!-- pull-back fan: query feeds a flat list -->
+  <g stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="4 4" fill="none">
+    <path d="M120,178 V206" marker-end="url(#gr-arrow)" />
+  </g>
+  <text x="138" y="200" font-size="10.5" fill="#94a3b8">top-k returns a flat list</text>
+
+  <!-- Chunk 1 (retrieved, cyan) -->
+  <rect x="62" y="214" width="386" height="44" rx="8" fill="#ffffff" stroke="#06b6d4" stroke-width="2" />
+  <rect x="62" y="214" width="5" height="44" rx="2.5" fill="#06b6d4" />
+  <text x="82" y="232" font-size="11.5" fill="#0f172a">"The X1 Earbuds ship in a recycled case."</text>
+  <text x="82" y="248" font-size="10" fill="#0e7490" font-weight="700">RETRIEVED</text>
+
+  <!-- Chunk 2 (retrieved, cyan) -->
+  <rect x="62" y="266" width="386" height="44" rx="8" fill="#ffffff" stroke="#06b6d4" stroke-width="2" />
+  <rect x="62" y="266" width="5" height="44" rx="2.5" fill="#06b6d4" />
+  <text x="82" y="284" font-size="11.5" fill="#0f172a">"AcmeAudio offers a one-year warranty."</text>
+  <text x="82" y="300" font-size="10" fill="#0e7490" font-weight="700">RETRIEVED</text>
+
+  <!-- Chunk 3 (not retrieved, muted) -->
+  <rect x="62" y="318" width="386" height="40" rx="8" fill="#f1f5f9" stroke="#e2e8f0" />
+  <rect x="62" y="318" width="5" height="40" rx="2.5" fill="#94a3b8" />
+  <text x="82" y="343" font-size="11.5" fill="#64748b">"Dana Reyes runs AcmeAudio."</text>
+
+  <!-- Chunk 4 (not retrieved, muted) -->
+  <rect x="62" y="366" width="386" height="40" rx="8" fill="#f1f5f9" stroke="#e2e8f0" />
+  <rect x="62" y="366" width="5" height="40" rx="2.5" fill="#94a3b8" />
+  <text x="82" y="391" font-size="11.5" fill="#64748b">"Returns are accepted by email."</text>
+
+  <!-- the gap -->
+  <text x="62" y="436" font-size="11.5" fill="#334155">Each chunk stands alone. Nothing links</text>
+  <text x="62" y="452" font-size="11.5" fill="#334155">"X1 Earbuds" to "AcmeAudio" to "Dana Reyes",</text>
+  <text x="62" y="468" font-size="11.5" font-weight="700" fill="#f43f5e">so the multi-hop question goes unanswered.</text>
+
+  <!-- ===================== RIGHT PANEL ===================== -->
+  <rect x="530" y="84" width="430" height="396" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+  <text x="552" y="112" font-size="12" font-weight="700" letter-spacing="0.05em" fill="#64748b">GRAPHRAG : TRAVERSE RELATIONSHIPS</text>
+
+  <!-- Query diamond (right) -->
+  <path d="M580,150 L592,162 L580,174 L568,162 Z" fill="#6366f1" stroke="#fff" stroke-width="1.5" />
+  <text x="608" y="159" font-size="12" font-weight="700" fill="#4f46e5">"Who leads the company</text>
+  <text x="608" y="174" font-size="12" font-weight="700" fill="#4f46e5">that makes the X1 Earbuds?"</text>
+
+  <!-- query enters the graph at the first entity -->
+  <path d="M600,178 Q612,214 632,242" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#gr-arrow)" />
+  <text x="618" y="206" font-size="10.5" fill="#94a3b8">match entity</text>
+
+  <!-- ===================== TRAVERSAL PATH EDGES (cyan, under nodes) ===================== -->
+  <!-- hop 1: X1 Earbuds (660,252) -> AcmeAudio (790,332) -->
+  <line x1="679" y1="270" x2="771" y2="314" fill="none" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" marker-end="url(#gr-path)" />
+  <!-- hop 2: AcmeAudio (790,332) -> Dana Reyes (660,402) -->
+  <line x1="771" y1="350" x2="679" y2="384" fill="none" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" marker-end="url(#gr-path)" />
+
+  <!-- edge labels -->
+  <rect x="688" y="282" width="74" height="18" rx="6" fill="#f8fafc" />
+  <text x="725" y="295" font-size="10.5" fill="#64748b" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">made_by</text>
+  <rect x="690" y="350" width="70" height="18" rx="6" fill="#f8fafc" />
+  <text x="725" y="363" font-size="10.5" fill="#64748b" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">led_by</text>
+
+  <!-- ===================== ENTITY NODES ===================== -->
+  <!-- X1 Earbuds (entry, teal) -->
+  <circle cx="660" cy="252" r="22" fill="#14b8a6" stroke="#fff" stroke-width="2.5" />
+  <text x="660" y="249" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">X1</text>
+  <text x="660" y="261" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">Earbuds</text>
+  <text x="660" y="297" font-size="10" font-weight="700" fill="#0f766e" text-anchor="middle">product</text>
+
+  <!-- AcmeAudio (company, violet) -->
+  <circle cx="790" cy="332" r="22" fill="#8b5cf6" stroke="#fff" stroke-width="2.5" />
+  <text x="790" y="329" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">Acme</text>
+  <text x="790" y="341" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">Audio</text>
+  <text x="790" y="377" font-size="10" font-weight="700" fill="#7c3aed" text-anchor="middle">company</text>
+
+  <!-- Dana Reyes (answer, teal) -->
+  <circle cx="660" cy="402" r="22" fill="#14b8a6" stroke="#fff" stroke-width="2.5" />
+  <text x="660" y="399" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">Dana</text>
+  <text x="660" y="411" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">Reyes</text>
+
+  <!-- answer badge -->
+  <rect x="700" y="390" width="86" height="24" rx="8" fill="#10b981" />
+  <text x="743" y="406" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">the answer</text>
+
+  <!-- an off-path entity + edge to show the graph is bigger (gray, non-path) -->
+  <line x1="812" y1="332" x2="888" y2="332" stroke="#cbd5e1" stroke-width="1.6" />
+  <circle cx="906" cy="332" r="16" fill="#94a3b8" stroke="#fff" stroke-width="2" />
+  <text x="906" y="335" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">EU</text>
+  <text x="852" y="324" font-size="9.5" fill="#64748b" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">ships_to</text>
+
+  <!-- the payoff -->
+  <text x="552" y="448" font-size="11.5" fill="#334155">Follow the edges across two hops to reach a fact</text>
+  <text x="552" y="464" font-size="11.5" font-weight="700" fill="#059669">no single chunk ever held.</text>
+
+  <!-- ===================== LEGEND ===================== -->
+  <g font-size="11.5" fill="#64748b">
+    <circle cx="48" cy="520" r="7" fill="#14b8a6" /><text x="62" y="524">entity node</text>
+    <line x1="160" y1="520" x2="196" y2="520" stroke="#cbd5e1" stroke-width="2.4" /><text x="206" y="524">relationship edge</text>
+    <line x1="330" y1="520" x2="366" y2="520" stroke="#06b6d4" stroke-width="3.2" stroke-linecap="round" /><text x="376" y="524">traversal path</text>
+    <path d="M500,514 L508,520 L500,526 L492,520 Z" fill="#6366f1" /><text x="516" y="524">query</text>
+    <rect x="588" y="514" width="14" height="14" rx="4" fill="#ffffff" stroke="#06b6d4" stroke-width="2" /><text x="610" y="524">retrieved chunk</text>
+  </g>
+</svg>

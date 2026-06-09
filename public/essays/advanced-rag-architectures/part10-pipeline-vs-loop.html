@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Naive pipeline vs. agentic loop</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 10 flagship animation
+     Self-contained: no external resources, no web fonts, inline SVG only.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --radius-card: 14px;
+    --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 320ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .vb { max-width: 900px; margin: 0 auto; }
+
+  .vb-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 14px; }
+  .vb-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .vb-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .vb-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* mode toggle + stats */
+  .vb-modebar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 4px 0 14px; }
+  .vb-modes { display: inline-flex; border: 1px solid var(--border); border-radius: 11px; padding: 3px; background: var(--surface-1); gap: 3px; }
+  .vb-mode {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--muted);
+    background: transparent; border: none; border-radius: 8px; padding: 7px 15px; cursor: pointer;
+    transition: background-color 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .vb-mode[aria-pressed="true"] { background: #fff; color: var(--heading); box-shadow: 0 1px 2px rgba(15,23,42,0.10); }
+  .vb-mode:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+
+  .vb-stats { display: flex; gap: 10px; margin-left: auto; }
+  .stat { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 7px 14px; min-width: 130px; }
+  .stat .s-label { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .stat .s-val { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--heading); line-height: 1.3; }
+  .vb.mode-naive .s-flow { border-color: #c7d2fe; }
+  .vb.mode-naive .s-flow .s-val { color: var(--indigo-strong); }
+  .vb.mode-agentic .s-flow { border-color: #ddd6fe; }
+  .vb.mode-agentic .s-flow .s-val { color: #7c3aed; }
+  .stat .s-val.verdict-bad { color: var(--rose); }
+  .stat .s-val.verdict-good { color: var(--emerald); }
+
+  /* canvas */
+  .vb-canvas {
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: radial-gradient(120% 100% at 50% -10%, var(--surface-1) 0%, var(--bg) 60%);
+    padding: 10px;
+  }
+  .vb-svg { display: block; width: 100%; height: auto; }
+
+  /* flowchart nodes (rounded rects) */
+  .node-box {
+    fill: #ffffff; stroke: var(--border); stroke-width: 1.5;
+    transition: fill var(--dur) var(--ease), stroke var(--dur) var(--ease),
+                stroke-width var(--dur) var(--ease);
+  }
+  .node-label { font-family: var(--sans); font-weight: 700; fill: var(--heading); text-anchor: middle; }
+  .node-sub { font-family: var(--sans); font-weight: 500; fill: var(--muted); text-anchor: middle; }
+  .node.dim .node-box { opacity: 0.42; }
+  .node.dim .node-label, .node.dim .node-sub { opacity: 0.42; }
+
+  /* node accents by role, applied when active */
+  .node.active .node-box { stroke-width: 3; }
+  .node.role-query.active .node-box  { stroke: var(--indigo-strong); fill: color-mix(in srgb, var(--indigo) 9%, #fff); }
+  .node.role-query.active .node-label { fill: var(--indigo-strong); }
+  .node.role-retrieve.active .node-box  { stroke: var(--cyan); fill: color-mix(in srgb, var(--cyan) 10%, #fff); }
+  .node.role-retrieve.active .node-label { fill: #0e7490; }
+  .node.role-correct.active .node-box  { stroke: var(--rose); fill: color-mix(in srgb, var(--rose) 9%, #fff); }
+  .node.role-correct.active .node-label { fill: var(--rose); }
+  .node.role-generate.active .node-box  { stroke: var(--indigo-strong); fill: color-mix(in srgb, var(--indigo) 9%, #fff); }
+  .node.role-generate.active .node-label { fill: var(--indigo-strong); }
+  .node.role-generate.grounded .node-box  { stroke: var(--emerald); fill: color-mix(in srgb, var(--emerald) 11%, #fff); }
+  .node.role-generate.grounded .node-label { fill: #047857; }
+
+  /* decision diamonds (rotated squares via polygon) */
+  .diamond {
+    fill: #ffffff; stroke: var(--border); stroke-width: 1.5;
+    transition: fill var(--dur) var(--ease), stroke var(--dur) var(--ease), stroke-width var(--dur) var(--ease);
+  }
+  .diamond-label { font-family: var(--sans); font-weight: 700; fill: var(--heading); text-anchor: middle; }
+  .diamond-sub { font-family: var(--sans); font-weight: 500; fill: var(--muted); text-anchor: middle; }
+  .node.dim .diamond { opacity: 0.42; }
+  .node.dim .diamond-label, .node.dim .diamond-sub { opacity: 0.42; }
+  .node.role-decide.active .diamond { stroke: var(--amber); stroke-width: 3; fill: color-mix(in srgb, var(--amber) 12%, #fff); }
+  .node.role-decide.active .diamond-label { fill: #b45309; }
+  .node.role-decide.bad .diamond { stroke: var(--rose); stroke-width: 3; fill: color-mix(in srgb, var(--rose) 10%, #fff); }
+  .node.role-decide.bad .diamond-label { fill: var(--rose); }
+  .node.role-decide.good .diamond { stroke: var(--emerald); stroke-width: 3; fill: color-mix(in srgb, var(--emerald) 11%, #fff); }
+  .node.role-decide.good .diamond-label { fill: #047857; }
+
+  /* verdict badges that pop on a diamond */
+  .verdict { opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .verdict.show { opacity: 1; }
+  .verdict-pill { stroke-width: 1.5; }
+  .verdict.bad  .verdict-pill { fill: color-mix(in srgb, var(--rose) 14%, #fff); stroke: var(--rose); }
+  .verdict.good .verdict-pill { fill: color-mix(in srgb, var(--emerald) 14%, #fff); stroke: var(--emerald); }
+  .verdict-txt { font-family: var(--sans); font-weight: 700; text-anchor: middle; }
+  .verdict.bad  .verdict-txt { fill: var(--rose); }
+  .verdict.good .verdict-txt { fill: #047857; }
+
+  /* edges (arrows) */
+  .edge { stroke: #cbd5e1; stroke-width: 2; fill: none; transition: stroke var(--dur) var(--ease), stroke-width var(--dur) var(--ease), opacity var(--dur) var(--ease); }
+  .edge.dim { opacity: 0.3; }
+  .edge.flow-indigo.lit { stroke: var(--indigo-strong); stroke-width: 3; }
+  .edge.flow-cyan.lit   { stroke: var(--cyan); stroke-width: 3; }
+  .edge.flow-amber.lit  { stroke: var(--amber); stroke-width: 3; }
+  .edge.flow-emerald.lit{ stroke: var(--emerald); stroke-width: 3; }
+  /* the corrective loop-back arc */
+  .edge.loopback { stroke: var(--rose); stroke-dasharray: 7 5; opacity: 0.28; }
+  .edge.loopback.lit { stroke: var(--rose); stroke-width: 3.5; opacity: 1; stroke-dasharray: 7 5; }
+
+  .edge-label { font-family: var(--sans); font-size: 11px; font-weight: 700; text-anchor: middle; transition: opacity var(--dur) var(--ease); }
+  .edge-label.muted { fill: var(--muted); }
+  .edge-label.bad { fill: var(--rose); }
+  .edge-label.good { fill: #047857; }
+  .edge-label.dim { opacity: 0.32; }
+
+  /* caption (aria-live) */
+  .vb-caption {
+    margin-top: 14px; display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius-card); padding: 13px 16px;
+  }
+  .vb-caption-dot {
+    flex: 0 0 auto; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--indigo); box-shadow: 0 0 0 4px rgba(99,102,241,0.18);
+    transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .vb.mode-agentic .vb-caption-dot { background: var(--violet); box-shadow: 0 0 0 4px rgba(139,92,246,0.18); }
+  .vb-caption-dot.is-bad  { background: var(--rose);    box-shadow: 0 0 0 4px rgba(244,63,94,0.18); }
+  .vb-caption-dot.is-good { background: var(--emerald); box-shadow: 0 0 0 4px rgba(16,185,129,0.18); }
+  .vb-caption-text { font-size: 14.5px; color: var(--body); }
+  .vb-caption-text b { color: var(--heading); }
+  .vb-caption-text code {
+    font-family: var(--mono); font-size: 12.5px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; color: var(--indigo-strong);
+  }
+
+  /* controls (shared with the series player) */
+  .ex-controls { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .ex-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ex-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease),
+                color 160ms var(--ease), transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .ex-btn svg { width: 15px; height: 15px; }
+  .ex-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .ex-btn:active { transform: translateY(1px); }
+  .ex-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); border-color: var(--indigo); }
+  .ex-btn.primary { color: #fff; background: var(--indigo-strong); border-color: var(--indigo-strong); }
+  .ex-btn.primary:hover { background: var(--indigo); border-color: var(--indigo); }
+  .ex-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .ex-status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .ex-stepcount { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ex-stepcount b { color: var(--heading); }
+  .ex-dots { display: flex; gap: 7px; }
+  .ex-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer;
+            transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .ex-dot:hover { background: #cbd5e1; }
+  .ex-dot.is-active { background: var(--indigo); transform: scale(1.35); }
+  .ex-dot.is-past { background: color-mix(in srgb, var(--indigo) 45%, var(--border)); }
+  .ex-dot:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+
+  .ex-hint { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .ex-hint kbd {
+    font-family: var(--mono); font-size: 11px; background: var(--surface-2);
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+    padding: 1px 5px; color: var(--body);
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .node-box, .diamond, .edge, .edge-label, .verdict, .vb-caption-dot, .ex-dot { transition: none !important; }
+  }
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .vb-title { font-size: 19px; }
+    .vb-stats { margin-left: 0; width: 100%; }
+    .stat { flex: 1; min-width: 0; }
+    .ex-status { margin-left: 0; width: 100%; justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+  <main class="vb mode-naive" aria-label="Naive RAG pipeline versus agentic corrective loop">
+    <header class="vb-head">
+      <span class="vb-eyebrow">RAG from First Principles &#183; Part 10</span>
+      <h1 class="vb-title">Naive pipeline vs. agentic loop</h1>
+      <p class="vb-sub">One query: "What is the battery life of the X1 wireless earbuds?" Watch how each architecture handles it.</p>
+    </header>
+
+    <div class="vb-modebar">
+      <div class="vb-modes" role="group" aria-label="RAG architecture">
+        <button class="vb-mode" id="modeNaive" type="button" aria-pressed="true">Naive pipeline</button>
+        <button class="vb-mode" id="modeAgentic" type="button" aria-pressed="false">Agentic loop</button>
+      </div>
+      <div class="vb-stats">
+        <div class="stat s-flow"><span class="s-label">Control flow</span><span class="s-val" id="statFlow">Straight line</span></div>
+        <div class="stat"><span class="s-label">Context verdict</span><span class="s-val" id="statVerdict">not checked</span></div>
+      </div>
+    </div>
+
+    <div class="vb-canvas">
+      <svg class="vb-svg" id="vbsvg" viewBox="0 0 720 470" role="img"
+           aria-label="A flowchart of a RAG system. In naive mode it is a straight line from Query to Retrieve to Generate. In agentic mode it adds decision diamonds, a corrective Correct step, and a loop-back arrow so the system can retrieve, grade the context, and retry from a better source before generating an answer.">
+        <defs>
+          <pattern id="vbgrid" width="36" height="36" patternUnits="userSpaceOnUse">
+            <path d="M36 0 H0 V36" fill="none" stroke="#f1f5f9" stroke-width="1"/>
+          </pattern>
+          <marker id="arrow-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#cbd5e1"/>
+          </marker>
+          <marker id="arrow-indigo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#4f46e5"/>
+          </marker>
+          <marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#06b6d4"/>
+          </marker>
+          <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#f59e0b"/>
+          </marker>
+          <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#10b981"/>
+          </marker>
+          <marker id="arrow-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#f43f5e"/>
+          </marker>
+        </defs>
+        <rect x="0" y="0" width="720" height="470" fill="url(#vbgrid)"/>
+        <g id="edgeG"></g>
+        <g id="nodeG"></g>
+        <g id="verdictG"></g>
+      </svg>
+    </div>
+
+    <div class="vb-caption">
+      <span class="vb-caption-dot" id="captionDot" aria-hidden="true"></span>
+      <p class="vb-caption-text" id="caption" aria-live="polite"></p>
+    </div>
+
+    <div class="ex-controls">
+      <div class="ex-btns">
+        <button class="ex-btn primary" id="btnPlay" aria-label="Play animation">
+          <span id="playIcon" aria-hidden="true"></span><span id="playText">Play</span>
+        </button>
+        <button class="ex-btn" id="btnBack" aria-label="Previous step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="ex-btn" id="btnNext" aria-label="Next step">
+          Next
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="ex-btn" id="btnRestart" aria-label="Restart from the beginning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="ex-status">
+        <span class="ex-stepcount" id="stepCount" aria-hidden="true">Step 1 of 3</span>
+        <div class="ex-dots" id="dots" role="group" aria-label="Jump to step"></div>
+      </div>
+    </div>
+
+    <p class="ex-hint">
+      <kbd>Space</kbd> play / pause &nbsp;&#183;&nbsp; <kbd>&#8592;</kbd> back &nbsp;&#183;&nbsp; <kbd>&#8594;</kbd> next &nbsp;&#183;&nbsp; toggle <b>Naive pipeline</b> / <b>Agentic loop</b> above
+    </p>
+    <p class="sr-only" id="liveExtra" aria-live="polite"></p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var W = 720, H = 470;
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- seeded PRNG (kept for determinism parity with the series) ----------
+     No randomness drives the layout, every coordinate is fixed below, but we
+     instantiate the same seeded generator the Part 4 file uses so nothing in
+     this widget can ever depend on wall-clock time or Math.random(). */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  var rand = mulberry32(20240610); // fixed seed, used only to keep the API identical
+
+  /* ---------- SVG helpers ---------- */
+  function el(name, attrs) {
+    var e = document.createElementNS(SVGNS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function diamondPts(cx, cy, hw, hh) {
+    return (cx) + "," + (cy - hh) + " " +
+           (cx + hw) + "," + (cy) + " " +
+           (cx) + "," + (cy + hh) + " " +
+           (cx - hw) + "," + (cy) + " ";
+  }
+
+  /* ---------- geometry: a rounded-rect node with a label (and optional sub) ---------- */
+  function makeNode(id, role, x, y, w, h, label, sub) {
+    var g = el("g", { "class": "node role-" + role + " dim", id: "node-" + id });
+    g.appendChild(el("rect", { "class": "node-box", x: x, y: y, width: w, height: h, rx: 14, ry: 14 }));
+    var cx = x + w / 2;
+    var labelY = sub ? y + h / 2 - 4 : y + h / 2 + 5;
+    var t = el("text", { "class": "node-label", x: cx, y: labelY, "font-size": 15 });
+    t.textContent = label;
+    g.appendChild(t);
+    if (sub) {
+      var s = el("text", { "class": "node-sub", x: cx, y: y + h / 2 + 14, "font-size": 11 });
+      s.textContent = sub;
+      g.appendChild(s);
+    }
+    g.dataset.cx = cx; g.dataset.cy = y + h / 2;
+    g.dataset.left = x; g.dataset.right = x + w;
+    g.dataset.top = y; g.dataset.bottom = y + h;
+    return g;
+  }
+  function makeDiamond(id, x, y, hw, hh, label, sub) {
+    var g = el("g", { "class": "node role-decide dim", id: "node-" + id });
+    g.appendChild(el("polygon", { "class": "diamond", points: diamondPts(x, y, hw, hh) }));
+    var t = el("text", { "class": "diamond-label", x: x, y: sub ? y - 3 : y + 4, "font-size": 13 });
+    t.textContent = label;
+    g.appendChild(t);
+    if (sub) {
+      var s = el("text", { "class": "diamond-sub", x: x, y: y + 13, "font-size": 10.5 });
+      s.textContent = sub;
+      g.appendChild(s);
+    }
+    g.dataset.cx = x; g.dataset.cy = y;
+    g.dataset.left = x - hw; g.dataset.right = x + hw;
+    g.dataset.top = y - hh; g.dataset.bottom = y + hh;
+    return g;
+  }
+
+  var nodeG = document.getElementById("nodeG");
+  var edgeG = document.getElementById("edgeG");
+  var verdictG = document.getElementById("verdictG");
+
+  /* ====================================================================
+     NAIVE layout: Query -> Retrieve -> Generate, one straight line.
+     ==================================================================== */
+  var NAIVE = { nodes: {}, edges: {} };
+  function buildNaive() {
+    nodeG.innerHTML = ""; edgeG.innerHTML = ""; verdictG.innerHTML = "";
+    NAIVE.nodes = {}; NAIVE.edges = {};
+    var cy = 235, h = 70, w = 168;
+    var n = {};
+    n.query    = makeNode("n-query", "query", 28, cy - h / 2, w, h, "Query", "earbud battery life");
+    n.retrieve = makeNode("n-retrieve", "retrieve", 276, cy - h / 2, w, h, "Retrieve", "top-k from policy index");
+    n.generate = makeNode("n-generate", "generate", 524, cy - h / 2, w, h, "Generate", "answer from those chunks");
+    Object.keys(n).forEach(function (k) { NAIVE.nodes[k] = n[k]; nodeG.appendChild(n[k]); });
+
+    // straight arrows
+    NAIVE.edges.e1 = addEdge("ne1", "flow-indigo",
+      +n.query.dataset.right + 4, cy, +n.retrieve.dataset.left - 8, cy, "arrow-grey");
+    NAIVE.edges.e2 = addEdge("ne2", "flow-indigo",
+      +n.retrieve.dataset.right + 4, cy, +n.generate.dataset.left - 8, cy, "arrow-grey");
+  }
+
+  /* ====================================================================
+     AGENTIC layout: Query -> <Retrieve needed?> -> Retrieve ->
+     <Context good?> --BAD--> Correct --loop back--> Retrieve (retry) ->
+     <Context good?> --GOOD--> Generate (grounded).
+     ==================================================================== */
+  var AG = { nodes: {}, edges: {}, verdicts: {} };
+  function buildAgentic() {
+    nodeG.innerHTML = ""; edgeG.innerHTML = ""; verdictG.innerHTML = "";
+    AG.nodes = {}; AG.edges = {}; AG.verdicts = {};
+
+    var n = {};
+    // top row
+    n.query    = makeNode("a-query", "query", 18, 60, 132, 60, "Query", "battery life?");
+    n.dRetr    = makeDiamond("a-dretr", 252, 90, 78, 52, "Retrieve", "needed?");
+    n.retrieve = makeNode("a-retrieve", "retrieve", 392, 60, 150, 60, "Retrieve", "policy index");
+    n.dGood    = makeDiamond("a-dgood", 650, 90, 60, 52, "Context", "good?");
+    // bottom row
+    n.correct  = makeNode("a-correct", "correct", 392, 320, 150, 72, "Correct", "route to spec source");
+    n.generate = makeNode("a-generate", "generate", 18, 320, 168, 72, "Generate", "grounded answer");
+
+    [n.query, n.dRetr, n.retrieve, n.dGood, n.correct, n.generate].forEach(function (g) { nodeG.appendChild(g); });
+    AG.nodes = { query: n.query, dRetr: n.dRetr, retrieve: n.retrieve, dGood: n.dGood, correct: n.correct, generate: n.generate };
+
+    // edges --------------------------------------------------------------
+    // query -> dRetr
+    AG.edges.e_q_dr = addEdge("ae_q_dr", "flow-indigo",
+      +n.query.dataset.right + 4, 90, +n.dRetr.dataset.left - 8, 90, "arrow-grey");
+    // dRetr --yes--> retrieve
+    AG.edges.e_dr_r = addEdge("ae_dr_r", "flow-amber",
+      +n.dRetr.dataset.right + 4, 90, +n.retrieve.dataset.left - 8, 90, "arrow-grey");
+    addEdgeLabel("yes", (+n.dRetr.dataset.right + +n.retrieve.dataset.left) / 2, 80, "muted", "lbl_yes");
+    // retrieve -> dGood
+    AG.edges.e_r_dg = addEdge("ae_r_dg", "flow-cyan",
+      +n.retrieve.dataset.right + 4, 90, +n.dGood.dataset.left - 8, 90, "arrow-grey");
+    // dGood --BAD--> down, then left into Correct (rose path)
+    AG.edges.e_dg_c = addPathEdge("ae_dg_c", "flow-rose-bad",
+      "M650 142 L650 356 L" + (+n.correct.dataset.right + 8) + " 356", "arrow-rose");
+    AG.edges.e_dg_c.classList.add("badpath");
+    addEdgeLabel("BAD", 650, 235, "bad", "lbl_bad");
+    // Correct --loop back--> Retrieve (the corrective loop, curved dashed rose)
+    AG.edges.loop = addPathEdge("ae_loop", "loopback",
+      "M" + (+n.correct.dataset.cx) + " " + (+n.correct.dataset.top - 4) +
+      " C " + (+n.correct.dataset.cx) + " 215, " + (+n.retrieve.dataset.cx) + " 215, " +
+      (+n.retrieve.dataset.cx) + " " + (+n.retrieve.dataset.bottom + 6), "arrow-rose");
+    addEdgeLabel("reformulate &amp; retry", 467, 222, "bad", "lbl_retry");
+    // dGood --GOOD--> down-left into Generate (emerald), drawn lower so it reads as the second pass
+    AG.edges.e_dg_g = addPathEdge("ae_dg_g", "flow-emerald-good",
+      "M608 110 L" + (+n.generate.dataset.cx) + " 110 L" + (+n.generate.dataset.cx) + " " + (+n.generate.dataset.top - 8),
+      "arrow-grey");
+    addEdgeLabel("GOOD", (608 + (+n.generate.dataset.cx)) / 2, 100, "good", "lbl_good");
+
+    // verdict badges that pop on the "Context good?" diamond
+    AG.verdicts.bad  = makeVerdict("v-bad", "bad", 650, 162, "BAD: policy, not specs");
+    AG.verdicts.good = makeVerdict("v-good", "good", 650, 162, "GOOD: spec match");
+  }
+
+  function addEdge(id, cls, x1, y1, x2, y2, marker) {
+    var p = el("path", {
+      "class": "edge " + cls, id: "edge-" + id,
+      d: "M" + x1 + " " + y1 + " L" + x2 + " " + y2,
+      "marker-end": "url(#" + marker + ")"
+    });
+    edgeG.appendChild(p);
+    return p;
+  }
+  function addPathEdge(id, cls, d, marker) {
+    var p = el("path", { "class": "edge " + cls, id: "edge-" + id, d: d, "marker-end": "url(#" + marker + ")" });
+    edgeG.appendChild(p);
+    return p;
+  }
+  function addEdgeLabel(text, x, y, cls, id) {
+    var t = el("text", { "class": "edge-label " + cls, x: x, y: y, id: "elbl-" + id });
+    // allow a simple HTML entity (ampersand) in label text
+    t.innerHTML = text;
+    edgeG.appendChild(t);
+    return t;
+  }
+  function makeVerdict(id, kind, cx, cy, label) {
+    var g = el("g", { "class": "verdict " + kind, id: "verdict-" + id });
+    var w = 158, h = 26;
+    g.appendChild(el("rect", { "class": "verdict-pill", x: cx - w / 2, y: cy - h / 2, width: w, height: h, rx: 13, ry: 13 }));
+    var t = el("text", { "class": "verdict-txt", x: cx, y: cy + 4, "font-size": 12 });
+    t.textContent = label;
+    g.appendChild(t);
+    verdictG.appendChild(g);
+    return g;
+  }
+
+  /* ---------- DOM refs ---------- */
+  var container  = document.querySelector(".vb");
+  var caption    = document.getElementById("caption");
+  var captionDot = document.getElementById("captionDot");
+  var stepCount  = document.getElementById("stepCount");
+  var dotsWrap   = document.getElementById("dots");
+  var statFlow   = document.getElementById("statFlow");
+  var statVerdict= document.getElementById("statVerdict");
+  var liveExtra  = document.getElementById("liveExtra");
+  var modeNaive  = document.getElementById("modeNaive");
+  var modeAgentic= document.getElementById("modeAgentic");
+  var btnPlay    = document.getElementById("btnPlay");
+  var btnBack    = document.getElementById("btnBack");
+  var btnNext    = document.getElementById("btnNext");
+  var btnRestart = document.getElementById("btnRestart");
+  var playIcon   = document.getElementById("playIcon");
+  var playText   = document.getElementById("playText");
+
+  var PLAY_ICON  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+  /* ---------- captions ---------- */
+  var NAIVE_CAPS = [
+    "<b>The query arrives.</b> A customer asks for the battery life of the X1 earbuds. The naive pipeline does the same thing for every query, so it is already committed to its single path.",
+    "<b>Retrieve, once.</b> It pulls the top-k chunks from the one policy index. It never asks whether retrieval was even needed, and never checks whether the chunks actually answer the question. The corpus only holds refund, shipping and warranty text, so these chunks are off-topic.",
+    "<b>Generate from whatever came back.</b> The model is handed those policy chunks and forced to answer. There is no battery spec in them, so it guesses or weakly refuses. Same straight path for every query: if retrieval was junk, the answer is junk."
+  ];
+  var AGENTIC_CAPS = [
+    "<b>The query arrives.</b> Same question, but now the pipeline can make decisions instead of running one fixed path.",
+    "<b>Decide: retrieve at all?</b> The first diamond is a control step. A factual product question clearly needs outside knowledge, so the answer is yes, go retrieve. (A pure greeting could skip retrieval entirely.)",
+    "<b>Retrieve from the policy index.</b> As before, it pulls the top-k chunks from the store-policy index. The difference is what happens next.",
+    "<b>Evaluate: is this context good?</b> A grader checks the chunks against the query. These are refund and shipping policies, not a battery spec. Verdict: <b>BAD</b>, irrelevant. A naive pipeline would have answered from them anyway.",
+    "<b>Correct.</b> The loop-back arrow fires. Instead of answering from junk, the system reformulates and routes to a different source: the product-spec index (or a web search). This branch is the whole point of control flow.",
+    "<b>Retrieve again, then re-evaluate.</b> The retry hits the spec source and returns the X1 datasheet. The same <code>Context good?</code> diamond now grades the result <b>GOOD</b>, a real spec match.",
+    "<b>Generate, grounded.</b> Only now does it answer, from context that actually contains the battery figure. Same starting query, but the loop turned a guess into a grounded answer. That extra correctness costs latency, tokens and complexity, so spend it only where failures prove you need it."
+  ];
+
+  function caps() { return mode === "naive" ? NAIVE_CAPS : AGENTIC_CAPS; }
+
+  /* ---------- helpers to set node / edge state ---------- */
+  function nodeState(node, state) {
+    // state: undefined => dim; "active"; "grounded"; "bad"; "good"
+    node.classList.remove("dim", "active", "grounded", "bad", "good");
+    if (!state) { node.classList.add("dim"); return; }
+    node.classList.add(state);
+  }
+  function dimAll(map) { Object.keys(map).forEach(function (k) { nodeState(map[k]); }); }
+  function edgeReset() {
+    var es = edgeG.querySelectorAll(".edge");
+    for (var i = 0; i < es.length; i++) {
+      es[i].classList.remove("lit");
+      es[i].classList.add("dim");
+    }
+    var ls = edgeG.querySelectorAll(".edge-label");
+    for (var j = 0; j < ls.length; j++) ls[j].classList.add("dim");
+  }
+  function litEdge(edge) { if (edge) { edge.classList.add("lit"); edge.classList.remove("dim"); } }
+  function showLabel(id) { var l = document.getElementById("elbl-" + id); if (l) l.classList.remove("dim"); }
+  function showVerdict(v, on) { if (v) v.classList.toggle("show", !!on); }
+
+  /* ---------- renderers ---------- */
+  function renderNaive(step) {
+    dimAll(NAIVE.nodes); edgeReset();
+    statFlow.textContent = "Straight line";
+    statVerdict.className = "s-val"; statVerdict.textContent = "not checked";
+    if (step === 0) {
+      nodeState(NAIVE.nodes.query, "active");
+    } else if (step === 1) {
+      nodeState(NAIVE.nodes.query); nodeState(NAIVE.nodes.retrieve, "active");
+      litEdge(NAIVE.edges.e1);
+    } else {
+      nodeState(NAIVE.nodes.generate, "active");
+      litEdge(NAIVE.edges.e1); litEdge(NAIVE.edges.e2);
+    }
+  }
+
+  function renderAgentic(step) {
+    dimAll(AG.nodes); edgeReset();
+    showVerdict(AG.verdicts.bad, false);
+    showVerdict(AG.verdicts.good, false);
+    statFlow.textContent = "Decision loop";
+    statVerdict.className = "s-val"; statVerdict.textContent = "not checked";
+
+    // cumulative path lighting so stepping back reads correctly
+    switch (step) {
+      case 0: // query
+        nodeState(AG.nodes.query, "active");
+        break;
+      case 1: // decide retrieve?
+        nodeState(AG.nodes.dRetr, "active");
+        litEdge(AG.edges.e_q_dr);
+        break;
+      case 2: // retrieve
+        nodeState(AG.nodes.retrieve, "active");
+        litEdge(AG.edges.e_q_dr); litEdge(AG.edges.e_dr_r); showLabel("lbl_yes");
+        break;
+      case 3: // evaluate -> BAD
+        nodeState(AG.nodes.dGood, "bad");
+        litEdge(AG.edges.e_q_dr); litEdge(AG.edges.e_dr_r); showLabel("lbl_yes");
+        litEdge(AG.edges.e_r_dg);
+        showVerdict(AG.verdicts.bad, true);
+        statVerdict.className = "s-val verdict-bad"; statVerdict.textContent = "BAD (irrelevant)";
+        break;
+      case 4: // correct + loop back
+        nodeState(AG.nodes.correct, "active");
+        litEdge(AG.edges.e_q_dr); litEdge(AG.edges.e_dr_r); showLabel("lbl_yes");
+        litEdge(AG.edges.e_r_dg); litEdge(AG.edges.e_dg_c); showLabel("lbl_bad");
+        litEdge(AG.edges.loop); showLabel("lbl_retry");
+        statVerdict.className = "s-val verdict-bad"; statVerdict.textContent = "BAD -> correct";
+        break;
+      case 5: // retry retrieve -> evaluate GOOD
+        nodeState(AG.nodes.retrieve, "active");
+        nodeState(AG.nodes.dGood, "good");
+        litEdge(AG.edges.e_q_dr); litEdge(AG.edges.e_dr_r);
+        litEdge(AG.edges.loop); litEdge(AG.edges.e_r_dg);
+        showVerdict(AG.verdicts.good, true);
+        statVerdict.className = "s-val verdict-good"; statVerdict.textContent = "GOOD (spec match)";
+        break;
+      default: // 6: generate grounded
+        nodeState(AG.nodes.dGood, "good");
+        nodeState(AG.nodes.generate, "grounded");
+        litEdge(AG.edges.e_q_dr); litEdge(AG.edges.e_dr_r);
+        litEdge(AG.edges.e_r_dg); litEdge(AG.edges.e_dg_g); showLabel("lbl_good");
+        showVerdict(AG.verdicts.good, true);
+        statVerdict.className = "s-val verdict-good"; statVerdict.textContent = "GOOD (spec match)";
+        break;
+    }
+  }
+
+  /* ---------- caption dot tint per step ---------- */
+  function tintCaptionDot(step) {
+    captionDot.classList.remove("is-bad", "is-good");
+    if (mode !== "agentic") return;
+    if (step === 3 || step === 4) captionDot.classList.add("is-bad");
+    else if (step === 5 || step === 6) captionDot.classList.add("is-good");
+  }
+
+  /* ---------- step machine ---------- */
+  var mode = "naive", current = 0, dotEls = [];
+
+  function buildDots() {
+    dotsWrap.innerHTML = "";
+    dotEls = [];
+    caps().forEach(function (s, idx) {
+      var b = document.createElement("button");
+      b.className = "ex-dot"; b.type = "button";
+      b.setAttribute("aria-label", "Go to step " + (idx + 1) + " of " + caps().length);
+      b.addEventListener("click", function () { pause(); go(idx); });
+      dotsWrap.appendChild(b);
+      dotEls.push(b);
+    });
+  }
+
+  function render(i) {
+    if (mode === "naive") renderNaive(i); else renderAgentic(i);
+    tintCaptionDot(i);
+    caption.innerHTML = '<span class="sr-only">' +
+      (mode === "naive" ? "Naive pipeline" : "Agentic loop") +
+      ", step " + (i + 1) + " of " + caps().length + ". </span>" + caps()[i];
+    stepCount.innerHTML = "Step <b>" + (i + 1) + "</b> of " + caps().length;
+    dotEls.forEach(function (d, di) {
+      d.classList.toggle("is-active", di === i);
+      d.classList.toggle("is-past", di < i);
+      if (di === i) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+    });
+    btnBack.disabled = (i === 0);
+    btnNext.disabled = (i === caps().length - 1);
+  }
+
+  function go(i) {
+    current = Math.max(0, Math.min(caps().length - 1, i));
+    render(current);
+  }
+
+  function setMode(m) {
+    pause();
+    mode = m;
+    container.classList.toggle("mode-naive", m === "naive");
+    container.classList.toggle("mode-agentic", m === "agentic");
+    modeNaive.setAttribute("aria-pressed", m === "naive" ? "true" : "false");
+    modeAgentic.setAttribute("aria-pressed", m === "agentic" ? "true" : "false");
+    if (m === "naive") buildNaive(); else buildAgentic();
+    buildDots();
+    go(0);
+    liveExtra.textContent = (m === "naive" ? "Naive pipeline" : "Agentic loop") + " mode.";
+  }
+
+  /* ---------- playback ---------- */
+  var timer = null, playing = false, AUTO_MS = 2600;
+  function tick() {
+    if (current >= caps().length - 1) { pause(); return; }
+    go(current + 1);
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function play() {
+    if (reduceMotion || playing) return;
+    if (current >= caps().length - 1) go(0);
+    playing = true; setPlayButton();
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function pause() {
+    playing = false;
+    if (timer) { window.clearTimeout(timer); timer = null; }
+    setPlayButton();
+  }
+  function toggle() { playing ? pause() : play(); }
+  function setPlayButton() {
+    if (reduceMotion) {
+      playIcon.innerHTML = PLAY_ICON; playText.textContent = "Auto-play off";
+      btnPlay.setAttribute("aria-label", "Auto-play disabled (reduced motion)");
+      return;
+    }
+    playIcon.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    playText.textContent = playing ? "Pause" : "Play";
+    btnPlay.setAttribute("aria-label", playing ? "Pause animation" : "Play animation");
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /* ---------- wiring ---------- */
+  modeNaive.addEventListener("click", function () { setMode("naive"); });
+  modeAgentic.addEventListener("click", function () { setMode("agentic"); });
+  btnPlay.addEventListener("click", toggle);
+  btnNext.addEventListener("click", function () { pause(); go(current + 1); });
+  btnBack.addEventListener("click", function () { pause(); go(current - 1); });
+  btnRestart.addEventListener("click", function () { pause(); go(0); });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    // only claim the arrow keys when this widget actually holds keyboard focus,
+    // so we never swallow the page's own arrow-key scrolling
+    var focused = container.contains(document.activeElement) && document.activeElement !== document.body;
+    if ((e.code === "Space" || e.key === " ") &&
+        !(e.target && e.target.closest && e.target.closest("button"))) {
+      e.preventDefault(); toggle();
+    } else if (e.key === "ArrowRight" && focused) { e.preventDefault(); pause(); go(current + 1); }
+    else if (e.key === "ArrowLeft" && focused) { e.preventDefault(); pause(); go(current - 1); }
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden) pause(); });
+
+  if (reduceMotion) {
+    btnPlay.disabled = true;
+    btnPlay.title = "Auto-play disabled (reduced motion). Use Next / Back.";
+  }
+
+  /* ---------- init ---------- */
+  buildNaive();
+  buildDots();
+  setPlayButton();
+  go(0);
+})();
+</script>
+</body>
+</html>
