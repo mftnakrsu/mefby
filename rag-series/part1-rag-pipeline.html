@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RAG Pipeline — from First Principles</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles — Part 1 flagship animation
+     Self-contained: no external resources, no web fonts, inline SVG only.
+     Design tokens are declared as CSS custom properties below so every
+     asset in the series can share the exact same palette.
+     ==================================================================== */
+  :root {
+    /* surfaces & structure */
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    /* text */
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    /* stage accents */
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+
+    --radius-card: 14px;
+    --radius-chip: 8px;
+
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 320ms;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+
+  .ragx {
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  /* ---------- Header ---------- */
+  .ragx-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 14px;
+    margin-bottom: 18px;
+  }
+  .ragx-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--indigo-strong);
+  }
+  .ragx-title {
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--heading);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .ragx-sub {
+    font-size: 13.5px;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  /* ---------- Stage rail (top) ---------- */
+  .ragx-railwrap {
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 6px 2px 10px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ragx-rail {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: 640px;
+  }
+  .ragx-node {
+    flex: 1 1 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px 4px;
+    min-width: 92px;
+  }
+  /* connector line between nodes */
+  .ragx-node:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 28px;            /* center of the icon disc */
+    left: calc(50% + 26px);
+    right: calc(-50% + 26px);
+    height: 2px;
+    background: var(--border);
+    z-index: 0;
+  }
+  .ragx-node.is-done:not(:last-child)::after {
+    background: linear-gradient(90deg, var(--node-accent, var(--indigo)) 0%, var(--border) 100%);
+  }
+  .ragx-disc {
+    position: relative;
+    z-index: 1;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--surface-1);
+    border: 2px solid var(--border);
+    color: var(--muted);
+    transition: transform var(--dur) var(--ease),
+                box-shadow var(--dur) var(--ease),
+                border-color var(--dur) var(--ease),
+                background-color var(--dur) var(--ease),
+                color var(--dur) var(--ease),
+                opacity var(--dur) var(--ease);
+  }
+  .ragx-disc svg { width: 24px; height: 24px; display: block; }
+  .ragx-nodelabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-align: center;
+    transition: color var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  }
+  .ragx-nodenum {
+    position: absolute;
+    top: -2px;
+    right: calc(50% - 36px);
+    z-index: 2;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    transition: all var(--dur) var(--ease);
+  }
+
+  /* completed node */
+  .ragx-node.is-done .ragx-disc {
+    border-color: var(--node-accent);
+    color: var(--node-accent);
+    background: color-mix(in srgb, var(--node-accent) 9%, #fff);
+  }
+  .ragx-node.is-done .ragx-nodelabel { color: var(--body); }
+  .ragx-node.is-done .ragx-nodenum {
+    border-color: var(--node-accent);
+    color: var(--node-accent);
+  }
+
+  /* active node */
+  .ragx-node.is-active .ragx-disc {
+    border-color: var(--node-accent);
+    color: #fff;
+    background: var(--node-accent);
+    transform: scale(1.16);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--node-accent) 18%, transparent),
+                0 6px 18px color-mix(in srgb, var(--node-accent) 30%, transparent);
+  }
+  .ragx-node.is-active .ragx-nodelabel { color: var(--heading); font-weight: 700; }
+  .ragx-node.is-active .ragx-nodenum {
+    background: var(--node-accent);
+    border-color: var(--node-accent);
+    color: #fff;
+    transform: scale(1.05);
+  }
+  /* inactive (not yet reached) dimmed */
+  .ragx-node.is-upcoming .ragx-disc { opacity: 0.55; }
+  .ragx-node.is-upcoming .ragx-nodelabel { opacity: 0.7; }
+
+  /* ---------- Stage canvas (below rail) ---------- */
+  .ragx-canvas {
+    position: relative;
+    margin-top: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background:
+      radial-gradient(120% 100% at 50% -20%, var(--surface-1) 0%, var(--bg) 60%);
+    min-height: 320px;
+    padding: 26px;
+    overflow: hidden;
+  }
+  /* subtle accent wash that tracks the active stage */
+  .ragx-canvas::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(80% 120% at 50% -10%,
+      color-mix(in srgb, var(--stage-accent, var(--indigo)) 8%, transparent) 0%,
+      transparent 55%);
+    transition: background var(--dur) var(--ease);
+    pointer-events: none;
+  }
+
+  /* each scene stacks in the same spot; we cross-fade them */
+  .ragx-scene {
+    position: absolute;
+    inset: 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+    transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+    pointer-events: none;
+  }
+  .ragx-scene.is-shown {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+  }
+  .ragx-scene-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--stage-accent, var(--indigo));
+  }
+
+  /* ----- generic small parts reused across scenes ----- */
+  .doc-page {
+    width: 132px;
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 13px;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.06);
+  }
+  .doc-page .doc-cap {
+    font-size: 10px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .doc-line { height: 7px; border-radius: 4px; background: var(--surface-2); margin: 6px 0; }
+  .doc-line.short { width: 62%; }
+
+  .chunk-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  /* document → chunks split layout (scene 0) */
+  .split-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: center; }
+  .chunk-card {
+    width: 122px;
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 12px 13px;
+    box-shadow: 0 6px 16px rgba(15,23,42,0.05);
+    transition: transform 380ms var(--ease), opacity 380ms var(--ease), border-color var(--dur) var(--ease);
+  }
+  .chunk-card .ck-tag {
+    display: inline-block;
+    font-size: 10px; font-weight: 700;
+    color: var(--indigo-strong);
+    background: color-mix(in srgb, var(--indigo) 12%, #fff);
+    border-radius: var(--radius-chip);
+    padding: 2px 7px;
+    margin-bottom: 8px;
+  }
+  .chunk-card .ck-line { height: 6px; border-radius: 4px; background: var(--surface-2); margin: 5px 0; }
+  .chunk-card .ck-line.short { width: 55%; }
+
+  /* highlighted chunk (retrieve) */
+  .chunk-card.is-hit {
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--cyan) 18%, transparent),
+                0 10px 24px color-mix(in srgb, var(--cyan) 22%, transparent);
+    transform: translateY(-4px) scale(1.04);
+  }
+  .chunk-card.is-dim { opacity: 0.4; }
+
+  /* embed vectors */
+  .vec-list { display: flex; flex-direction: column; gap: 12px; }
+  .vec-item { display: flex; align-items: center; gap: 12px; }
+  .vec-chip {
+    font-size: 10px; font-weight: 700; color: var(--violet);
+    background: color-mix(in srgb, var(--violet) 12%, #fff);
+    border-radius: var(--radius-chip); padding: 3px 8px; white-space: nowrap;
+  }
+  .vec-nums {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--body);
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 7px 11px;
+    white-space: nowrap;
+  }
+  .vec-nums b { color: var(--violet); font-weight: 600; }
+  .vec-bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 22px; }
+  .vec-bars span {
+    width: 5px; border-radius: 3px;
+    background: color-mix(in srgb, var(--violet) 80%, #fff);
+  }
+
+  /* store: vector grid + cylinder */
+  .store-wrap { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; justify-content: center; }
+  .store-cyl {
+    width: 118px; height: 132px;
+    display: grid; place-items: center;
+    color: var(--teal);
+  }
+  .store-cyl svg { width: 100%; height: 100%; }
+  .store-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 14px);
+    gap: 9px;
+    padding: 14px;
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 6px 16px rgba(15,23,42,0.05);
+  }
+  .store-grid i {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--surface-2);
+    transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+  }
+  .store-grid i.on { background: color-mix(in srgb, var(--teal) 75%, #fff); }
+  .store-grid i.hot {
+    background: var(--cyan);
+    transform: scale(1.18);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 26%, transparent);
+    animation: ragx-hotpulse 1.8s var(--ease) infinite;
+  }
+  /* the retrieved "nearest" vector pulses so the search is shown, not just stated */
+  @keyframes ragx-hotpulse {
+    0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 28%, transparent); }
+    60%      { box-shadow: 0 0 0 12px color-mix(in srgb, var(--cyan) 0%, transparent); }
+  }
+
+  /* query chip */
+  .query-chip {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: #fff;
+    border: 1.5px solid color-mix(in srgb, var(--cyan) 45%, var(--border));
+    border-radius: 999px;
+    padding: 9px 16px 9px 13px;
+    font-size: 14px; font-weight: 600; color: var(--heading);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--cyan) 16%, transparent);
+  }
+  .query-chip .qmark {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--cyan); color: #fff;
+    display: grid; place-items: center; flex: 0 0 auto;
+  }
+  .query-chip .qmark svg { width: 13px; height: 13px; }
+
+  /* augment prompt card */
+  .prompt-card {
+    width: 100%; max-width: 440px;
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 10px 26px rgba(15,23,42,0.07);
+    overflow: hidden;
+    text-align: left;
+  }
+  .prompt-head {
+    background: color-mix(in srgb, var(--amber) 12%, #fff);
+    border-bottom: 1px solid color-mix(in srgb, var(--amber) 30%, var(--border));
+    padding: 8px 14px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; color: #b45309;
+  }
+  .prompt-body { padding: 13px 15px; font-size: 13px; }
+  .prompt-row { margin: 4px 0; }
+  .prompt-label {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    border-radius: 5px; padding: 1px 6px; margin-right: 6px;
+  }
+  .prompt-label.ctx { color: var(--teal); background: color-mix(in srgb, var(--teal) 13%, #fff); }
+  .prompt-label.qst { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 13%, #fff); }
+  .prompt-text { color: var(--body); }
+
+  /* generate: LLM -> answer */
+  .gen-wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: center; }
+  .llm-box {
+    width: 90px; height: 90px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--emerald) 10%, #fff);
+    border: 1.5px solid color-mix(in srgb, var(--emerald) 40%, var(--border));
+    display: grid; place-items: center;
+    color: var(--emerald);
+    text-align: center;
+  }
+  .llm-box svg { width: 30px; height: 30px; }
+  .llm-box .llm-cap { font-size: 11px; font-weight: 700; margin-top: 3px; color: #047857; }
+  .arrow-flow { color: var(--muted); display: grid; place-items: center; }
+  .arrow-flow svg { width: 30px; height: 18px; }
+
+  .answer-card {
+    max-width: 360px;
+    background: #fff;
+    border: 1.5px solid color-mix(in srgb, var(--emerald) 45%, var(--border));
+    border-radius: 14px;
+    box-shadow: 0 10px 26px color-mix(in srgb, var(--emerald) 14%, transparent);
+    padding: 14px 16px;
+    text-align: left;
+  }
+  .answer-card .ans-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #047857;
+    background: color-mix(in srgb, var(--emerald) 13%, #fff);
+    border-radius: var(--radius-chip);
+    padding: 3px 8px; margin-bottom: 9px;
+  }
+  .answer-card .ans-badge svg { width: 12px; height: 12px; }
+  .answer-card .ans-text { font-size: 14px; color: var(--heading); font-weight: 500; }
+  .answer-card .ans-cite {
+    margin-top: 10px; padding-top: 9px;
+    border-top: 1px dashed var(--border);
+    font-size: 11.5px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .answer-card .ans-cite svg { width: 13px; height: 13px; color: var(--teal); flex: 0 0 auto; }
+  .answer-card .ans-cite b { color: var(--teal); font-weight: 600; }
+
+  /* ---------- Caption ---------- */
+  .ragx-caption {
+    margin-top: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 13px 16px;
+  }
+  .ragx-caption-dot {
+    flex: 0 0 auto;
+    margin-top: 4px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--stage-accent, var(--indigo));
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--stage-accent, var(--indigo)) 18%, transparent);
+    transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .ragx-caption-text {
+    font-size: 14.5px;
+    color: var(--body);
+  }
+  .ragx-caption-text b { color: var(--heading); }
+
+  /* ---------- Controls ---------- */
+  .ragx-controls {
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+  .ragx-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ragx-btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--body);
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: background-color 160ms var(--ease),
+                border-color 160ms var(--ease),
+                color 160ms var(--ease),
+                transform 120ms var(--ease),
+                box-shadow 160ms var(--ease);
+  }
+  .ragx-btn svg { width: 15px; height: 15px; }
+  .ragx-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .ragx-btn:active { transform: translateY(1px); }
+  .ragx-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent);
+    border-color: var(--indigo);
+  }
+  .ragx-btn.primary {
+    color: #fff;
+    background: var(--indigo-strong);
+    border-color: var(--indigo-strong);
+  }
+  .ragx-btn.primary:hover { background: var(--indigo); border-color: var(--indigo); }
+  .ragx-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .ragx-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .ragx-stepcount {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .ragx-stepcount b { color: var(--heading); }
+  .ragx-dots { display: flex; gap: 7px; }
+  .ragx-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--border);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+  }
+  .ragx-dot:hover { background: #cbd5e1; }
+  .ragx-dot.is-active {
+    background: var(--stage-accent, var(--indigo));
+    transform: scale(1.35);
+  }
+  .ragx-dot.is-past { background: color-mix(in srgb, var(--indigo) 45%, var(--border)); }
+  .ragx-dot:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent);
+  }
+
+  .ragx-hint {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .ragx-hint kbd {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 1px 5px;
+    color: var(--body);
+  }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* Respect reduced motion: kill transitions/transforms-as-motion */
+  @media (prefers-reduced-motion: reduce) {
+    .ragx-disc, .ragx-scene, .chunk-card, .store-grid i,
+    .ragx-caption-dot, .ragx-canvas::before, .ragx-dot, .ragx-nodenum {
+      transition: opacity 1ms linear !important;
+    }
+    .ragx-node.is-active .ragx-disc { transform: none; }
+    .chunk-card.is-hit { transform: none; }
+    .ragx-scene { transform: none; }
+    .store-grid i.hot { animation: none !important; }
+  }
+
+  /* Responsive tweaks */
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .ragx-canvas { padding: 18px; min-height: 300px; }
+    .ragx-scene { inset: 18px; }
+    .ragx-status { margin-left: 0; width: 100%; justify-content: space-between; }
+    .ragx-title { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+  <main class="ragx" aria-label="Interactive RAG pipeline walkthrough">
+
+    <!-- ---------- Header ---------- -->
+    <header class="ragx-head">
+      <span class="ragx-eyebrow">RAG from First Principles · Part 1</span>
+      <h1 class="ragx-title">One document through the RAG pipeline</h1>
+      <p class="ragx-sub">Indexing, then a live query — step by step.</p>
+    </header>
+
+    <!-- ---------- Stage rail (6 nodes) ---------- -->
+    <div class="ragx-railwrap" role="presentation">
+      <ol class="ragx-rail" id="rail" aria-label="Pipeline stages"></ol>
+    </div>
+
+    <!-- ---------- Stage canvas ---------- -->
+    <section class="ragx-canvas" id="canvas" aria-label="Stage illustration">
+
+      <!-- Scene 0: Document → Chunks -->
+      <div class="ragx-scene" data-scene="0">
+        <div class="ragx-scene-title">Document → Chunks</div>
+        <div class="split-row">
+          <div class="doc-page">
+            <div class="doc-cap">refund-policy.md</div>
+            <div class="doc-line"></div><div class="doc-line"></div>
+            <div class="doc-line"></div><div class="doc-line"></div>
+            <div class="doc-line short"></div>
+          </div>
+          <div class="arrow-flow" aria-hidden="true">
+            <svg viewBox="0 0 30 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9h22"/><path d="M19 4l5 5-5 5"/></svg>
+          </div>
+          <div class="chunk-row" id="chunkRow">
+            <div class="chunk-card"><span class="ck-tag">chunk 1</span><div class="ck-line"></div><div class="ck-line"></div><div class="ck-line short"></div></div>
+            <div class="chunk-card"><span class="ck-tag">chunk 2</span><div class="ck-line"></div><div class="ck-line"></div><div class="ck-line short"></div></div>
+            <div class="chunk-card"><span class="ck-tag">chunk 3</span><div class="ck-line"></div><div class="ck-line"></div><div class="ck-line short"></div></div>
+            <div class="chunk-card"><span class="ck-tag">chunk 4</span><div class="ck-line"></div><div class="ck-line"></div><div class="ck-line short"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 1: Embed -->
+      <div class="ragx-scene" data-scene="1">
+        <div class="ragx-scene-title">Chunks → Vectors</div>
+        <div class="vec-list">
+          <div class="vec-item">
+            <span class="vec-chip">chunk 1</span>
+            <span class="vec-nums">[<b>0.12</b>, <b>-0.04</b>, <b>0.88</b>, …]</span>
+            <span class="vec-bars"><span style="height:14px"></span><span style="height:8px"></span><span style="height:21px"></span><span style="height:11px"></span><span style="height:17px"></span></span>
+          </div>
+          <div class="vec-item">
+            <span class="vec-chip">chunk 2</span>
+            <span class="vec-nums">[<b>-0.31</b>, <b>0.50</b>, <b>0.07</b>, …]</span>
+            <span class="vec-bars"><span style="height:6px"></span><span style="height:20px"></span><span style="height:9px"></span><span style="height:16px"></span><span style="height:12px"></span></span>
+          </div>
+          <div class="vec-item">
+            <span class="vec-chip">chunk 3</span>
+            <span class="vec-nums">[<b>0.64</b>, <b>0.22</b>, <b>-0.19</b>, …]</span>
+            <span class="vec-bars"><span style="height:19px"></span><span style="height:13px"></span><span style="height:7px"></span><span style="height:10px"></span><span style="height:21px"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 2: Store -->
+      <div class="ragx-scene" data-scene="2">
+        <div class="ragx-scene-title">Vectors → Vector store</div>
+        <div class="store-wrap">
+          <div class="store-cyl" aria-hidden="true">
+            <svg viewBox="0 0 100 116" fill="none">
+              <ellipse cx="50" cy="18" rx="40" ry="15" fill="#fff" stroke="currentColor" stroke-width="3"/>
+              <path d="M10 18 V98 a40 15 0 0 0 80 0 V18" fill="color-mix(in srgb, #14b8a6 8%, #fff)" stroke="currentColor" stroke-width="3"/>
+              <path d="M10 52 a40 15 0 0 0 80 0" stroke="currentColor" stroke-width="2.5" opacity="0.45" fill="none"/>
+              <path d="M10 75 a40 15 0 0 0 80 0" stroke="currentColor" stroke-width="2.5" opacity="0.45" fill="none"/>
+            </svg>
+          </div>
+          <div class="store-grid" id="storeGrid"></div>
+        </div>
+      </div>
+
+      <!-- Scene 3: Query enters + Retrieve -->
+      <div class="ragx-scene" data-scene="3">
+        <div class="ragx-scene-title">Query → Retrieve nearest chunk</div>
+        <div class="query-chip">
+          <span class="qmark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          </span>
+          What is our refund window?
+        </div>
+        <div class="store-wrap" style="margin-top:6px">
+          <div class="store-grid" id="retrieveGrid"></div>
+          <div class="chunk-row" style="max-width:140px">
+            <div class="chunk-card is-hit" id="hitChunk">
+              <span class="ck-tag" style="color:#0e7490;background:color-mix(in srgb,#06b6d4 13%,#fff)">chunk 1 · best match</span>
+              <div class="ck-line"></div><div class="ck-line"></div><div class="ck-line short"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 4: Augment -->
+      <div class="ragx-scene" data-scene="4">
+        <div class="ragx-scene-title">Retrieved chunk + Question → Prompt</div>
+        <div class="prompt-card">
+          <div class="prompt-head">Augmented prompt</div>
+          <div class="prompt-body">
+            <div class="prompt-row">
+              <span class="prompt-label ctx">Context</span>
+              <span class="prompt-text">“Refunds are accepted within <b>30 days</b> of purchase…” <em style="color:var(--muted)">(retrieved)</em></span>
+            </div>
+            <div class="prompt-row" style="margin-top:10px">
+              <span class="prompt-label qst">Question</span>
+              <span class="prompt-text">What is our refund window?</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 5: Generate -->
+      <div class="ragx-scene" data-scene="5">
+        <div class="ragx-scene-title">Prompt → LLM → Grounded answer</div>
+        <div class="gen-wrap">
+          <div class="llm-box" aria-hidden="true">
+            <div style="text-align:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="2.5"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.2" fill="currentColor"/><path d="M2 12v3M22 12v3"/><circle cx="9" cy="13.5" r="1.3" fill="currentColor"/><circle cx="15" cy="13.5" r="1.3" fill="currentColor"/></svg>
+              <div class="llm-cap">LLM</div>
+            </div>
+          </div>
+          <div class="arrow-flow" aria-hidden="true">
+            <svg viewBox="0 0 30 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9h22"/><path d="M19 4l5 5-5 5"/></svg>
+          </div>
+          <div class="answer-card">
+            <span class="ans-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              Grounded answer
+            </span>
+            <div class="ans-text">You can request a refund within <b style="color:#047857">30 days</b> of purchase.</div>
+            <div class="ans-cite">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+              <span>Source: <b>refund-policy.md</b> · chunk 1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ---------- Caption (aria-live) ---------- -->
+    <div class="ragx-caption">
+      <span class="ragx-caption-dot" aria-hidden="true"></span>
+      <p class="ragx-caption-text" id="caption" aria-live="polite"></p>
+    </div>
+
+    <!-- ---------- Controls ---------- -->
+    <div class="ragx-controls">
+      <div class="ragx-btns">
+        <button class="ragx-btn primary" id="btnPlay" aria-label="Play animation">
+          <span id="playIcon" aria-hidden="true"></span><span id="playText">Play</span>
+        </button>
+        <button class="ragx-btn" id="btnBack" aria-label="Previous step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="ragx-btn" id="btnNext" aria-label="Next step">
+          Next
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="ragx-btn" id="btnRestart" aria-label="Restart from the beginning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="ragx-status">
+        <span class="ragx-stepcount" id="stepCount" aria-hidden="true">Step 1 of 7</span>
+        <div class="ragx-dots" id="dots" role="tablist" aria-label="Jump to step"></div>
+      </div>
+    </div>
+
+    <p class="ragx-hint">
+      <kbd>Space</kbd> play / pause &nbsp;·&nbsp; <kbd>←</kbd> back &nbsp;·&nbsp; <kbd>→</kbd> next
+    </p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ------------------------------------------------------------------
+     STEP MODEL
+     7 logical steps. Steps map onto 6 visual stage nodes; the "Query"
+     moment shares the Retrieve node (it's the same scene/canvas).
+     Each step: rail node index, scene index, accent color, caption.
+     ------------------------------------------------------------------ */
+  var ACCENT = {
+    indigo:  "#6366f1",
+    violet:  "#8b5cf6",
+    teal:    "#14b8a6",
+    cyan:    "#06b6d4",
+    amber:   "#f59e0b",
+    emerald: "#10b981"
+  };
+
+  // The 6 rail nodes (fixed across the top).
+  var NODES = [
+    { key: "chunk",    label: "Chunk",    accent: ACCENT.indigo,  icon: icon("chunk")  },
+    { key: "embed",    label: "Embed",    accent: ACCENT.violet,  icon: icon("embed")  },
+    { key: "store",    label: "Store",    accent: ACCENT.teal,    icon: icon("store")  },
+    { key: "retrieve", label: "Retrieve", accent: ACCENT.cyan,    icon: icon("retrieve")},
+    { key: "augment",  label: "Augment",  accent: ACCENT.amber,   icon: icon("augment")},
+    { key: "generate", label: "Generate", accent: ACCENT.emerald, icon: icon("generate")}
+  ];
+
+  // The 7 steps the user walks through.
+  var STEPS = [
+    { node: 0, scene: 0, accent: ACCENT.indigo,
+      caption: "<b>Chunk.</b> Split the document into small, self-contained passages so each piece is searchable on its own." },
+    { node: 1, scene: 1, accent: ACCENT.violet,
+      caption: "<b>Embed.</b> Turn each chunk into a vector of numbers that captures its meaning." },
+    { node: 2, scene: 2, accent: ACCENT.teal,
+      caption: "<b>Store.</b> Save every vector in a vector store so we can search by similarity later." },
+    { node: 3, scene: 3, accent: ACCENT.cyan,
+      caption: "<b>Query.</b> A user asks a question — it's embedded the same way the chunks were." },
+    { node: 3, scene: 3, accent: ACCENT.cyan,
+      caption: "<b>Retrieve.</b> The store returns the chunk whose vector is closest to the question." },
+    { node: 4, scene: 4, accent: ACCENT.amber,
+      caption: "<b>Augment.</b> The retrieved chunk is added to the prompt as context, alongside the question." },
+    { node: 5, scene: 5, accent: ACCENT.emerald,
+      caption: "<b>Generate.</b> The LLM answers from that context — grounded, and with a cited source." }
+  ];
+
+  var AUTO_MS = 2200;
+
+  /* ------------------------------------------------------------------
+     Inline SVG icon set (no external assets).
+     ------------------------------------------------------------------ */
+  function icon(name) {
+    var p = {
+      chunk:    '<rect x="3" y="3" width="8" height="8" rx="1.6"/><rect x="13" y="3" width="8" height="8" rx="1.6"/><rect x="3" y="13" width="8" height="8" rx="1.6"/><rect x="13" y="13" width="8" height="8" rx="1.6"/>',
+      embed:    '<path d="M4 18V9M9 18V5M14 18v-6M19 18v-9"/>',
+      store:    '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/>',
+      retrieve: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+      augment:  '<path d="M12 5v14M5 12h14"/>',
+      generate: '<path d="M12 3l2.2 5.6L20 9.8l-4.4 3.6L17 19l-5-3-5 3 1.4-5.6L4 9.8l5.8-1.2z"/>'
+    }[name];
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+         + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
+  }
+
+  var PLAY_ICON =
+    '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var PAUSE_ICON =
+    '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+  /* ------------------------------------------------------------------
+     DOM refs
+     ------------------------------------------------------------------ */
+  var rail      = document.getElementById("rail");
+  var canvas    = document.getElementById("canvas");
+  var scenes    = Array.prototype.slice.call(document.querySelectorAll(".ragx-scene"));
+  var caption   = document.getElementById("caption");
+  var stepCount = document.getElementById("stepCount");
+  var dotsWrap  = document.getElementById("dots");
+
+  var btnPlay    = document.getElementById("btnPlay");
+  var btnBack    = document.getElementById("btnBack");
+  var btnNext    = document.getElementById("btnNext");
+  var btnRestart = document.getElementById("btnRestart");
+  var playIcon   = document.getElementById("playIcon");
+  var playText   = document.getElementById("playText");
+
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ------------------------------------------------------------------
+     Build the rail nodes
+     ------------------------------------------------------------------ */
+  var nodeEls = [];
+  NODES.forEach(function (n, i) {
+    var li = document.createElement("li");
+    li.className = "ragx-node";
+    li.style.setProperty("--node-accent", n.accent);
+    li.innerHTML =
+      '<span class="ragx-nodenum">' + (i + 1) + '</span>' +
+      '<span class="ragx-disc">' + n.icon + '</span>' +
+      '<span class="ragx-nodelabel">' + n.label + '</span>';
+    rail.appendChild(li);
+    nodeEls.push(li);
+  });
+
+  /* ------------------------------------------------------------------
+     Build progress dots (one per STEP). Clickable to jump.
+     ------------------------------------------------------------------ */
+  var dotEls = [];
+  STEPS.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.className = "ragx-dot";
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-label", "Go to step " + (i + 1) + " of " + STEPS.length);
+    b.addEventListener("click", function () { pause(); go(i); });
+    dotsWrap.appendChild(b);
+    dotEls.push(b);
+  });
+
+  /* ------------------------------------------------------------------
+     Populate the Store / Retrieve dot grids
+     ------------------------------------------------------------------ */
+  var storeGrid    = document.getElementById("storeGrid");
+  var retrieveGrid = document.getElementById("retrieveGrid");
+  // pattern of "filled" vector dots (3 chunks stored among the grid)
+  var ON_DOTS  = [1, 3, 6, 8, 10, 12, 16, 19, 22];
+  var HOT_DOT  = 12; // the retrieved (closest) vector
+  for (var g = 0; g < 25; g++) {
+    var a = document.createElement("i");
+    var b = document.createElement("i");
+    if (ON_DOTS.indexOf(g) !== -1) { a.className = "on"; b.className = "on"; }
+    if (g === HOT_DOT) b.classList.add("hot");
+    storeGrid.appendChild(a);
+    retrieveGrid.appendChild(b);
+  }
+
+  /* ------------------------------------------------------------------
+     RENDER a given step index
+     ------------------------------------------------------------------ */
+  var current = 0;
+
+  function render(i) {
+    var step = STEPS[i];
+
+    // canvas + caption accent
+    canvas.style.setProperty("--stage-accent", step.accent);
+    document.documentElement.style.setProperty("--stage-accent", step.accent);
+
+    // rail nodes: done / active / upcoming
+    nodeEls.forEach(function (el, ni) {
+      el.classList.remove("is-active", "is-done", "is-upcoming");
+      if (ni < step.node)        el.classList.add("is-done");
+      else if (ni === step.node) el.classList.add("is-active");
+      else                       el.classList.add("is-upcoming");
+    });
+    // keep the active stage centered on narrow screens (no vertical page jump)
+    var activeNode = nodeEls[step.node];
+    if (activeNode && activeNode.scrollIntoView) {
+      activeNode.scrollIntoView({ inline: "center", block: "nearest" });
+    }
+
+    // scenes: show only the active one
+    scenes.forEach(function (sc) {
+      sc.classList.toggle("is-shown", Number(sc.getAttribute("data-scene")) === step.scene);
+    });
+
+    // caption (aria-live announces step position + the change to screen readers)
+    caption.innerHTML =
+      '<span class="sr-only">Step ' + (i + 1) + ' of ' + STEPS.length + '. </span>' +
+      step.caption;
+
+    // step count + dots
+    stepCount.innerHTML = "Step <b>" + (i + 1) + "</b> of " + STEPS.length;
+    dotEls.forEach(function (d, di) {
+      d.classList.toggle("is-active", di === i);
+      d.classList.toggle("is-past", di < i);
+      d.setAttribute("aria-selected", di === i ? "true" : "false");
+    });
+
+    // disable Back/Next at the ends
+    btnBack.disabled = (i === 0);
+    btnNext.disabled = (i === STEPS.length - 1);
+  }
+
+  function go(i) {
+    current = Math.max(0, Math.min(STEPS.length - 1, i));
+    render(current);
+  }
+
+  /* ------------------------------------------------------------------
+     PLAYBACK
+     ------------------------------------------------------------------ */
+  var timer = null;
+  var playing = false;
+
+  function tick() {
+    if (current >= STEPS.length - 1) {
+      pause();                 // stop at the end
+      return;
+    }
+    go(current + 1);
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+
+  function play() {
+    if (reduceMotion) return;  // no auto-motion when reduced motion
+    if (playing) return;
+    // if we're at the end, restart from the top before playing
+    if (current >= STEPS.length - 1) go(0);
+    playing = true;
+    setPlayButton();
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+
+  function pause() {
+    playing = false;
+    if (timer) { window.clearTimeout(timer); timer = null; }
+    setPlayButton();
+  }
+
+  function toggle() { playing ? pause() : play(); }
+
+  function setPlayButton() {
+    if (reduceMotion) {
+      // auto-play is disabled under reduced motion; say so visibly, not just on hover
+      playIcon.innerHTML = PLAY_ICON;
+      playText.textContent = "Auto-play off";
+      btnPlay.setAttribute("aria-label", "Auto-play disabled (reduced motion)");
+      return;
+    }
+    playIcon.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    playText.textContent = playing ? "Pause" : "Play";
+    btnPlay.setAttribute("aria-label", playing ? "Pause animation" : "Play animation");
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /* ------------------------------------------------------------------
+     Controls wiring
+     ------------------------------------------------------------------ */
+  btnPlay.addEventListener("click", toggle);
+  btnNext.addEventListener("click", function () { pause(); go(current + 1); });
+  btnBack.addEventListener("click", function () { pause(); go(current - 1); });
+  btnRestart.addEventListener("click", function () { pause(); go(0); });
+
+  // Keyboard: Space toggles, arrows step. Ignore when typing in a field.
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+    if (e.code === "Space" || e.key === " ") {
+      e.preventDefault();
+      toggle();
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      pause(); go(current + 1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      pause(); go(current - 1);
+    }
+  });
+
+  // Don't run auto-play timers in a hidden/background tab.
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) pause();
+  });
+
+  // If reduced motion, hide Play (auto-motion disabled) but keep stepping.
+  if (reduceMotion) {
+    btnPlay.disabled = true;
+    btnPlay.title = "Auto-play disabled (reduced motion). Use Next / Back.";
+  }
+
+  /* ------------------------------------------------------------------
+     INIT
+     ------------------------------------------------------------------ */
+  setPlayButton();
+  go(0);
+})();
+</script>
+</body>
+</html>
