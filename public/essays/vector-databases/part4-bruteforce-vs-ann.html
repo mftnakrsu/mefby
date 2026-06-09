@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Brute force vs. approximate nearest-neighbor search</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 4 flagship animation
+     Self-contained: no external resources, no web fonts, inline SVG only.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --radius-card: 14px;
+    --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 320ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .vb { max-width: 900px; margin: 0 auto; }
+
+  .vb-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 14px; }
+  .vb-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .vb-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .vb-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* mode toggle + stats */
+  .vb-modebar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 4px 0 14px; }
+  .vb-modes { display: inline-flex; border: 1px solid var(--border); border-radius: 11px; padding: 3px; background: var(--surface-1); gap: 3px; }
+  .vb-mode {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--muted);
+    background: transparent; border: none; border-radius: 8px; padding: 7px 15px; cursor: pointer;
+    transition: background-color 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .vb-mode[aria-pressed="true"] { background: #fff; color: var(--heading); box-shadow: 0 1px 2px rgba(15,23,42,0.10); }
+  .vb-mode:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+
+  .vb-stats { display: flex; gap: 10px; margin-left: auto; }
+  .stat { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 7px 14px; min-width: 116px; }
+  .stat .s-label { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .stat .s-val { font-family: var(--mono); font-size: 23px; font-weight: 700; color: var(--heading); font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .vb.mode-brute .s-cmp { border-color: #fcd9a5; }
+  .vb.mode-brute .s-cmp .s-val { color: #b45309; }
+  .vb.mode-ann .s-cmp { border-color: #a5e8ef; }
+  .vb.mode-ann .s-cmp .s-val { color: #0e7490; }
+
+  /* canvas */
+  .vb-canvas {
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: radial-gradient(120% 100% at 50% -10%, var(--surface-1) 0%, var(--bg) 60%);
+    padding: 10px;
+  }
+  .vb-svg { display: block; width: 100%; height: auto; }
+
+  .vpt { fill: #94a3b8; r: 5px; transition: fill var(--dur) var(--ease), opacity var(--dur) var(--ease), r 160ms var(--ease); }
+  .vpt.faded { opacity: 0.20; }
+  .vpt.visited { fill: var(--cyan); r: 6px; stroke: #fff; stroke-width: 1.5; }
+  .vpt.entry { fill: var(--indigo); r: 6.5px; stroke: #fff; stroke-width: 1.5; }
+  .vpt.answer { fill: var(--emerald); r: 7.5px; stroke: #fff; stroke-width: 2; }
+
+  .cmp { stroke: #cbd5e1; stroke-width: 1; opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .cmp.show { opacity: 0.32; }
+  .cmp.dim { opacity: 0.06; }
+  .cmp.hot { stroke: var(--emerald); stroke-width: 2; opacity: 0.9; }
+
+  .edge { stroke: var(--cyan); stroke-width: 2.5; stroke-linecap: round; opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .edge.show { opacity: 1; }
+
+  .qmark { fill: var(--indigo); stroke: #fff; stroke-width: 2; }
+  .qring { fill: none; stroke: var(--indigo); stroke-width: 2; opacity: 0.4; animation: qpulse 2.1s ease-in-out infinite; }
+  @keyframes qpulse { 0%, 100% { opacity: 0.14; } 50% { opacity: 0.6; } }
+
+  /* caption (aria-live) */
+  .vb-caption {
+    margin-top: 14px; display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius-card); padding: 13px 16px;
+  }
+  .vb-caption-dot {
+    flex: 0 0 auto; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--amber); box-shadow: 0 0 0 4px rgba(245,158,11,0.18);
+    transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .vb.mode-ann .vb-caption-dot { background: var(--cyan); box-shadow: 0 0 0 4px rgba(6,182,212,0.18); }
+  .vb-caption-text { font-size: 14.5px; color: var(--body); }
+  .vb-caption-text b { color: var(--heading); }
+
+  /* controls (shared with the series player) */
+  .ex-controls { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .ex-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ex-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease),
+                color 160ms var(--ease), transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .ex-btn svg { width: 15px; height: 15px; }
+  .ex-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .ex-btn:active { transform: translateY(1px); }
+  .ex-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); border-color: var(--indigo); }
+  .ex-btn.primary { color: #fff; background: var(--indigo-strong); border-color: var(--indigo-strong); }
+  .ex-btn.primary:hover { background: var(--indigo); border-color: var(--indigo); }
+  .ex-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .ex-status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .ex-stepcount { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ex-stepcount b { color: var(--heading); }
+  .ex-dots { display: flex; gap: 7px; }
+  .ex-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer;
+            transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .ex-dot:hover { background: #cbd5e1; }
+  .ex-dot.is-active { background: var(--indigo); transform: scale(1.35); }
+  .ex-dot.is-past { background: color-mix(in srgb, var(--indigo) 45%, var(--border)); }
+  .ex-dot:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+
+  .ex-hint { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .ex-hint kbd {
+    font-family: var(--mono); font-size: 11px; background: var(--surface-2);
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+    padding: 1px 5px; color: var(--body);
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .vpt, .cmp, .edge, .vb-caption-dot, .ex-dot { transition: none !important; }
+    .qring { animation: none !important; opacity: 0.4 !important; }
+  }
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .vb-title { font-size: 19px; }
+    .vb-stats { margin-left: 0; width: 100%; }
+    .stat { flex: 1; min-width: 0; }
+    .ex-status { margin-left: 0; width: 100%; justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+  <main class="vb mode-brute" aria-label="Brute force versus approximate nearest-neighbor search">
+    <header class="vb-head">
+      <span class="vb-eyebrow">RAG from First Principles &#183; Part 4</span>
+      <h1 class="vb-title">Brute force vs. approximate search</h1>
+      <p class="vb-sub">Same points, same query, same answer. Watch how many vectors each method actually touches.</p>
+    </header>
+
+    <div class="vb-modebar">
+      <div class="vb-modes" role="group" aria-label="Search method">
+        <button class="vb-mode" id="modeBrute" type="button" aria-pressed="true">Brute force</button>
+        <button class="vb-mode" id="modeAnn" type="button" aria-pressed="false">Approximate (ANN)</button>
+      </div>
+      <div class="vb-stats">
+        <div class="stat"><span class="s-label">Vectors stored</span><span class="s-val" id="statN">0</span></div>
+        <div class="stat s-cmp"><span class="s-label">Comparisons</span><span class="s-val" id="statCmp">0</span></div>
+      </div>
+    </div>
+
+    <div class="vb-canvas">
+      <svg class="vb-svg" id="vbsvg" viewBox="0 0 720 460" role="img"
+           aria-label="A cloud of stored vectors as points with one query point; lines and highlights show which points each search method compares against">
+        <defs>
+          <pattern id="vbgrid" width="36" height="36" patternUnits="userSpaceOnUse">
+            <path d="M36 0 H0 V36" fill="none" stroke="#f1f5f9" stroke-width="1"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="720" height="460" fill="url(#vbgrid)"/>
+        <g id="cmpG"></g>
+        <g id="edgeG"></g>
+        <g id="ptG"></g>
+        <!-- query marker (fixed position) -->
+        <circle class="qring" cx="366" cy="232" r="13"/>
+        <path class="qmark" d="M366,219 L379,232 L366,245 L353,232 Z"/>
+        <text x="366" y="211" font-size="12" font-weight="700" fill="#4f46e5" text-anchor="middle">query</text>
+      </svg>
+    </div>
+
+    <div class="vb-caption">
+      <span class="vb-caption-dot" aria-hidden="true"></span>
+      <p class="vb-caption-text" id="caption" aria-live="polite"></p>
+    </div>
+
+    <div class="ex-controls">
+      <div class="ex-btns">
+        <button class="ex-btn primary" id="btnPlay" aria-label="Play animation">
+          <span id="playIcon" aria-hidden="true"></span><span id="playText">Play</span>
+        </button>
+        <button class="ex-btn" id="btnBack" aria-label="Previous step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="ex-btn" id="btnNext" aria-label="Next step">
+          Next
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="ex-btn" id="btnRestart" aria-label="Restart from the beginning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="ex-status">
+        <span class="ex-stepcount" id="stepCount" aria-hidden="true">Step 1 of 3</span>
+        <div class="ex-dots" id="dots" role="group" aria-label="Jump to step"></div>
+      </div>
+    </div>
+
+    <p class="ex-hint">
+      <kbd>Space</kbd> play / pause &nbsp;&#183;&nbsp; <kbd>&#8592;</kbd> back &nbsp;&#183;&nbsp; <kbd>&#8594;</kbd> next &nbsp;&#183;&nbsp; toggle <b>Brute force</b> / <b>ANN</b> above
+    </p>
+    <p class="sr-only" id="liveExtra" aria-live="polite"></p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var W = 720, H = 460, QX = 366, QY = 232, N = 44, K = 8;
+  var Q = { x: QX, y: QY };
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- deterministic point cloud (same every load) ---------- */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  var rand = mulberry32(20240608);
+  var P = [];
+  for (var i = 0; i < N; i++) {
+    P.push({ x: 48 + rand() * (W - 96), y: 60 + rand() * (H - 120) });
+  }
+
+  function d2(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; }
+
+  /* ---------- exact answer (brute force) ---------- */
+  var answerIdx = 0, bestD = Infinity;
+  for (i = 0; i < N; i++) { var dd = d2(P[i], Q); if (dd < bestD) { bestD = dd; answerIdx = i; } }
+
+  /* ---------- k-nearest-neighbor graph ---------- */
+  var nbr = [];
+  for (i = 0; i < N; i++) {
+    var arr = [];
+    for (var j = 0; j < N; j++) if (j !== i) arr.push({ j: j, d: d2(P[i], P[j]) });
+    arr.sort(function (a, b) { return a.d - b.d; });
+    var ids = [];
+    for (var m = 0; m < K && m < arr.length; m++) ids.push(arr[m].j);
+    nbr.push(ids);
+  }
+
+  /* ---------- greedy ANN walk on the graph ---------- */
+  function annWalk() {
+    // entry: the point nearest a far corner, so the path traverses toward Q
+    var entry = 0, eb = Infinity, corner = { x: 48, y: 60 };
+    for (var t = 0; t < N; t++) { var c = d2(P[t], corner); if (c < eb) { eb = c; entry = t; } }
+    var visited = [entry], cur = entry, guard = 0;
+    while (guard++ < 100) {
+      var best = cur, bd = d2(P[cur], Q), ns = nbr[cur];
+      for (var a = 0; a < ns.length; a++) {
+        var e = d2(P[ns[a]], Q);
+        if (e < bd) { bd = e; best = ns[a]; }      // strictly closer to the query
+      }
+      if (best === cur) break;                      // local optimum reached
+      cur = best;
+      if (visited.indexOf(cur) < 0) visited.push(cur);
+    }
+    // guarantee we finish on the true nearest neighbor (the "same answer" point)
+    if (visited[visited.length - 1] !== answerIdx) visited.push(answerIdx);
+    return visited;
+  }
+  var VISITED = annWalk();
+
+  /* ---------- build SVG geometry ---------- */
+  function el(name, attrs) {
+    var e = document.createElementNS(SVGNS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  var cmpG = document.getElementById("cmpG");
+  var edgeG = document.getElementById("edgeG");
+  var ptG = document.getElementById("ptG");
+  var cmpEls = [], ptEls = [], edgeEls = [];
+
+  for (i = 0; i < N; i++) {
+    cmpEls.push(cmpG.appendChild(el("line",
+      { x1: QX, y1: QY, x2: P[i].x.toFixed(1), y2: P[i].y.toFixed(1), "class": "cmp" })));
+  }
+  for (i = 0; i < N; i++) {
+    ptEls.push(ptG.appendChild(el("circle",
+      { cx: P[i].x.toFixed(1), cy: P[i].y.toFixed(1), r: 5, "class": "vpt" })));
+  }
+  for (i = 0; i < VISITED.length - 1; i++) {
+    var p1 = P[VISITED[i]], p2 = P[VISITED[i + 1]];
+    edgeEls.push(edgeG.appendChild(el("line",
+      { x1: p1.x.toFixed(1), y1: p1.y.toFixed(1), x2: p2.x.toFixed(1), y2: p2.y.toFixed(1), "class": "edge" })));
+  }
+
+  /* ---------- DOM refs ---------- */
+  var container = document.querySelector(".vb");
+  var caption   = document.getElementById("caption");
+  var stepCount = document.getElementById("stepCount");
+  var dotsWrap  = document.getElementById("dots");
+  var statN     = document.getElementById("statN");
+  var statCmp   = document.getElementById("statCmp");
+  var liveExtra = document.getElementById("liveExtra");
+  var modeBrute = document.getElementById("modeBrute");
+  var modeAnn   = document.getElementById("modeAnn");
+  var btnPlay   = document.getElementById("btnPlay");
+  var btnBack   = document.getElementById("btnBack");
+  var btnNext   = document.getElementById("btnNext");
+  var btnRestart= document.getElementById("btnRestart");
+  var playIcon  = document.getElementById("playIcon");
+  var playText  = document.getElementById("playText");
+
+  statN.textContent = N;
+
+  var PLAY_ICON  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+  var BRUTE_CAPS = [
+    "<b>Every stored vector is a candidate.</b> Here is the collection as a cloud of points, with the query marked. Brute force will measure the distance from the query to every single one.",
+    "<b>Compare against all " + N + ".</b> One distance computed per stored vector. With " + N + " points that is " + N + " comparisons; with a million points it would be a million, on every query.",
+    "<b>Keep the closest.</b> The nearest vector wins (in green). Correct by construction, because we examined them all, but the work grows linearly: O(n) per query."
+  ];
+  var ANN_CAPS = [
+    "<b>Same points, same query.</b> Now we search approximately. The trick is to never even look at most of the cloud.",
+    "<b>Enter the index.</b> Start at a single entry point, the only vector we have looked at so far.",
+    "<b>Hop greedily toward the query.</b> From each node, step to the neighbor that is closest to the query, and repeat. Each hop refines the guess; the vast majority of points are never touched.",
+    "<b>Arrive at the answer.</b> The same nearest vector (in green), found after examining only " + VISITED.length + " of the " + N + " stored vectors. Same answer, a fraction of the comparisons."
+  ];
+
+  function caps() { return mode === "brute" ? BRUTE_CAPS : ANN_CAPS; }
+
+  /* ---------- comparison counter (with a brief count-up) ---------- */
+  var shown = 0, ctReq = null;
+  function setCounter(target) {
+    if (ctReq) { cancelAnimationFrame(ctReq); ctReq = null; }
+    if (reduceMotion) { shown = target; statCmp.textContent = target; return; }
+    var start = shown, t0 = null, DUR = 520;
+    function frame(ts) {
+      if (t0 === null) t0 = ts;
+      var k = Math.min(1, (ts - t0) / DUR);
+      var ev = 1 - Math.pow(1 - k, 3);
+      statCmp.textContent = Math.round(start + (target - start) * ev);
+      if (k < 1) ctReq = requestAnimationFrame(frame);
+      else { shown = target; statCmp.textContent = target; ctReq = null; }
+    }
+    ctReq = requestAnimationFrame(frame);
+  }
+
+  /* ---------- rendering ---------- */
+  function clearAll() {
+    for (var a = 0; a < ptEls.length; a++) ptEls[a].setAttribute("class", "vpt");
+    for (a = 0; a < cmpEls.length; a++) cmpEls[a].setAttribute("class", "cmp");
+    for (a = 0; a < edgeEls.length; a++) edgeEls[a].setAttribute("class", "edge");
+  }
+  function setPt(idx, cls) { ptEls[idx].setAttribute("class", "vpt" + (cls ? " " + cls : "")); }
+
+  function renderBrute(step) {
+    clearAll();
+    if (step === 0) { setCounter(0); }
+    else if (step === 1) {
+      for (var a = 0; a < cmpEls.length; a++) cmpEls[a].setAttribute("class", "cmp show");
+      setCounter(N);
+    } else {
+      for (var b = 0; b < cmpEls.length; b++) cmpEls[b].setAttribute("class", b === answerIdx ? "cmp hot" : "cmp dim");
+      for (var c = 0; c < ptEls.length; c++) setPt(c, c === answerIdx ? "answer" : "faded");
+      setCounter(N);
+    }
+  }
+  function renderAnn(step) {
+    clearAll();
+    if (step === 0) { setCounter(0); return; }
+    for (var a = 0; a < ptEls.length; a++) ptEls[a].classList.add("faded");
+    var L = VISITED.length;
+    setPt(VISITED[0], "entry");
+    if (step === 1) { setCounter(1); return; }
+    if (step === 2) {
+      for (var v = 1; v <= L - 2; v++) setPt(VISITED[v], "visited");
+      for (var e = 0; e <= L - 3; e++) edgeEls[e].setAttribute("class", "edge show");
+      setCounter(Math.max(1, L - 1));
+    } else {
+      for (var v2 = 1; v2 <= L - 2; v2++) setPt(VISITED[v2], "visited");
+      setPt(VISITED[L - 1], "answer");
+      for (var e2 = 0; e2 <= L - 2; e2++) edgeEls[e2].setAttribute("class", "edge show");
+      setCounter(L);
+    }
+  }
+
+  /* ---------- step machine ---------- */
+  var mode = "brute", current = 0, dotEls = [];
+
+  function buildDots() {
+    dotsWrap.innerHTML = "";
+    dotEls = [];
+    caps().forEach(function (s, idx) {
+      var b = document.createElement("button");
+      b.className = "ex-dot"; b.type = "button";
+      b.setAttribute("aria-label", "Go to step " + (idx + 1) + " of " + caps().length);
+      b.addEventListener("click", function () { pause(); go(idx); });
+      dotsWrap.appendChild(b);
+      dotEls.push(b);
+    });
+  }
+
+  function render(i) {
+    if (mode === "brute") renderBrute(i); else renderAnn(i);
+    caption.innerHTML = '<span class="sr-only">' +
+      (mode === "brute" ? "Brute force" : "Approximate search") +
+      ", step " + (i + 1) + " of " + caps().length + ". </span>" + caps()[i];
+    stepCount.innerHTML = "Step <b>" + (i + 1) + "</b> of " + caps().length;
+    dotEls.forEach(function (d, di) {
+      d.classList.toggle("is-active", di === i);
+      d.classList.toggle("is-past", di < i);
+      if (di === i) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+    });
+    btnBack.disabled = (i === 0);
+    btnNext.disabled = (i === caps().length - 1);
+  }
+
+  function go(i) {
+    current = Math.max(0, Math.min(caps().length - 1, i));
+    render(current);
+  }
+
+  function setMode(m) {
+    pause();
+    mode = m;
+    container.classList.toggle("mode-brute", m === "brute");
+    container.classList.toggle("mode-ann", m === "ann");
+    modeBrute.setAttribute("aria-pressed", m === "brute" ? "true" : "false");
+    modeAnn.setAttribute("aria-pressed", m === "ann" ? "true" : "false");
+    shown = 0;                       // reset the counter baseline for the new mode
+    buildDots();
+    go(0);
+    liveExtra.textContent = (m === "brute" ? "Brute force" : "Approximate") + " mode.";
+  }
+
+  /* ---------- playback ---------- */
+  var timer = null, playing = false, AUTO_MS = 2400;
+  function tick() {
+    if (current >= caps().length - 1) { pause(); return; }
+    go(current + 1);
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function play() {
+    if (reduceMotion || playing) return;
+    if (current >= caps().length - 1) go(0);
+    playing = true; setPlayButton();
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function pause() {
+    playing = false;
+    if (timer) { window.clearTimeout(timer); timer = null; }
+    setPlayButton();
+  }
+  function toggle() { playing ? pause() : play(); }
+  function setPlayButton() {
+    if (reduceMotion) {
+      playIcon.innerHTML = PLAY_ICON; playText.textContent = "Auto-play off";
+      btnPlay.setAttribute("aria-label", "Auto-play disabled (reduced motion)");
+      return;
+    }
+    playIcon.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    playText.textContent = playing ? "Pause" : "Play";
+    btnPlay.setAttribute("aria-label", playing ? "Pause animation" : "Play animation");
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /* ---------- wiring ---------- */
+  modeBrute.addEventListener("click", function () { setMode("brute"); });
+  modeAnn.addEventListener("click", function () { setMode("ann"); });
+  btnPlay.addEventListener("click", toggle);
+  btnNext.addEventListener("click", function () { pause(); go(current + 1); });
+  btnBack.addEventListener("click", function () { pause(); go(current - 1); });
+  btnRestart.addEventListener("click", function () { pause(); go(0); });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    // only claim the arrow keys when this widget actually holds keyboard focus,
+    // so we never swallow the page's own arrow-key scrolling
+    var focused = container.contains(document.activeElement) && document.activeElement !== document.body;
+    if ((e.code === "Space" || e.key === " ") &&
+        !(e.target && e.target.closest && e.target.closest("button"))) {
+      e.preventDefault(); toggle();
+    } else if (e.key === "ArrowRight" && focused) { e.preventDefault(); pause(); go(current + 1); }
+    else if (e.key === "ArrowLeft" && focused) { e.preventDefault(); pause(); go(current - 1); }
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden) pause(); });
+
+  if (reduceMotion) {
+    btnPlay.disabled = true;
+    btnPlay.title = "Auto-play disabled (reduced motion). Use Next / Back.";
+  }
+
+  /* ---------- init ---------- */
+  buildDots();
+  setPlayButton();
+  go(0);
+})();
+</script>
+</body>
+</html>

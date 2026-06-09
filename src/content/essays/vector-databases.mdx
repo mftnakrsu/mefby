@@ -1,0 +1,188 @@
+---
+title: "Vector Databases and Indexing"
+description: "You can score one chunk against a query, but doing it for every chunk is exact, brute-force k-NN: perfectly accurate and painfully O(n). Part 4 of a from-scratch series on Retrieval-Augmented Generation: why ordinary database indexes break in high dimensions, the speed-versus-recall trade-off behind approximate nearest-neighbor (ANN) search, the intuition for HNSW and IVF, and what a vector database actually stores and does."
+date: 2026-06-10
+tags: ["RAG", "Vector Database", "ANN", "HNSW", "IVF", "Vector Search", "AI"]
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*RAG from First Principles. Part 4 of the series.*
+
+## What you'll learn
+
+Part 3 left us with a working ranking function and a warning. We can embed a user's question into a query vector, score it against any stored chunk vector with cosine similarity, and keep the `k` best. The warning was the cost: doing that against *every* stored vector is fine for a few thousand chunks and brutal for millions. This part closes that gap. By the end you'll know why that exhaustive approach (exact, or brute-force, k-NN) scales so badly, why an ordinary database index cannot rescue us, and the single trade-off the whole field is organized around: giving up a sliver of accuracy to go enormously faster. We'll build intuition for the two index families you will actually meet, **HNSW** and **IVF**, glance at how vectors get compressed, and pin down what a **vector database** really is. We stay conceptual, with at most a few lines of illustrative code; the full build comes later in the series.
+
+## Prerequisites
+
+Parts 1 through 3: [Why RAG Exists](/essays/why-rag-exists), [Embeddings, Truly Understood](/essays/embeddings), and [Measuring Similarity](/essays/measuring-similarity). You should be comfortable that a chunk of text becomes an **embedding** (a vector, a point in a space with hundreds of dimensions), that similar meanings sit close together there, and that we rank chunks by a **similarity** score, usually **cosine similarity**, and keep the **top-k**. Basic Python helps for the one short snippet, but the heart of this part is pictures and intuition.
+
+## The baseline we just outgrew: brute-force k-NN
+
+Let me name what we have been doing, so we can talk about it. To answer *"What is our refund window?"* we embed the question, compare that query vector against the stored vector of every chunk of `refund-policy.md` and every other document, score each one, and keep the closest `k`. Comparing against the whole collection and returning the genuinely `k` nearest is called **exact nearest-neighbor search**, or, because you do it by the sheer force of checking everything, **brute-force k-NN** (k-NN is short for k-nearest-neighbors). It has one wonderful property and one fatal one.
+
+The wonderful property: it is exactly right. By definition it inspects every candidate, so the `k` it returns really are the `k` closest. No approximation, no chance of missing the best chunk.
+
+The fatal property is the cost. If you have `N` stored vectors, every query computes `N` similarity scores, one per stored vector. That is **O(n)** work per query: double the collection and you double the time. In code the whole thing is almost embarrassingly short:
+
+```python
+import numpy as np
+
+# query  : the embedding of "What is our refund window?"  (shape: d)
+# chunks : an (N, d) matrix of stored chunk embeddings, already normalized
+def brute_force_topk(query, chunks, k=4):
+    scores = chunks @ query           # one dot product per stored vector -> O(N)
+    return np.argsort(-scores)[:k]    # indices of the k highest-scoring chunks
+```
+
+For a hobby project with a few thousand chunks, this is genuinely all you need. Modern hardware multiplies and adds quickly, and `chunks @ query` is exactly the operation it is most optimized for. The trouble starts when `N` stops being thousands. A serious knowledge base (all of a company's documents, a product catalog, years of support tickets) is millions or billions of vectors. Now every query, from every user, must perform millions of multiply-and-add passes before it can answer, inside the sub-second budget a person waiting on a chatbot will tolerate. O(n) per query times many queries per second is a wall. We need to find the nearest vectors *without* looking at all of them.
+
+## Why a normal database isn't enough
+
+The instinct of any engineer is: databases solved "find things fast" decades ago, so just put an index on it. It is worth understanding precisely why that instinct fails here, because the failure is the whole reason vector databases exist.
+
+A traditional database makes lookups fast with structures like the **B-tree**, the workhorse index behind `WHERE price = 19.99`, `WHERE date > '2024-01-01'`, and `ORDER BY name`. A B-tree keeps one column's values in sorted order so the engine can binary-search them, reaching any value in a handful of steps instead of scanning the whole table. It is brilliant at exact matches, ranges, and sorting, the moment you have a **single dimension with a natural order**.
+
+That last phrase is the catch. "Find the nearest neighbors in a 768-dimensional space" is not a sorted-column question. There is no single axis to binary-search along; closeness depends on all 768 numbers at once, and a vector that looks near on dimension 1 may be far on dimension 2. You might think: fine, build a tree that splits on many dimensions (these exist, k-d trees and their relatives). And in 2 or 3 dimensions they work beautifully. The problem is what happens as the dimensions pile up, a phenomenon with a suitably ominous name: the **curse of dimensionality**.
+
+Here is the intuition, without the math. Space-partitioning trees earn their speed by ruling out regions: "the target is on this side of the split, so ignore the other side." But in very high dimensions, points behave strangely. The distances between all pairs become eerily similar (almost everything is roughly equidistant from everything else), and the volume of space explodes so fast that any local neighborhood is nearly empty. To be *certain* it has the true nearest neighbor, the tree can no longer rule regions out and ends up visiting almost all of them, degrading into a scan that is often slower than plain brute force. Tree tricks that win in two dimensions do not survive the trip to several hundred. That is why we cannot reuse the index we already know, and why a different kind of index is needed.
+
+## The central trade-off: approximate, not exact
+
+Here is the pivot the whole field turns on, and it is a genuine change of goal. We stop insisting on the *exact* nearest neighbors and accept *almost always the right ones*. That single concession buys speedups of orders of magnitude, and it is the foundation of **Approximate Nearest Neighbor (ANN)** search.
+
+The bargain sounds reckless until you remember what we are doing. We are retrieving chunks to ground a language model. If the truly best chunk is the one that reads *"Refunds are accepted within 30 days of purchase,"* and ANN returns that chunk plus three slightly-less-perfect neighbors instead of the mathematically optimal four, the model answers the question just as well. We do not need the provably perfect set; we need a very good set, fast.
+
+To talk about that sliver, we need a word for it. **Recall**, in this nearest-neighbor sense, is the fraction of the true top-k that your approximate search actually returns. If the exact top-10 contains ten specific chunks and your ANN index returns eight of them, that is 0.8, or 80 percent, recall. (This is a different use of the word "recall" than in classification; here it simply means "of the genuine neighbors, how many did we find.") An index tuned to 0.95 recall returns, on average, 95 percent of the truly nearest results, and finds them far faster than brute force ever could.
+
+And that sets up the trade-off the rest of this chapter, and most of your tuning time, lives inside: **speed versus recall.** Returning more of the true neighbors (higher recall) costs more work per query (less speed); cutting corners (more speed) misses more of them (lower recall). Every index and knob we are about to meet is just a different place to sit on that curve. There is no free lunch, only a choice of where on the speed-recall curve to live.
+
+The animation below makes the bargain visceral. The same cloud of stored vectors, the same query, the same answer, reached two ways. Brute force draws a line to every point and the comparison counter climbs to the full size of the collection. ANN lights up only the handful of points it actually visits on its way in, and the counter barely moves.
+
+<Diagram number={1} caption="Same points, same query, same answer. Brute force compares against every vector (the counter climbs to the full N); ANN visits only a handful of nodes on the way in (the counter stays tiny). Toggle the two modes and step through each.">
+  <IframeFigure
+    src="/essays/vector-databases/part4-bruteforce-vs-ann.html"
+    title="Interactive comparison of brute-force and approximate nearest-neighbor search over a 2D cloud of points: brute force draws a comparison line to every stored point while a counter climbs to the full collection size; ANN highlights only the small set of visited nodes on a path to the same answer, with a far smaller counter"
+    height={720}
+  />
+</Diagram>
+
+## HNSW: navigating a graph of neighbors
+
+The most popular ANN index today is **HNSW**, which stands for **Hierarchical Navigable Small World**. The name is a mouthful, but the idea is one you already use whenever you travel a long distance efficiently, and the analogy makes it click.
+
+Think about crossing a country by train. You do not take the slow local that stops at every village. You take an express between major cities to get into the right region fast, change to a regional line, then finally a local for the last few stops to the exact station. Long hops first, short hops last. HNSW builds exactly this, but for vectors.
+
+Picture the vectors as nodes in a graph, with each node linked to some of its nearest neighbors. (A "navigable small world" graph is one where mostly-short links, plus a few long ones, let you walk from any node to any other in surprisingly few steps, the "six degrees of separation" effect.) Now stack several such graphs in layers. The **bottom layer** holds every vector, densely connected to its near neighbors: the local train, short hops. Each layer above it is a sparser sample of the one below, with longer links: regional, then express. The **top layer** has only a few nodes joined by long-range links.
+
+A search starts at an entry point in the sparse top layer and walks **greedily**: from the current node, step to whichever neighbor is closest to the query, and repeat, until no neighbor is closer. Those long top-layer links cover huge ground per hop, dropping you into the right neighborhood almost immediately. Then you descend a layer and refine with shorter hops, descend again, and finish on the dense bottom layer with tiny local steps. There, rather than stopping at the very first local best, the search keeps a short running list of the closest candidates it has seen (a tunable beam), which is how it returns a whole top-k and reaches the high recall it is known for. You navigate from a coarse overview down to a fine answer, touching only a tiny fraction of the nodes.
+
+<Diagram number={2} caption="HNSW as stacked layers. The sparse top layer makes long hops from the entry point to land near the target fast; each layer down is denser with shorter hops; the bottom layer holds every vector and does the final fine steps to the nearest neighbor.">
+  <img src="/essays/vector-databases/part4-hnsw-layers.svg" alt="Three stacked layers of a graph. The top layer is sparse, with four nodes joined by long edges and an entry node; a highlighted path makes long hops across it, then drops down a dashed connector to the middle layer, which has more nodes and shorter edges; it drops again to the dense bottom layer of many closely spaced nodes, where short hops lead to a highlighted nearest-neighbor node beside the query marker." class="w-full rounded-lg" />
+</Diagram>
+
+That layered, greedy walk is why HNSW is fast and why its recall is excellent: in practice it finds the true nearest neighbors the overwhelming majority of the time while visiting only a sliver of the graph. Its main cost is memory. The graph (all those nodes and their links) lives in RAM, and storing the links on top of the vectors themselves is real overhead. HNSW is the default in many vector databases precisely because, for typical workloads, its speed and recall are hard to beat, and you pay for that with memory.
+
+## IVF: sorting vectors onto shelves
+
+The other family you will meet takes a different route to the same goal. **IVF**, the **Inverted File Index**, is about not searching shelves you already know are irrelevant.
+
+Picture a library. The books are not strewn at random; they are grouped by subject onto shelves. When you want a book on Roman history you do not scan every shelf in the building, you walk straight to the history section and look only there. IVF organizes vectors the same way. Before any queries arrive, it runs a clustering algorithm (commonly **k-means**) that groups the stored vectors into some number of clusters by proximity. Each cluster has a **centroid**, the average position of its members, which serves as the cluster's address, its shelf label.
+
+At query time you do not compare against every vector. You first compare the query against the (relatively few) centroids to find which clusters it lands nearest, then search only inside those clusters. Walk to the right shelves, ignore the rest of the library. If a million vectors are split into a thousand clusters of a thousand each, and you look in just one cluster, you have replaced a million comparisons with about a thousand for the centroids plus a thousand inside the cluster: a couple of thousand instead of a million.
+
+The knob that sets IVF's place on the speed-recall curve is **nprobe**: the number of clusters you actually search. Search only the single nearest cluster (`nprobe = 1`) and you are fastest but riskiest, because the true nearest neighbor might sit just across a cluster boundary in one you never opened. Raise `nprobe` to search the nearest few clusters and recall climbs, because you are now covering those border regions, at the cost of more comparisons. `nprobe` is the dial you turn to move along the trade-off.
+
+<Diagram number={3} caption="IVF partitions the space into clusters, each with a centroid (the x marks). A query is compared only against the centroids, then searched inside the nearest few clusters (nprobe), shown highlighted, while every other cluster stays dim and untouched.">
+  <img src="/essays/vector-databases/part4-ivf-clusters.svg" alt="A 2D space divided into several irregular cells, each holding scattered dots and a centroid marked with an x. A query point drawn as a diamond sits near a cell boundary. The two cells whose centroids are nearest the query are highlighted and their dots connected to the query by thin comparison lines, illustrating nprobe equal to two; the remaining cells are dimmed to show they are skipped." class="w-full rounded-lg" />
+</Diagram>
+
+Compared with HNSW, IVF's profile is different. It is typically lighter on memory, and its clusters map naturally onto disk, so it scales comfortably to very large, on-disk collections; HNSW's graph wants to live in RAM. IVF's recall and speed depend heavily on how many clusters you create and on `nprobe`, and it usually needs a representative sample of your data to train the clustering well. As a rough rule of thumb: HNSW tends to win on raw query speed and recall when memory is available; IVF tends to win when collections are huge and memory or disk economics dominate. Neither is universally "better"; they simply sit at different points on the same curve.
+
+## Shrinking the vectors: a word on compression
+
+Both approaches still store the vectors, and vectors are not small: a million 768-dimensional vectors in standard 32-bit floats is several gigabytes before you add any index. So there is a third lever, orthogonal to the index: **compression**.
+
+The term to recognize is **Product Quantization (PQ)**. The intuition: instead of storing every vector at full precision, PQ chops each vector into short sub-vectors and replaces each piece with the nearest entry from a small learned codebook, so a long list of precise floats collapses into a handful of compact codes. The vectors get dramatically smaller in memory, distances can be computed directly on the compressed form, and the price is a little lost precision, a small hit to recall. PQ is frequently paired with clustering, an arrangement you will see written as **IVF+PQ**: cluster to narrow the search, then store the cluster members compressed so far more of them fit in memory. You do not need the internals today; just recognize the name and the idea (compress to save memory at a small accuracy cost) when you meet it in a database's settings.
+
+## So what is a vector database, really?
+
+With the indexing intuition in hand, we can answer the question the chapter's title raises. A **vector database** is not merely "a place that runs ANN search." The index is the engine, but a database is the whole car.
+
+Concretely, a vector database bundles several things you would otherwise have to build and operate yourself:
+
+- **The vectors and an ANN index over them** (HNSW, IVF, or others), with a configurable **similarity metric**, the cosine, dot product, or Euclidean choice from Part 3, set to match your embedding model.
+- **The original payload alongside each vector**: the chunk's text and its **metadata**, the structured fields you attach such as source document, author, date, tags, or language. The embedding lets you *find* a chunk; the stored text is what you actually feed the model, and keeping them together is what makes the result useful rather than just an index number.
+- **Metadata filtering**: constraining a similarity search by those fields, for example "find the most similar chunks, but only among documents tagged `2024`," or "only within this user's workspace." This is more than a convenience; in real systems it is essential for correctness and access control, and good vector databases fuse the filter into the ANN search rather than bolting it on afterward.
+- **Writes and lifecycle**: **upsert** (insert a vector if its id is new, update it if the id already exists) and delete, so the index stays current as documents change, plus persistence to disk so the data survives a restart, and the scaling, replication, and backups any production datastore needs.
+- **An API and operational machinery**: a client to query and manage it, and the unglamorous but vital concerns of monitoring, security, and availability.
+
+So the honest definition: a vector database is **index plus storage plus an API plus operational machinery**, organized around similarity search. The ANN index is the clever heart, but everything around it is what turns a math trick into something you can run a product on.
+
+## Choosing one: the landscape
+
+Now the practical question: which one do you use? Before the table, an important caveat, and I mean it. **The vector-database landscape moves very fast, and I have a knowledge cutoff.** Treat everything below as a representative snapshot to orient you, not a current or ranked recommendation. Capabilities, limits, and pricing change constantly, and projects ship new features every month. Verify the current state yourself before you commit.
+
+With that firmly in mind, the options sort into three buckets.
+
+| Option | Bucket | Managed or self-hosted | Notes (verify current state) |
+|---|---|---|---|
+| Pinecone | Dedicated vector DB | Managed (cloud) | Fully hosted; minimal ops; popular for getting to production quickly |
+| Weaviate | Dedicated vector DB | Both | Open source with a managed cloud; built-in modules |
+| Qdrant | Dedicated vector DB | Both | Open source, written in Rust; strong metadata filtering |
+| Milvus | Dedicated vector DB | Both | Open source; built for very large scale |
+| Chroma | Dedicated vector DB | Both | Lightweight; popular for local development and prototypes |
+| FAISS | Library / raw index | Self-hosted (library) | A library of ANN indexes, not a database: no server, no managed storage layer, and no metadata layer by default (you can serialize an index to a file, but you run it yourself). The reference toolkit for the indexes themselves |
+| pgvector | Added to existing store | Both | Adds vector columns and ANN to PostgreSQL; keep vectors beside your relational data |
+| Elasticsearch / OpenSearch | Added to existing store | Both | Vector search alongside mature text search and filtering |
+| Redis | Added to existing store | Both | Vector search inside an in-memory store you may already run |
+
+A few axes worth comparing as you read any such list: **managed versus self-hosted** (do you want to run it, or pay someone to), **in-memory versus on-disk** (speed against cost and scale), **metadata filtering** (how rich, and how well integrated with the search), **scale** (thousands, millions, or billions of vectors), and **ease of getting started**.
+
+The practical guidance underneath all the names is simple, and stable even as the products churn:
+
+- **Learning or prototyping?** Start simple and local. An in-process library or a lightweight local database (or even the brute-force loop from earlier, for a few thousand chunks) gets you moving with zero infrastructure, and it is the fastest way to learn.
+- **Already on a database that now speaks vectors?** If you run PostgreSQL, reaching for `pgvector` keeps your vectors next to your other data and avoids running a second system. Do not add a dedicated vector database before you feel the need.
+- **Going to production at scale?** Graduate to a managed or scalable dedicated database when volume, latency, filtering, or operational load justify it. Match the index and metric to your workload: HNSW for speed and recall when you have memory to spare, IVF or IVF+PQ when scale and memory economics dominate, and the similarity metric your embedding model was trained for.
+
+The throughline: do not over-engineer early, and do not paint yourself into a corner late. Start with the simplest thing that works, and move up the ladder only when a real constraint pushes you.
+
+{/* From experience callout: drop in a real first-person anecdote here (e.g. the time the speed-versus-recall trade-off bit you in production, or an early project where you reached for a heavyweight managed vector DB you did not actually need yet), then wrap it as: > 💡 **From experience** ...story... */}
+
+## Back to RAG: fast retrieval at scale
+
+Step back and see how much of the pipeline is now colored in. We can turn text into **embeddings** (Part 2). We can **score** a query against a chunk with cosine similarity and rank by it (Part 3). And now we can do that ranking **fast at scale**: store millions of vectors in a vector database and use approximate nearest-neighbor search, HNSW or IVF, to retrieve the **top-k** in milliseconds without ever comparing against everything. Embed, score, retrieve at scale. The retrieval engine is essentially complete.
+
+But notice the assumption we have leaned on since Part 1 and never examined. We keep saying "the chunks," as if our documents arrived pre-cut into tidy, self-contained pieces. They do not. A real source is a sprawling PDF, a long web page, a thread of messages, and *we* have to decide where to cut it into the chunks we embed and store. That decision turns out to matter enormously: cut badly and you embed half-thoughts and split answers across pieces, and no amount of fast, high-recall retrieval can find an answer that your chunking already destroyed. How to split documents well, and why it quietly makes or breaks a RAG system, is Part 5.
+
+## Key takeaways
+
+- Comparing a query against every stored vector is **exact, brute-force k-NN**: perfectly accurate but **O(n)** per query, which is fine for thousands of chunks and unworkable at millions.
+- Ordinary database indexes like the **B-tree** do not help, because nearest-neighbor in hundreds of dimensions is not a sorted-column lookup, and tree-based partitioning collapses under the **curse of dimensionality**.
+- The fix is to stop being exact: **Approximate Nearest Neighbor (ANN)** search trades a little **recall** (the fraction of the true top-k you return) for a huge speed gain. Every index is a point on the **speed-versus-recall** curve.
+- **HNSW** navigates a layered graph greedily, long hops up top and short hops at the bottom, for excellent speed and recall at a higher memory cost; it is today's most common default.
+- **IVF** clusters vectors around **centroids** and searches only the nearest few clusters, tuned by **nprobe**; it is lighter on memory and scales well on disk. **Product Quantization (PQ)** compresses vectors to save still more memory at a small accuracy cost.
+- A **vector database** is index plus storage plus API plus operational machinery: it holds the vectors and their text and **metadata**, supports **metadata filtering** and **upserts**, and persists and scales. Start simple and local; graduate to a managed or scalable store when a real constraint demands it, and verify the fast-moving landscape yourself.
+
+## Glossary
+
+- **Exact / brute-force k-NN**: comparing the query against every stored vector and returning the true `k` nearest; perfectly accurate but O(n) work per query.
+- **Approximate Nearest Neighbor (ANN)**: search that returns *almost* the true nearest neighbors, trading a little accuracy for a large speed gain; the basis of every vector index.
+- **Recall** (nearest-neighbor sense): the fraction of the true top-k that an approximate search actually returns; 0.95 recall means 95 percent of the genuinely nearest results were found.
+- **Curse of dimensionality**: the way intuitions and tree-based partitioning break down in high dimensions, where points become nearly equidistant and pruning fails, defeating ordinary spatial indexes.
+- **B-tree**: the standard database index that keeps one column's values sorted so the engine can binary-search them; excellent for exact matches, ranges, and sorting on a single ordered dimension, but useless for nearest-neighbor search in many dimensions.
+- **HNSW (Hierarchical Navigable Small World)**: a graph-based ANN index with stacked layers; greedy navigation makes long hops in the sparse top layers and short hops in the dense bottom layer. Fast, high recall, memory-hungry.
+- **IVF (Inverted File Index)**: a clustering-based ANN index that partitions vectors into clusters and searches only the clusters nearest the query (set by `nprobe`); lighter on memory than HNSW and scales well on disk.
+- **Centroid**: the average position of a cluster's member vectors; its representative address, compared against at query time to decide which clusters to search.
+- **k-means**: a clustering algorithm that partitions vectors into a chosen number of groups by proximity, each summarized by its centroid; the clustering step behind IVF.
+- **nprobe**: in IVF, the number of clusters searched per query; higher means better recall and slower, lower means faster and riskier.
+- **Product Quantization (PQ)**: a compression scheme that splits vectors into sub-vectors and encodes each with a small codebook, shrinking memory at a small cost in precision; often combined as IVF+PQ.
+- **Vector database**: a system organized around similarity search that combines an ANN index, vector and payload storage, an API, and operational machinery.
+- **Metadata filtering**: restricting a similarity search by structured fields stored with each vector, such as date, source, tags, or owner.
+- **Upsert**: a write that inserts a vector if its id is new and updates it if the id already exists; the basic operation for keeping an index current.
+
+---
+
+**Next up, Part 5: Documents and Chunking.** We can retrieve the right chunks fast at scale, but we have been assuming the chunks were sensibly cut to begin with. Next we tackle the split: how to break real documents into pieces worth embedding, and why getting it wrong quietly sabotages everything downstream.
