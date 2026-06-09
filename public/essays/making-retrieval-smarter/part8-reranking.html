@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Retrieve, then rerank: watch the best chunk climb</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 8 flagship animation.
+     Two-stage retrieval: a fast first pass casts a wide net (top 10),
+     then a cross-encoder reranks and we keep the best few (top-k = 3).
+     Self-contained: no external resources, no web fonts, no real model.
+     Scores are hardcoded to make the reorder legible. Shares the series
+     design tokens.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff; --surface-1: #f8fafc; --surface-2: #f1f5f9; --border: #e2e8f0;
+    --heading: #0f172a; --body: #334155; --muted: #64748b;
+    --indigo: #6366f1; --indigo-strong: #4f46e5; --violet: #8b5cf6; --teal: #14b8a6;
+    --cyan: #06b6d4; --emerald: #10b981; --amber: #f59e0b; --rose: #f43f5e;
+    --radius-card: 14px; --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1); --dur: 300ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans); background: var(--bg); color: var(--body);
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    line-height: 1.5; padding: 24px;
+  }
+  .rr { max-width: 900px; margin: 0 auto; }
+
+  .rr-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 12px; }
+  .rr-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .rr-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .rr-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* query + stage line */
+  .rr-query {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: var(--surface-1); padding: 12px 14px; margin-bottom: 12px;
+  }
+  .rr-query .q-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); }
+  .rr-query .q-text { font-size: 15px; font-weight: 600; color: var(--heading); }
+  .rr-stage {
+    margin-left: auto; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
+    border-radius: 999px; padding: 4px 11px; border: 1px solid var(--border); color: var(--muted); background: #fff;
+    transition: color 200ms var(--ease), border-color 200ms var(--ease), background-color 200ms var(--ease);
+  }
+  .rr-stage.s1 { color: #0d9488; border-color: #99f6e4; background: #f0fdfa; }
+  .rr-stage.s2 { color: var(--indigo-strong); border-color: #c7d2fe; background: #eef2ff; }
+
+  /* legend above the score column */
+  .rr-legend { display: flex; align-items: center; gap: 8px; justify-content: flex-end; font-size: 11.5px; font-weight: 600; color: var(--muted); margin-bottom: 6px; height: 16px; }
+  .rr-legend .dot { width: 10px; height: 10px; border-radius: 3px; }
+  .rr-legend .dot.fp { background: var(--teal); }
+  .rr-legend .dot.ce { background: var(--indigo); }
+
+  /* the list */
+  .rr-list { position: relative; height: 600px; }
+  .crow {
+    position: absolute; left: 0; right: 0; height: 52px;
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 0 12px;
+    transition: top 620ms var(--ease), opacity var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background-color var(--dur) var(--ease);
+    will-change: top;
+  }
+  .crow .rank {
+    flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; background: var(--surface-2); color: var(--muted);
+    font-family: var(--mono); font-size: 12.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums;
+    transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+  }
+  .crow .ctext { flex: 1 1 auto; font-size: 12.5px; color: var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .crow .badge {
+    flex: 0 0 auto; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; opacity: 0;
+    transition: opacity var(--dur) var(--ease);
+  }
+  .crow .badge.show { opacity: 1; }
+  .crow .badge.win { color: var(--emerald); border: 1px solid #a7f3d0; background: #ecfdf5; }
+  .crow .badge.bad { color: var(--rose); border: 1px solid #fecdd3; background: #fff1f2; }
+  .crow .score { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; width: 168px; }
+  .crow .track { flex: 1; height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .crow .fill { height: 100%; width: 0; background: var(--teal); border-radius: 999px; transition: width 560ms var(--ease), background-color var(--dur) var(--ease); }
+  .crow .num { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--body); width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+  /* rerank mode recolors the bars */
+  .mode-ce .crow .fill { background: var(--indigo); }
+  /* kept (above the cut) vs dropped (below) */
+  .crow.kept { border-color: var(--indigo); box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 13%, transparent); }
+  .crow.kept .rank { background: var(--indigo); color: #fff; }
+  .crow.dropped { opacity: 0.4; }
+  .crow.dropped .fill { background: #cbd5e1; }
+
+  /* the cut line */
+  .cut {
+    position: absolute; left: -4px; right: -4px; height: 0; border-top: 2px dashed var(--indigo);
+    opacity: 0; transition: opacity var(--dur) var(--ease); pointer-events: none;
+  }
+  .cut.show { opacity: 1; }
+  .cut .cut-tag {
+    position: absolute; right: 0; top: -11px; transform: translateY(-2px);
+    font-size: 10.5px; font-weight: 700; color: var(--indigo-strong);
+    background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 2px 9px;
+  }
+
+  /* answer */
+  .rr-answer {
+    margin-top: 14px; border-radius: var(--radius-card); padding: 13px 15px; font-size: 14.5px;
+    background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; display: none;
+  }
+  .rr-answer.show { display: block; }
+  .rr-answer b { color: var(--heading); }
+
+  /* caption */
+  .rr-caption {
+    margin-top: 16px; display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 13px 16px;
+  }
+  .rr-caption-dot { flex: 0 0 auto; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--indigo); box-shadow: 0 0 0 4px color-mix(in srgb, var(--indigo) 18%, transparent); }
+  .rr-caption-text { font-size: 14.5px; color: var(--body); }
+  .rr-caption-text b { color: var(--heading); }
+
+  /* controls (shared with the series player) */
+  .ex-controls { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .ex-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ex-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease), color 160ms var(--ease), transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .ex-btn svg { width: 15px; height: 15px; }
+  .ex-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .ex-btn:active { transform: translateY(1px); }
+  .ex-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); border-color: var(--indigo); }
+  .ex-btn.primary { color: #fff; background: var(--indigo-strong); border-color: var(--indigo-strong); }
+  .ex-btn.primary:hover { background: var(--indigo); border-color: var(--indigo); }
+  .ex-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .ex-status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .ex-stepcount { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ex-stepcount b { color: var(--heading); }
+  .ex-dots { display: flex; gap: 7px; }
+  .ex-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer; transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .ex-dot:hover { background: #cbd5e1; }
+  .ex-dot.is-active { background: var(--indigo); transform: scale(1.35); }
+  .ex-dot.is-past { background: color-mix(in srgb, var(--indigo) 45%, var(--border)); }
+  .ex-dot:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+  .ex-hint { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .ex-hint kbd { font-family: var(--mono); font-size: 11px; background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; color: var(--body); }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .crow, .crow .fill, .crow .rank, .crow .badge, .cut, .ex-dot, .rr-stage { transition: none !important; }
+  }
+  @media (max-width: 600px) {
+    body { padding: 16px; }
+    .rr-title { font-size: 19px; }
+    .crow .score { width: 104px; }
+    .crow .badge { display: none; }
+    .ex-status { margin-left: 0; width: 100%; justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+  <main class="rr" aria-label="Interactive: retrieve then rerank">
+    <header class="rr-head">
+      <span class="rr-eyebrow">RAG from First Principles &#183; Part 8</span>
+      <h1 class="rr-title">Retrieve wide, then rerank</h1>
+      <p class="rr-sub">A visualization of two-stage retrieval. No real model runs here; scores are illustrative.</p>
+    </header>
+
+    <div class="rr-query">
+      <span class="q-label">QUERY</span>
+      <span class="q-text">Can I get a refund on a jacket I&#8217;ve already worn?</span>
+      <span class="rr-stage s1" id="stage">Stage 1 &#183; retrieve</span>
+    </div>
+
+    <div class="rr-legend"><span class="dot fp" id="legendDot"></span><span id="legendText">First-pass score (fast, hybrid)</span></div>
+
+    <div class="rr-list" id="list" role="list" aria-label="Candidate chunks, reordered as you step"></div>
+
+    <div class="rr-answer" id="answer"></div>
+
+    <div class="rr-caption">
+      <span class="rr-caption-dot" aria-hidden="true"></span>
+      <p class="rr-caption-text" id="caption" aria-live="polite"></p>
+    </div>
+
+    <div class="ex-controls">
+      <div class="ex-btns">
+        <button class="ex-btn primary" id="btnPlay" aria-label="Play animation"><span id="playIcon" aria-hidden="true"></span><span id="playText">Play</span></button>
+        <button class="ex-btn" id="btnBack" aria-label="Previous step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="ex-btn" id="btnNext" aria-label="Next step">
+          Next
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="ex-btn" id="btnRestart" aria-label="Restart from the beginning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="ex-status">
+        <span class="ex-stepcount" id="stepCount" aria-hidden="true">Step 1 of 6</span>
+        <div class="ex-dots" id="dots" role="group" aria-label="Jump to step"></div>
+      </div>
+    </div>
+
+    <p class="ex-hint"><kbd>Space</kbd> play / pause &nbsp;&#183;&nbsp; <kbd>&#8592;</kbd> back &nbsp;&#183;&nbsp; <kbd>&#8594;</kbd> next &nbsp;&#183;&nbsp; the rerank step is where the order changes</p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  // Canonical chunk list. fp = first-pass (hybrid) score, ce = cross-encoder score.
+  // Designed so the genuinely best chunk (worn clothing) sits at rank 6 on the
+  // first pass and climbs to rank 1 after reranking, while an off-topic "jacket
+  // sale" distractor starts at rank 1 and sinks.
+  var CHUNKS = [
+    { text: "Refunds are accepted within 30 days of purchase, provided the item is unused.", fp: 0.66, ce: 0.88 },
+    { text: "Items marked final sale cannot be returned or exchanged.",                       fp: 0.49, ce: 0.74 },
+    { text: "Standard shipping takes 3 to 5 business days; express is next-day.",             fp: 0.21, ce: 0.05 },
+    { text: "To start a return, email support@example.com with your order number.",          fp: 0.52, ce: 0.55 },
+    { text: "Worn or washed clothing counts as used and is not eligible for a refund.",      fp: 0.41, ce: 0.96 }, // the climber
+    { text: "Our winter jacket collection is on sale through the end of the month.",         fp: 0.71, ce: 0.12 }, // the distractor
+    { text: "Gift cards never expire and are non-refundable.",                               fp: 0.33, ce: 0.10 },
+    { text: "All electronics include a one-year limited warranty.",                          fp: 0.18, ce: 0.03 },
+    { text: "Shipping fees are non-refundable; late returns get store credit.",              fp: 0.37, ce: 0.33 },
+    { text: "Exchanges for a different size are free within the return window.",             fp: 0.44, ce: 0.40 }
+  ];
+  var WORN = 4, SALE = 5;     // indices of the climber and the distractor
+  var K = 3;                  // top-k kept after reranking
+  var N = CHUNKS.length;
+  var STRIDE = 60;            // px between row tops (row is 52px + 8px gap)
+
+  function orderBy(key) {
+    return CHUNKS.map(function (_c, i) { return i; })
+                 .sort(function (a, b) { return CHUNKS[b][key] - CHUNKS[a][key]; });
+  }
+  var FP_ORDER = orderBy("fp");
+  var CE_ORDER = orderBy("ce");
+
+  var STEP_CAPS = [
+    "<b>Cast a wide net.</b> First-pass retrieval (the hybrid search from Part 7) returns the top 10 candidates, ordered by its fast score. Wide enough to not miss the answer, too rough to trust the order.",
+    "<b>The catch.</b> The chunk that actually answers the question sits at rank 6, buried under an off-topic 'winter jacket sale' that only looks relevant because it shares the word jacket. A bi-encoder cannot tell them apart.",
+    "<b>Rerank.</b> A cross-encoder reads the query and each candidate together and scores true relevance (the indigo bars). 'Worn clothing counts as used' now scores highest; the sale ad scores near zero.",
+    "<b>Reorder.</b> Sort by the cross-encoder score. The real answer climbs from rank 6 to the top, and the distractor sinks from rank 1 to 7. Same candidates, far better order.",
+    "<b>Keep the best few.</b> Cut to the top-k (here k = 3). Only these three chunks are handed to the generator. We cast a wide net, then trimmed to what matters.",
+    "<b>The payoff.</b> The kept context now holds the decisive fact, so the model can answer correctly instead of being misled by a sale ad."
+  ];
+  var N_STEPS = STEP_CAPS.length;
+
+  var PLAY_ICON  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var container = document.querySelector(".rr");
+  var listEl    = document.getElementById("list");
+  var stageEl   = document.getElementById("stage");
+  var legendDot = document.getElementById("legendDot");
+  var legendText= document.getElementById("legendText");
+  var answerEl  = document.getElementById("answer");
+  var caption   = document.getElementById("caption");
+  var stepCount = document.getElementById("stepCount");
+  var dotsWrap  = document.getElementById("dots");
+  var btnPlay   = document.getElementById("btnPlay");
+  var btnBack   = document.getElementById("btnBack");
+  var btnNext   = document.getElementById("btnNext");
+  var btnRestart= document.getElementById("btnRestart");
+  var playIcon  = document.getElementById("playIcon");
+  var playText  = document.getElementById("playText");
+
+  /* ---------- build rows once ---------- */
+  var rows = CHUNKS.map(function (c, i) {
+    var row = document.createElement("div");
+    row.className = "crow";
+    row.setAttribute("role", "listitem");
+    row.innerHTML =
+      '<span class="rank">0</span>' +
+      '<span class="ctext"></span>' +
+      '<span class="badge"></span>' +
+      '<span class="score"><span class="track"><span class="fill"></span></span><span class="num">0.00</span></span>';
+    row.querySelector(".ctext").textContent = c.text;
+    listEl.appendChild(row);
+    return {
+      el: row,
+      rank: row.querySelector(".rank"),
+      badge: row.querySelector(".badge"),
+      fill: row.querySelector(".fill"),
+      num: row.querySelector(".num")
+    };
+  });
+
+  /* ---------- cut line ---------- */
+  var cut = document.createElement("div");
+  cut.className = "cut";
+  cut.innerHTML = '<span class="cut-tag">top-k = 3 &#8594; to the generator</span>';
+  cut.style.top = (K * STRIDE - 4) + "px";
+  listEl.appendChild(cut);
+
+  /* ---------- render a step ---------- */
+  var current = 0;
+  function render(step) {
+    var useCe = step >= 2;                 // scores shown
+    var order = step >= 3 ? CE_ORDER : FP_ORDER;  // positions
+
+    listEl.classList.toggle("mode-ce", useCe);
+    legendDot.className = "dot " + (useCe ? "ce" : "fp");
+    legendText.textContent = useCe ? "Rerank score (cross-encoder)" : "First-pass score (fast, hybrid)";
+    stageEl.textContent = useCe ? "Stage 2 · rerank" : "Stage 1 · retrieve";
+    stageEl.className = "rr-stage " + (useCe ? "s2" : "s1");
+
+    rows.forEach(function (r, i) {
+      var rank = order.indexOf(i);                 // 0-based position now
+      r.el.style.top = (rank * STRIDE) + "px";
+      r.rank.textContent = rank + 1;
+
+      var val = useCe ? CHUNKS[i].ce : CHUNKS[i].fp;
+      r.fill.style.width = (val * 100) + "%";
+      r.num.textContent = val.toFixed(2);
+
+      // problem-framing badges (step 1 only)
+      var showWin = (step === 1 && i === WORN);
+      var showBad = (step === 1 && i === SALE);
+      r.badge.className = "badge" + (showWin ? " win show" : showBad ? " bad show" : "");
+      r.badge.textContent = showWin ? "the real answer, at rank 6" : showBad ? "off-topic" : "";
+
+      // keep / drop after the cut (steps 4 and 5)
+      var kept = step >= 4 && rank < K;
+      var dropped = step >= 4 && rank >= K;
+      r.el.classList.toggle("kept", kept);
+      r.el.classList.toggle("dropped", dropped);
+    });
+
+    cut.classList.toggle("show", step >= 4);
+    answerEl.classList.toggle("show", step >= 5);
+    if (step >= 5) {
+      answerEl.innerHTML = "<b>Answer:</b> No. A worn jacket counts as used, and refunds require the item to be unused, so it is not eligible for a refund.";
+    }
+
+    caption.innerHTML = '<span class="sr-only">Step ' + (step + 1) + ' of ' + N_STEPS + '. </span>' + STEP_CAPS[step];
+    stepCount.innerHTML = "Step <b>" + (step + 1) + "</b> of " + N_STEPS;
+    dotEls.forEach(function (d, di) {
+      d.classList.toggle("is-active", di === step);
+      d.classList.toggle("is-past", di < step);
+      if (di === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+    });
+    btnBack.disabled = (step === 0);
+    btnNext.disabled = (step === N_STEPS - 1);
+  }
+
+  function go(i) { current = Math.max(0, Math.min(N_STEPS - 1, i)); render(current); }
+
+  /* ---------- dots ---------- */
+  var dotEls = [];
+  for (var s = 0; s < N_STEPS; s++) {
+    (function (idx) {
+      var b = document.createElement("button");
+      b.className = "ex-dot"; b.type = "button";
+      b.setAttribute("aria-label", "Go to step " + (idx + 1) + " of " + N_STEPS);
+      b.addEventListener("click", function () { pause(); go(idx); });
+      dotsWrap.appendChild(b);
+      dotEls.push(b);
+    })(s);
+  }
+
+  /* ---------- playback ---------- */
+  var timer = null, playing = false, AUTO_MS = 2600;
+  function tick() { if (current >= N_STEPS - 1) { pause(); return; } go(current + 1); timer = window.setTimeout(tick, AUTO_MS); }
+  function play() { if (reduceMotion || playing) return; if (current >= N_STEPS - 1) go(0); playing = true; setPlayButton(); timer = window.setTimeout(tick, AUTO_MS); }
+  function pause() { playing = false; if (timer) { window.clearTimeout(timer); timer = null; } setPlayButton(); }
+  function toggle() { playing ? pause() : play(); }
+  function setPlayButton() {
+    if (reduceMotion) { playIcon.innerHTML = PLAY_ICON; playText.textContent = "Auto-play off"; btnPlay.setAttribute("aria-label", "Auto-play disabled (reduced motion)"); return; }
+    playIcon.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    playText.textContent = playing ? "Pause" : "Play";
+    btnPlay.setAttribute("aria-label", playing ? "Pause animation" : "Play animation");
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /* ---------- wiring ---------- */
+  btnPlay.addEventListener("click", toggle);
+  btnNext.addEventListener("click", function () { pause(); go(current + 1); });
+  btnBack.addEventListener("click", function () { pause(); go(current - 1); });
+  btnRestart.addEventListener("click", function () { pause(); go(0); });
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    var focused = container.contains(document.activeElement) && document.activeElement !== document.body;
+    if ((e.code === "Space" || e.key === " ") && !(e.target && e.target.closest && e.target.closest("button"))) {
+      e.preventDefault(); toggle();
+    } else if (e.key === "ArrowRight" && focused) { e.preventDefault(); pause(); go(current + 1); }
+    else if (e.key === "ArrowLeft" && focused) { e.preventDefault(); pause(); go(current - 1); }
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden) pause(); });
+  if (reduceMotion) { btnPlay.disabled = true; btnPlay.title = "Auto-play disabled (reduced motion). Use Next / Back."; }
+
+  /* ---------- init ---------- */
+  setPlayButton();
+  go(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+---
+title: "Making Retrieval Smarter"
+description: "Part 8 of a from-scratch series on Retrieval-Augmented Generation. First-pass retrieval is fast but only roughly right: the best chunk can sit at rank six. Sharpen it with three levers, in pipeline order. Before retrieval, transform the query (multi-query, HyDE, step-back, decomposition). During retrieval, filter by metadata. After retrieval, rerank a wide candidate set with a cross-encoder and keep the best few. Includes a focused code addition that adds reranking and a metadata filter to the app you built in Part 6."
+date: 2026-06-14
+tags: ["RAG", "Retrieval", "Reranking", "Cross-Encoder", "Vector Search", "LLM", "AI"]
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*RAG from First Principles. Part 8 of the series.*
+
+## What you'll learn
+
+In Part 7 we made retrieval recall-strong with hybrid search, and we ended with an uncomfortable truth: the ranked list it returns is only *roughly* right. The chunk that best answers the question might sit at rank five or six, below something that merely looks relevant. This part is about sharpening that list. You will get a clean mental map of the three places you can intervene around retrieval, called levers here: *before* it (rewrite the query), *during* it (filter the candidates), and *after* it (rerank the results). You will learn why a fast first pass is structurally imprecise, what a cross-encoder is and why reranking with one is the highest-leverage fix, and you will add a reranking step and a metadata filter to the app from Part 6 in a few lines.
+
+## Prerequisites
+
+Parts 1 through 7, especially [Embeddings](/essays/embeddings) (Part 2), [Vector Databases and Indexing](/essays/vector-databases) (Part 4), and [Retrieval Deep Dive](/essays/retrieval-deep-dive) (Part 7). You should be comfortable with embeddings, cosine similarity, top-k, and the idea of hybrid (dense plus sparse) retrieval. Basic Python is enough for the one code section.
+
+## Where Part 7 left us, and three levers to pull
+
+Part 7's closing advice was a strategy: **cast a wide net, then trim.** Retrieve generously so the right chunk is somewhere in the net, accepting that the *order* will be imperfect, then tighten things up afterward. That advice quietly admitted a problem we never fixed: first-pass retrieval is fast but imprecise. It is very good at "these twenty chunks are in the right neighborhood" and only mediocre at "this exact chunk is the single best answer."
+
+Good news: every weakness here has a named, well-understood fix, and they fall naturally into three positions around the retrieval step. I will call them the three **levers**, and we will pull them in pipeline order:
+
+- **Before retrieval, the BEFORE lever: query transformations.** The user's raw question is often a poor search query. Rewrite it into something the index can match well.
+- **During retrieval, the DURING lever: metadata filtering.** Constrain the search to chunks that satisfy hard criteria (right customer, right date, right section) before you ever score them.
+- **After retrieval, the AFTER lever: reranking.** Take the wide, roughly-ordered candidate set and reorder it with a slower, far more accurate model, then keep only the best few.
+
+Keep that map in your head for the whole chapter: improve the query going in, narrow the field, then sharpen the order coming out. Reranking is the star, so let us first understand precisely why we need it.
+
+## Why retrieval is only "roughly right": the bi-encoder bottleneck
+
+The retrieval you built in Part 6 and tuned in Part 7 uses a **bi-encoder**: the query and each chunk are embedded *separately* into vectors, and relevance is the cosine similarity between them. The "bi" is the whole point. There are two independent encoding passes that never see each other. The chunk is embedded once, offline, when you build the index; the query is embedded on its own at search time; then you compare two finished vectors with cheap arithmetic.
+
+That design is what makes retrieval fast enough to be useful. Because every chunk vector is precomputed, answering a query is one embedding plus a nearest-neighbor lookup, even across millions of chunks (Part 4). Speed is the gift.
+
+The cost is precision, and it is structural, not a bug you can tune away. Each text, however long and nuanced, gets crushed into a single fixed-length vector *before* it has any idea what it will be compared against. The chunk vector cannot emphasize the part of the chunk that happens to matter for *your* question, because it was computed long before your question existed. The query vector cannot lean on a specific phrase in a specific chunk, because it is built in isolation too. Two summaries are compared, never the full texts side by side. So a chunk that shares surface vocabulary with the query (say, both mention "jacket") can score higher than the chunk that actually answers the question but happens to phrase it differently. The ranking is plausible, not precise.
+
+That looseness is exactly the gap reranking closes, and it is why the rest of this chapter exists.
+
+## The BEFORE lever: query transformations
+
+Before a query ever reaches the index, you can improve it. Users do not write search queries; they write questions, and questions are often short, ambiguous, conversational, or secretly several questions at once. A query transformation rewrites the raw question into one or more better search queries. Every technique below buys quality with extra language-model calls, which means more latency and more cost, so reach for them where a class of query keeps failing, not by default.
+
+Here are the four worth knowing.
+
+**Multi-query, also called query expansion.** Ask a language model to produce several rephrasings of the question, retrieve for each one, then union the results and remove duplicates. Different phrasings surface different chunks, so this mainly lifts **recall**: it widens the net so the right chunk is less likely to be missed because the user's exact words did not match.
+
+**HyDE (Hypothetical Document Embeddings).** Instead of searching with the short question, ask a language model to *write a hypothetical answer* to it, then embed *that* and search with it. It sounds backwards, but it works for a clean reason: a passage that answers a question looks far more like the real target documents than a terse question does, so its embedding lands closer to them in vector space. The caveat is real. The model can hallucinate a confidently wrong "answer" and steer retrieval off course, and it adds a call, so treat the hypothetical as a search probe, never as content you would show the user.
+
+**Step-back prompting.** Generate a more general, more abstract version of the question and retrieve for that first, to gather the foundational context a specific question needs. Asked "is a worn linen blazer covered," a useful step-back query is "what is our overall returns policy." It helps reasoning-heavy questions where the specific answer depends on background the narrow query would never pull in.
+
+**Query decomposition.** Split a complex, multi-part question into sub-questions, retrieve for each, then combine the results. "How does returning an item work, and does it cost anything" is really two questions; answering it well means retrieving for both. Decomposition is essential for compositional queries, and it is a first taste of the agentic patterns in Part 10, where the system plans its own sub-questions.
+
+<Diagram number={1} caption="The before-retrieval lever. One messy, multi-part question is rewritten four different ways: several rephrasings (multi-query), a hypothetical answer to embed (HyDE), a broader question for context (step-back), and a set of sub-questions (decomposition). Each feeds retrieval, whose hits are then unioned and deduped.">
+  <img src="/essays/making-retrieval-smarter/part8-query-transformations.svg" alt="A diagram with a raw query box on the left reading How does returning an item work, and does sending it back cost me anything. Four arrows fan out to four cards: Multi-query / Expansion (an LLM writes several rephrasings) with chips how do I send an item back and steps to return an order; HyDE / Hypothetical answer (an LLM drafts a fake answer to embed) with a chip Returns are accepted within 30 days if the item is unused; Step-back / Broader question with a chip what is our overall returns policy; and Decomposition / Sub-questions with chips what is the return process and what does returning cost. Arrows from all four cards converge into a tall Retrieval column on the right labelled run each query then union and dedupe the hits." class="w-full rounded-lg" />
+</Diagram>
+
+## The DURING lever: metadata filtering
+
+Back in Parts 4 and 5 we were careful to keep **metadata** on every chunk: its source, date, author, section, document type, and, in real systems, who is allowed to see it. The DURING lever is where that pays off. **Metadata filtering** constrains retrieval to only the chunks that match hard, non-negotiable criteria, so the similarity search runs over a smaller, cleaner pool. Only 2024 documents. Only this customer's files. Only chunks from the "pricing" section.
+
+Why bother, when similarity search already ranks things? Four reasons:
+
+- **Precision.** A filter removes confidently-irrelevant matches outright, instead of hoping a low score buries them. The semantically-similar 2019 policy simply cannot appear if you filter to the current year.
+- **Freshness.** A date filter is the simplest way to keep stale documents from competing with current ones. Embeddings have no sense of time; metadata does.
+- **Security and multi-tenancy.** This one is not optional. In a shared system, an access-level filter is what stops one user's query from ever retrieving another user's documents. Treat this as a hard correctness and safety requirement, not a nice-to-have. It is so important that we devote Part 12 to doing it properly.
+- **A smaller, cheaper search space.** Fewer candidates means faster, cheaper retrieval, which matters at scale.
+
+One distinction to file away. **Pre-filtering** applies the metadata constraint *before* the similarity search, so you score only the chunks that already passed. **Post-filtering** runs the similarity search first and then drops the hits that fail the filter. Pre-filtering is usually what you want, because it scores only the matching chunks, so you get the top-k *of the matching set* and never waste scoring on chunks you will throw away. The catch with post-filtering is that it can quietly return *fewer than k* results, or none, even when plenty of matching chunks exist, because it filters a list that was already trimmed to the top overall matches. (Pre-filtering can return fewer than k too, but only in the honest case where fewer than k chunks match the filter at all.) Many vector databases support proper pre-filtering directly; use it.
+
+## The AFTER lever: reranking with cross-encoders
+
+This is the chapter's star, and it directly attacks the bi-encoder bottleneck from earlier.
+
+A **cross-encoder** takes the query and one candidate chunk *together*, as a single joined input, and outputs one number: how relevant this chunk is to this query. Because both texts go through the model at once, every word of the query can attend to every word of the chunk, and the other way around. The model is not comparing two pre-baked summaries; it is reading the pair and judging the match directly. That is why a cross-encoder is dramatically more accurate at relevance than a bi-encoder. It is also why **reranking**, reordering candidates by a cross-encoder's score, fixes exactly the looseness we diagnosed. The contrast is easiest to see side by side.
+
+<Diagram number={2} caption="Bi-encoder versus cross-encoder. The bi-encoder embeds the query and chunk separately into two vectors and compares them with cosine: fast, because chunks are precomputed, but lossy. The cross-encoder feeds the query and chunk in together and outputs one relevance score: slow, because it runs per pair at query time, but accurate. This single contrast is why the two-stage pattern exists.">
+  <img src="/essays/making-retrieval-smarter/part8-biencoder-vs-crossencoder.svg" alt="Two panels. Left, Bi-encoder, fast and lossy: a query box and a chunk box each flow down through their own separate Encoder, producing two vectors, which a cheap cosine step combines into a single score 0.41; a note says the same model is run twice and the chunk side is precomputed. Right, Cross-encoder, slow and accurate: the query and chunk boxes converge immediately into one joined input CLS query SEP chunk, which passes through a single Cross-Encoder where the two texts attend to each other, producing one relevance score 0.96." class="w-full rounded-lg" />
+</Diagram>
+
+So why not rerank everything and skip the bi-encoder entirely? Because a cross-encoder is slow in exactly the way the bi-encoder is fast. It cannot precompute anything: the score depends on the query, so the model has to run once for every (query, chunk) pair, at query time. Running it across millions of chunks for a single search would take minutes and cost a fortune. It is wonderful at judging a short list and hopeless as a first-pass search over a whole corpus.
+
+That tension has a clean resolution, and it is the headline pattern of this part: **two-stage retrieval**, also called **retrieve-then-rerank**.
+
+1. **Retrieve wide (fast).** Use the bi-encoder or hybrid search from Part 7 to fetch a generous candidate set, say the top fifty to one hundred chunks. This stage's job is recall: get the right chunk *into the net*, order be damned.
+2. **Rerank narrow (accurate).** Run the cross-encoder on just those candidates, reorder them by its relevance score, and keep the best few, say the top three to five. This stage's job is precision: surface the genuinely best chunk to the top.
+
+You get the bi-encoder's speed over the whole corpus and the cross-encoder's precision over the short list, and you only pay the expensive model on a few dozen pairs. This *is* Part 7's "cast a wide net, then trim," now with a name and a mechanism: the wide net is stage one, the cross-encoder does the trimming. The animation below makes the reorder concrete. We ask about a refund on a worn jacket, watch first-pass retrieval return ten candidates with the genuinely best one stuck at rank six under an off-topic sale ad, then trigger the rerank and watch the order snap into shape, with a cut line marking the top-k that actually reaches the model.
+
+<Diagram number={3} caption="Two-stage retrieval in motion. A fast first pass returns ten candidates in roughly-right order, the chunk that truly answers the question sitting at rank six. Step through the rerank: a cross-encoder rescores every candidate, the real answer climbs to the top, the off-topic distractor sinks, and a cut line keeps only the top three for the generator.">
+  <IframeFigure
+    src="/essays/making-retrieval-smarter/part8-reranking.html"
+    title="Interactive two-stage retrieval. For the query can I get a refund on a jacket I have already worn, ten candidate chunks appear in first-pass hybrid order with an off-topic winter jacket sale ranked first and the decisive worn clothing chunk stuck at rank six. Stepping forward runs a cross-encoder rerank that rescores and reorders the list so the worn clothing chunk climbs to the top and the sale ad sinks, then a cut line keeps only the top three chunks handed to the generator."
+    height={900}
+  />
+</Diagram>
+
+A practical note, with the usual freshness caveat. There is a healthy supply of ready-made rerankers: open cross-encoder models you can run locally and hosted reranking APIs you call over the network. Reranking models, their APIs, and the recommended model names move fast and I have a knowledge cutoff, so I will keep the code that follows minimal and lean on the local cross-encoder. Check the current docs for today's best model and exact usage before you ship.
+
+## Putting the levers together
+
+Here is the enhanced query-time pipeline with all three levers in place, in order:
+
+1. **Transform** the raw query (the BEFORE lever): rephrase, expand, or decompose it if this kind of query needs it.
+2. **Filter** by metadata (the DURING lever): restrict to the right tenant, date, or section. Security filters are mandatory.
+3. **Retrieve wide** with hybrid search (Part 7): pull a generous candidate set so recall is high.
+4. **Rerank** that set with a cross-encoder (the AFTER lever) and keep the top few.
+5. **Generate**: hand only those best chunks to the model, with the grounded prompt from Part 6.
+
+The crucial caveat: you almost never need all three levers at once. Each one adds latency, cost, and moving parts. The discipline is to add a lever where your *failure analysis* demands it, not because it sounds advanced. If your misses are mostly stale or cross-tenant results, you need a filter, not a reranker. If the right chunk is reliably in the top fifty but rarely at the top, a reranker is your fix. Part 11 is entirely about measuring retrieval so you make these calls with evidence instead of vibes. For now, hold the principle: measure before you add complexity.
+
+## Extend the app: add a reranker and a filter
+
+Time to make this real on the app from Part 6. We will add a metadata filter and a cross-encoder reranker around retrieval. This is an extension, not a rebuild: embedding, storing, augmenting, and generating are all unchanged. We give each chunk a little metadata, fetch a wide first-pass set, and rerank it down to the top-k. (Reranker model names move fast; verify the current one.)
+
+```python
+from sentence_transformers import CrossEncoder
+
+# A cross-encoder scores a (query, chunk) PAIR directly. Check current names.
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+def rerank(query, candidates, top_k=3):
+    pairs = [(query, c["text"]) for c in candidates]   # one pair per candidate
+    rel = reranker.predict(pairs)                       # a relevance score per pair
+    ranked = sorted(zip(candidates, rel), key=lambda cr: cr[1], reverse=True)
+    return [{**c, "rerank": float(s)} for c, s in ranked[:top_k]]  # keep the best few, with their score
+
+def smart_retrieve(query, n=10, top_k=3, where=None):
+    candidates = first_pass(query, n=n, where=where)    # Part 6 retrieve, but wide
+    return rerank(query, candidates, top_k=top_k)        # then the accurate trim
+```
+
+The `first_pass` function is just Part 6's `retrieve` asked for a larger `n` (ten here, where a real corpus would fetch fifty to one hundred; our toy corpus only has ten chunks), optionally narrowed by a metadata filter. Run the query "Can I get a refund on a jacket I've already worn?" and print the order before and after reranking:
+
+```text
+QUERY: Can I get a refund on a jacket I've already worn?
+
+STAGE 1, first-pass order (bi-encoder cosine, top 10):
+   1. 0.71  Our winter jacket collection is on sale through the end of the month.
+   2. 0.66  Refunds are accepted within 30 days of purchase, provided the item is unused.
+   3. 0.52  To start a return, email support@example.com with your order number.
+   4. 0.49  Items marked final sale cannot be returned or exchanged.
+   5. 0.44  Exchanges for a different size are free within the return window.
+   6. 0.41  Worn or washed clothing counts as used and is not eligible for a refund.
+   7. 0.37  Shipping fees are non-refundable; late returns get store credit.
+   8. 0.33  Gift cards never expire and are non-refundable.
+   9. 0.21  Standard shipping takes 3 to 5 business days; express is next-day.
+  10. 0.18  All electronics include a one-year limited warranty.
+
+STAGE 2, after cross-encoder rerank (top 3 kept):
+   1. 0.96  Worn or washed clothing counts as used and is not eligible for a refund.
+   2. 0.88  Refunds are accepted within 30 days of purchase, provided the item is unused.
+   3. 0.74  Items marked final sale cannot be returned or exchanged.
+```
+
+Look at what happened. On the first pass, an off-topic sale ad ranked first because it shares the word "jacket," and the chunk that actually answers the question ("worn clothing counts as used") was stranded at rank six, below the cut a naive top-three would have taken. The cross-encoder, reading each chunk *together* with the query, lifts that decisive chunk to the top and drops the sale ad near the bottom. The model now receives the three chunks that genuinely settle the question, so it can answer correctly instead of being misled. (Both the first-pass ordering and these scores are illustrative and depend on the embedding and reranker models you pick. The local reranker above actually outputs an unbounded relevance logit, not the tidy 0 to 1 numbers shown here, so your live run will look different. Only the resulting order is the point.)
+
+The metadata filter is the other half. Because each chunk carries a `section`, you can restrict the first pass to the returns policy and the sale ad never even competes:
+
+```text
+With a metadata filter (section == "returns"), the sale ad never even competes:
+   1. 0.66  Refunds are accepted within 30 days of purchase, provided the item is unused.
+   2. 0.52  To start a return, email support@example.com with your order number.
+   3. 0.49  Items marked final sale cannot be returned or exchanged.
+```
+
+The complete, runnable file is here: [`rag_rerank.py`](/essays/making-retrieval-smarter/rag_rerank.py). It builds straight on Part 6's `rag_app.py`, so `augment` and `generate` carry over untouched.
+
+{/* From experience callout: drop in a real first-person anecdote here (e.g. the day adding a cross-encoder reranker visibly lifted answer quality on the same corpus and the same prompt, with retrieval the only thing that changed; or how much latency HyDE actually cost in production and when it was worth it), then wrap it as: > 💡 **From experience** ...story... */}
+
+## Recap, and the road ahead
+
+We took the roughly-right ranked list from Part 7 and sharpened it with three levers around retrieval. Before, we rewrite the query (multi-query, HyDE, step-back, decomposition). During, we filter candidates by metadata, with security filtering as a hard requirement. After, the star of the chapter, we rerank a wide candidate set with a cross-encoder, the two-stage retrieve-then-rerank pattern that finally puts Part 7's "cast a wide net, then trim" on a real mechanism. With a reranker and a filter, a single-pass pipeline is about as sharp as it gets.
+
+And yet it is still single-pass: it retrieves once and generates once, and we never questioned *what unit* we retrieve. Every part so far has handed the model whichever chunks scored well, exactly as they were stored. But the best thing to retrieve and the best thing to *show the model* are not always the same chunk. That is the subject of Part 9.
+
+## Key takeaways
+
+- First-pass retrieval is only roughly right because it uses a **bi-encoder**: query and chunks are embedded separately, so each text is crushed to one vector that never gets to consider the other. Fast, but structurally imprecise.
+- Sharpen retrieval with three levers in pipeline order: **before** (transform the query), **during** (filter by metadata), **after** (rerank the results).
+- **Query transformations** (multi-query, HyDE, step-back, decomposition) turn a poor question into better search queries. Each costs extra LLM calls, so use them where a query type keeps failing.
+- **Metadata filtering** enforces hard criteria (date, section, and critically, access level for security and multi-tenancy) and shrinks the search space. Prefer **pre-filtering**, which scores only matching chunks, over **post-filtering**, which can return fewer than k results even when plenty of chunks match.
+- A **cross-encoder** scores the query and a chunk together and judges relevance far more accurately than a bi-encoder, but it is too slow to run over a whole corpus.
+- **Two-stage retrieval (retrieve-then-rerank)** resolves the tension: retrieve a wide net fast, rerank it with the cross-encoder, keep the best few. Add levers only where your failure analysis demands it; measure before adding complexity (Part 11).
+
+## Glossary
+
+- **Bi-encoder**: a model that embeds the query and each chunk *separately* into vectors and compares them with cosine similarity. Fast, because chunk vectors are precomputed, but lossy, because each text is summarized into one vector in isolation. This is ordinary dense retrieval.
+- **Cross-encoder**: a model that takes the query and a candidate chunk *together* as one input and outputs a single relevance score. Far more accurate than a bi-encoder, because the two texts attend to each other, but slow, because it runs per pair at query time.
+- **Reranking**: reordering a set of retrieved candidates by a more accurate relevance model (typically a cross-encoder), so the genuinely best chunk rises to the top.
+- **Two-stage retrieval (retrieve-then-rerank)**: fetch a wide candidate set with fast first-pass retrieval, then reorder just those candidates with a slow, accurate reranker and keep the best few. Speed and precision together.
+- **Query transformation**: rewriting the user's raw question into one or more better search queries before retrieval.
+- **Multi-query (query expansion)**: generating several rephrasings of the query, retrieving for each, and merging the results to lift recall.
+- **HyDE (Hypothetical Document Embeddings)**: writing a hypothetical answer with an LLM and searching with *its* embedding, since an answer resembles the target documents more than a short question does.
+- **Step-back prompting**: generating a broader, more general version of the question and retrieving for it to gather foundational context.
+- **Query decomposition**: splitting a complex, multi-part question into sub-questions, retrieving for each, and combining the results.
+- **Metadata filtering**: restricting retrieval to chunks whose metadata matches hard criteria (date, source, section, access level).
+- **Pre-filtering vs post-filtering**: pre-filtering applies the metadata constraint *before* the similarity search, so you get the top-k of the matching set; post-filtering applies it *after*, so it can return fewer than k even when more chunks would have matched.
+
+---
+
+**Next up, Part 9: Advanced Retrieval Patterns.** We have sharpened how we rank chunks; next we rethink *what we retrieve*, with parent-document retrieval, sentence-window retrieval, self-querying, and contextual compression.
