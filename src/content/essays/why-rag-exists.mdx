@@ -1,13 +1,12 @@
 ---
 title: "Why RAG Exists"
-series: "RAG from First Principles"
-part: 1
-description: "Powerful LLMs still answer confidently and wrong about your own data and recent events. This first part explains why — and introduces RAG, the pattern that fixes it — with no code and a clear mental model."
+description: "Even a powerful LLM answers confidently and wrong about your own documents and yesterday's events. Part 1 of a from-scratch series on Retrieval-Augmented Generation: no code, just the four problems RAG solves and one durable mental model."
 date: 2026-06-09
-tags: ["RAG", "LLM", "AI", "retrieval", "embeddings"]
+tags: ["RAG", "LLM", "Retrieval", "Embeddings", "AI", "NLP"]
 ---
 
-# Why RAG Exists
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
 
 *RAG from First Principles — Part 1 of the series.*
 
@@ -18,8 +17,6 @@ By the end of this part you'll understand, in plain language, why a large langua
 ## Prerequisites
 
 None. This is Part 1. If you can read a sentence of Python you're already over-qualified for today — the code starts in later parts.
-
----
 
 ## The confidently wrong answer
 
@@ -40,8 +37,6 @@ Now try a different question:
 Same fluency, same confidence, same problem — except this time there isn't even a wrong page to point to. Yesterday hadn't happened yet when this model was built. It cannot know.
 
 Neither of these is a bug you can prompt your way out of, and neither means the model is "dumb." They're structural. A language model, on its own, is a brilliant reasoner with **no access to your information and no clock**. Before we can fix that, we have to be precise about *why* it happens — because each cause maps to a thing RAG does.
-
----
 
 ## Why a vanilla LLM gets it wrong: four limitations
 
@@ -69,10 +64,9 @@ Ask it about anything that happened after that line — yesterday's incident, th
 
 Here's that gap drawn out:
 
-<figure>
-  <img src="part1-knowledge-cutoff.svg" alt="A horizontal timeline. A solid bar of training data ends at a 'knowledge cutoff' marker; beyond it, a faded, hatched region labelled 'the model knows nothing here' contains events — yesterday's news, your product launch, this morning's incident — leading to a 'Today' marker far to the right." />
-  <figcaption>Figure 1 — The model's knowledge is frozen at its training cutoff; everything after it is a blind spot, no matter how recent or important.</figcaption>
-</figure>
+<Diagram number={1} caption="The model's knowledge is frozen at its training cutoff; everything after it is a blind spot, no matter how recent or important.">
+  <img src="/essays/why-rag-exists/knowledge-cutoff.svg" alt="A horizontal timeline. A solid bar of training data ends at a 'knowledge cutoff' marker; beyond it, a faded, hatched region labelled 'the model knows nothing here' contains events — yesterday's news, your product launch, this morning's incident — leading to a 'Today' marker far to the right." class="w-full rounded-lg" />
+</Diagram>
 
 ### 3. No private or proprietary knowledge
 
@@ -96,8 +90,6 @@ So pasting "everything" fails for concrete reasons:
 
 The fix isn't a bigger desk. It's putting *only the right page* on the desk at the right moment. Which is exactly what RAG does.
 
----
-
 ## Enter RAG
 
 Here's the whole idea in one sentence:
@@ -114,12 +106,9 @@ Notice how cleanly the three moves answer the four problems. Retrieval supplies 
 
 This is the shift, side by side:
 
-<figure>
-  <img src="part1-llm-vs-rag.svg" alt="Two paths side by side. Left: a question goes into an LLM and out comes a confident wrong answer flagged as a hallucination with no source. Right: the same question first retrieves a snippet from a knowledge base, that snippet plus the question become an augmented prompt, the LLM reads it, and out comes a grounded, correct answer with a cited source." />
-  <figcaption>Figure 2 — Same question, same model. The only difference is whether the relevant evidence was retrieved and placed in the prompt before the model answered.</figcaption>
-</figure>
-
----
+<Diagram number={2} caption="Same question, same model. The only difference is whether the relevant evidence was retrieved and placed in the prompt before the model answered.">
+  <img src="/essays/why-rag-exists/llm-vs-rag.svg" alt="Two paths side by side. Left: a question goes into an LLM and out comes a confident wrong answer flagged as a hallucination with no source. Right: the same question first retrieves a snippet from a knowledge base, that snippet plus the question become an augmented prompt, the LLM reads it, and out comes a grounded, correct answer with a cited source." class="w-full rounded-lg" />
+</Diagram>
 
 ## The mental model: an open-book exam
 
@@ -137,14 +126,11 @@ The closed-book student is a vanilla LLM. The open-book student is RAG. **Nothin
 - Laying the open book beside the question **= augmentation** (put that material in front of the model with the question)
 - Writing the answer in her own words **= generation** (the model composes the response from what's there)
 
-<figure>
-  <img src="part1-open-book-exam.svg" alt="A friendly illustration of two students at desks. On the left, a student with closed, stacked books and a question-mark thought bubble guesses from memory, labelled 'Vanilla LLM'. On the right, a student with an open book, finger on a highlighted passage, calmly writes the answer, labelled 'RAG', with small notes mapping flip-to-the-page to retrieval, open-beside-the-question to augmentation, and write-in-your-own-words to generation." />
-  <figcaption>Figure 3 — RAG doesn't make the model smarter; it turns a closed-book exam into an open-book one.</figcaption>
-</figure>
+<Diagram number={3} caption="RAG doesn't make the model smarter; it turns a closed-book exam into an open-book one.">
+  <img src="/essays/why-rag-exists/open-book-exam.svg" alt="A friendly illustration of two students at desks. On the left, a student with closed, stacked books and a question-mark thought bubble guesses from memory, labelled 'Vanilla LLM'. On the right, a student with an open book, finger on a highlighted passage, calmly writes the answer, labelled 'RAG', with small notes mapping flip-to-the-page to retrieval, open-beside-the-question to augmentation, and write-in-your-own-words to generation." class="w-full rounded-lg" />
+</Diagram>
 
 The analogy even predicts RAG's failure modes, which is how you know it's a good one. If your "textbook" doesn't contain the answer, the open-book student is no better off — RAG can only ground answers in knowledge you actually gave it. And if she flips to the *wrong* page, she'll confidently answer from irrelevant material — which is why **retrieval quality is the whole ballgame**, and why much of this series is about getting the right page into her hands.
-
----
 
 ## A bird's-eye view of the pipeline
 
@@ -167,12 +153,13 @@ There are two phases. The first happens once, up front, whenever your documents 
 
 That's the entire arc: **document → chunk → embed → store → retrieve → augment → generate.** Don't worry about *how* any single stage works yet — each one gets its own part later. For now I just want the map in your head, because the rest of the series is a guided tour of exactly these stations. The interactive figure below walks one document through all seven, one step at a time — play it, then step through it slowly:
 
-<figure>
-  <iframe src="part1-rag-pipeline.html" title="Interactive animation: one document flowing through the full RAG pipeline — chunk, embed, store, retrieve, augment, generate — with play/pause and step-through controls" width="100%" height="680" style="border:0;border-radius:14px;overflow:hidden"></iframe>
-  <figcaption>Figure 4 — The full RAG pipeline, animated. Use Play/Pause or step Next/Back through chunk → embed → store → retrieve → augment → generate. (If your reader can't embed HTML, open <code>part1-rag-pipeline.html</code> directly.)</figcaption>
-</figure>
-
----
+<Diagram number={4} caption="The full RAG pipeline, animated. Press Play, or step Next / Back through chunk → embed → store → retrieve → augment → generate.">
+  <IframeFigure
+    src="/essays/why-rag-exists/rag-pipeline.html"
+    title="Interactive animation: one document flowing through the full RAG pipeline — chunk, embed, store, retrieve, augment, generate — with play/pause and step-through controls"
+    height={760}
+  />
+</Diagram>
 
 ## So when should you reach for RAG?
 
@@ -185,8 +172,6 @@ RAG is not the only tool, and reaching for it reflexively is its own mistake. He
 **Consider fine-tuning** — actually adjusting the model's weights on your own examples — when you need to change the model's *behavior, format, or style* rather than its *facts*. Fine-tuning is great at "always respond in this tone / this JSON shape / this domain's phrasing" and poor at "know this fact," because facts baked into weights are expensive to update and still can't be cited. A useful one-liner: **fine-tuning changes how the model talks; RAG changes what it knows right now.** Many serious systems use both — fine-tune the manner, RAG the matter — but if you only adopt one thing first, and your pain is wrong-about-my-data, start with RAG.
 
 Here's the decision in a sentence: *if the failure is the model not knowing your current, specific information, RAG is the fix — and almost every "the AI made something up about our business" problem is that failure in disguise.*
-
----
 
 ## Key takeaways
 
