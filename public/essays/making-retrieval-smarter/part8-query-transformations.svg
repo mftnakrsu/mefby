@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 580" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="qt-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#94a3b8" />
+    </marker>
+    <marker id="qt-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#06b6d4" />
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="580" fill="#ffffff" />
+
+  <!-- Title -->
+  <text x="30" y="40" font-size="20" font-weight="700" fill="#0f172a">The before-retrieval toolbox: improve the query first</text>
+  <text x="30" y="62" font-size="13" fill="#64748b">A raw question is often a poor search query. Four ways to rewrite it before it reaches the index, each costing extra LLM calls.</text>
+
+  <!-- ===================== RAW QUERY ===================== -->
+  <text x="30" y="266" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#64748b">RAW QUERY</text>
+  <rect x="24" y="276" width="214" height="110" rx="12" fill="#f8fafc" stroke="#e2e8f0" />
+  <rect x="24" y="276" width="6" height="110" rx="3" fill="#64748b" />
+  <text x="46" y="306" font-size="12.5" fill="#0f172a">How does returning an</text>
+  <text x="46" y="326" font-size="12.5" fill="#0f172a">item work, and does</text>
+  <text x="46" y="346" font-size="12.5" fill="#0f172a">sending it back cost</text>
+  <text x="46" y="366" font-size="12.5" fill="#0f172a">me anything?</text>
+
+  <!-- fan-out arrows from query to each card -->
+  <path d="M238 331 C280 200, 286 160, 306 156" fill="none" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#qt-slate)" />
+  <path d="M238 331 C282 290, 288 274, 306 270" fill="none" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#qt-slate)" />
+  <path d="M238 331 C282 364, 288 384, 306 384" fill="none" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#qt-slate)" />
+  <path d="M238 331 C280 466, 286 498, 306 498" fill="none" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#qt-slate)" />
+
+  <!-- ===================== CARD 1: MULTI-QUERY ===================== -->
+  <g>
+    <rect x="312" y="104" width="486" height="104" rx="12" fill="#ffffff" stroke="#c7d2fe" />
+    <rect x="312" y="104" width="5" height="104" rx="2.5" fill="#6366f1" />
+    <text x="332" y="130" font-size="12" font-weight="700" letter-spacing="0.05em" fill="#4f46e5">MULTI-QUERY / EXPANSION</text>
+    <text x="332" y="152" font-size="12.5" fill="#334155">An LLM writes several rephrasings; retrieve for each, union the hits.</text>
+    <rect x="332" y="166" width="210" height="26" rx="13" fill="#eef2ff" stroke="#c7d2fe" />
+    <text x="347" y="183" font-size="11" fill="#4338ca" font-family="'JetBrains Mono', ui-monospace, monospace">how do I send an item back?</text>
+    <rect x="550" y="166" width="180" height="26" rx="13" fill="#eef2ff" stroke="#c7d2fe" />
+    <text x="565" y="183" font-size="11" fill="#4338ca" font-family="'JetBrains Mono', ui-monospace, monospace">steps to return an order</text>
+  </g>
+
+  <!-- ===================== CARD 2: HyDE ===================== -->
+  <g>
+    <rect x="312" y="218" width="486" height="104" rx="12" fill="#ffffff" stroke="#ddd6fe" />
+    <rect x="312" y="218" width="5" height="104" rx="2.5" fill="#8b5cf6" />
+    <text x="332" y="244" font-size="12" font-weight="700" letter-spacing="0.05em" fill="#7c3aed">HyDE &#183; HYPOTHETICAL ANSWER</text>
+    <text x="332" y="266" font-size="12.5" fill="#334155">An LLM drafts a fake answer; embed and search with that, not the question.</text>
+    <rect x="332" y="280" width="448" height="26" rx="13" fill="#f5f3ff" stroke="#ddd6fe" />
+    <text x="347" y="297" font-size="11" fill="#6d28d9" font-family="'JetBrains Mono', ui-monospace, monospace">Returns are accepted within 30 days if the item is unused...</text>
+  </g>
+
+  <!-- ===================== CARD 3: STEP-BACK ===================== -->
+  <g>
+    <rect x="312" y="332" width="486" height="104" rx="12" fill="#ffffff" stroke="#99f6e4" />
+    <rect x="312" y="332" width="5" height="104" rx="2.5" fill="#14b8a6" />
+    <text x="332" y="358" font-size="12" font-weight="700" letter-spacing="0.05em" fill="#0d9488">STEP-BACK &#183; BROADER QUESTION</text>
+    <text x="332" y="380" font-size="12.5" fill="#334155">Ask a more general question first to gather foundational context.</text>
+    <rect x="332" y="394" width="300" height="26" rx="13" fill="#f0fdfa" stroke="#99f6e4" />
+    <text x="347" y="411" font-size="11" fill="#0f766e" font-family="'JetBrains Mono', ui-monospace, monospace">what is our overall returns policy?</text>
+  </g>
+
+  <!-- ===================== CARD 4: DECOMPOSITION ===================== -->
+  <g>
+    <rect x="312" y="446" width="486" height="104" rx="12" fill="#ffffff" stroke="#fde68a" />
+    <rect x="312" y="446" width="5" height="104" rx="2.5" fill="#f59e0b" />
+    <text x="332" y="472" font-size="12" font-weight="700" letter-spacing="0.05em" fill="#b45309">DECOMPOSITION &#183; SUB-QUESTIONS</text>
+    <text x="332" y="494" font-size="12.5" fill="#334155">Split a multi-part question into parts; retrieve for each, then combine.</text>
+    <rect x="332" y="508" width="222" height="26" rx="13" fill="#fffbeb" stroke="#fde68a" />
+    <text x="347" y="525" font-size="11" fill="#92400e" font-family="'JetBrains Mono', ui-monospace, monospace">what is the return process?</text>
+    <rect x="562" y="508" width="200" height="26" rx="13" fill="#fffbeb" stroke="#fde68a" />
+    <text x="577" y="525" font-size="11" fill="#92400e" font-family="'JetBrains Mono', ui-monospace, monospace">what does returning cost?</text>
+  </g>
+
+  <!-- arrows from each card into retrieval -->
+  <line x1="798" y1="156" x2="834" y2="156" stroke="#06b6d4" stroke-width="1.8" marker-end="url(#qt-cyan)" />
+  <line x1="798" y1="270" x2="834" y2="270" stroke="#06b6d4" stroke-width="1.8" marker-end="url(#qt-cyan)" />
+  <line x1="798" y1="384" x2="834" y2="384" stroke="#06b6d4" stroke-width="1.8" marker-end="url(#qt-cyan)" />
+  <line x1="798" y1="498" x2="834" y2="498" stroke="#06b6d4" stroke-width="1.8" marker-end="url(#qt-cyan)" />
+
+  <!-- ===================== RETRIEVAL COLUMN ===================== -->
+  <rect x="838" y="104" width="220" height="446" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+  <rect x="838" y="104" width="6" height="446" rx="3" fill="#06b6d4" />
+  <text x="948" y="300" font-size="13" font-weight="700" letter-spacing="0.06em" fill="#0891b2" text-anchor="middle">RETRIEVAL</text>
+  <text x="948" y="328" font-size="12.5" fill="#334155" text-anchor="middle">Run each query</text>
+  <text x="948" y="346" font-size="12.5" fill="#334155" text-anchor="middle">against the index,</text>
+  <text x="948" y="364" font-size="12.5" fill="#334155" text-anchor="middle">then union and</text>
+  <text x="948" y="382" font-size="12.5" fill="#334155" text-anchor="middle">dedupe the hits.</text>
+</svg>

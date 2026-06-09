@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 540" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="ah-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b5cf6" />
+    </marker>
+    <marker id="ah-indigo" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6366f1" />
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="540" fill="#ffffff" />
+
+  <!-- Title -->
+  <text x="30" y="40" font-size="20" font-weight="700" fill="#0f172a">Two ways to compare a query and a chunk</text>
+  <text x="30" y="62" font-size="13" fill="#64748b">A bi-encoder scores them apart and cheap; a cross-encoder scores them together and accurate.</text>
+
+  <!-- ===================== PANEL 1: BI-ENCODER ===================== -->
+  <g>
+    <rect x="18" y="86" width="512" height="420" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+    <rect x="18" y="86" width="6" height="420" rx="3" fill="#8b5cf6" />
+    <text x="44" y="118" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#7c3aed">BI-ENCODER &#183; FAST, LOSSY</text>
+
+    <!-- two separate inputs -->
+    <rect x="44" y="138" width="205" height="40" rx="8" fill="#ffffff" stroke="#ddd6fe" />
+    <text x="146" y="163" font-size="13" font-weight="600" fill="#0f172a" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">query</text>
+    <rect x="261" y="138" width="205" height="40" rx="8" fill="#ffffff" stroke="#ddd6fe" />
+    <text x="363" y="163" font-size="13" font-weight="600" fill="#0f172a" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">chunk</text>
+
+    <!-- arrows down into encoders -->
+    <line x1="146" y1="180" x2="146" y2="206" stroke="#8b5cf6" stroke-width="2" marker-end="url(#ah-violet)" />
+    <line x1="363" y1="180" x2="363" y2="206" stroke="#8b5cf6" stroke-width="2" marker-end="url(#ah-violet)" />
+
+    <!-- two separate encoder passes -->
+    <rect x="44" y="210" width="205" height="44" rx="10" fill="#ffffff" stroke="#c4b5fd" />
+    <text x="146" y="237" font-size="13.5" font-weight="700" fill="#6d28d9" text-anchor="middle">Encoder</text>
+    <rect x="261" y="210" width="205" height="44" rx="10" fill="#ffffff" stroke="#c4b5fd" />
+    <text x="363" y="237" font-size="13.5" font-weight="700" fill="#6d28d9" text-anchor="middle">Encoder</text>
+    <text x="255" y="276" font-size="11.5" font-style="italic" fill="#7c3aed" text-anchor="middle">same model, run twice (chunk side is precomputed)</text>
+
+    <!-- arrows down into vectors -->
+    <line x1="146" y1="285" x2="146" y2="305" stroke="#8b5cf6" stroke-width="2" marker-end="url(#ah-violet)" />
+    <line x1="363" y1="285" x2="363" y2="305" stroke="#8b5cf6" stroke-width="2" marker-end="url(#ah-violet)" />
+
+    <!-- two vectors -->
+    <rect x="60" y="308" width="172" height="32" rx="8" fill="#f5f3ff" stroke="#ddd6fe" />
+    <text x="146" y="329" font-size="11.5" fill="#7c3aed" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">[0.21, -0.08, ...]</text>
+    <rect x="277" y="308" width="172" height="32" rx="8" fill="#f5f3ff" stroke="#ddd6fe" />
+    <text x="363" y="329" font-size="11.5" fill="#7c3aed" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">[0.19, -0.04, ...]</text>
+
+    <!-- converge into cosine -->
+    <path d="M146 340 L146 360 L210 360 L210 372" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#ah-violet)" />
+    <path d="M363 340 L363 360 L300 360 L300 372" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#ah-violet)" />
+    <rect x="200" y="374" width="110" height="38" rx="10" fill="#ffffff" stroke="#a78bfa" />
+    <text x="255" y="399" font-size="13" font-weight="700" fill="#6d28d9" text-anchor="middle">cosine</text>
+    <line x1="255" y1="412" x2="255" y2="430" stroke="#8b5cf6" stroke-width="2" marker-end="url(#ah-violet)" />
+    <text x="255" y="450" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">score 0.41</text>
+
+    <text x="44" y="480" font-size="12.5" fill="#334155">Fast: chunks are embedded once, ahead of time.</text>
+    <text x="44" y="498" font-size="12.5" fill="#334155">Lossy: each text is crushed to one vector, blind to the other.</text>
+  </g>
+
+  <!-- ===================== PANEL 2: CROSS-ENCODER ===================== -->
+  <g>
+    <rect x="550" y="86" width="512" height="420" rx="14" fill="#f8fafc" stroke="#e2e8f0" />
+    <rect x="550" y="86" width="6" height="420" rx="3" fill="#6366f1" />
+    <text x="576" y="118" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#4f46e5">CROSS-ENCODER &#183; SLOW, ACCURATE</text>
+
+    <!-- two inputs -->
+    <rect x="576" y="138" width="205" height="40" rx="8" fill="#ffffff" stroke="#c7d2fe" />
+    <text x="678" y="163" font-size="13" font-weight="600" fill="#0f172a" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">query</text>
+    <rect x="793" y="138" width="205" height="40" rx="8" fill="#ffffff" stroke="#c7d2fe" />
+    <text x="895" y="163" font-size="13" font-weight="600" fill="#0f172a" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">chunk</text>
+
+    <!-- converge immediately into one joined input -->
+    <path d="M678 180 L678 198 L787 198 L787 214" fill="none" stroke="#6366f1" stroke-width="2" marker-end="url(#ah-indigo)" />
+    <path d="M895 180 L895 198 L787 198" fill="none" stroke="#6366f1" stroke-width="2" />
+
+    <rect x="606" y="216" width="362" height="40" rx="8" fill="#eef2ff" stroke="#c7d2fe" />
+    <text x="787" y="241" font-size="12.5" fill="#4f46e5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">[CLS] query [SEP] chunk</text>
+
+    <line x1="787" y1="256" x2="787" y2="276" stroke="#6366f1" stroke-width="2" marker-end="url(#ah-indigo)" />
+
+    <!-- one joint encoder -->
+    <rect x="606" y="278" width="362" height="50" rx="10" fill="#ffffff" stroke="#a5b4fc" />
+    <text x="787" y="302" font-size="13.5" font-weight="700" fill="#4338ca" text-anchor="middle">Cross-Encoder</text>
+    <text x="787" y="320" font-size="11.5" font-style="italic" fill="#4f46e5" text-anchor="middle">the two texts attend to each other inside the model</text>
+
+    <line x1="787" y1="328" x2="787" y2="372" stroke="#6366f1" stroke-width="2" marker-end="url(#ah-indigo)" />
+
+    <!-- one relevance score -->
+    <rect x="697" y="374" width="180" height="40" rx="10" fill="#eef2ff" stroke="#a5b4fc" />
+    <text x="787" y="400" font-size="13.5" font-weight="700" fill="#4338ca" text-anchor="middle">relevance 0.96</text>
+
+    <text x="576" y="480" font-size="12.5" fill="#334155">Slow: it must run once per (query, chunk) pair, at query time.</text>
+    <text x="576" y="498" font-size="12.5" fill="#334155">Accurate: it reads the pair together, not two separate vectors.</text>
+  </g>
+</svg>
