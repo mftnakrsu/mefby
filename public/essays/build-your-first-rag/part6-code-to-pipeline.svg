@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 520" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p6-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1,1 L9,5 L1,9" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="520" fill="#ffffff" />
+
+  <!-- Title -->
+  <text x="40" y="40" font-size="20" font-weight="700" fill="#0f172a">The app you wrote is the architecture</text>
+  <text x="40" y="62" font-size="13" fill="#64748b">Each function maps to a pipeline stage, and to the part that explained it.</text>
+
+  <!-- ===================== LANE 1: INDEXING ===================== -->
+  <text x="40" y="92" font-size="12" font-weight="700" letter-spacing="0.05em" fill="#64748b">INDEXING (BUILD ONCE)</text>
+
+  <!-- Load -->
+  <rect x="40" y="104" width="200" height="96" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+  <rect x="40" y="104" width="6" height="96" rx="3" fill="#94a3b8" />
+  <text x="62" y="134" font-size="14" font-weight="700" fill="#475569">Load</text>
+  <text x="224" y="128" font-size="10.5" font-weight="700" fill="#94a3b8" text-anchor="end">Part 5</text>
+  <text x="62" y="160" font-size="13.5" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, monospace">CORPUS</text>
+  <text x="62" y="182" font-size="11.5" fill="#64748b">the raw documents</text>
+
+  <!-- Chunk -->
+  <rect x="268" y="104" width="200" height="96" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+  <rect x="268" y="104" width="6" height="96" rx="3" fill="#64748b" />
+  <text x="290" y="134" font-size="14" font-weight="700" fill="#475569">Chunk</text>
+  <text x="452" y="128" font-size="10.5" font-weight="700" fill="#94a3b8" text-anchor="end">Part 5</text>
+  <text x="290" y="160" font-size="13.5" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, monospace">chunk()</text>
+  <text x="290" y="182" font-size="11.5" fill="#64748b">split + add metadata</text>
+
+  <!-- Embed -->
+  <rect x="496" y="104" width="200" height="96" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+  <rect x="496" y="104" width="6" height="96" rx="3" fill="#8b5cf6" />
+  <text x="518" y="134" font-size="14" font-weight="700" fill="#7c3aed">Embed</text>
+  <text x="680" y="128" font-size="10.5" font-weight="700" fill="#a78bfa" text-anchor="end">Part 2</text>
+  <text x="518" y="160" font-size="13.5" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, monospace">embed()</text>
+  <text x="518" y="182" font-size="11.5" fill="#64748b">text to 384-dim vectors</text>
+
+  <!-- Store -->
+  <rect x="724" y="104" width="200" height="96" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+  <rect x="724" y="104" width="6" height="96" rx="3" fill="#14b8a6" />
+  <text x="746" y="134" font-size="14" font-weight="700" fill="#0f766e">Store</text>
+  <text x="908" y="128" font-size="10.5" font-weight="700" fill="#5eead4" text-anchor="end">Part 4</text>
+  <text x="746" y="160" font-size="13.5" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, monospace">vectors + chunks</text>
+  <text x="746" y="182" font-size="11.5" fill="#64748b">list + NumPy matrix</text>
+
+  <!-- lane 1 arrows -->
+  <g stroke="#94a3b8" stroke-width="1.8">
+    <line x1="242" y1="152" x2="266" y2="152" marker-end="url(#p6-arrow)" />
+    <line x1="470" y1="152" x2="494" y2="152" marker-end="url(#p6-arrow)" />
+    <line x1="698" y1="152" x2="722" y2="152" marker-end="url(#p6-arrow)" />
+  </g>
+
+  <!-- connector: store feeds retrieval -->
+  <path d="M824,202 V236 H175 V314" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-dasharray="5 5" marker-end="url(#p6-arrow)" />
+  <text x="500" y="228" font-size="11" fill="#94a3b8" text-anchor="middle">the stored vectors feed retrieval</text>
+
+  <!-- ===================== LANE 2: QUERY TIME ===================== -->
+  <text x="40" y="306" font-size="12" font-weight="700" letter-spacing="0.05em" fill="#64748b">QUERY TIME (EVERY QUESTION)</text>
+
+  <!-- Retrieve -->
+  <rect x="40" y="318" width="270" height="96" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+  <rect x="40" y="318" width="6" height="96" rx="3" fill="#06b6d4" />
+  <text x="62" y="348" font-size="14" font-weight="700" fill="#0e7490">Retrieve</text>
+  <text x="294" y="342" font-size="10.5" font-weight="700" fill="#67e8f9" text-anchor="end">Parts 3 + 4</text>
+  <text x="62" y="374" font-size="13.5" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, monospace">retrieve()</text>
+  <text x="62" y="396" font-size="11.5" fill="#64748b">cosine similarity, top-k</text>
+
+  <!-- Augment -->
+  <rect x="345" y="318" width="270" height="96" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+  <rect x="345" y="318" width="6" height="96" rx="3" fill="#f59e0b" />
+  <text x="367" y="348" font-size="14" font-weight="700" fill="#b45309">Augment</text>
+  <text x="599" y="342" font-size="10.5" font-weight="700" fill="#fcd34d" text-anchor="end">Parts 5 + 1</text>
+  <text x="367" y="374" font-size="13.5" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, monospace">build_prompt()</text>
+  <text x="367" y="396" font-size="11.5" fill="#64748b">grounded template + context</text>
+
+  <!-- Generate -->
+  <rect x="650" y="318" width="270" height="96" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+  <rect x="650" y="318" width="6" height="96" rx="3" fill="#6366f1" />
+  <text x="672" y="348" font-size="14" font-weight="700" fill="#4f46e5">Generate</text>
+  <text x="904" y="342" font-size="10.5" font-weight="700" fill="#a5b4fc" text-anchor="end">Part 1</text>
+  <text x="672" y="374" font-size="13.5" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, monospace">generate()</text>
+  <text x="672" y="396" font-size="11.5" fill="#64748b">the LLM answers from context</text>
+
+  <!-- lane 2 arrows -->
+  <g stroke="#94a3b8" stroke-width="1.8">
+    <line x1="312" y1="366" x2="343" y2="366" marker-end="url(#p6-arrow)" />
+    <line x1="617" y1="366" x2="648" y2="366" marker-end="url(#p6-arrow)" />
+  </g>
+
+  <!-- ask() brace -->
+  <path d="M40,438 V448 H920 V438" fill="none" stroke="#c7d2fe" stroke-width="1.8" />
+  <line x1="480" y1="448" x2="480" y2="458" stroke="#c7d2fe" stroke-width="1.8" />
+  <text x="480" y="478" font-size="12.5" font-weight="700" fill="#4f46e5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">ask(question)</text>
+  <text x="480" y="496" font-size="11" fill="#64748b" text-anchor="middle">calls retrieve() then build_prompt() then generate()</text>
+</svg>

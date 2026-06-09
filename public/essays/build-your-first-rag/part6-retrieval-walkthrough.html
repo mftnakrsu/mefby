@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Retrieval Walkthrough: watch your RAG app think</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 6 flagship animation
+     Self-contained: no external resources, no web fonts, no real model.
+     Scores and answers are hardcoded to match the tutorial's sample corpus.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff; --surface-1: #f8fafc; --surface-2: #f1f5f9; --border: #e2e8f0;
+    --heading: #0f172a; --body: #334155; --muted: #64748b;
+    --indigo: #6366f1; --indigo-strong: #4f46e5; --violet: #8b5cf6; --teal: #14b8a6;
+    --cyan: #06b6d4; --emerald: #10b981; --amber: #f59e0b; --rose: #f43f5e;
+    --radius-card: 14px; --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1); --dur: 300ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans); background: var(--bg); color: var(--body);
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    line-height: 1.5; padding: 24px;
+  }
+  .rw { max-width: 900px; margin: 0 auto; }
+
+  .rw-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 12px; }
+  .rw-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .rw-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .rw-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* question selector */
+  .rw-qlabel { font-size: 12px; font-weight: 600; color: var(--muted); margin: 6px 0 6px; }
+  .rw-qs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .rw-q {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer;
+    transition: background-color 160ms var(--ease), color 160ms var(--ease), border-color 160ms var(--ease);
+  }
+  .rw-q:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .rw-q[aria-pressed="true"] { color: #fff; background: var(--indigo-strong); border-color: var(--indigo-strong); }
+  .rw-q:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+
+  /* query line */
+  .rw-query {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: var(--surface-1); padding: 12px 14px; margin-bottom: 14px;
+  }
+  .rw-query .q-text { font-size: 15px; font-weight: 600; color: var(--heading); }
+  .rw-vec {
+    font-family: var(--mono); font-size: 11.5px; color: var(--violet);
+    background: color-mix(in srgb, var(--violet) 10%, #fff); border: 1px solid color-mix(in srgb, var(--violet) 30%, var(--border));
+    border-radius: 8px; padding: 3px 8px; opacity: 0; transform: translateY(-2px);
+    transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  }
+  .rw-vec.on { opacity: 1; transform: none; }
+
+  /* chunk rows */
+  .rw-chunks { display: flex; flex-direction: column; gap: 8px; }
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 10px 12px;
+    transition: opacity var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .row .r-text { flex: 1 1 auto; font-size: 13px; color: var(--body); }
+  .row .r-score { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; width: 150px; opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .row .r-score.on { opacity: 1; }
+  .track { flex: 1; height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .fill { height: 100%; width: 0; background: var(--cyan); border-radius: 999px; transition: width 520ms var(--ease); }
+  .r-num { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--body); width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+  .r-badge {
+    flex: 0 0 auto; font-size: 10.5px; font-weight: 700; color: var(--cyan); border: 1px solid color-mix(in srgb, var(--cyan) 40%, var(--border));
+    background: color-mix(in srgb, var(--cyan) 10%, #fff); border-radius: 999px; padding: 1px 8px; opacity: 0; transition: opacity var(--dur) var(--ease);
+  }
+  .r-badge.on { opacity: 1; }
+  .row.top { border-color: var(--cyan); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 14%, transparent); }
+  .row.top .fill { background: var(--cyan); }
+  .row.dim { opacity: 0.4; }
+  .row.dim .fill { background: #cbd5e1; }
+
+  /* prompt + answer */
+  .rw-panel { margin-top: 14px; }
+  .hidden { display: none; }
+  .rw-prompt {
+    font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--heading);
+    white-space: pre-wrap; background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius-card); padding: 13px 15px; margin: 0;
+  }
+  .rw-plabel, .rw-alabel { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; margin: 14px 0 6px; }
+  .rw-answer { border-radius: var(--radius-card); padding: 13px 15px; font-size: 14.5px; }
+  .rw-answer.good { background: color-mix(in srgb, var(--emerald) 8%, #fff); border: 1px solid color-mix(in srgb, var(--emerald) 35%, var(--border)); color: #065f46; }
+  .rw-answer.unknown { background: color-mix(in srgb, var(--amber) 9%, #fff); border: 1px solid color-mix(in srgb, var(--amber) 38%, var(--border)); color: #92400e; }
+  .rw-answer b { color: var(--heading); }
+
+  /* caption */
+  .rw-caption {
+    margin-top: 16px; display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 13px 16px;
+  }
+  .rw-caption-dot { flex: 0 0 auto; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--indigo); box-shadow: 0 0 0 4px color-mix(in srgb, var(--indigo) 18%, transparent); }
+  .rw-caption-text { font-size: 14.5px; color: var(--body); }
+  .rw-caption-text b { color: var(--heading); }
+
+  /* controls (shared with the series player) */
+  .ex-controls { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .ex-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ex-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease), color 160ms var(--ease), transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .ex-btn svg { width: 15px; height: 15px; }
+  .ex-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .ex-btn:active { transform: translateY(1px); }
+  .ex-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); border-color: var(--indigo); }
+  .ex-btn.primary { color: #fff; background: var(--indigo-strong); border-color: var(--indigo-strong); }
+  .ex-btn.primary:hover { background: var(--indigo); border-color: var(--indigo); }
+  .ex-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .ex-status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .ex-stepcount { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ex-stepcount b { color: var(--heading); }
+  .ex-dots { display: flex; gap: 7px; }
+  .ex-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer; transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .ex-dot:hover { background: #cbd5e1; }
+  .ex-dot.is-active { background: var(--indigo); transform: scale(1.35); }
+  .ex-dot.is-past { background: color-mix(in srgb, var(--indigo) 45%, var(--border)); }
+  .ex-dot:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+  .ex-hint { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .ex-hint kbd { font-family: var(--mono); font-size: 11px; background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; color: var(--body); }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rw-vec, .row, .row .r-score, .fill, .r-badge, .ex-dot { transition: none !important; }
+  }
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .rw-title { font-size: 19px; }
+    .row .r-score { width: 110px; }
+    .ex-status { margin-left: 0; width: 100%; justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+  <main class="rw" aria-label="Interactive retrieval walkthrough">
+    <header class="rw-head">
+      <span class="rw-eyebrow">RAG from First Principles &#183; Part 6</span>
+      <h1 class="rw-title">Watch your app think</h1>
+      <p class="rw-sub">A visualization of what the tutorial code does. No real model runs here.</p>
+    </header>
+
+    <p class="rw-qlabel">Pick a question:</p>
+    <div class="rw-qs" id="qs" role="group" aria-label="Choose a preset question"></div>
+
+    <div class="rw-query">
+      <span class="q-text" id="qText"></span>
+      <span class="rw-vec" id="qVec">embedded &#8594; [0.02, -0.11, 0.34, ...] (384 dims)</span>
+    </div>
+
+    <div class="rw-chunks" id="chunks"></div>
+
+    <div class="rw-panel">
+      <p class="rw-plabel hidden" id="pLabel">AUGMENTED PROMPT</p>
+      <pre class="rw-prompt hidden" id="prompt"></pre>
+      <p class="rw-alabel hidden" id="aLabel">ANSWER</p>
+      <div class="rw-answer hidden" id="answer"></div>
+    </div>
+
+    <div class="rw-caption">
+      <span class="rw-caption-dot" aria-hidden="true"></span>
+      <p class="rw-caption-text" id="caption" aria-live="polite"></p>
+    </div>
+
+    <div class="ex-controls">
+      <div class="ex-btns">
+        <button class="ex-btn primary" id="btnPlay" aria-label="Play animation"><span id="playIcon" aria-hidden="true"></span><span id="playText">Play</span></button>
+        <button class="ex-btn" id="btnBack" aria-label="Previous step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="ex-btn" id="btnNext" aria-label="Next step">
+          Next
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="ex-btn" id="btnRestart" aria-label="Restart from the beginning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="ex-status">
+        <span class="ex-stepcount" id="stepCount" aria-hidden="true">Step 1 of 6</span>
+        <div class="ex-dots" id="dots" role="group" aria-label="Jump to step"></div>
+      </div>
+    </div>
+
+    <p class="ex-hint"><kbd>Space</kbd> play / pause &nbsp;&#183;&nbsp; <kbd>&#8592;</kbd> back &nbsp;&#183;&nbsp; <kbd>&#8594;</kbd> next &nbsp;&#183;&nbsp; pick a question above</p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var CHUNKS = [
+    "Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.",
+    "To start a return, email support@example.com with your order number. Refunds are processed within five business days of us receiving the item.",
+    "Standard shipping takes 3 to 5 business days. Express shipping arrives the next business day.",
+    "Shipping fees are non-refundable, and items marked final sale cannot be returned or exchanged.",
+    "All electronics include a one-year limited warranty covering manufacturing defects."
+  ];
+
+  // Hardcoded cosine scores per chunk, matched to the tutorial's behavior.
+  var QUESTIONS = [
+    { q: "What is our refund window?",
+      scores: [0.61, 0.34, 0.12, 0.18, 0.09],
+      answer: "You can get a refund within 30 days of purchase, as long as the item is unused and in its original packaging.",
+      inCorpus: true },
+    { q: "How long does shipping take?",
+      scores: [0.14, 0.16, 0.67, 0.31, 0.10],
+      answer: "Standard shipping takes 3 to 5 business days, and express shipping arrives the next business day.",
+      inCorpus: true },
+    { q: "Do you offer gift wrapping?",
+      scores: [0.13, 0.11, 0.15, 0.12, 0.08],
+      answer: "I don't know based on the provided documents.",
+      inCorpus: false }
+  ];
+  var K = 3;
+
+  var STEP_CAPS = [
+    "<b>Your question.</b> Here is the query and the five-document corpus. Watch it flow through the app.",
+    "<b>Embed the query.</b> The same local model that embedded the chunks turns the question into one 384-dimensional vector (Part 2).",
+    "<b>Score every chunk.</b> Cosine similarity between the query vector and each chunk vector. Higher means more relevant (Part 3).",
+    "<b>Keep the top three.</b> Sort by score and take the top-k (here k = 3). These chunks become the context (Part 4).",
+    "<b>Build the prompt.</b> Inject the top chunks into the template, then add the question and the grounding instruction (Parts 5 and 1).",
+    "<b>Generate.</b> The model answers using only the retrieved context."
+  ];
+  var N_STEPS = 6;
+
+  var PLAY_ICON  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var container = document.querySelector(".rw");
+  var qsWrap   = document.getElementById("qs");
+  var qText    = document.getElementById("qText");
+  var qVec     = document.getElementById("qVec");
+  var chunksEl = document.getElementById("chunks");
+  var pLabel   = document.getElementById("pLabel");
+  var promptEl = document.getElementById("prompt");
+  var aLabel   = document.getElementById("aLabel");
+  var answerEl = document.getElementById("answer");
+  var caption  = document.getElementById("caption");
+  var stepCount= document.getElementById("stepCount");
+  var dotsWrap = document.getElementById("dots");
+  var btnPlay  = document.getElementById("btnPlay");
+  var btnBack  = document.getElementById("btnBack");
+  var btnNext  = document.getElementById("btnNext");
+  var btnRestart = document.getElementById("btnRestart");
+  var playIcon = document.getElementById("playIcon");
+  var playText = document.getElementById("playText");
+
+  /* ---------- build chunk rows once ---------- */
+  var rows = CHUNKS.map(function (text, i) {
+    var row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML =
+      '<span class="r-badge">top</span>' +
+      '<span class="r-text"></span>' +
+      '<span class="r-score"><span class="track"><span class="fill"></span></span><span class="r-num">0.00</span></span>';
+    row.querySelector(".r-text").textContent = text;
+    chunksEl.appendChild(row);
+    return {
+      el: row,
+      badge: row.querySelector(".r-badge"),
+      score: row.querySelector(".r-score"),
+      fill: row.querySelector(".fill"),
+      num: row.querySelector(".r-num")
+    };
+  });
+
+  /* ---------- build question selector ---------- */
+  QUESTIONS.forEach(function (Q, i) {
+    var b = document.createElement("button");
+    b.className = "rw-q"; b.type = "button";
+    b.textContent = Q.q;
+    b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+    b.addEventListener("click", function () { setQuestion(i); });
+    qsWrap.appendChild(b);
+  });
+  var qBtns = Array.prototype.slice.call(qsWrap.querySelectorAll(".rw-q"));
+
+  /* ---------- per-question state ---------- */
+  var qi = 0, Q = QUESTIONS[0], topset = {}, current = 0;
+
+  function buildPrompt(q, topTexts) {
+    var ctx = topTexts.map(function (t) { return "- " + t; }).join("\n");
+    return 'Answer the question using ONLY the context below.\n' +
+           'If the answer is not in the context, say "I don\'t know based on the provided documents."\n\n' +
+           'Context:\n' + ctx + '\n\nQuestion: ' + q + '\nAnswer:';
+  }
+
+  function setQuestion(i) {
+    pause();
+    qi = i; Q = QUESTIONS[i];
+    qBtns.forEach(function (b, bi) { b.setAttribute("aria-pressed", bi === i ? "true" : "false"); });
+
+    qText.textContent = Q.q;
+
+    // top-k by score
+    var order = CHUNKS.map(function (_t, idx) { return idx; })
+      .sort(function (a, b) { return Q.scores[b] - Q.scores[a]; });
+    var topk = order.slice(0, K);
+    topset = {};
+    topk.forEach(function (idx) { topset[idx] = true; });
+
+    // fixed score numbers per row
+    rows.forEach(function (r, idx) { r.num.textContent = Q.scores[idx].toFixed(2); });
+
+    // prompt + answer content
+    promptEl.textContent = buildPrompt(Q.q, topk.map(function (idx) { return CHUNKS[idx]; }));
+    answerEl.textContent = Q.answer;
+    answerEl.className = "rw-answer " + (Q.inCorpus ? "good" : "unknown");
+
+    go(0);
+  }
+
+  /* ---------- render a step ---------- */
+  function render(i) {
+    qVec.classList.toggle("on", i >= 1);
+
+    rows.forEach(function (r, idx) {
+      // scores
+      r.score.classList.toggle("on", i >= 2);
+      r.fill.style.width = (i >= 2) ? (Q.scores[idx] * 100) + "%" : "0%";
+      // top-k highlight
+      var isTop = !!topset[idx];
+      r.el.classList.toggle("top", i >= 3 && isTop);
+      r.el.classList.toggle("dim", i >= 3 && !isTop);
+      r.badge.classList.toggle("on", i >= 3 && isTop);
+    });
+
+    pLabel.classList.toggle("hidden", i < 4);
+    promptEl.classList.toggle("hidden", i < 4);
+    aLabel.classList.toggle("hidden", i < 5);
+    answerEl.classList.toggle("hidden", i < 5);
+
+    var cap = STEP_CAPS[i];
+    if (i === 5) {
+      cap = Q.inCorpus
+        ? "<b>Generate.</b> The model answers using only the retrieved context."
+        : "<b>Generate.</b> Nothing in the corpus answers this, and the top scores are low, so the grounded model honestly declines instead of guessing.";
+    }
+    caption.innerHTML = '<span class="sr-only">Step ' + (i + 1) + ' of ' + N_STEPS + '. </span>' + cap;
+
+    stepCount.innerHTML = "Step <b>" + (i + 1) + "</b> of " + N_STEPS;
+    dotEls.forEach(function (d, di) {
+      d.classList.toggle("is-active", di === i);
+      d.classList.toggle("is-past", di < i);
+      if (di === i) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+    });
+    btnBack.disabled = (i === 0);
+    btnNext.disabled = (i === N_STEPS - 1);
+  }
+
+  function go(i) { current = Math.max(0, Math.min(N_STEPS - 1, i)); render(current); }
+
+  /* ---------- dots ---------- */
+  var dotEls = [];
+  for (var s = 0; s < N_STEPS; s++) {
+    (function (idx) {
+      var b = document.createElement("button");
+      b.className = "ex-dot"; b.type = "button";
+      b.setAttribute("aria-label", "Go to step " + (idx + 1) + " of " + N_STEPS);
+      b.addEventListener("click", function () { pause(); go(idx); });
+      dotsWrap.appendChild(b);
+      dotEls.push(b);
+    })(s);
+  }
+
+  /* ---------- playback ---------- */
+  var timer = null, playing = false, AUTO_MS = 2300;
+  function tick() { if (current >= N_STEPS - 1) { pause(); return; } go(current + 1); timer = window.setTimeout(tick, AUTO_MS); }
+  function play() { if (reduceMotion || playing) return; if (current >= N_STEPS - 1) go(0); playing = true; setPlayButton(); timer = window.setTimeout(tick, AUTO_MS); }
+  function pause() { playing = false; if (timer) { window.clearTimeout(timer); timer = null; } setPlayButton(); }
+  function toggle() { playing ? pause() : play(); }
+  function setPlayButton() {
+    if (reduceMotion) { playIcon.innerHTML = PLAY_ICON; playText.textContent = "Auto-play off"; btnPlay.setAttribute("aria-label", "Auto-play disabled (reduced motion)"); return; }
+    playIcon.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    playText.textContent = playing ? "Pause" : "Play";
+    btnPlay.setAttribute("aria-label", playing ? "Pause animation" : "Play animation");
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /* ---------- wiring ---------- */
+  btnPlay.addEventListener("click", toggle);
+  btnNext.addEventListener("click", function () { pause(); go(current + 1); });
+  btnBack.addEventListener("click", function () { pause(); go(current - 1); });
+  btnRestart.addEventListener("click", function () { pause(); go(0); });
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    var focused = container.contains(document.activeElement) && document.activeElement !== document.body;
+    if ((e.code === "Space" || e.key === " ") && focused && !(e.target && e.target.closest && e.target.closest("button"))) {
+      e.preventDefault(); toggle();
+    } else if (e.key === "ArrowRight" && focused) { e.preventDefault(); pause(); go(current + 1); }
+    else if (e.key === "ArrowLeft" && focused) { e.preventDefault(); pause(); go(current - 1); }
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden) pause(); });
+  if (reduceMotion) { btnPlay.disabled = true; btnPlay.title = "Auto-play disabled (reduced motion). Use Next / Back."; }
+
+  /* ---------- init ---------- */
+  setPlayButton();
+  setQuestion(0);
+})();
+</script>
+</body>
+</html>
