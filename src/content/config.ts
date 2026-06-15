@@ -7,7 +7,7 @@ const essays = defineCollection({
     description: z.string(),
     date: z.coerce.date(),
     tags: z.array(z.string()).default([]),
-    // Optional link to the essay's companion code (a folder in the rag-by-hand repo).
+    // Optional link to the essay's companion code + notebook (a folder in the rag-by-hand repo).
     codeUrl: z.string().url().optional(),
     // Optional social-card image (site-relative path, e.g. /og/rag-by-hand.png).
     ogImage: z.string().optional(),
