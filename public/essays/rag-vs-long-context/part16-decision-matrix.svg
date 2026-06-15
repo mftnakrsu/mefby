@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 600" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <rect x="0" y="0" width="1080" height="600" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">When do you even need retrieval?</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">Two axes decide it: how big the corpus is, and how often it changes. Cost per query is the tiebreaker.</text>
+
+  <!-- ============================================================ -->
+  <!-- LEFT PANEL: the decision matrix (corpus size x volatility)    -->
+  <!-- plot box x:60..520  y:120..470                                -->
+  <!-- ============================================================ -->
+  <text x="60" y="100" font-size="13" font-weight="700" fill="#0f172a">The decision matrix</text>
+
+  <!-- axes -->
+  <line x1="120" y1="150" x2="120" y2="470" stroke="#94a3b8" stroke-width="1.6"/>
+  <line x1="120" y1="470" x2="520" y2="470" stroke="#94a3b8" stroke-width="1.6"/>
+  <!-- y axis label: corpus size -->
+  <text x="78" y="160" font-size="10.5" fill="#475569" text-anchor="middle">massive</text>
+  <text x="78" y="465" font-size="10.5" fill="#475569" text-anchor="middle">small</text>
+  <text x="40" y="315" font-size="11" font-weight="700" fill="#64748b" text-anchor="middle" transform="rotate(-90 40 315)">corpus size &#8594;</text>
+  <!-- x axis label: volatility -->
+  <text x="180" y="492" font-size="10.5" fill="#475569" text-anchor="middle">stable</text>
+  <text x="470" y="492" font-size="10.5" fill="#475569" text-anchor="middle">fast-moving</text>
+  <text x="320" y="512" font-size="11" font-weight="700" fill="#64748b" text-anchor="middle">how often the corpus changes &#8594;</text>
+
+  <!-- grid quadrant lines -->
+  <line x1="320" y1="150" x2="320" y2="470" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="120" y1="310" x2="520" y2="310" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <!-- bottom-left: small + stable -> CAG / stuff (emerald) -->
+  <rect x="128" y="318" width="184" height="144" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="1.6"/>
+  <text x="220" y="362" font-size="14" font-weight="700" fill="#047857" text-anchor="middle">CAG</text>
+  <text x="220" y="382" font-size="10.5" fill="#059669" text-anchor="middle">small + stable, reused</text>
+  <text x="220" y="402" font-size="9.5" fill="#059669" text-anchor="middle">preload once, cache the</text>
+  <text x="220" y="415" font-size="9.5" fill="#059669" text-anchor="middle">KV state, reuse it</text>
+  <text x="220" y="440" font-size="9" fill="#10b981" text-anchor="middle">(tiny corpus: plain</text>
+  <text x="220" y="452" font-size="9" fill="#10b981" text-anchor="middle">long-context is fine too)</text>
+
+  <!-- top-left: mid/large + stable -> long context (teal) -->
+  <rect x="128" y="158" width="184" height="144" rx="10" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+  <text x="220" y="206" font-size="14" font-weight="700" fill="#0f766e" text-anchor="middle">Long-context</text>
+  <text x="220" y="226" font-size="10.5" fill="#0d9488" text-anchor="middle">mid-size + stable</text>
+  <text x="220" y="248" font-size="9.5" fill="#0d9488" text-anchor="middle">fits the window, but too</text>
+  <text x="220" y="261" font-size="9.5" fill="#0d9488" text-anchor="middle">big to want it cached</text>
+  <text x="220" y="282" font-size="9.5" fill="#0d9488" text-anchor="middle">on every call</text>
+
+  <!-- right column (any size, fast-moving OR massive) -> RAG (slate) -->
+  <rect x="328" y="158" width="184" height="304" rx="10" fill="#f8fafc" stroke="#475569" stroke-width="1.6"/>
+  <text x="420" y="300" font-size="16" font-weight="700" fill="#1e293b" text-anchor="middle">RAG</text>
+  <text x="420" y="322" font-size="10.5" fill="#475569" text-anchor="middle">massive, fast-moving,</text>
+  <text x="420" y="335" font-size="10.5" fill="#475569" text-anchor="middle">or private</text>
+  <text x="420" y="358" font-size="9.5" fill="#64748b" text-anchor="middle">retrieve only the</text>
+  <text x="420" y="370" font-size="9.5" fill="#64748b" text-anchor="middle">slice you need;</text>
+  <text x="420" y="382" font-size="9.5" fill="#64748b" text-anchor="middle">cost tracks k,</text>
+  <text x="420" y="394" font-size="9.5" fill="#64748b" text-anchor="middle">not corpus size</text>
+
+  <!-- ============================================================ -->
+  <!-- RIGHT PANEL: cost vs corpus size (per-query, log-ish bars)    -->
+  <!-- plot box x:600..1040  y:150..470                              -->
+  <!-- ============================================================ -->
+  <text x="600" y="100" font-size="13" font-weight="700" fill="#0f172a">Cost per query as the corpus grows</text>
+  <text x="600" y="116" font-size="10.5" fill="#94a3b8">relative units &#183; lower is better &#183; amortized over many reuses of a stable corpus</text>
+
+  <!-- legend -->
+  <g font-size="11">
+    <rect x="600" y="128" width="13" height="13" rx="3" fill="#475569"/>
+    <text x="620" y="139" fill="#64748b">RAG (top-k)</text>
+    <rect x="708" y="128" width="13" height="13" rx="3" fill="#10b981"/>
+    <text x="728" y="139" fill="#64748b">CAG (cached)</text>
+    <rect x="826" y="128" width="13" height="13" rx="3" fill="#cbd5e1"/>
+    <text x="846" y="139" fill="#64748b">long-context (fresh)</text>
+  </g>
+
+  <!-- baseline -->
+  <line x1="620" y1="450" x2="1040" y2="450" stroke="#94a3b8" stroke-width="1.6"/>
+  <text x="612" y="454" font-size="10" fill="#94a3b8" text-anchor="end">0</text>
+  <text x="612" y="170" font-size="10" fill="#94a3b8" text-anchor="end">high</text>
+
+  <!-- GROUP 1: small corpus -->
+  <!-- long-context (tall-ish), RAG (low), CAG (lowest) -->
+  <rect x="636" y="392" width="22" height="58" rx="4" fill="#cbd5e1"/>
+  <rect x="660" y="404" width="22" height="46" rx="4" fill="#475569"/>
+  <rect x="684" y="416" width="22" height="34" rx="4" fill="#10b981"/>
+  <text x="671" y="468" font-size="10.5" font-weight="700" fill="#0f172a" text-anchor="middle">small</text>
+  <!-- CAG-wins flag -->
+  <rect x="638" y="360" width="70" height="22" rx="6" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="673" y="375" font-size="9" font-weight="700" fill="#059669" text-anchor="middle">CAG wins</text>
+
+  <!-- GROUP 2: mid corpus -->
+  <rect x="772" y="300" width="22" height="150" rx="4" fill="#cbd5e1"/>
+  <rect x="796" y="408" width="22" height="42" rx="4" fill="#475569"/>
+  <rect x="820" y="398" width="22" height="52" rx="4" fill="#10b981"/>
+  <text x="807" y="468" font-size="10.5" font-weight="700" fill="#0f172a" text-anchor="middle">mid</text>
+
+  <!-- GROUP 3: massive corpus -->
+  <rect x="908" y="176" width="22" height="274" rx="4" fill="#cbd5e1"/>
+  <rect x="932" y="406" width="22" height="44" rx="4" fill="#475569"/>
+  <rect x="956" y="330" width="22" height="120" rx="4" fill="#10b981"/>
+  <text x="943" y="468" font-size="10.5" font-weight="700" fill="#0f172a" text-anchor="middle">massive</text>
+  <!-- RAG-wins flag -->
+  <rect x="906" y="300" width="74" height="22" rx="6" fill="#f8fafc" stroke="#475569"/>
+  <text x="943" y="315" font-size="9" font-weight="700" fill="#1e293b" text-anchor="middle">RAG wins</text>
+
+  <!-- the key insight line on the right panel -->
+  <text x="600" y="490" font-size="10" fill="#94a3b8">long-context pays for the whole corpus fresh on every query; CAG reads it cached (~0.1x); RAG sends only k chunks.</text>
+
+  <!-- ============================================================ -->
+  <!-- footer banner                                                -->
+  <!-- ============================================================ -->
+  <rect x="40" y="528" width="1000" height="48" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="56" y="540" width="118" height="24" rx="8" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.3"/>
+  <text x="115" y="556" font-size="10" font-weight="700" fill="#0f766e" text-anchor="middle">the closing loop</text>
+  <text x="190" y="549" font-size="11" fill="#334155">Part 1 asked why RAG exists. The honest answer in 2026: not always. A small, stable, reused corpus can be cached (CAG)</text>
+  <text x="190" y="566" font-size="11" fill="#334155">or stuffed; a massive, fast-moving, or private corpus still needs retrieval. Pick by corpus shape, then by cost per query.</text>
+</svg>
