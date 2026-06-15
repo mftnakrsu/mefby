@@ -8,8 +8,9 @@ interface Props {
   tags?: string[];
   lang?: string;
   translationSlug?: string;
+  codeUrl?: string;
 }
-const { title, description, date, tags = [], lang = 'en', translationSlug } = Astro.props;
+const { title, description, date, tags = [], lang = 'en', translationSlug, codeUrl } = Astro.props;
 const dateFormatted = date.toISOString().slice(0, 10);
 
 const backLabel = lang === 'tr' ? 'geri' : 'back';
@@ -32,7 +33,17 @@ const articleJsonLd = {
     <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
       <div class="flex items-center justify-between mb-12">
         <a href="/" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors">&larr; {backLabel}</a>
-        {translationSlug && (
+        <div class="flex items-center gap-2">
+          {codeUrl && (
+            <a
+              href={codeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 text-[11px] font-mono px-2.5 py-1 rounded-full text-zinc-500 border border-zinc-200 hover:text-emerald-700 hover:border-emerald-300 transition-colors"
+              aria-label="View the code for this essay on GitHub"
+            >Code <span aria-hidden="true">&#8599;</span></a>
+          )}
+          {translationSlug && (
           <nav class="flex items-center gap-1" aria-label="Language">
             {langs.map((code) => (
               lang === code ? (
@@ -49,7 +60,8 @@ const articleJsonLd = {
               )
             ))}
           </nav>
-        )}
+          )}
+        </div>
       </div>
 
       <article lang={lang}>
