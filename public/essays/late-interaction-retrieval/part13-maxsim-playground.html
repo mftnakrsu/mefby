@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MaxSim playground: late interaction, token by token</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 13 flagship interactive.
+     Self-contained: no external resources, no web fonts, no CDN.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root{
+    --bg:#ffffff; --surface:#f8fafc; --surface2:#f1f5f9; --border:#e2e8f0;
+    --heading:#0f172a; --body:#334155; --muted:#64748b;
+    --indigo:#6366f1; --indigo-d:#4f46e5; --violet:#8b5cf6; --teal:#14b8a6;
+    --cyan:#06b6d4; --cyan-d:#0e7490; --emerald:#10b981; --emerald-d:#059669;
+    --amber:#f59e0b; --rose:#f43f5e;
+    --radius-card:14px; --radius-chip:8px;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--body); font-family:var(--sans);
+    font-size:15px; line-height:1.5; padding:20px;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .wrap{max-width:900px; margin:0 auto}
+
+  .head{display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 14px; margin-bottom:6px}
+  .eyebrow{font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--indigo-d)}
+  h1{font-size:21px; font-weight:700; color:var(--heading); margin:0; letter-spacing:-0.01em}
+  .sub{font-size:13.5px; color:var(--muted); margin:2px 0 14px}
+
+  /* query bar */
+  .query{display:flex; align-items:center; gap:10px; margin:0 0 14px; flex-wrap:wrap}
+  .query .lbl{font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+  .query .q{font-family:var(--mono); font-size:13.5px; font-weight:600; color:var(--heading);
+    background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:7px 13px}
+
+  /* doc toggle + controls */
+  .topbar{display:flex; flex-wrap:wrap; gap:14px 18px; align-items:center; justify-content:space-between; margin-bottom:14px}
+  .scn{display:inline-flex; flex-wrap:wrap; background:var(--surface2); border:1px solid var(--border); border-radius:11px; padding:3px; gap:2px}
+  .scn button{
+    appearance:none; border:0; background:transparent; cursor:pointer;
+    font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--muted);
+    padding:7px 12px; border-radius:8px; transition:background-color .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease);
+  }
+  .scn button[aria-pressed="true"]{background:var(--bg); color:var(--indigo-d); box-shadow:0 1px 2px rgba(15,23,42,.10)}
+  .scn button:focus-visible{outline:none; box-shadow:0 0 0 3px rgba(99,102,241,.35)}
+
+  .player{display:inline-flex; align-items:center; gap:8px}
+  .pbtn{
+    appearance:none; cursor:pointer; font-family:var(--sans); font-size:12.5px; font-weight:600;
+    color:var(--body); background:var(--bg); border:1px solid var(--border); border-radius:9px; padding:7px 12px;
+    transition:background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
+  }
+  .pbtn:hover{border-color:#cbd5e1}
+  .pbtn:focus-visible{outline:none; box-shadow:0 0 0 3px rgba(99,102,241,.35)}
+  .pbtn.primary{background:var(--indigo-d); color:#fff; border-color:var(--indigo-d)}
+  .pbtn[disabled]{opacity:.4; cursor:default}
+  .dots{display:inline-flex; gap:6px; align-items:center; margin-left:2px}
+  .dot{width:9px; height:9px; border-radius:50%; background:#cbd5e1; border:0; padding:0; cursor:pointer;
+    transition:background-color .2s var(--ease), transform .2s var(--ease)}
+  .dot[aria-current="true"]{background:var(--indigo-d); transform:scale(1.18)}
+  .dot:focus-visible{outline:none; box-shadow:0 0 0 3px rgba(99,102,241,.35)}
+
+  /* the grid */
+  .gridwrap{border:1px solid var(--border); border-radius:var(--radius-card); background:var(--surface); padding:14px 14px 10px; overflow-x:auto}
+  table.grid{border-collapse:separate; border-spacing:7px; width:100%}
+  table.grid th, table.grid td{padding:0}
+  .corner{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); text-align:left; vertical-align:bottom; padding-bottom:4px !important; white-space:nowrap}
+  .doctok{
+    font-family:var(--mono); font-size:11.5px; font-weight:700; color:var(--cyan-d); text-align:center;
+    padding-bottom:4px !important; white-space:nowrap;
+  }
+  .qtok{
+    font-family:var(--mono); font-size:13px; font-weight:700; color:var(--indigo-d); text-align:center;
+    background:#eef2ff; border:1px solid var(--indigo); border-radius:8px; min-width:108px; height:48px; white-space:nowrap;
+  }
+  .cell{
+    font-family:var(--mono); font-size:13px; font-weight:600; text-align:center; color:#94a3b8;
+    background:var(--bg); border:1px solid var(--border); border-radius:8px; height:48px; min-width:62px;
+    transition:background-color .35s var(--ease), border-color .35s var(--ease), color .35s var(--ease), box-shadow .35s var(--ease);
+  }
+  .cell.dim{opacity:.45}
+  .cell.max{background:#ecfeff; border:2px solid var(--cyan); color:var(--cyan-d); font-weight:700; box-shadow:0 2px 8px rgba(6,182,212,.20)}
+  .qtok.active{box-shadow:0 0 0 3px rgba(99,102,241,.30)}
+  .qtok.pending{opacity:.5}
+  .rowmax{
+    font-family:var(--mono); font-size:13px; font-weight:700; text-align:center; color:#cbd5e1;
+    min-width:58px; transition:color .3s var(--ease)}
+  .rowmax.on{color:var(--cyan-d)}
+  .rowmax-h{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); text-align:center; padding-bottom:4px !important}
+
+  /* score panels */
+  .scores{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px}
+  @media (max-width:640px){ .scores{grid-template-columns:1fr} }
+  .card{border:1px solid var(--border); border-radius:var(--radius-card); background:var(--bg); padding:13px 15px}
+  .card.maxsim{border-left:4px solid var(--cyan)}
+  .card.pooled{border-left:4px solid var(--violet)}
+  .card h3{margin:0 0 4px; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
+  .card .big{font-family:var(--mono); font-size:30px; font-weight:700; color:var(--heading); font-variant-numeric:tabular-nums; line-height:1.1}
+  .card.maxsim .big{color:var(--cyan-d)}
+  .card.pooled .big{color:#7c3aed}
+  .card .expl{font-size:11.5px; color:var(--muted); margin-top:5px; min-height:30px}
+  .card .accum{font-family:var(--mono); font-size:12px; color:var(--body); margin-top:4px; min-height:16px}
+
+  /* verdict */
+  .verdict{
+    margin-top:16px; font-size:13.5px; color:var(--body);
+    background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--muted);
+    border-radius:8px; padding:12px 14px; transition:border-color .3s var(--ease)}
+  .verdict.win{border-left-color:var(--cyan)}
+  .verdict.topical{border-left-color:var(--amber)}
+  .verdict b{color:var(--heading)}
+  .verdict .stamp{font-weight:700}
+  .verdict.win .stamp{color:var(--cyan-d)}
+  .verdict.topical .stamp{color:#b45309}
+
+  .hint{margin-top:13px; font-size:11.5px; color:var(--muted); text-align:center}
+  kbd{font-family:var(--mono); font-size:10.5px; background:var(--surface2); border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; padding:1px 5px; color:var(--body)}
+  .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+
+  @media (prefers-reduced-motion: reduce){
+    .cell, .qtok, .rowmax, .scn button, .pbtn, .dot, .verdict{transition:none !important}
+    .cell.max{box-shadow:none}
+    .card.maxsim .big{transition:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <span class="eyebrow">RAG from First Principles &#183; Part 13</span>
+    <h1>MaxSim, token by token</h1>
+  </header>
+  <p class="sub">Step the query through its tokens. Each one picks its best-matching doc token (the outlined cell); the score is the running sum of those best matches. Pooled cosine, for contrast, collapses both sides to one vector first.</p>
+
+  <div class="query">
+    <span class="lbl">Query</span>
+    <span class="q">E-4042 error</span>
+  </div>
+
+  <div class="topbar">
+    <div class="scn" id="scn" role="group" aria-label="Candidate document">
+      <button data-d="exact" aria-pressed="true">Doc A &#183; exact-term match</button>
+      <button data-d="topical" aria-pressed="false">Doc B &#183; topical only</button>
+    </div>
+    <div class="player">
+      <button class="pbtn" id="back" type="button" aria-label="Previous query token">&larr; Back</button>
+      <button class="pbtn primary" id="play" type="button">Play</button>
+      <button class="pbtn" id="next" type="button" aria-label="Next query token">Next &rarr;</button>
+      <button class="pbtn" id="restart" type="button">Restart</button>
+      <span class="dots" id="dots" role="group" aria-label="Query token step"></span>
+    </div>
+  </div>
+
+  <div class="gridwrap">
+    <table class="grid" id="grid" aria-hidden="true"></table>
+  </div>
+
+  <div class="scores">
+    <div class="card maxsim">
+      <h3>MaxSim score (late interaction)</h3>
+      <div class="big" id="maxsimVal">0.00</div>
+      <div class="accum" id="maxsimAccum"></div>
+      <div class="expl">Sum of each query token's single best doc-token match. Keeps the exact-term signal alive.</div>
+    </div>
+    <div class="card pooled">
+      <h3>Pooled cosine (single vector)</h3>
+      <div class="big" id="pooledVal">0.00</div>
+      <div class="accum" id="pooledAccum">cos( mean(query), mean(doc) )</div>
+      <div class="expl">The cosine between the two mean-pooled (averaged) vectors, one per side. Averaging dilutes the rare code, so a short generic doc can pool higher.</div>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+
+  <p class="hint">Toggle the candidate doc above, press <kbd>Play</kbd>, or step with <kbd>&larr;</kbd> <kbd>&rarr;</kbd>. Press <kbd>Space</kbd> to play or pause.</p>
+  <p class="sr" aria-live="polite" id="srlive"></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // -------------------------------------------------------------------
+  // The scenario. Query tokens (rows) x doc tokens (cols). Each cell is a
+  // cosine similarity in 0..1. The query "E-4042 error" tokenizes to e, 4042,
+  // error (the tokenizer splits the code into e + 4042, matching the .py).
+  // Doc A is a long passage that buries the exact code 4042; Doc B is a short
+  // generic "error" sentence that shares the topical word but not the code.
+  // The lesson is a RANK INVERSION: pooled cosine (mean . mean) ranks the
+  // generic Doc B ABOVE the exact-term Doc A, while MaxSim flips it back.
+  // -------------------------------------------------------------------
+  var QTOK = ["e", "4042", "error"];
+
+  var DOCS = {
+    exact: {
+      label: "Doc A · exact-term match",
+      cols: ["billing", "log", "e", "4042", "batch", "report"],
+      // sims[qIndex][colIndex]
+      sims: [
+        [0.21, 0.18, 0.99, 0.30, 0.16, 0.19],   // e     -> exact token match on "e"
+        [0.17, 0.14, 0.28, 0.99, 0.12, 0.15],   // 4042  -> the exact-term row: the buried code
+        [0.33, 0.29, 0.31, 0.27, 0.24, 0.41]    // error (no literal "error" token; best is weak)
+      ],
+      // cosine between the two mean-pooled (averaged) vectors: the rare 4042
+      // is diluted across a long passage, so the pooled vector reads low.
+      pooled: 0.55
+    },
+    topical: {
+      label: "Doc B · topical only",
+      cols: ["a", "general", "error", "loading", "the", "page"],
+      sims: [
+        [0.34, 0.31, 0.30, 0.27, 0.36, 0.29],   // e     (no "e" token; all weak)
+        [0.22, 0.25, 0.33, 0.29, 0.24, 0.21],   // 4042  (no code anywhere -> all weak)
+        [0.30, 0.41, 0.97, 0.38, 0.28, 0.35]    // error -> exact match on the shared topical word
+      ],
+      // cosine between the two mean-pooled (averaged) vectors: this is SHORT,
+      // so the shared word "error" dominates and pools HIGHER than Doc A.
+      pooled: 0.62
+    }
+  };
+
+  var current = "exact";   // which doc
+  var step = 0;            // 0 = nothing revealed; 1..N = query tokens revealed
+  var playing = false;
+  var timer = null;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var gridEl    = document.getElementById("grid");
+  var dotsEl    = document.getElementById("dots");
+  var msVal     = document.getElementById("maxsimVal");
+  var msAccum   = document.getElementById("maxsimAccum");
+  var poolVal   = document.getElementById("pooledVal");
+  var verdEl    = document.getElementById("verdict");
+  var srEl      = document.getElementById("srlive");
+  var playBtn   = document.getElementById("play");
+  var backBtn   = document.getElementById("back");
+  var nextBtn   = document.getElementById("next");
+  var restartBtn= document.getElementById("restart");
+
+  function doc(){ return DOCS[current]; }
+  function maxIndex(arr){
+    var mi = 0; for(var i=1;i<arr.length;i++){ if(arr[i] > arr[mi]) mi = i; } return mi;
+  }
+  function rowMax(qi){ var r = doc().sims[qi]; return r[maxIndex(r)]; }
+
+  // ---- build the grid table for the current doc ----
+  function buildGrid(){
+    var d = doc();
+    var html = "";
+    // header row: corner + doc token labels
+    html += "<tr><th class='corner'>query &#8595; / doc &#8594;</th>";
+    d.cols.forEach(function(c){ html += "<th class='doctok'>"+c+"</th>"; });
+    html += "<th class='rowmax-h'>max</th></tr>";
+    // one row per query token
+    QTOK.forEach(function(q, qi){
+      html += "<tr>";
+      html += "<td class='qtok' id='qt"+qi+"'>"+q+"</td>";
+      d.cols.forEach(function(c, ci){
+        html += "<td class='cell' id='c"+qi+"_"+ci+"'>"+d.sims[qi][ci].toFixed(2)+"</td>";
+      });
+      html += "<td class='rowmax' id='rm"+qi+"'>&#8212;</td>";
+      html += "</tr>";
+    });
+    gridEl.innerHTML = html;
+  }
+
+  // ---- build the step dots ----
+  function buildDots(){
+    dotsEl.innerHTML = "";
+    for(var i=0;i<=QTOK.length;i++){
+      var b = document.createElement("button");
+      b.className = "dot";
+      b.type = "button";
+      b.dataset.step = i;
+      b.setAttribute("aria-label", i === 0 ? "Start" : "Through query token " + i);
+      (function(idx){ b.addEventListener("click", function(){ stop(); step = idx; render(); }); })(i);
+      dotsEl.appendChild(b);
+    }
+  }
+
+  function render(){
+    var d = doc();
+    var running = 0;
+    var parts = [];
+
+    QTOK.forEach(function(q, qi){
+      var revealed = qi < step;
+      var mi = maxIndex(d.sims[qi]);
+      var qEl = document.getElementById("qt"+qi);
+      qEl.classList.toggle("active", qi === step - 1);
+      qEl.classList.toggle("pending", !revealed && qi !== step - 1);
+
+      d.cols.forEach(function(c, ci){
+        var cell = document.getElementById("c"+qi+"_"+ci);
+        cell.classList.remove("max","dim");
+        if(revealed){
+          if(ci === mi) cell.classList.add("max");
+          else cell.classList.add("dim");
+        }
+      });
+
+      var rm = document.getElementById("rm"+qi);
+      if(revealed){
+        var mx = d.sims[qi][mi];
+        rm.textContent = mx.toFixed(2);
+        rm.classList.add("on");
+        running += mx;
+        parts.push(mx.toFixed(2));
+      } else {
+        rm.innerHTML = "&#8212;";
+        rm.classList.remove("on");
+      }
+    });
+
+    // MaxSim readout
+    msVal.textContent = running.toFixed(2);
+    msAccum.textContent = parts.length ? parts.join(" + ") + " =" : "step through to accumulate";
+
+    // Pooled cosine: a single fixed number, shown in full once we start (it does
+    // not depend on which query token we are on; one vector, one dot product).
+    if(step === 0){ poolVal.textContent = "0.00"; }
+    else { poolVal.textContent = d.pooled.toFixed(2); }
+
+    // dots
+    Array.prototype.forEach.call(dotsEl.children, function(b, i){
+      b.setAttribute("aria-current", i === step ? "true" : "false");
+    });
+
+    // buttons
+    backBtn.disabled = step === 0;
+    nextBtn.disabled = step === QTOK.length;
+
+    // verdict (only meaningful once fully stepped)
+    updateVerdict(running);
+  }
+
+  function updateVerdict(running){
+    if(step < QTOK.length){
+      verdEl.className = "verdict";
+      verdEl.innerHTML = "<span class='stamp'>Stepping.</span> Each query token lights up its single strongest doc match; the MaxSim score is their running sum.";
+      announce();
+      return;
+    }
+    var d = doc();
+    var exactPooled = DOCS.exact.pooled, topicalPooled = DOCS.topical.pooled;
+    if(current === "exact"){
+      verdEl.className = "verdict win";
+      verdEl.innerHTML = "<span class='stamp'>The rankings invert.</span> The query token <b>4042</b> finds an exact match (0.99) in Doc A, so MaxSim lands at <b>"+running.toFixed(2)+"</b>, the top score. But pooled cosine averages that buried code away and reads only <b>"+d.pooled.toFixed(2)+"</b>, BELOW the generic Doc B's <b>"+topicalPooled.toFixed(2)+"</b>. Pooled cosine ranks the generic doc above the exact-term doc; MaxSim flips it back so the exact-term doc wins.";
+    } else {
+      verdEl.className = "verdict topical";
+      verdEl.innerHTML = "<span class='stamp'>The rankings invert.</span> Doc B is on-topic but never contains the code, so the <b>4042</b> query token tops out at "+rowMax(1).toFixed(2)+" and MaxSim only reaches <b>"+running.toFixed(2)+"</b>, below Doc A. Yet pooled cosine reads <b>"+d.pooled.toFixed(2)+"</b>, ABOVE the exact-term Doc A's <b>"+exactPooled.toFixed(2)+"</b>: pooling lets this short generic doc outrank the doc that literally contains the code. MaxSim flips it back.";
+    }
+    announce();
+  }
+
+  function announce(){
+    var d = doc();
+    var running = 0;
+    for(var i=0;i<step;i++){ running += rowMax(i); }
+    var msg;
+    if(step === 0){
+      msg = d.label + " selected. Press Play or Next to step through the query tokens.";
+    } else if(step < QTOK.length){
+      var qi = step - 1;
+      var mi = maxIndex(d.sims[qi]);
+      msg = "Query token " + QTOK[qi] + " best matches doc token " + d.cols[mi] +
+            " at " + d.sims[qi][mi].toFixed(2) + ". Running MaxSim " + running.toFixed(2) + ".";
+    } else {
+      msg = "All query tokens stepped. MaxSim " + running.toFixed(2) +
+            " for " + d.label + ". Pooled cosine " + d.pooled.toFixed(2) + ".";
+    }
+    srEl.textContent = msg;
+  }
+
+  // ---- player ----
+  function tick(){
+    if(step >= QTOK.length){ stop(); return; }
+    step += 1;
+    render();
+    if(step >= QTOK.length){ stop(); }
+  }
+  function play(){
+    if(step >= QTOK.length){ step = 0; render(); }
+    playing = true;
+    playBtn.textContent = "Pause";
+    if(reduce){ // no animation budget: jump to the end
+      step = QTOK.length; render(); stop(); return;
+    }
+    timer = setInterval(tick, 1100);
+  }
+  function stop(){
+    playing = false;
+    playBtn.textContent = "Play";
+    if(timer){ clearInterval(timer); timer = null; }
+  }
+  function togglePlay(){ playing ? stop() : play(); }
+
+  function setDoc(which){
+    current = which;
+    Array.prototype.forEach.call(document.querySelectorAll("#scn button"), function(b){
+      b.setAttribute("aria-pressed", b.dataset.d === which ? "true" : "false");
+    });
+    stop();
+    buildGrid();
+    // keep the current step so a toggle is a direct A/B comparison
+    if(step > QTOK.length) step = QTOK.length;
+    render();
+  }
+
+  // ---- wiring ----
+  document.querySelectorAll("#scn button").forEach(function(b){
+    b.addEventListener("click", function(){ setDoc(b.dataset.d); });
+  });
+  playBtn.addEventListener("click", togglePlay);
+  nextBtn.addEventListener("click", function(){ stop(); if(step < QTOK.length){ step += 1; render(); } });
+  backBtn.addEventListener("click", function(){ stop(); if(step > 0){ step -= 1; render(); } });
+  restartBtn.addEventListener("click", function(){ stop(); step = 0; render(); });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key === "ArrowRight"){ e.preventDefault(); stop(); if(step < QTOK.length){ step += 1; render(); } }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); stop(); if(step > 0){ step -= 1; render(); } }
+    else if(e.key === " " || e.key === "Spacebar"){ e.preventDefault(); togglePlay(); }
+  });
+
+  buildGrid();
+  buildDots();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+---
+title: "Adaptive RAG"
+description: "Not every query needs the same machinery: a greeting needs no retrieval, a fact needs one lookup, a comparison needs several. Part 15 of a from-scratch series on Retrieval-Augmented Generation and the close of the Frontier Track: a small complexity classifier that routes each query to no-retrieval, single-step, or multi-step retrieval, unifying the pipelines built across Parts 6 to 10 into one adaptive system."
+date: 2026-06-21
+tags: ["RAG", "Adaptive RAG", "Routing", "Query Complexity", "Retrieval", "LLM", "AI"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-15-adaptive-rag"
+ogImage: "/og/rag-by-hand.png"
+seriesOrder: 15
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*RAG from First Principles. Part 15 of the series, and the close of the Frontier Track.*
+
+## What you'll learn
+
+For fourteen parts we have built retrieval pipelines and then run them the same way for every question that walks in the door. This part fixes the last thing left unexamined: the assumption that one pipeline should serve every query. We will build a tiny **complexity classifier**, a function that looks at an incoming query and decides how much machinery it actually warrants, and then a **router** that sends each query down one of three paths: no retrieval at all, a single retrieve-then-generate, or a multi-step decompose-retrieve-synthesize. This is Adaptive RAG, and the satisfying part is that we are not inventing a new pipeline. We are putting a conductor in front of the pipelines we already built in Parts 6 through 10 and letting it choose. Along the way I will be careful to separate this idea from two things it superficially resembles: query transformation from Part 8 and source routing from Part 10. They are not the same move, and conflating them is the most common way people get Adaptive RAG wrong.
+
+## Prerequisites
+
+This part leans on the whole back half of the series, so it is the one place where I genuinely assume you have the earlier pieces in your head. You need [Build Your First RAG](/essays/build-your-first-rag) (Part 6), because the single-step route is exactly that retrieve-augment-generate loop. You need [Making Retrieval Smarter](/essays/making-retrieval-smarter) (Part 8) for query decomposition, which the multi-step route reuses, and so we can draw the contrast with query transformation cleanly. And you need [Advanced RAG Architectures](/essays/advanced-rag-architectures) (Part 10), because the multi-step route is the decompose-and-synthesize shape from there, and because Part 10's idea of routing by knowledge source is the thing we must take care not to confuse with routing by difficulty. No new math in this part. It is architecture and judgment, with a small amount of deterministic Python you could read in one sitting.
+
+## One pipeline does not fit every query
+
+Here is the situation we have quietly been in since Part 6. We built a pipeline, we tuned its retriever, we added reranking and decomposition and grounding, and then we pointed it at every query identically. A user types "hi there" and the system dutifully embeds it, searches the vector store, pulls back the three nearest policy chunks, stuffs them into a prompt, and asks a language model to answer. The model, to its credit, ignores the irrelevant chunks and says hello. But we paid for an embedding, a vector search, and a bloated prompt to produce a greeting that needed none of it.
+
+Now flip it around. A user asks "compare the refund window and the warranty period, and explain the difference." A single retrieval grabs the chunks nearest to that whole sentence, which might be the refund chunk, or the warranty chunk, or an unlucky mix, but rarely both cleanly, and the model is asked to compare two things when it reliably has evidence for only one. The easy query was over-served. The hard query was under-served. The same fixed pipeline did both, because a fixed pipeline has no way to tell them apart.
+
+The fix is to look at the query first and decide how much work it deserves. That decision, made before retrieval, is the entire idea of **Adaptive RAG**: a system that classifies each incoming query by complexity and routes it to the pipeline that fits, instead of running one pipeline for all of them. The name comes from the Adaptive-RAG paper (Jeong et al., NAACL 2024, arXiv 2403.14403), which framed it precisely as choosing a retrieval strategy per query rather than committing to one.
+
+<Diagram number={1} caption="One classifier, three routes. A small complexity classifier reads cheap signals from the query (its length, comparative words, conjunction-of-tasks phrases like 'and then' or 'both', the number of question marks) and sends it down the cheapest path that can still answer it: no retrieval for small talk and known facts, a single retrieve-then-generate for a plain lookup (the Part 6 loop), or a multi-step decompose-retrieve-synthesize for a comparison (the Part 10 shape). Adaptive RAG is the conductor over the pipelines we already built, not a new pipeline.">
+  <img src="/essays/adaptive-rag/part15-routing-map.svg" alt="A flow diagram. At the top, a box labelled Query (any user request) feeds a diamond labelled Classify complexity, which lists the signals it reads: length, comparative words, conjunction-of-tasks phrases like and then or both, and the number of question marks. The diamond branches into three labelled routes. Route A, none, no retrieval: a single Generate node, captioned greetings and facts the model knows, the cheapest path with zero retrieval. Route B, single, single-step Part 6: Retrieve then Generate, captioned one lookup answers it, with the example what's our refund window. Route C, multi, multi-step Part 10: Decompose, then Retrieve times n, then Synthesize, one pass per sub-question, with a comparison query as the example. A footer reads: Adaptive RAG is the conductor, not a new pipeline; it routes among the pipelines built in Parts 6 to 10 by query complexity, and contrasts with Part 8 (rewrite the query) and Part 10 (route by source)." class="w-full rounded-lg" />
+</Diagram>
+
+## Three routes
+
+Before we classify anything, let us name the three destinations, because the classifier only makes sense once you know what it is choosing between. All three are pipelines you have already seen.
+
+The first route is **no retrieval**. Some queries do not need the index at all. "Hi there" and "thanks" are pure conversational glue. A question whose answer the model already holds from its own pretraining, like a definition of a common word, does not need your documents either. For these the right move is to skip retrieval entirely and answer directly. This is the cheapest possible path: one model call, or in our offline build a templated reply, and zero embedding or search. Crucially, this route does not use the Part 6 lookup at all. The whole point is that we recognized we did not need it.
+
+The second route is **single-step**, and it is the Part 6 pipeline unchanged: embed the query, retrieve the top chunk or two, build a grounded prompt, generate. This is the workhorse. Most factual questions against a knowledge base are single-step queries. "What is our refund window?" needs exactly one lookup against exactly one relevant chunk, and then an answer grounded in it. If your traffic is mostly questions like this, single-step is where most of it should land, and that is fine.
+
+The third route is **multi-step**, and it is the decompose-retrieve-synthesize shape from Part 10. A query that asks you to compare two things, or that bundles several questions into one sentence, cannot be answered by a single retrieval, because no single chunk holds both halves of a comparison. So we **decompose** it: split the one hard query into a few simpler sub-queries, retrieve for each independently, and then synthesize the gathered evidence into one answer. "Compare the refund window and the warranty period" becomes two retrievals, one that finds the refund chunk and one that finds the warranty chunk, and only then do we answer. The multi-step route costs the most (several retrievals, more tokens), which is exactly why we do not want to run it on "hi there."
+
+That is the whole menu: none, single, multi. Cheapest to costliest, matched to easiest to hardest. The classifier's only job is to put each query on the right shelf.
+
+## The complexity classifier
+
+The classifier is smaller than you might expect, and deliberately so. In the companion code I wrote it as a handful of deterministic rules over the lowercased query. This is the function verbatim from the runnable artifact, and it is the only part of the routing logic that is not free to vary, because the routing decisions in this part come straight out of it:
+
+```python
+def classify_complexity(query: str) -> str:
+    q = query.lower().strip()
+    if re.search(r"\b(hi|hello|thanks|who are you)\b", q) or len(q.split()) <= 2:
+        return "none"
+    multi_signals = ("compare", "versus", " vs ", "difference between",
+                     " and then", "across", "each of", "both", "trade-off")
+    if any(s in q for s in multi_signals) or q.count("?") > 1:
+        return "multi"
+    return "single"
+```
+
+Read it as three questions asked in order. First: is this small talk or trivially short? A greeting keyword, or two words or fewer, routes to **none**. Second: does it carry a signal of comparison or multiplicity? Words like "compare", "versus", "difference between", "across", "both", or more than one question mark in a single message all suggest the query is really several questions wearing one coat, so it routes to **multi**. Everything that survives both checks is a plain factual lookup and routes to **single**.
+
+These signals are crude on purpose. Length, comparative words, a handful of conjunction-of-tasks phrases like "and then", "both", or "each of", and question-mark count are the cheap, legible features that a rule can read in microseconds, and they get you a long way. Note the precise boundary: the classifier keys on those specific phrases, not on a bare "and"; a lone "and" only joins clauses and does not by itself trigger the multi route (it is used later, inside decomposition, to split a query that already routed multi). In a production system you would replace this rule block with a small trained classifier, a lightweight model that has seen many labelled queries and learned the boundary far more robustly than a keyword list ever could. The companion code keeps the trained-classifier path behind the standard offline guard and falls back to these rules when no model is available, so the lesson runs anywhere. The mechanism is identical either way: a fast, cheap function from query text to a route label. What changes between the toy and production is only how accurately that function draws the lines.
+
+It helps to see the classifier and the three routes as one connected machine, where picking a query lights up the path it takes. The widget below lets you do exactly that.
+
+<Diagram number={2} caption="The complexity router, end to end. Pick one of the example queries (two per class) and watch the classifier read its signals, settle on a route (none, single, or multi), and light up the matching path: a direct reply, a single Part 6 lookup, or a multi-step decompose-retrieve-synthesize. The greetings touch the index zero times; the comparison fans out into two sub-queries that each retrieve their own chunk before the answer is synthesized.">
+  <IframeFigure
+    src="/essays/adaptive-rag/part15-complexity-router.html"
+    title="Interactive complexity router. Select one of several preset support queries, two of each complexity class. The widget shows the classifier reading the query's signals and assigning it a route: none for greetings like hi there and thanks, which answer directly with no retrieval; single for a plain lookup like what is our refund window, which runs one retrieve-then-generate against the refund chunk; and multi for a comparison like compare the refund window and the warranty period, which decomposes into two sub-queries, retrieves the refund chunk and the warranty chunk separately, and synthesizes one answer. The chosen path lights up end to end while the others stay dim."
+    height={760}
+  />
+</Diagram>
+
+## Routing among the pipelines we already built
+
+This is the payoff of the whole series, so it is worth stating plainly. Adaptive RAG does not introduce a new retrieval technique. It is the conductor standing in front of the pipelines you spent Parts 6 through 10 building, and its instrument is the classifier. The **none** route is the recognition that the Part 6 lookup is sometimes unnecessary. The **single** route *is* the Part 6 lookup. The **multi** route is the Part 10 decompose-and-synthesize shape. Adaptive RAG is the layer that decides which of those to invoke. Once you see it that way, every earlier part clicks into place as a tool the conductor can reach for.
+
+In the companion code, the `route` function is exactly that dispatcher. It calls `classify_complexity`, then branches: a `none` query gets a direct templated reply with no retrieval, a `single` query goes through retrieve-then-generate, and a `multi` query is decomposed into sub-queries that are each retrieved and then synthesized. The six demo queries in the artifact split two to a class, and they make the behavior concrete. "Hi there" and "thanks" route to **none** and never touch the index. "What is our refund window?" and "How do I fix the E-4042 error?" route to **single** and each retrieve their one relevant chunk, the refund-policy chunk and the E-4042 error-code chunk respectively, reusing the same support knowledge base from the earlier parts. "Compare the refund window and the warranty period, and explain the difference" and "What is the difference between the refund window and the warranty period?" route to **multi**, decompose into a refund sub-query and a warranty sub-query, retrieve each chunk separately, and synthesize. The routing decisions are deterministic and identical whether you run the real-model path or the offline fallback. Only the underlying similarity scores shift between paths; which chunk each sub-query lands on, and which route each query takes, do not.
+
+Now the contrasts, because this is where Adaptive RAG gets confused with its neighbors.
+
+### It is not Part 8 (transforming the query)
+
+Part 8 taught query transformation: rewriting a query so that it retrieves better. Expanding "the E-4042 thing" into "E-4042 payment-declined error", or splitting a multi-part question into sub-questions to feed the same retriever. Query transformation changes *what you search with*. Adaptive RAG changes *whether and how much you search at all*. A transform always assumes you are going to retrieve and tries to make that retrieval land better. The router asks the prior question: should we retrieve once, several times, or not at all? They compose neatly. The multi-step route, in fact, uses Part 8's decomposition as its internal mechanism. But the routing decision sits one level above the transform, and that level is the new idea.
+
+### It is not Part 10 (routing by source)
+
+Part 10's query routing decides *which index* a query goes to: send an HR question to the HR store, a code question to the code store, a news question to web search. That is routing by **knowledge source**, by where the answer lives. Adaptive RAG routes by **complexity**, by how hard the query is to answer regardless of where the answer lives. A simple HR question and a simple code question are both single-step queries even though they hit different stores; a multi-hop comparison is a multi-step query whether its evidence sits in one store or three. Source routing and complexity routing are orthogonal, and a mature system does both: first decide how much machinery the query needs, then, within the retrieving routes, decide which sources to hit. Confusing the two leads people to build a source router and call it adaptive, when it has not actually changed how much retrieval any given query triggers.
+
+## What it buys, and the honest caveats
+
+The benefit of routing is structural and easy to see in the figure: you stop paying for machinery an easy query never needed, and you keep the heavy machinery available for the hard query that does need it.
+
+<Diagram number={3} caption="What routing buys you. Left: effort spent per query. Always running the heaviest pipeline (the fixed bars) wastes effort on easy and medium queries; the adaptive bars spend only what each query needs, saving the no-retrieval and single-step work while still applying full effort to the hard comparison. Right: answer quality stays high for the adaptive system, tracking the fixed pipeline, because the hard queries still get the full treatment. A misroute is the failure mode: a hard query sent down the single-step path under-retrieves and quality drops.">
+  <img src="/essays/adaptive-rag/part15-cost-vs-complexity.svg" alt="Two panels. Left panel, effort spent per query (cost plus latency, lower is better), compares an always-multi-step fixed pipeline against an adaptive routed one across three query types. For an easy greeting and a medium single-lookup query, the fixed pipeline spends a tall bar of effort while the adaptive bar is short, with the difference annotated as saved (no retrieval, and one step instead of n). For a hard comparison both spend full effort, kept. Right panel, answer quality (higher is better) as query complexity increases: both the fixed and adaptive lines stay high and track each other, with a note that the classifier is itself a failure surface and a misroute sending a hard query to the single-step path under-retrieves and drops quality. A footer flags vendor reports of roughly 35 percent lower latency and 28 percent lower cost as indicative, not measured guarantees, and says the real win is structural." class="w-full rounded-lg" />
+</Diagram>
+
+You will see numbers attached to this benefit, and I want to be careful with them. Some 2026 vendor write-ups of production routing deployments report on the order of 35 percent lower latency and 28 percent lower cost from adding a complexity router, sometimes alongside a small accuracy bump. Treat those figures as **indicative, not measured guarantees**. They are not from the Adaptive-RAG paper, which reports effectiveness and a step-count style of efficiency rather than a headline latency percentage, and they are not something I measured for you here. Your own numbers depend entirely on your traffic mix: route mostly greetings and trivia and you will save a great deal, route mostly genuinely hard comparisons and the classifier mostly just adds a step. The honest framing is that the win is structural rather than a fixed percentage. You stop spending on machinery an easy query never needed, and how much that saves you is something only your own traffic can tell you.
+
+The caveat that matters most is that the classifier is itself a new failure surface. A fixed pipeline at least fails predictably: it always over- or under-serves in the same way. A router can misroute. The dangerous direction is under-classification: a genuinely hard, multi-part query that the classifier reads as **single** gets one retrieval where it needed several, under-retrieves, and answers a comparison from half the evidence. That failure is quiet, because the system confidently returns a fluent answer that happens to be missing a side. The opposite mistake, sending an easy query to the multi-step path, only wastes effort and is far more forgiving. So when you tune a router, tune it knowing the asymmetry: an over-served easy query costs you money, but an under-served hard query costs you a wrong answer. Add the router only once you can measure that tradeoff, which is exactly the discipline Part 11 was about.
+
+> 💡 **From experience.** The first time I shipped a router like this, I made the classic mistake: I tuned it to be aggressive about the cheap routes, because the cost dashboard was the thing my manager was looking at, and sending more traffic to no-retrieval and single-step made that number drop beautifully. It looked like a win for two weeks. Then a support lead forwarded me a transcript where a customer had asked something like "what is the difference between your refund window and your warranty, and which one covers water damage?" and the bot had answered only about the refund window, fluently and confidently, never mentioning the warranty at all. My aggressive thresholds had read that as a single-step query and given it one lookup. The chunk it retrieved was real and correct, so nothing looked broken in the logs, and the answer was grounded in a true document. It was just answering half the question. The fix was not a smarter model. It was moving the threshold so that any query carrying a comparison signal or a second question mark fell to the multi route, and accepting that I would now sometimes run the expensive path on a query that did not strictly need it. I traded a little cost back for a lot fewer silently-half-answered questions, and that was the right trade every time. The lesson stuck: a misroute toward "cheaper" is invisible in your cost graph and very visible to the one user it failed.
+
+{/* author: swap the above for your own real first-person routing story if you have a better one, e.g. a time an over-eager complexity classifier under-retrieved a multi-part question and answered half of it; keep the asymmetry lesson (under-serving a hard query is a wrong answer, over-serving an easy one is just wasted cost) and keep it em-dash-free. */}
+
+## Key takeaways
+
+- **Adaptive RAG** classifies each query by **complexity** and routes it to the pipeline that fits, instead of running one fixed pipeline for everything. It is the answer to the problem that a single pipeline over-serves easy queries and under-serves hard ones.
+- There are **three routes**: **none** (small talk or a fact the model already knows; skip the index entirely), **single** (the Part 6 retrieve-then-generate), and **multi** (the Part 10 decompose-retrieve-synthesize for comparisons and multi-part questions).
+- The **complexity classifier** is a small, fast function from query text to a route label, built here from deterministic rules over cheap signals (length, comparative words, a few conjunction-of-tasks phrases like "and then" or "both", question-mark count) and replaced in production by a small trained classifier. The mechanism is the same; only the accuracy of the boundary changes.
+- Adaptive RAG is the **conductor over Parts 6 to 10**, not a new retrieval technique. Do not confuse it with Part 8 (which transforms *what you search with*) or Part 10's source routing (which picks *which index* to search). Complexity routing asks the prior question: whether and how much to retrieve at all.
+- The benefit is **structural**: stop paying for machinery an easy query never needed, keep the heavy machinery for the hard query that does. Vendor figures like roughly 35 percent lower latency and 28 percent lower cost are **indicative, not measured**; your real savings depend on your traffic mix.
+- The classifier is a **new failure surface**, and the dangerous direction is **under-classification**: a hard query routed to single-step under-retrieves and silently answers half the question. Tune for that asymmetry, and add the router only once you can measure the tradeoff.
+
+## Glossary
+
+- **Adaptive RAG**: a RAG system that classifies each incoming query by complexity and routes it to the retrieval strategy that fits, rather than running one fixed pipeline for every query.
+- **Complexity classifier**: a small, fast function that maps a query to a route label (none, single, or multi) from cheap signals such as length, comparative words, specific conjunction-of-tasks phrases like "and then" / "both" / "each of", and question-mark count (a bare "and" does not trigger multi on its own); a rule block here, a small trained model in production.
+- **Router**: the dispatcher that calls the complexity classifier and then invokes the matching pipeline (a direct answer, a single retrieve-then-generate, or a multi-step decompose-retrieve-synthesize).
+- **No-retrieval route**: the path for small talk or a fact the model already knows, answered directly without touching the index; the cheapest route.
+- **Single-step route**: the Part 6 retrieve-augment-generate loop, used for plain factual lookups that one retrieval can answer.
+- **Multi-step route**: the Part 10 decompose-retrieve-synthesize shape, used for comparisons and multi-part questions that no single retrieval can answer.
+- **Complexity routing**: routing a query by how hard it is to answer (how much retrieval it needs), as distinct from source routing, which picks which index or store the query should be sent to.
+- **Misroute**: a classifier error that sends a query down the wrong path; under-classification (a hard query sent to single-step) is the costly direction because it under-retrieves and answers part of the question while looking correct.
+
+---
+
+That closes the Frontier Track. Across these three optional parts we extended the core series with token-level matching, contextualized chunking, and now per-query routing, all built by hand and all sitting on top of what you already knew. There is no Part 16 to tease. The series finale is still Part 12, [RAG in Production](/essays/rag-in-production), and its capstone is still where the whole picture comes together. So this is a light send-off rather than a second farewell: you now have the conductor as well as the instruments. Go point it at a real corpus, measure it the way Part 11 taught, and build something.

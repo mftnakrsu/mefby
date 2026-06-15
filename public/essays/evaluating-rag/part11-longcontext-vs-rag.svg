@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="lc-axis" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M1,1 L9,5 L1,9 Z" fill="#94a3b8" />
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="560" fill="#ffffff" />
+
+  <!-- Title -->
+  <text x="40" y="40" font-size="20" font-weight="700" fill="#0f172a">Long-context models vs RAG, as the corpus grows</text>
+  <text x="40" y="63" font-size="13" fill="#64748b">RAG stays cheap and steady. Stuffing everything in context gets expensive and loses the needle in the middle. Self-Route picks the winner per query.</text>
+
+  <!-- Legend (top-right) -->
+  <g font-size="11.5" fill="#64748b">
+    <line x1="690" y1="36" x2="724" y2="36" stroke="#14b8a6" stroke-width="3" stroke-linecap="round" /><text x="732" y="40">RAG (top-k retrieval)</text>
+    <line x1="850" y1="36" x2="884" y2="36" stroke="#6366f1" stroke-width="3" stroke-linecap="round" /><text x="892" y="40">long-context</text>
+  </g>
+
+  <!-- =========================================================== -->
+  <!-- PANEL 1: ACCURACY                                           -->
+  <!-- plot box x:70..330  y:130..430  (origin bottom-left 70,430) -->
+  <!-- =========================================================== -->
+  <text x="70" y="108" font-size="13" font-weight="700" fill="#0f172a">Accuracy</text>
+  <text x="70" y="125" font-size="10.5" fill="#94a3b8">higher is better</text>
+
+  <!-- grid -->
+  <line x1="70" y1="180" x2="330" y2="180" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="70" y1="230" x2="330" y2="230" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="70" y1="280" x2="330" y2="280" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="70" y1="330" x2="330" y2="330" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="70" y1="380" x2="330" y2="380" stroke="#f1f5f9" stroke-width="1" />
+
+  <!-- axes -->
+  <line x1="70" y1="130" x2="70" y2="430" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#lc-axis)" />
+  <line x1="70" y1="430" x2="340" y2="430" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#lc-axis)" />
+  <text x="62" y="146" font-size="10" fill="#94a3b8" text-anchor="end">high</text>
+  <text x="62" y="426" font-size="10" fill="#94a3b8" text-anchor="end">low</text>
+
+  <!-- RAG accuracy: flat-ish, stays steady -->
+  <path d="M90,200 C150,196 210,198 270,202 320,206 320,206 320,206" fill="none" stroke="#14b8a6" stroke-width="2.8" stroke-linecap="round" />
+  <!-- long-context accuracy: starts equal, then dips (lost in the middle) -->
+  <path d="M90,198 C150,192 190,196 220,228 250,282 290,320 320,316" fill="none" stroke="#6366f1" stroke-width="2.8" stroke-linecap="round" />
+
+  <!-- lost-in-the-middle annotation -->
+  <circle cx="270" cy="300" r="4" fill="#f43f5e" />
+  <rect x="190" y="338" width="150" height="34" rx="8" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.3" />
+  <text x="265" y="354" font-size="10" font-weight="700" fill="#be123c" text-anchor="middle">lost in the middle</text>
+  <text x="265" y="367" font-size="9.5" fill="#9f1239" text-anchor="middle">real models only; toy stays flat</text>
+
+  <text x="100" y="186" font-size="10.5" font-weight="700" fill="#0f766e">RAG holds</text>
+
+  <!-- =========================================================== -->
+  <!-- PANEL 2: COST                                               -->
+  <!-- plot box x:400..660  y:130..430                             -->
+  <!-- =========================================================== -->
+  <text x="400" y="108" font-size="13" font-weight="700" fill="#0f172a">Cost / tokens</text>
+  <text x="400" y="125" font-size="10.5" fill="#94a3b8">lower is better</text>
+
+  <line x1="400" y1="180" x2="660" y2="180" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="400" y1="230" x2="660" y2="230" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="400" y1="280" x2="660" y2="280" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="400" y1="330" x2="660" y2="330" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="400" y1="380" x2="660" y2="380" stroke="#f1f5f9" stroke-width="1" />
+
+  <line x1="400" y1="130" x2="400" y2="430" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#lc-axis)" />
+  <line x1="400" y1="430" x2="670" y2="430" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#lc-axis)" />
+  <text x="392" y="146" font-size="10" fill="#94a3b8" text-anchor="end">high</text>
+  <text x="392" y="426" font-size="10" fill="#94a3b8" text-anchor="end">low</text>
+
+  <!-- long-context cost: rises steeply (whole corpus in every prompt) -->
+  <path d="M420,410 C470,404 510,380 550,320 590,255 620,180 650,150" fill="none" stroke="#6366f1" stroke-width="2.8" stroke-linecap="round" />
+  <!-- RAG cost: flat-ish (only top-k retrieved chunks) -->
+  <path d="M420,406 C490,403 560,400 620,398 650,397 650,397 650,397" fill="none" stroke="#14b8a6" stroke-width="2.8" stroke-linecap="round" />
+
+  <text x="588" y="172" font-size="10.5" font-weight="700" fill="#4f46e5" text-anchor="end">long-context climbs</text>
+  <text x="560" y="392" font-size="10.5" font-weight="700" fill="#0f766e" text-anchor="end">RAG stays flat</text>
+
+  <!-- =========================================================== -->
+  <!-- PANEL 3: LATENCY                                            -->
+  <!-- plot box x:730..960  y:130..430                             -->
+  <!-- =========================================================== -->
+  <text x="730" y="108" font-size="13" font-weight="700" fill="#0f172a">Latency</text>
+  <text x="730" y="125" font-size="10.5" fill="#94a3b8">lower is better</text>
+
+  <line x1="730" y1="180" x2="960" y2="180" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="730" y1="230" x2="960" y2="230" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="730" y1="280" x2="960" y2="280" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="730" y1="330" x2="960" y2="330" stroke="#f1f5f9" stroke-width="1" />
+  <line x1="730" y1="380" x2="960" y2="380" stroke="#f1f5f9" stroke-width="1" />
+
+  <line x1="730" y1="130" x2="730" y2="430" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#lc-axis)" />
+  <line x1="730" y1="430" x2="970" y2="430" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#lc-axis)" />
+  <text x="722" y="146" font-size="10" fill="#94a3b8" text-anchor="end">high</text>
+  <text x="722" y="426" font-size="10" fill="#94a3b8" text-anchor="end">low</text>
+
+  <!-- long-context latency: rises (longer prompt = slower prefill) -->
+  <path d="M750,406 C800,400 840,372 880,320 915,275 935,225 945,205" fill="none" stroke="#6366f1" stroke-width="2.8" stroke-linecap="round" />
+  <!-- RAG latency: small constant retrieval overhead, then flat -->
+  <path d="M750,392 C820,389 890,387 940,386 945,386 945,386 945,386" fill="none" stroke="#14b8a6" stroke-width="2.8" stroke-linecap="round" />
+
+  <text x="888" y="228" font-size="10.5" font-weight="700" fill="#4f46e5" text-anchor="end">prefill grows</text>
+  <text x="870" y="380" font-size="10.5" font-weight="700" fill="#0f766e" text-anchor="end">RAG: retrieve + small prompt</text>
+
+  <!-- shared x-axis label -->
+  <text x="500" y="466" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="middle">corpus size  &#8594;  (more documents to search)</text>
+
+  <!-- =========================================================== -->
+  <!-- SELF-ROUTE crossover banner                                 -->
+  <!-- =========================================================== -->
+  <rect x="40" y="488" width="920" height="56" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5" />
+
+  <!-- crossover marker glyph -->
+  <g transform="translate(74, 516)">
+    <circle cx="0" cy="0" r="14" fill="#ecfdf5" stroke="#10b981" stroke-width="1.8" />
+    <path d="M-7,-6 L7,6 M-7,6 L7,-6" stroke="#10b981" stroke-width="2.2" stroke-linecap="round" />
+  </g>
+
+  <text x="104" y="510" font-size="13" font-weight="700" fill="#059669">Self-Route: where the lines cross</text>
+  <text x="104" y="529" font-size="11.5" fill="#334155">Try RAG first; fall back to full-context only when the retrieved chunks look insufficient. Cheap on easy queries, accurate on hard ones.</text>
+
+  <!-- right-side verdict chip -->
+  <rect x="744" y="500" width="200" height="32" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.4" />
+  <text x="844" y="520" font-size="11" font-weight="700" fill="#059669" text-anchor="middle">it depends, not "RAG is dead"</text>
+</svg>

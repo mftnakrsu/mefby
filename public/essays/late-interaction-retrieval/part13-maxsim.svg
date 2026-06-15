@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 600" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p13ms-arr-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#06b6d4"/>
+    </marker>
+    <marker id="p13ms-arr-indigo" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6366f1"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="600" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">MaxSim, one operation</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">For each query token take the best-matching doc token, then add up those best matches. That sum is the score.</text>
+
+  <!-- Query token labels (rows) on the left -->
+  <text x="40" y="118" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#4f46e5">QUERY TOKENS</text>
+
+  <!-- column header: doc tokens -->
+  <text x="300" y="118" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#0e7490">DOC TOKENS &#8594; cosine similarity in each cell</text>
+
+  <!-- ===================================================================== -->
+  <!-- The similarity grid                                                    -->
+  <!-- columns: 5 doc tokens; rows: 3 query tokens                            -->
+  <!-- cell origin grid at x=300, y=150; cell 120 wide x 64 tall              -->
+  <!-- ===================================================================== -->
+
+  <!-- doc token column headers -->
+  <g font-size="10.5" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" fill="#0e7490" text-anchor="middle">
+    <text x="360" y="142">refund</text>
+    <text x="480" y="142">within</text>
+    <text x="600" y="142">30</text>
+    <text x="720" y="142">days</text>
+    <text x="840" y="142">E-4042</text>
+  </g>
+
+  <!-- ROW 1: query "refund" -->
+  <rect x="60" y="152" width="220" height="58" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="170" y="186" font-size="13" font-weight="700" fill="#4f46e5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">"refund"</text>
+
+  <g font-size="12" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">
+    <!-- max cell highlighted cyan -->
+    <rect x="304" y="152" width="112" height="58" rx="8" fill="#ecfeff" stroke="#06b6d4" stroke-width="2.2"/>
+    <text x="360" y="186" fill="#0e7490" font-weight="700">0.94</text>
+    <rect x="424" y="152" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="480" y="186" fill="#94a3b8">0.21</text>
+    <rect x="544" y="152" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="600" y="186" fill="#94a3b8">0.18</text>
+    <rect x="664" y="152" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="720" y="186" fill="#94a3b8">0.27</text>
+    <rect x="784" y="152" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="840" y="186" fill="#94a3b8">0.30</text>
+  </g>
+  <!-- max readout -->
+  <text x="930" y="178" font-size="10.5" fill="#64748b">max</text>
+  <text x="930" y="194" font-size="14" font-weight="700" fill="#0e7490" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">0.94</text>
+
+  <!-- ROW 2: query "window" -->
+  <rect x="60" y="224" width="220" height="58" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="170" y="258" font-size="13" font-weight="700" fill="#4f46e5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">"window"</text>
+
+  <g font-size="12" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">
+    <rect x="304" y="224" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="360" y="258" fill="#94a3b8">0.33</text>
+    <rect x="424" y="224" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="480" y="258" fill="#94a3b8">0.58</text>
+    <rect x="544" y="224" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="600" y="258" fill="#94a3b8">0.49</text>
+    <!-- max cell -->
+    <rect x="664" y="224" width="112" height="58" rx="8" fill="#ecfeff" stroke="#06b6d4" stroke-width="2.2"/>
+    <text x="720" y="258" fill="#0e7490" font-weight="700">0.71</text>
+    <rect x="784" y="224" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="840" y="258" fill="#94a3b8">0.15</text>
+  </g>
+  <text x="930" y="250" font-size="10.5" fill="#64748b">max</text>
+  <text x="930" y="266" font-size="14" font-weight="700" fill="#0e7490" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">0.71</text>
+
+  <!-- ROW 3: query "E-4042" -->
+  <rect x="60" y="296" width="220" height="58" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="170" y="330" font-size="13" font-weight="700" fill="#4f46e5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">"E-4042"</text>
+
+  <g font-size="12" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">
+    <rect x="304" y="296" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="360" y="330" fill="#94a3b8">0.22</text>
+    <rect x="424" y="296" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="480" y="330" fill="#94a3b8">0.12</text>
+    <rect x="544" y="296" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="600" y="330" fill="#94a3b8">0.19</text>
+    <rect x="664" y="296" width="112" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="720" y="330" fill="#94a3b8">0.24</text>
+    <!-- max cell -->
+    <rect x="784" y="296" width="112" height="58" rx="8" fill="#ecfeff" stroke="#06b6d4" stroke-width="2.2"/>
+    <text x="840" y="330" fill="#0e7490" font-weight="700">0.99</text>
+  </g>
+  <text x="930" y="322" font-size="10.5" fill="#64748b">max</text>
+  <text x="930" y="338" font-size="14" font-weight="700" fill="#0e7490" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">0.99</text>
+
+  <!-- bracket from the three maxima down to the sum -->
+  <path d="M930,348 V392 H630" fill="none" stroke="#06b6d4" stroke-width="1.6"/>
+  <path d="M930,200 V348" fill="none" stroke="#06b6d4" stroke-width="1.6" stroke-dasharray="4 4"/>
+  <path d="M930,272 V348" fill="none" stroke="#06b6d4" stroke-width="1.6" stroke-dasharray="4 4"/>
+  <line x1="632" y1="392" x2="600" y2="392" stroke="#06b6d4" stroke-width="1.8" marker-end="url(#p13ms-arr-cyan)"/>
+
+  <!-- SUM node -->
+  <rect x="360" y="368" width="232" height="56" rx="10" fill="#f5f3ff" stroke="#6366f1" stroke-width="1.8"/>
+  <text x="476" y="392" font-size="11" font-weight="700" letter-spacing="0.04em" fill="#4f46e5" text-anchor="middle">SUM OF THE ROW MAXIMA</text>
+  <text x="476" y="412" font-size="13" font-weight="700" fill="#4f46e5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">0.94 + 0.71 + 0.99 = 2.64</text>
+
+  <!-- score node -->
+  <line x1="360" y1="396" x2="318" y2="396" stroke="#6366f1" stroke-width="1.8" marker-end="url(#p13ms-arr-indigo)"/>
+  <rect x="118" y="368" width="196" height="56" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="1.8"/>
+  <text x="216" y="392" font-size="11" font-weight="700" letter-spacing="0.04em" fill="#4f46e5" text-anchor="middle">MaxSim SCORE</text>
+  <text x="216" y="413" font-size="18" font-weight="700" fill="#4338ca" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">2.64</text>
+
+  <!-- the formula band -->
+  <rect x="40" y="456" width="1000" height="104" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="60" y="484" font-size="12" font-weight="700" letter-spacing="0.05em" fill="#64748b">THE WHOLE RULE</text>
+  <text x="60" y="512" font-size="14" fill="#334155" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">score(q, d) = &#931;</text>
+  <text x="222" y="512" font-size="12" fill="#64748b" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">over query tokens i</text>
+  <text x="402" y="512" font-size="14" fill="#334155" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">max</text>
+  <text x="452" y="512" font-size="12" fill="#64748b" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">over doc tokens j</text>
+  <text x="612" y="512" font-size="14" fill="#334155" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">cosine( q&#7522; , d&#11388; )</text>
+  <text x="60" y="540" font-size="11.5" fill="#64748b">No new model at query time. Doc token vectors are precomputed offline; only this max-then-sum runs per query.</text>
+</svg>

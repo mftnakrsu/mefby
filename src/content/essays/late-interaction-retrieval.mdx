@@ -1,0 +1,184 @@
+---
+title: "Late-Interaction Retrieval"
+description: "Single-vector embeddings throw away token-level signal. Late interaction keeps a vector per token and scores with MaxSim, getting cross-encoder-quality matching at bi-encoder serving cost. Part 13 of a from-scratch series on Retrieval-Augmented Generation, opening the Frontier Track: ColBERT and ColBERTv2, MaxSim by hand in numpy, the storage tradeoff, and how ColPali extends late interaction to document page images without OCR or chunking."
+date: 2026-06-19
+tags: ["RAG", "Retrieval", "ColBERT", "ColPali", "Late Interaction", "Embeddings", "LLM", "AI"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-13-late-interaction"
+ogImage: "/og/rag-by-hand.png"
+seriesOrder: 13
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*RAG from First Principles. Part 13 of the series, opening the Frontier Track.*
+
+## What you'll learn
+
+The core series ended at Part 12. Twelve parts took us from "why does RAG even exist" all the way to running the thing in production, and that arc is complete. This part begins something optional: a short **Frontier Track** of 2026 advances you reach for once the core is solid, each one building directly on what you already know rather than on the part before it.
+
+We open with late interaction. In Part 7 we learned to compress a whole passage into a single dense vector and rank by cosine similarity. In Part 8 we learned that a cross-encoder, which reads the query and document together, ranks far more precisely but is too slow to run over a whole corpus. Late interaction is the paradigm that sits between them. It keeps a separate vector for every token, scores a query against a document with an operation called **MaxSim**, and gets cross-encoder-quality term matching while keeping the document side precomputable offline like an ordinary embedding. By the end you will be able to explain why pooling a passage into one vector loses information, compute MaxSim by hand in a few lines of numpy, reason about the storage cost that buys you this precision and how compression brings it back down, and understand, as a mechanism, how ColPali pushes the same trick onto document page images and skips OCR and chunking entirely.
+
+## Prerequisites
+
+Two parts carry most of the weight here: [Retrieval Deep Dive](/essays/retrieval-deep-dive) (Part 7), where we built single-vector dense retrieval and saw exactly the failure mode this part fixes, the rare literal token that semantic search averages away; and [Making Retrieval Smarter](/essays/making-retrieval-smarter) (Part 8), where the cross-encoder reranker showed what precise, token-aware scoring looks like and what it costs. You should also remember cosine similarity from [Measuring Similarity](/essays/measuring-similarity) (Part 3), because MaxSim is built entirely out of cosines. No new math beyond that. We keep using the support knowledge base from the back half of the series, the refund-policy line and the `E-4042` error code, so this feels continuous with everything before it.
+
+## Where we left off, and the gap between Part 7 and Part 8
+
+Here is the shape of the two retrieval tools we already have, and the gap between them.
+
+Part 7 gave us the **bi-encoder**: a model that embeds the query and each document *separately* into one vector apiece, so every document vector can be computed once, offline, and stored in a vector index. At query time you embed only the query and compare it to the stored vectors with a single cosine each. Cheap and scalable, which is why vector search works over millions of documents. The price is that all the nuance of a passage gets crushed into one point in space before the query is ever seen.
+
+Part 8 gave us the **cross-encoder**: a model that reads the query and a document *together*, in one forward pass, to produce a relevance score. Because it sees both at once it can notice that one specific word in the query matches one specific word in the document, the fine-grained signal a single pooled vector cannot preserve. The price is the mirror image: nothing can be precomputed, since every score requires running the model on a fresh query-document pair at query time. That is why in Part 8 we could only afford it as a reranker over a few dozen candidates a cheaper retriever had already surfaced.
+
+So we have cheap-and-blunt on one side and precise-and-expensive on the other, with a real gap between. What we would like is a scorer that sees term-level matches the way a cross-encoder does, but whose document side can be precomputed and stored the way a bi-encoder's can. That is the problem **late interaction** was built to solve, introduced as **ColBERT** (Khattab and Zaharia, SIGIR 2020, arXiv 2004.12832).
+
+## The pooling problem
+
+To see why one vector per passage is lossy, watch what pooling actually does. When a bi-encoder turns "Refund requests are processed within five business days" into a single vector, it runs every token through the transformer and then averages the per-token outputs into one point. That average is a reasonable summary of what the passage is *about*. But averaging is destructive by definition: a rare, decisive token gets blended in with a dozen ordinary ones and its signal is diluted toward the mean.
+
+This matters most for the exact query our Part 7 app kept failing on: a literal code, an order ID, a part number. Imagine a long passage that mentions `E-4042` once, buried among forty unrelated words about batch reconciliation. The token vector for `E-4042` is in there, but averaged with thirty-nine others the result barely leans in its direction. Now imagine a short, generic sentence, "A general error occurred while loading the page." It shares the topical word "error" and almost nothing else, but because it is short, that one word dominates its pooled vector. Pool both, compare each to the query "E-4042 error" by a single cosine, and the short generic sentence can easily rank *above* the passage that literally contains the code. The decisive token was averaged into oblivion in the long passage and amplified in the short one. We met this exact failure in Part 7 and fixed it with keyword search; late interaction fixes it differently, by never pooling in the first place.
+
+<Diagram number={1} caption="The pooling problem in one picture. On the left, Part 7: the whole passage runs through the encoder and is averaged into a single pooled vector, so a rare decisive token is blended into the mean and its signal is lost. On the right, late interaction: the encoder's per-token outputs are kept as a bag of one vector per token, nothing averaged away, so a rare token survives as its own point for matching. The code is drawn as a single token cell for legibility, though the tokenizer actually splits E-4042 into e and 4042.">
+  <img src="/essays/late-interaction-retrieval/part13-pooled-vs-multivector.svg" alt="On the left, a passage of word tokens feeds an encoder whose per-token outputs are merged by an averaging node into one violet pooled vector labelled one vector per passage; a callout notes the rare token E-4042 is washed out by the average. On the right, the same passage feeds the same encoder but the per-token outputs are kept as a row of separate violet vectors, one per token, labelled a vector per token, with the E-4042 token highlighted as surviving intact." class="w-full rounded-lg" />
+</Diagram>
+
+## Token-level multi-vectors
+
+The fix is almost embarrassingly direct: stop pooling. A late-interaction model runs the passage through the same transformer encoder a bi-encoder uses, but instead of averaging the per-token outputs into one vector, it *keeps all of them*. A passage of eight tokens becomes eight vectors; a passage of forty tokens becomes forty. We call this a **multi-vector** representation, in contrast to the single pooled vector of Part 7, and we do it for the query too: "E-4042 error" becomes a small bag of per-token vectors rather than one.
+
+In the companion code the function that produces these is `token_embed(text)`, returning an array of shape `(number_of_tokens, dimensions)` rather than the `(dimensions,)` of an ordinary embedding. With the real model path it pulls the transformer's per-token hidden states out before the pooling step. Offline, with no model and no network, it falls back to a transparent deterministic hashing embedder: every token maps to a fixed reproducible unit vector, so identical tokens, the query's `4042` and the document's `4042`, map to the *same* vector and an exact match scores about 1.0. That fallback is honest about its limits, a hash has no idea that "refund" and "reimbursement" are cousins the way a trained model does, but it exists only so the *shape* of late interaction is runnable and inspectable on any machine. A banner names which path is live, and everything below behaves the same on both.
+
+Each token vector is L2-normalized, meaning scaled to unit length, the small trick from Part 3 that lets a plain dot product read directly as cosine similarity. That is what makes the scoring function a one-liner.
+
+## MaxSim, by hand
+
+Now we need a single number that scores how well a bag of query-token vectors matches a bag of document-token vectors. The operation late interaction uses is **MaxSim**, and the rule is short enough to say in one sentence: for each query token, find its single best-matching document token, and then add up those best matches across all the query tokens.
+
+In numpy it is barely longer than the sentence. Here is the function exactly as it ships in the companion repo:
+
+```python
+import numpy as np
+
+def maxsim(query_vecs: np.ndarray, doc_vecs: np.ndarray) -> float:
+    """Late-interaction score: for each query token take the max cosine
+    similarity over all doc tokens, then sum. Inputs are L2-normalized
+    (n_q, d) and (n_d, d), so the dot product IS cosine similarity."""
+    sims = query_vecs @ doc_vecs.T          # (n_q, n_d) pairwise cosine
+    return float(sims.max(axis=1).sum())    # max over doc tokens, sum over query tokens
+```
+
+Walk it slowly. The first line, `query_vecs @ doc_vecs.T`, multiplies every query-token vector against every document-token vector, producing a grid: rows are query tokens, columns are document tokens, each cell the cosine between one query token and one document token. The second line does the actual MaxSim. `sims.max(axis=1)` takes, for each query-token row, the maximum cell in that row, that token's single best match anywhere in the document; `.sum()` then adds those row maxima into one score. That is the whole algorithm.
+
+The two design choices explain why late interaction behaves the way it does. The **max** gives precision: a query token does not care whether the document is long, short, or mostly off-topic, it only asks "is my best match in here strong?" A buried `E-4042` is still an exact match, and the max finds it regardless of the surrounding words. The **sum** aggregates across the query: a document that matches many query tokens well outscores one that matches only a few. There is no averaging anywhere, which is precisely why the signal that pooling destroyed survives here.
+
+<Diagram number={2} caption="MaxSim as a grid operation. Each query token (rows) is compared against every document token (columns) to fill a grid of cosine similarities. For each query-token row, the single largest cell is selected (the token's best match anywhere in the document). Those row maxima are then summed into one late-interaction score. The max gives term-level precision; the sum aggregates across the query.">
+  <img src="/essays/late-interaction-retrieval/part13-maxsim.svg" alt="A grid with query tokens labelling the rows and document tokens labelling the columns; each cell is shaded by cosine similarity. In each row the single brightest cell is outlined in cyan as that query token's maximum. Arrows lead from the outlined max cell of every row into a single indigo sum node on the right that outputs the final MaxSim score, illustrating max over document tokens followed by sum over query tokens." class="w-full rounded-lg" />
+</Diagram>
+
+Now the worked example, on the same four-document support corpus the code uses. The query is `E-4042 error`. The corpus has the long passage that buries `E-4042` in a batch-reconciliation report (the exact-term doc), the short generic "A general error occurred while loading the page" (the distractor), a shipping line, and the refund line. First we rank the four by pooled cosine, the Part 7 way, one vector per document:
+
+```text
+Ranking by POOLED cosine (one vector per doc, Part 7):
+  rank 1  cos=+0.503  A general error occurred while loading the page.... [DISTRACTOR]
+  rank 2  cos=+0.151  Standard shipping takes three to five business days to ...
+  rank 3  cos=+0.123  Our internal billing log emits the diagnostic identifie... [exact term]
+  rank 4  cos=-0.104  Refunds are accepted within 30 days of purchase if the ...
+```
+
+The exact-term document, the one that literally contains `E-4042`, lands at rank 3, *below* a shipping line that has nothing to do with the query, and the short generic "error" distractor wins outright. This is the pooling problem in numbers: the rare code was averaged into oblivion in the long passage, and the short generic sentence pooled higher on the shared word "error" alone.
+
+Now rank the same four by MaxSim:
+
+```text
+Ranking by MaxSim (token-level late interaction):
+  rank 1  maxsim=2.269  Our internal billing log emits the diagnostic identifie... [exact term]
+  rank 2  maxsim=1.766  A general error occurred while loading the page.... [DISTRACTOR]
+  rank 3  maxsim=0.947  Standard shipping takes three to five business days to ...
+  rank 4  maxsim=0.660  Refunds are accepted within 30 days of purchase if the ...
+```
+
+The rankings *disagree at the top*, and that disagreement is the whole lesson. MaxSim puts the exact-term document first: the query token `4042` found its exact match among the document's tokens, and the max rewarded that one strong hit no matter how much unrelated text surrounded it. The distractor still scores well because it does match "error", but it cannot manufacture a match for `4042` it does not contain, so it drops to second. Late interaction surfaced the document pooled cosine had buried. (Those exact decimals come from the offline fallback embedder; run it against the real model and the magnitudes shift, but the conclusion holds.)
+
+The interactive figure below lets you feel this directly. Toggle between the exact-term document and the distractor, watch the query-token by document-token grid fill in, see which cell each query row picks as its max, and read the running sum that becomes the score.
+
+<Diagram number={3} caption='Interactive MaxSim playground. Toggle between the exact-term document and the short generic distractor for the query "E-4042 error". The grid shades each query-token by document-token cosine; each query row&apos;s chosen max cell is outlined, and the running sum of those maxima is the late-interaction score. Switching documents shows the rank inversion: pooled cosine ranks the generic distractor above the exact-term document, while MaxSim flips it back so the buried exact match wins.'>
+  <IframeFigure
+    src="/essays/late-interaction-retrieval/part13-maxsim-playground.html"
+    title='Interactive late-interaction scorer: a grid of cosine similarities between the tokens of the query "E-4042 error" (rows) and the tokens of a chosen document (columns), with each query row&apos;s maximum cell highlighted and the running sum of row maxima shown as the MaxSim score, plus a toggle between an exact-term document that contains the code and a short generic error distractor, demonstrating the rank inversion in which pooled cosine ranks the distractor above the exact-term document while MaxSim flips it back so the exact-term document wins'
+    height={760}
+  />
+</Diagram>
+
+## Why it is still cheap to serve
+
+At this point a fair worry is that we have just reinvented the cross-encoder. We are doing token-level matching again, so are we not back to running an expensive model on every query-document pair at query time? No, and the reason is the most important practical fact in this part: the document token vectors are **precomputed**.
+
+Exactly like a bi-encoder's single vector, each document is run through the encoder once, offline, at index time, and its bag of per-token vectors is stored. At query time the model only ever runs on the query. Everything after that, the whole MaxSim, is just dot products and a max and a sum over numbers already sitting in your index. There is no neural network in the query-time scoring loop at all. Contrast the cross-encoder: it reads query and document *jointly*, so its score does not exist until it has seen the query, which means it cannot precompute anything and must run a full forward pass per candidate at query time. Late interaction gets the term-level precision a cross-encoder is prized for, but moves the heavy model work to index time where it belongs. The slogan, and it is accurate, is "cross-encoder quality, bi-encoder serving cost", the genuine third option in the gap we opened with.
+
+## The storage tradeoff
+
+Nothing is free, and the bill for late interaction comes due in storage. A bi-encoder stores one vector per document. A late-interaction model stores one vector per *token*, so a passage of forty tokens costs roughly forty times the space of its pooled summary. On the toy four-document corpus, the arithmetic is small and exact:
+
+```text
+Toy corpus: 4 docs, ~12 tokens/doc, 384 dims, float32 (4 bytes/dim).
+  pooled (1 vec/doc)      :        6,144 bytes  (   0.01 MB)
+  multi-vector (1 vec/tok):       73,728 bytes  (   0.07 MB)  -> 12.0x more
+  multi-vector, 2-bit     :        4,608 bytes  (   0.00 MB)  -> ColBERTv2 residual compression
+```
+
+Twelve times more, just from refusing to pool, and the multiplier scales with how long your documents are. Left unaddressed, this is what makes late interaction sound impractical at corpus scale. The answer is compression, the headline contribution of **ColBERTv2** (Santhanam et al., NAACL 2022, arXiv 2112.01488). ColBERTv2 stores each token vector not as a full 32-bit-per-dimension float but as a small *residual* against a nearby cluster centroid, quantized to one or two bits per dimension. On the standard MS MARCO passage benchmark the paper reports the vanilla multi-vector index at about 154 GiB shrinking to roughly 16 GiB with 1-bit residuals or about 25 GiB with 2-bit, a 6 to 10 times reduction that brings the footprint into the same neighborhood as a single-vector index on the same corpus. The toy "2-bit" line above is that idea in miniature: drop from four bytes per dimension to a quarter of a byte and the multi-vector cost falls below even the pooled baseline. Per-token vectors cost meaningfully more space, that space is the price of term-level precision, and compression is what makes paying it practical rather than prohibitive.
+
+## ColPali: the same trick on page images
+
+So far every token has been a word. The last idea in this part keeps MaxSim exactly as it is and changes what the document tokens *are*. This is **ColPali** (Faysse et al., ICLR 2025, arXiv 2407.01449), and it is worth being precise about what it does, because it is easy to over-claim.
+
+A real document is rarely clean text. It is a PDF page with a two-column layout, a table, a chart, a stamped figure. The traditional pipeline, the one Part 5 warned us about, runs OCR to extract text and then chunks it, and both steps mangle layout and lose visual structure that often carried the meaning. ColPali skips all of it. It uses a **vision-language model**, a model that takes an image and produces embeddings, to embed the document **page image** directly. A vision transformer cuts the page into a grid of small **patches**, roughly a thousand per page, and emits one vector per patch, much as a text encoder emits one vector per token. Those patch vectors are the document's multi-vector representation. The query stays ordinary text, embedded into its per-token vectors, and you score query tokens against page patches with the *same MaxSim* you already built. No OCR, no chunking: a query token like "refund" can light up directly on the patch of the page where that word is printed, table and all.
+
+I want to be clear about the boundary of what we can demonstrate here. No real vision-language model runs in the offline companion; you cannot download VLM weights and embed a real page on a machine with no network. So the code teaches the *mechanism* with a deliberate stand-in: a four-by-four grid of sixteen deterministically hashed vectors playing the role of a page's patch embeddings, run through the identical `maxsim` call.
+
+```text
+  toy page: 16 patch vectors x 384 dims (standing in for an image's patches)
+  query "refund window policy" (3 tokens) vs the page patches:
+    maxsim(query tokens, page patches) = 1.062
+```
+
+That `1.062` is not a claim about ColPali's real-world accuracy. It is a demonstration that the scoring is mechanically identical: each query token takes its max over the patch vectors, then we sum. ColPali's contribution is not a new scoring rule, it is realizing that if you can produce patch vectors for a page image, late interaction's MaxSim works on them unchanged, and you get to retrieve visually rich documents without ever flattening them into error-prone text first. (ColQwen is the same idea built on a different vision-language backbone; the mechanism is the same.) Treat the named models as a 2026 snapshot and verify their current state before you build on them.
+
+## From experience
+
+> 💡 **From experience**
+>
+> The first time late interaction earned its keep for me, I had inherited a search system for a corpus of equipment manuals, and the complaints all rhymed: technicians would paste in a part number or a fault code straight off a label, and get back pages that were vaguely about the right machine but never the one page that listed that exact code. I had read the Part 7 lesson about rare tokens, so I reached for the usual hybrid-search fix, and it helped on the cleanest cases. But a lot of those codes lived inside dense diagnostic tables, and once a table got chunked the code and the procedure that referenced it kept landing in different chunks, so even keyword search would surface the code and lose the answer. Switching that corpus to a ColBERT-style index was the thing that actually fixed it. Keeping a vector per token meant a fault code stayed a sharp, findable point no matter how much surrounding boilerplate a page carried, and MaxSim rewarded the page that actually contained it. The cost was real, the index got much larger before I turned on compression, but for a corpus where the whole value was finding one exact line on one exact page, it was the right trade. The lesson I took away: when your failures are about exact terms buried in long, messy passages, the fix may not be a better single vector, it may be refusing to collapse to a single vector at all.
+
+{/* author: swap the equipment-manuals / fault-code story above for your own real late-interaction or ColBERT/ColPali anecdote (the corpus where exact-term recall on long passages was the whole game); keep it first-person and concrete, and keep the blockquote format. */}
+
+## Key takeaways
+
+- A **bi-encoder** (Part 7) embeds query and document separately into one **pooled** vector each, which is cheap to serve but **averages away** rare, decisive tokens. A **cross-encoder** (Part 8) reads them jointly for term-level precision but cannot precompute anything, so it only works as a reranker over a few candidates. **Late interaction** fills the gap between them.
+- Late interaction keeps a **multi-vector** representation, one vector per token, for both query and document, and never pools. The decisive token that pooling destroyed survives intact.
+- **MaxSim** scores a pair by taking, for each query token, its maximum cosine over all document tokens, then summing those maxima. The **max** gives term-level precision; the **sum** aggregates across the query. It is about three lines of numpy over L2-normalized vectors.
+- On the worked `E-4042 error` example the rankings **disagree at the top**: pooled cosine ranks a short generic "error" distractor first and buries the exact-term passage, while MaxSim surfaces the exact-term passage. That disagreement is the entire point.
+- Document token vectors are **precomputed offline**, so only MaxSim (dot products, a max, a sum) runs at query time. That is "cross-encoder quality, bi-encoder serving cost," the genuine third option introduced by **ColBERT** and made storage-practical by **ColBERTv2**.
+- The cost is **storage**: per-token vectors run roughly an order of magnitude larger than one pooled vector (12x on the toy corpus). **Residual compression** (ColBERTv2, 1 to 2 bits per dimension) shrinks the MS MARCO index from about 154 GiB to roughly 16 to 25 GiB, a 6 to 10 times reduction.
+- **ColPali** keeps MaxSim unchanged and makes the document tokens be **page-image patches** from a **vision-language model**, retrieving visually rich documents without OCR or chunking. Taught here strictly as a mechanism: no real VLM runs offline, and the toy patch grid only shows that the scoring is identical. This field moves fast and I have a knowledge cutoff, so treat the named models as a snapshot and verify their current state.
+
+## Glossary
+
+- **Bi-encoder**: a model that embeds the query and each document separately into one vector apiece, so document vectors can be precomputed and stored; the single-vector dense retriever of Part 7.
+- **Cross-encoder**: a model that reads the query and a document together in one pass to produce a precise relevance score, which cannot be precomputed and so is used only to rerank a few candidates (Part 8).
+- **Pooling**: averaging a passage's per-token encoder outputs into one vector, which summarizes the whole but dilutes any single rare, decisive token.
+- **Multi-vector representation**: keeping one vector per token (for both query and document) instead of pooling to a single vector, so token-level signal is preserved.
+- **Late interaction**: the retrieval paradigm that keeps multi-vector representations and defers query-to-document comparison to a per-token scoring step at query time, introduced as ColBERT.
+- **MaxSim**: the late-interaction score; for each query token take the maximum cosine similarity over all document tokens, then sum those maxima.
+- **ColBERT**: the original late-interaction retriever (SIGIR 2020), which keeps per-token vectors and scores with MaxSim.
+- **ColBERTv2**: the follow-up (NAACL 2022) whose residual compression quantizes token vectors to 1 to 2 bits per dimension, shrinking the index by 6 to 10 times.
+- **Residual compression**: storing each token vector as a small, low-bit residual against a nearby cluster centroid rather than as a full float vector, the trick that makes multi-vector storage practical.
+- **Vision-language model (VLM)**: a model that takes an image and produces embeddings, used by ColPali to embed a document page image directly.
+- **Patch**: one small tile of a page image; a vision transformer emits one vector per patch, roughly a thousand per page, playing the role token vectors play for text.
+- **ColPali**: a late-interaction retriever (ICLR 2025) that embeds document page images as patch vectors via a VLM and scores query tokens against page patches with the same MaxSim, skipping OCR and chunking.
+
+---
+
+**Next up, Part 14: Context-Aware Chunking.** Late interaction preserves token-level signal, but the chunk a token lives in can still be uninterpretable once it leaves its document: "she" loses its antecedent, "the policy" loses its year. Next we look at two training-free ways to keep a chunk's context, late chunking and Anthropic's Contextual Retrieval, built by hand and compared.
