@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Context-aware chunking, three ways</title>
+<style>
+  :root{
+    --bg:#ffffff; --surface:#f8fafc; --surface2:#f1f5f9; --border:#e2e8f0;
+    --heading:#0f172a; --body:#334155; --muted:#64748b;
+    --indigo:#6366f1; --indigo-d:#4f46e5; --violet:#8b5cf6; --violet-d:#6d28d9;
+    --cyan:#06b6d4; --teal:#14b8a6; --teal-d:#0f766e;
+    --emerald:#10b981; --emerald-d:#059669; --amber:#f59e0b; --amber-d:#b45309;
+    --rose:#f43f5e; --rose-d:#e11d48;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--body); font-family:var(--sans);
+    font-size:15px; line-height:1.5; padding:18px;
+  }
+  .wrap{max-width:860px; margin:0 auto}
+
+  .topbar{display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:14px}
+  .scn{display:inline-flex; flex-wrap:wrap; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:3px; gap:2px}
+  .scn button{
+    appearance:none; border:0; background:transparent; cursor:pointer;
+    font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--muted);
+    padding:7px 11px; border-radius:8px; transition:all .15s ease;
+  }
+  .scn button:focus-visible{outline:2px solid var(--indigo); outline-offset:2px}
+  .scn button[aria-pressed="true"]{background:var(--bg); color:var(--indigo-d); box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .legend{display:flex; gap:13px; font-size:11.5px; color:var(--muted); align-items:center; flex-wrap:wrap}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .chip{width:11px; height:11px; border-radius:3px; display:inline-block}
+  .chip.hit{background:var(--emerald)}
+  .chip.miss{background:var(--rose)}
+  .chip.ctx{background:var(--amber)}
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start}
+  @media (max-width:700px){ .grid{grid-template-columns:1fr} }
+
+  .panel{border:1px solid var(--border); border-radius:14px; background:var(--bg); padding:12px}
+  .panel h3{
+    margin:0 0 9px; font-size:10.5px; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted);
+  }
+
+  /* the query */
+  .qrow{
+    font-family:var(--mono); font-size:12.5px; color:var(--heading);
+    background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--cyan);
+    border-radius:8px; padding:9px 11px; margin-bottom:11px;
+  }
+  .qrow .lab{display:block; font-family:var(--sans); font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--teal-d); margin-bottom:4px}
+
+  .clab{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin:2px 0 6px}
+
+  /* the document chunks */
+  .doc{display:flex; flex-direction:column; gap:7px}
+  .ck{
+    position:relative; font-size:12.5px; color:var(--body);
+    padding:8px 10px 8px 12px; border-radius:8px;
+    background:var(--surface); border:1px solid var(--border);
+    transition:background .3s ease, border-color .3s ease, box-shadow .3s ease;
+  }
+  .ck::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:8px 0 0 8px; background:#cbd5e1; transition:background .3s ease}
+  .ck .role{display:block; font-size:9.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-bottom:3px}
+  .ck .body{display:block}
+  .ck .prefix{display:none; color:var(--amber-d); font-style:italic}
+  .ck.show-prefix .prefix{display:inline}
+  .ck .score{
+    position:absolute; right:9px; top:8px; font-family:var(--mono); font-size:11px;
+    font-weight:700; color:var(--muted);
+  }
+  /* the chunk that gets retrieved (rank 1) */
+  .ck.retrieved{background:rgba(16,185,129,.10); border-color:rgba(16,185,129,.55); box-shadow:0 0 0 1px rgba(16,185,129,.25)}
+  .ck.retrieved::before{background:var(--emerald)}
+  .ck.retrieved .role{color:var(--emerald-d)}
+  .ck.retrieved .score{color:var(--emerald-d)}
+  /* the chunk we WANTED but missed */
+  .ck.target-miss{
+    background:repeating-linear-gradient(135deg,#fff5f6,#fff5f6 7px,#ffeaed 7px,#ffeaed 14px);
+    border:1.5px dashed rgba(244,63,94,.55); color:#9f1239;
+  }
+  .ck.target-miss::before{background:var(--rose)}
+  .ck.target-miss .role{color:var(--rose-d)}
+  .ck.target-miss .score{color:var(--rose-d)}
+  .ck.contextualized::before{background:var(--amber)}
+
+  mark.coref{background:rgba(244,63,94,.16); color:#9f1239; border-radius:3px; padding:0 2px; font-weight:600}
+  .ck.retrieved mark.coref, .ck.contextualized mark.coref{background:rgba(16,185,129,.16); color:var(--emerald-d)}
+
+  /* how each mode builds the vector (right panel) */
+  .flow{display:flex; flex-direction:column; gap:9px}
+  .step{
+    display:flex; align-items:flex-start; gap:9px; font-size:12.5px; color:var(--body);
+  }
+  .step .num{
+    flex:0 0 auto; width:20px; height:20px; border-radius:50%;
+    background:var(--surface2); color:var(--muted); font-size:11px; font-weight:700;
+    display:inline-flex; align-items:center; justify-content:center; margin-top:1px;
+  }
+  .step.cut .num{background:#ffe4e6; color:var(--rose-d)}
+  .step.encode .num{background:#ede9fe; color:var(--violet-d)}
+  .step.pool .num{background:#ccfbf1; color:var(--teal-d)}
+  .step.context .num{background:#fef3c7; color:var(--amber-d)}
+  .step b{color:var(--heading)}
+
+  .verdict{
+    margin-top:14px; font-size:13.5px; color:var(--body);
+    background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--muted);
+    border-radius:8px; padding:11px 13px; transition:border-color .3s ease;
+  }
+  .verdict.win{border-left-color:var(--emerald)}
+  .verdict.lose{border-left-color:var(--rose)}
+  .verdict b{color:var(--heading)}
+  .verdict .stamp{font-weight:700}
+  .verdict.win .stamp{color:var(--emerald-d)}
+  .verdict.lose .stamp{color:var(--rose-d)}
+
+  .hint{margin-top:12px; font-size:11.5px; color:var(--muted); text-align:center}
+  kbd{font-family:var(--mono); font-size:10.5px; background:var(--surface2); border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; padding:1px 5px; color:var(--body)}
+  .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+
+  @media (prefers-reduced-motion: reduce){
+    .scn button, .ck, .ck::before, .verdict{ transition:none !important }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="scn" id="scn" role="group" aria-label="Chunking strategy">
+      <button data-s="naive" aria-pressed="true">Naive chunking</button>
+      <button data-s="late" aria-pressed="false">Late chunking</button>
+      <button data-s="contextual" aria-pressed="false">Contextual retrieval</button>
+    </div>
+    <div class="legend">
+      <span><i class="chip hit"></i> retrieved (rank 1)</span>
+      <span><i class="chip miss"></i> wanted, but missed</span>
+      <span><i class="chip ctx"></i> situating prefix</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: the document + which chunk is retrieved -->
+    <div class="panel">
+      <h3>One short document, four chunks</h3>
+      <div class="qrow"><span class="lab">Query</span><span id="q-text">what is Alice's refund window?</span></div>
+      <div class="clab">Indexed chunks &#183; cosine to the query</div>
+      <div class="doc" id="doc"></div>
+    </div>
+
+    <!-- RIGHT: how this mode builds the chunk vector -->
+    <div class="panel" aria-label="How this strategy embeds the chunk">
+      <h3 id="flow-title">How the vector is built</h3>
+      <div class="flow" id="flow"></div>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+
+  <p class="hint">Toggle a strategy above, or use <kbd>&larr;</kbd> <kbd>&rarr;</kbd>. The answer chunk says "She set the refund window at 30 days" &mdash; watch whether each strategy can still find it.</p>
+  <p class="sr" aria-live="polite" id="srlive"></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // The fixed four-chunk document. chunk index [1] (the refund line) is the gold target;
+  // its subject "Alice" is only named in chunk [0], so a coreference query depends on context.
+  // Each strategy supplies a per-chunk cosine score, the chunk's display role, and which
+  // chunk ends up retrieved (rank 1).
+  var CHUNKS = [
+    {role:"chunk [0]", body:'Alice founded Acme in 2019.'},
+    {role:"chunk [1] &#183; the answer", body:'<mark class="coref">She</mark> set the refund window at 30 days.', target:true, prefix:'This chunk is from a note about Alice and Acme\'s refund policy. '},
+    {role:"chunk [2]", body:'Returns outside that window are declined automatically.'},
+    {role:"chunk [3]", body:'The error code E-4042 means the window has already closed.'}
+  ];
+
+  var MODES = {
+    naive: {
+      label:"Naive chunking",
+      // chunk [1] embedded alone: "She set the refund window" has no "Alice"; the off-topic
+      // chunk [2] shares the word "window" and edges ahead.
+      scores:[0.214, 0.413, 0.434, -0.116],
+      retrieved:2,            // chunk [2] ("Returns outside that window...") wins on the shared word "window"
+      showPrefix:false,
+      ctxOn:false,
+      flow:[
+        {cls:"cut",    t:"<b>Cut first.</b> Split the document into four chunk strings."},
+        {cls:"encode", t:"<b>Embed each chunk alone.</b> Chunk [1] goes to the encoder as just “She set the refund window at 30 days.”"},
+        {cls:"pool",   t:"The vector for chunk [1] never saw the word <b>Alice</b>, so it reads as a generic, ownerless rule."}
+      ],
+      win:false,
+      verdict:["MISS","Chunk [1] is the answer, but embedded in isolation “She” points to nothing. Off-topic chunk [2], which only shares the word <b>window</b>, edges ahead and lands at rank 1. The answer chunk ranks second and falls outside a tight top-k. This is the context-loss problem from Part 5."]
+    },
+    late: {
+      label:"Late chunking",
+      // whole doc encoded first; chunk [1]'s tokens absorbed "Alice" via attention -> strong match
+      scores:[0.253, 0.443, 0.378, -0.078],
+      retrieved:1,            // chunk [1] now wins
+      showPrefix:false,
+      ctxOn:false,
+      flow:[
+        {cls:"encode", t:"<b>Encode first.</b> Run all of the document's tokens through one long-context pass."},
+        {cls:"pool",   t:"During attention, chunk [1]'s tokens read “Alice” and “Acme” from earlier in the document."},
+        {cls:"pool",   t:"<b>Pool the span after the transformer.</b> Chunk [1]'s vector is now contextualized by the whole document &mdash; no LLM, no text change."}
+      ],
+      win:true,
+      verdict:["HIT","Same boundaries, same text. But because the tokens were pooled <b>after</b> attending over the whole document, chunk [1]'s vector now carries “Alice.” It rises to rank 1, above the off-topic chunk [2]. Cost: a long-context encoder and one full-document pass at index time. No LLM."]
+    },
+    contextual: {
+      label:"Contextual retrieval",
+      // an LLM-written prefix re-anchors the chunk in plain text before embedding
+      scores:[0.354, 0.479, 0.461, 0.108],
+      retrieved:1,            // chunk [1] wins, by an even wider margin
+      showPrefix:true,        // render the amber prefix on the target chunk
+      ctxOn:true,
+      flow:[
+        {cls:"context", t:"<b>Ask an LLM to situate the chunk.</b> One short sentence: “This chunk is from a note about Alice and Acme's refund policy.”"},
+        {cls:"context", t:"<b>Prepend it</b> to the chunk text. The embedder is unchanged &mdash; the context lives in the text."},
+        {cls:"encode",  t:"Embed prefix + chunk together. “Alice” and “refund policy” are now literally in the string."}
+      ],
+      win:true,
+      verdict:["HIT","An LLM wrote one situating sentence and you prepended it before embedding. Now “Alice” and “refund policy” sit right in the text, so chunk [1] wins outright at the highest score yet. Model-agnostic and drop-in; the cost is one extra LLM call per chunk at index time, which prompt caching makes cheap."]
+    }
+  };
+  var ORDER = ["naive","late","contextual"];
+
+  var docEl  = document.getElementById("doc");
+  var flowEl = document.getElementById("flow");
+  var ftEl   = document.getElementById("flow-title");
+  var verdEl = document.getElementById("verdict");
+  var srEl   = document.getElementById("srlive");
+  var current = "naive";
+
+  function fmt(x){ return x.toFixed(3); }
+
+  function render(){
+    var m = MODES[current];
+
+    // chunks
+    docEl.innerHTML = "";
+    CHUNKS.forEach(function(c, i){
+      var d = document.createElement("div");
+      var classes = ["ck"];
+      if(i === m.retrieved) classes.push("retrieved");
+      else if(c.target) classes.push("target-miss");      // the gold chunk we failed to surface
+      if(c.target && m.showPrefix) classes.push("show-prefix","contextualized");
+      d.className = classes.join(" ");
+      var prefixHtml = (c.prefix && m.showPrefix) ? '<span class="prefix">'+c.prefix+'</span>' : '';
+      d.innerHTML =
+        '<span class="score">'+fmt(m.scores[i])+'</span>'+
+        '<span class="role">'+c.role+'</span>'+
+        '<span class="body">'+prefixHtml+c.body+'</span>';
+      docEl.appendChild(d);
+    });
+
+    // flow steps
+    ftEl.textContent = m.label + ": how the vector is built";
+    flowEl.innerHTML = "";
+    m.flow.forEach(function(s, i){
+      var st = document.createElement("div");
+      st.className = "step " + s.cls;
+      st.innerHTML = '<span class="num" aria-hidden="true">'+(i+1)+'</span><span>'+s.t+'</span>';
+      flowEl.appendChild(st);
+    });
+
+    // verdict
+    verdEl.className = "verdict " + (m.win ? "win" : "lose");
+    verdEl.innerHTML = '<span class="stamp">' + m.verdict[0] + '.</span> ' + m.verdict[1];
+
+    // toggle buttons
+    Array.prototype.forEach.call(document.querySelectorAll("#scn button"), function(b){
+      b.setAttribute("aria-pressed", b.dataset.s === current ? "true" : "false");
+    });
+
+    // a11y: one live announcement summarising the outcome
+    var retrievedRole = CHUNKS[m.retrieved].role.replace(/&#183;.*$/, "").trim();
+    var plain = verdEl.textContent.replace(/<[^>]+>/g, "");
+    srEl.textContent = m.label + ". Retrieved " + retrievedRole + " at rank 1. " + plain;
+  }
+
+  document.querySelectorAll("#scn button").forEach(function(b){
+    b.addEventListener("click", function(){ current = b.dataset.s; render(); });
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    var i = ORDER.indexOf(current);
+    i = e.key === "ArrowRight" ? (i+1) % ORDER.length : (i-1+ORDER.length) % ORDER.length;
+    current = ORDER[i];
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

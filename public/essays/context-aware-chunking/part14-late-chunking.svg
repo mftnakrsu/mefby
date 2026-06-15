@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 640" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p14lc-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="p14lc-arr-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b5cf6"/>
+    </marker>
+    <marker id="p14lc-arr-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f43f5e"/>
+    </marker>
+    <marker id="p14lc-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#14b8a6"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="640" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">Two ways to turn a document into chunk vectors</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">Where you cut the document relative to the encoder decides whether each chunk vector remembers its context.</text>
+
+  <!-- ===================================================================== -->
+  <!-- Panel A: NAIVE - chunk then embed                                       -->
+  <!-- ===================================================================== -->
+  <g transform="translate(40,96)">
+    <rect width="490" height="500" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <rect width="6" height="500" rx="3" fill="#f43f5e"/>
+
+    <text x="26" y="34" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#64748b">NAIVE: CHUNK, THEN EMBED</text>
+    <text x="26" y="54" font-size="11.5" fill="#64748b">Cut first. Each chunk meets the encoder alone.</text>
+
+    <!-- step 1: split the document into isolated chunk strings -->
+    <text x="26" y="86" font-size="10.5" font-weight="700" letter-spacing="0.04em" fill="#64748b">1 &#183; SPLIT THE TEXT</text>
+
+    <rect x="26" y="98" width="438" height="40" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="40" y="115" font-size="11" fill="#334155">Alice founded Acme in 2019.</text>
+    <text x="40" y="130" font-size="9.5" fill="#94a3b8">chunk [0]</text>
+
+    <rect x="26" y="146" width="438" height="40" rx="8" fill="#fff1f2" stroke="#f43f5e"/>
+    <text x="40" y="163" font-size="11" fill="#9f1239">She set the refund window at 30 days.</text>
+    <text x="40" y="178" font-size="9.5" fill="#e11d48" font-weight="700">chunk [1] &#183; "She" has no antecedent here</text>
+
+    <!-- step 2: each chunk embedded independently -->
+    <text x="26" y="216" font-size="10.5" font-weight="700" letter-spacing="0.04em" fill="#64748b">2 &#183; EMBED EACH CHUNK ON ITS OWN</text>
+
+    <!-- encoder box 1 -->
+    <line x1="245" y1="138" x2="245" y2="232" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#p14lc-arr)"/>
+    <rect x="120" y="232" width="250" height="38" rx="8" fill="#f5f3ff" stroke="#8b5cf6"/>
+    <text x="245" y="256" font-size="11" font-weight="700" fill="#6d28d9" text-anchor="middle">encoder (sees chunk [0] only)</text>
+
+    <line x1="245" y1="186" x2="245" y2="300" stroke="#f43f5e" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#p14lc-arr-rose)"/>
+    <rect x="120" y="300" width="250" height="38" rx="8" fill="#fff1f2" stroke="#f43f5e"/>
+    <text x="245" y="324" font-size="11" font-weight="700" fill="#e11d48" text-anchor="middle">encoder (sees chunk [1] only)</text>
+
+    <!-- resulting chunk vectors -->
+    <text x="26" y="372" font-size="10.5" font-weight="700" letter-spacing="0.04em" fill="#64748b">3 &#183; CHUNK VECTORS</text>
+
+    <line x1="245" y1="270" x2="245" y2="388" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#p14lc-arr)"/>
+    <rect x="120" y="388" width="250" height="34" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="245" y="409" font-size="10.5" fill="#475569" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">v0 &#8594; about a 2019 founding</text>
+
+    <line x1="245" y1="338" x2="245" y2="430" stroke="#f43f5e" stroke-width="1.6" marker-end="url(#p14lc-arr-rose)"/>
+    <rect x="120" y="430" width="250" height="34" rx="8" fill="#fff1f2" stroke="#f43f5e"/>
+    <text x="245" y="451" font-size="10.5" fill="#e11d48" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">v1 &#8594; "she set a window" (whose?)</text>
+
+    <text x="26" y="486" font-size="10.5" fill="#9f1239">The answer chunk forgot it was about Alice. A "what is Alice's refund window?" query misses it.</text>
+  </g>
+
+  <!-- ===================================================================== -->
+  <!-- Panel B: LATE CHUNKING - embed all tokens, then pool                    -->
+  <!-- ===================================================================== -->
+  <g transform="translate(550,96)">
+    <rect width="490" height="500" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <rect width="6" height="500" rx="3" fill="#14b8a6"/>
+
+    <text x="26" y="34" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#64748b">LATE CHUNKING: EMBED ALL, THEN POOL</text>
+    <text x="26" y="54" font-size="11.5" fill="#64748b">Encode first. Pool token spans after the transformer.</text>
+
+    <!-- step 1: whole document as one token strip -->
+    <text x="26" y="86" font-size="10.5" font-weight="700" letter-spacing="0.04em" fill="#64748b">1 &#183; THE WHOLE DOCUMENT, AS TOKENS</text>
+
+    <g font-size="9.5" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">
+      <rect x="26" y="98" width="50" height="28" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="51" y="116" fill="#475569" text-anchor="middle">Alice</text>
+      <rect x="80" y="98" width="78" height="28" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="119" y="116" fill="#475569" text-anchor="middle">founded</text>
+      <rect x="162" y="98" width="62" height="28" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="193" y="116" fill="#475569" text-anchor="middle">Acme 2019</text>
+      <rect x="228" y="98" width="42" height="28" rx="6" fill="#f0fdfa" stroke="#14b8a6"/><text x="249" y="116" fill="#0f766e" text-anchor="middle">She</text>
+      <rect x="274" y="98" width="44" height="28" rx="6" fill="#f0fdfa" stroke="#14b8a6"/><text x="296" y="116" fill="#0f766e" text-anchor="middle">set</text>
+      <rect x="322" y="98" width="70" height="28" rx="6" fill="#f0fdfa" stroke="#14b8a6"/><text x="357" y="116" fill="#0f766e" text-anchor="middle">refund</text>
+      <rect x="396" y="98" width="68" height="28" rx="6" fill="#f0fdfa" stroke="#14b8a6"/><text x="430" y="116" fill="#0f766e" text-anchor="middle">30 days</text>
+    </g>
+
+    <!-- step 2: one pass through long-context encoder -->
+    <line x1="245" y1="126" x2="245" y2="156" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#p14lc-arr)"/>
+    <rect x="60" y="156" width="370" height="42" rx="8" fill="#f5f3ff" stroke="#8b5cf6"/>
+    <text x="245" y="176" font-size="11.5" font-weight="700" fill="#6d28d9" text-anchor="middle">long-context encoder, one pass</text>
+    <text x="245" y="190" font-size="9.5" fill="#7c3aed" text-anchor="middle">every token attends to every other token</text>
+
+    <!-- step 3: contextualized per-token vectors -->
+    <text x="26" y="234" font-size="10.5" font-weight="700" letter-spacing="0.04em" fill="#64748b">2 &#183; CONTEXTUALIZED TOKEN VECTORS</text>
+    <line x1="245" y1="198" x2="245" y2="246" stroke="#8b5cf6" stroke-width="1.6" marker-end="url(#p14lc-arr-violet)"/>
+
+    <g font-size="9" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">
+      <rect x="26" y="246" width="50" height="26" rx="6" fill="#ede9fe" stroke="#8b5cf6"/><text x="51" y="263" fill="#6d28d9" text-anchor="middle">Alice*</text>
+      <rect x="80" y="246" width="78" height="26" rx="6" fill="#ede9fe" stroke="#8b5cf6"/><text x="119" y="263" fill="#6d28d9" text-anchor="middle">founded*</text>
+      <rect x="162" y="246" width="62" height="26" rx="6" fill="#ede9fe" stroke="#8b5cf6"/><text x="193" y="263" fill="#6d28d9" text-anchor="middle">Acme 2019*</text>
+      <rect x="228" y="246" width="42" height="26" rx="6" fill="#ccfbf1" stroke="#0d9488"/><text x="249" y="263" fill="#0f766e" text-anchor="middle">She*</text>
+      <rect x="274" y="246" width="44" height="26" rx="6" fill="#ccfbf1" stroke="#0d9488"/><text x="296" y="263" fill="#0f766e" text-anchor="middle">set*</text>
+      <rect x="322" y="246" width="70" height="26" rx="6" fill="#ccfbf1" stroke="#0d9488"/><text x="357" y="263" fill="#0f766e" text-anchor="middle">refund*</text>
+      <rect x="396" y="246" width="68" height="26" rx="6" fill="#ccfbf1" stroke="#0d9488"/><text x="430" y="263" fill="#0f766e" text-anchor="middle">30 days*</text>
+    </g>
+    <text x="26" y="288" font-size="10" fill="#0f766e">* "She" now carries "Alice"; "refund" sits next to "founded Acme in 2019".</text>
+
+    <!-- step 4: pool spans into chunk vectors -->
+    <text x="26" y="320" font-size="10.5" font-weight="700" letter-spacing="0.04em" fill="#64748b">3 &#183; POOL EACH SPAN INTO A CHUNK VECTOR</text>
+
+    <!-- span [0] bracket -->
+    <path d="M28,300 v8 h196 v-8" fill="none" stroke="#94a3b8" stroke-width="1.4"/>
+    <line x1="126" y1="316" x2="126" y2="346" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#p14lc-arr)"/>
+    <!-- span [1] bracket -->
+    <path d="M230,300 v8 h232 v-8" fill="none" stroke="#14b8a6" stroke-width="1.4"/>
+    <line x1="346" y1="316" x2="346" y2="346" stroke="#14b8a6" stroke-width="1.6" marker-end="url(#p14lc-arr-teal)"/>
+
+    <rect x="26" y="346" width="200" height="34" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="126" y="367" font-size="10.5" fill="#475569" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">mean(span [0]) &#8594; v0</text>
+
+    <rect x="246" y="346" width="218" height="34" rx="8" fill="#f0fdfa" stroke="#14b8a6"/>
+    <text x="355" y="367" font-size="10.5" fill="#0f766e" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">mean(span [1]) &#8594; v1</text>
+
+    <!-- result chunk vectors -->
+    <text x="26" y="416" font-size="10.5" font-weight="700" letter-spacing="0.04em" fill="#64748b">4 &#183; CHUNK VECTORS</text>
+    <line x1="126" y1="380" x2="126" y2="430" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#p14lc-arr)"/>
+    <line x1="355" y1="380" x2="355" y2="430" stroke="#14b8a6" stroke-width="1.6" marker-end="url(#p14lc-arr-teal)"/>
+
+    <rect x="26" y="430" width="200" height="34" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="126" y="451" font-size="10" fill="#475569" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">v0 &#8594; Alice, Acme, 2019</text>
+
+    <rect x="246" y="430" width="218" height="34" rx="8" fill="#f0fdfa" stroke="#14b8a6"/>
+    <text x="355" y="451" font-size="10" fill="#0f766e" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">v1 &#8594; Alice's 30-day refund</text>
+
+    <text x="26" y="486" font-size="10.5" fill="#0f766e">Same chunk boundaries. But v1 was pooled from tokens that had already read the whole document.</text>
+  </g>
+</svg>

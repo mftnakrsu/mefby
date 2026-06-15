@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 560" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p13pm-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="p13pm-arr-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b5cf6"/>
+    </marker>
+    <marker id="p13pm-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#14b8a6"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="560" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">One vector, or one per token</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">The same passage, encoded two ways. Pooling averages the tokens into a single point; multi-vectors keep every token.</text>
+
+  <!-- ===================================================================== -->
+  <!-- Panel 1: POOLED (single-vector)                                        -->
+  <!-- ===================================================================== -->
+  <g transform="translate(40,96)">
+    <rect width="490" height="416" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <rect width="6" height="416" rx="3" fill="#8b5cf6"/>
+
+    <text x="26" y="34" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#64748b">POOLED &#183; ONE VECTOR PER PASSAGE</text>
+    <text x="26" y="54" font-size="11.5" fill="#64748b">The single-vector dense retrieval of Part 7.</text>
+
+    <!-- the passage as a strip of tokens -->
+    <g font-size="10.5" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">
+      <rect x="26" y="78" width="86" height="28" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="69" y="96" fill="#475569" text-anchor="middle">refunds</text>
+      <rect x="120" y="78" width="78" height="28" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="159" y="96" fill="#475569" text-anchor="middle">within</text>
+      <rect x="206" y="78" width="58" height="28" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="235" y="96" fill="#475569" text-anchor="middle">30</text>
+      <rect x="272" y="78" width="66" height="28" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="305" y="96" fill="#475569" text-anchor="middle">days</text>
+      <rect x="346" y="78" width="118" height="28" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="405" y="96" fill="#475569" text-anchor="middle">error E-4042</text>
+    </g>
+
+    <!-- mean-pool funnel -->
+    <text x="245" y="138" font-size="11" font-weight="700" fill="#7c3aed" text-anchor="middle">mean-pool</text>
+    <path d="M69,108 L245,150" fill="none" stroke="#8b5cf6" stroke-width="1.4"/>
+    <path d="M159,108 L245,150" fill="none" stroke="#8b5cf6" stroke-width="1.4"/>
+    <path d="M235,108 L245,150" fill="none" stroke="#8b5cf6" stroke-width="1.4"/>
+    <path d="M305,108 L245,150" fill="none" stroke="#8b5cf6" stroke-width="1.4"/>
+    <path d="M405,108 L245,150" fill="none" stroke="#8b5cf6" stroke-width="1.4"/>
+
+    <!-- the one pooled vector -->
+    <g transform="translate(0,158)">
+      <rect x="142" y="0" width="206" height="40" rx="9" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.6"/>
+      <g font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">
+        <rect x="152" y="8" width="22" height="24" rx="4" fill="#ddd6fe"/>
+        <rect x="178" y="8" width="22" height="24" rx="4" fill="#c4b5fd"/>
+        <rect x="204" y="8" width="22" height="24" rx="4" fill="#ddd6fe"/>
+        <rect x="230" y="8" width="22" height="24" rx="4" fill="#a78bfa"/>
+        <rect x="256" y="8" width="22" height="24" rx="4" fill="#c4b5fd"/>
+        <rect x="282" y="8" width="22" height="24" rx="4" fill="#ddd6fe"/>
+        <rect x="308" y="8" width="22" height="24" rx="4" fill="#c4b5fd"/>
+      </g>
+      <text x="245" y="60" font-size="10.5" font-weight="700" fill="#6d28d9" text-anchor="middle">1 vector &#215; d dims</text>
+    </g>
+
+    <!-- the cost line -->
+    <text x="26" y="270" font-size="11.5" font-weight="700" fill="#0f172a">Cheap to store, fast to search.</text>
+
+    <!-- the failure box -->
+    <rect x="26" y="284" width="438" height="112" rx="10" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.3"/>
+    <text x="42" y="308" font-size="11" font-weight="700" letter-spacing="0.04em" fill="#e11d48">THE POOLING PROBLEM</text>
+    <text x="42" y="330" font-size="11.5" fill="#9f1239">A query term like</text>
+    <text x="158" y="330" font-size="11.5" font-weight="700" fill="#9f1239" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">E-4042</text>
+    <text x="221" y="330" font-size="11.5" fill="#9f1239">matches one word in a long</text>
+    <text x="42" y="350" font-size="11.5" fill="#9f1239">passage, but the average dilutes it away. The exact-term</text>
+    <text x="42" y="370" font-size="11.5" fill="#9f1239">signal is gone before retrieval ever scores the passage.</text>
+  </g>
+
+  <!-- ===================================================================== -->
+  <!-- Panel 2: MULTI-VECTOR (per-token)                                      -->
+  <!-- ===================================================================== -->
+  <g transform="translate(550,96)">
+    <rect width="490" height="416" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <rect width="6" height="416" rx="3" fill="#06b6d4"/>
+
+    <text x="26" y="34" font-size="12" font-weight="700" letter-spacing="0.06em" fill="#64748b">MULTI-VECTOR &#183; ONE VECTOR PER TOKEN</text>
+    <text x="26" y="54" font-size="11.5" fill="#64748b">Late interaction keeps the token-level signal.</text>
+
+    <!-- the same passage strip -->
+    <g font-size="10.5" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">
+      <rect x="26" y="78" width="86" height="28" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="69" y="96" fill="#475569" text-anchor="middle">refunds</text>
+      <rect x="120" y="78" width="78" height="28" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="159" y="96" fill="#475569" text-anchor="middle">within</text>
+      <rect x="206" y="78" width="58" height="28" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="235" y="96" fill="#475569" text-anchor="middle">30</text>
+      <rect x="272" y="78" width="66" height="28" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="305" y="96" fill="#475569" text-anchor="middle">days</text>
+      <rect x="346" y="78" width="118" height="28" rx="7" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.6"/>
+      <text x="405" y="96" fill="#0e7490" text-anchor="middle">error E-4042</text>
+    </g>
+
+    <!-- straight-down arrows, one per token -->
+    <line x1="69"  y1="108" x2="69"  y2="146" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#p13pm-arr)"/>
+    <line x1="159" y1="108" x2="159" y2="146" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#p13pm-arr)"/>
+    <line x1="235" y1="108" x2="235" y2="146" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#p13pm-arr)"/>
+    <line x1="305" y1="108" x2="305" y2="146" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#p13pm-arr)"/>
+    <line x1="405" y1="108" x2="405" y2="146" stroke="#06b6d4" stroke-width="1.6" marker-end="url(#p13pm-arr-teal)"/>
+
+    <!-- five small token vectors -->
+    <g font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="0">
+      <!-- token 1 -->
+      <rect x="44" y="150" width="50" height="58" rx="7" fill="#f5f3ff" stroke="#8b5cf6"/>
+      <rect x="52" y="158" width="34" height="9" rx="2" fill="#c4b5fd"/>
+      <rect x="52" y="170" width="34" height="9" rx="2" fill="#ddd6fe"/>
+      <rect x="52" y="182" width="34" height="9" rx="2" fill="#a78bfa"/>
+      <rect x="52" y="194" width="34" height="9" rx="2" fill="#c4b5fd"/>
+      <!-- token 2 -->
+      <rect x="134" y="150" width="50" height="58" rx="7" fill="#f5f3ff" stroke="#8b5cf6"/>
+      <rect x="142" y="158" width="34" height="9" rx="2" fill="#ddd6fe"/>
+      <rect x="142" y="170" width="34" height="9" rx="2" fill="#a78bfa"/>
+      <rect x="142" y="182" width="34" height="9" rx="2" fill="#ddd6fe"/>
+      <rect x="142" y="194" width="34" height="9" rx="2" fill="#c4b5fd"/>
+      <!-- token 3 -->
+      <rect x="210" y="150" width="50" height="58" rx="7" fill="#f5f3ff" stroke="#8b5cf6"/>
+      <rect x="218" y="158" width="34" height="9" rx="2" fill="#a78bfa"/>
+      <rect x="218" y="170" width="34" height="9" rx="2" fill="#c4b5fd"/>
+      <rect x="218" y="182" width="34" height="9" rx="2" fill="#ddd6fe"/>
+      <rect x="218" y="194" width="34" height="9" rx="2" fill="#a78bfa"/>
+      <!-- token 4 -->
+      <rect x="280" y="150" width="50" height="58" rx="7" fill="#f5f3ff" stroke="#8b5cf6"/>
+      <rect x="288" y="158" width="34" height="9" rx="2" fill="#c4b5fd"/>
+      <rect x="288" y="170" width="34" height="9" rx="2" fill="#ddd6fe"/>
+      <rect x="288" y="182" width="34" height="9" rx="2" fill="#c4b5fd"/>
+      <rect x="288" y="194" width="34" height="9" rx="2" fill="#ddd6fe"/>
+      <!-- token 5 (the exact-term token, highlighted cyan) -->
+      <rect x="380" y="150" width="50" height="58" rx="7" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.6"/>
+      <rect x="388" y="158" width="34" height="9" rx="2" fill="#67e8f9"/>
+      <rect x="388" y="170" width="34" height="9" rx="2" fill="#22d3ee"/>
+      <rect x="388" y="182" width="34" height="9" rx="2" fill="#67e8f9"/>
+      <rect x="388" y="194" width="34" height="9" rx="2" fill="#22d3ee"/>
+    </g>
+    <text x="245" y="230" font-size="10.5" font-weight="700" fill="#0e7490" text-anchor="middle">n tokens &#215; d dims, nothing averaged away</text>
+
+    <!-- the win box -->
+    <rect x="26" y="284" width="438" height="112" rx="10" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.3"/>
+    <text x="42" y="308" font-size="11" font-weight="700" letter-spacing="0.04em" fill="#0e7490">WHAT THIS BUYS</text>
+    <text x="42" y="330" font-size="11.5" fill="#155e75">The</text>
+    <text x="68" y="330" font-size="11.5" font-weight="700" fill="#155e75" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">E-4042</text>
+    <text x="131" y="330" font-size="11.5" fill="#155e75">token keeps its own vector, so a query that</text>
+    <text x="42" y="350" font-size="11.5" fill="#155e75">mentions the code can match it directly at query time. The</text>
+    <text x="42" y="370" font-size="11.5" fill="#155e75">cost: far more storage. The scoring rule is MaxSim (next figure).</text>
+  </g>
+</svg>

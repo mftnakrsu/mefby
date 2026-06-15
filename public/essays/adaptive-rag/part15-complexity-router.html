@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The complexity router</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 15 flagship animation
+     Self-contained: no external resources, no web fonts, inline SVG only.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --radius-card: 14px;
+    --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 320ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .vb { max-width: 900px; margin: 0 auto; }
+
+  .vb-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 14px; }
+  .vb-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .vb-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .vb-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* scenario picker (grouped query chips) */
+  .vb-scn-wrap { margin: 6px 0 14px; }
+  .vb-scn-legend { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .vb-scn-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .scn {
+    font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer; text-align: left;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease),
+                color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .scn .scn-tag {
+    font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+    padding: 1px 6px; border-radius: 6px; text-transform: uppercase;
+  }
+  .scn[data-cls="none"]   .scn-tag { color: #475569; background: var(--surface-2); }
+  .scn[data-cls="single"] .scn-tag { color: #0e7490; background: #ecfeff; }
+  .scn[data-cls="multi"]  .scn-tag { color: #6d28d9; background: #f5f3ff; }
+  .scn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .scn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); border-color: var(--indigo); }
+  .scn[aria-pressed="true"][data-cls="none"]   { border-color: var(--muted);  background: var(--surface-1); box-shadow: 0 1px 2px rgba(15,23,42,0.08); }
+  .scn[aria-pressed="true"][data-cls="single"] { border-color: var(--cyan);   background: #ecfeff; box-shadow: 0 1px 2px rgba(6,182,212,0.12); }
+  .scn[aria-pressed="true"][data-cls="multi"]  { border-color: var(--violet); background: #f5f3ff; box-shadow: 0 1px 2px rgba(139,92,246,0.12); }
+
+  /* verdict strip */
+  .vb-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .vb-route-pill {
+    font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+    border: 1px solid var(--border); border-radius: 10px; background: #fff;
+    padding: 6px 13px; color: var(--muted);
+    transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+  }
+  .vb-route-pill .rp-label { color: var(--muted); font-family: var(--sans); font-weight: 600; font-size: 11.5px; margin-right: 7px; }
+  .vb.route-none   .vb-route-pill { color: #475569; border-color: var(--muted); background: var(--surface-1); }
+  .vb.route-single .vb-route-pill { color: #0e7490; border-color: var(--cyan);   background: #ecfeff; }
+  .vb.route-multi  .vb-route-pill { color: #6d28d9; border-color: var(--violet); background: #f5f3ff; }
+  .vb-cost {
+    font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 10px; background: #fff; padding: 6px 12px;
+  }
+  .vb-cost b { font-family: var(--mono); color: var(--heading); }
+
+  /* canvas */
+  .vb-canvas {
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: radial-gradient(120% 100% at 50% -10%, var(--surface-1) 0%, var(--bg) 60%);
+    padding: 10px;
+  }
+  .vb-svg { display: block; width: 100%; height: auto; }
+
+  /* nodes */
+  .node-box {
+    fill: #ffffff; stroke: var(--border); stroke-width: 1.5;
+    transition: fill var(--dur) var(--ease), stroke var(--dur) var(--ease), stroke-width var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  }
+  .node-label { font-family: var(--sans); font-weight: 700; fill: var(--heading); text-anchor: middle; }
+  .node-sub { font-family: var(--sans); font-weight: 500; fill: var(--muted); text-anchor: middle; }
+  .node.dim .node-box { opacity: 0.34; }
+  .node.dim .node-label, .node.dim .node-sub { opacity: 0.34; }
+  .node.active .node-box { stroke-width: 3; }
+
+  .node.role-query.active .node-box  { stroke: var(--indigo-strong); fill: color-mix(in srgb, var(--indigo) 9%, #fff); }
+  .node.role-query.active .node-label { fill: var(--indigo-strong); }
+  .node.role-retrieve.active .node-box  { stroke: var(--cyan); fill: color-mix(in srgb, var(--cyan) 10%, #fff); }
+  .node.role-retrieve.active .node-label { fill: #0e7490; }
+  .node.role-decompose.active .node-box  { stroke: var(--violet); fill: color-mix(in srgb, var(--violet) 10%, #fff); }
+  .node.role-decompose.active .node-label { fill: #6d28d9; }
+  .node.role-generate.active .node-box  { stroke: var(--indigo-strong); fill: color-mix(in srgb, var(--indigo) 9%, #fff); }
+  .node.role-generate.active .node-label { fill: var(--indigo-strong); }
+  .node.role-generate.grounded .node-box  { stroke: var(--emerald); fill: color-mix(in srgb, var(--emerald) 11%, #fff); }
+  .node.role-generate.grounded .node-label { fill: #047857; }
+
+  /* classifier diamond */
+  .diamond {
+    fill: #ffffff; stroke: var(--border); stroke-width: 1.5;
+    transition: fill var(--dur) var(--ease), stroke var(--dur) var(--ease), stroke-width var(--dur) var(--ease);
+  }
+  .diamond-label { font-family: var(--sans); font-weight: 700; fill: var(--heading); text-anchor: middle; }
+  .diamond-sub { font-family: var(--sans); font-weight: 500; fill: var(--muted); text-anchor: middle; }
+  .node.dim .diamond { opacity: 0.34; }
+  .node.dim .diamond-label, .node.dim .diamond-sub { opacity: 0.34; }
+  .node.role-classify.active .diamond { stroke: var(--amber); stroke-width: 3; fill: color-mix(in srgb, var(--amber) 12%, #fff); }
+  .node.role-classify.active .diamond-label { fill: #b45309; }
+
+  /* route group labels (the A/B/C banners) */
+  .route-band { fill: var(--surface-1); stroke: var(--border); stroke-width: 1.2; transition: opacity var(--dur) var(--ease); }
+  .route-band.dim { opacity: 0.34; }
+  .route-rail { transition: opacity var(--dur) var(--ease); }
+  .route-rail.dim { opacity: 0.34; }
+  .route-tag { font-family: var(--sans); font-size: 10px; font-weight: 700; letter-spacing: 0.05em; transition: opacity var(--dur) var(--ease); }
+  .route-tag.dim { opacity: 0.34; }
+  .route-tag.none   { fill: #64748b; }
+  .route-tag.single { fill: #0e7490; }
+  .route-tag.multi  { fill: #6d28d9; }
+
+  /* edges */
+  .edge { stroke: #cbd5e1; stroke-width: 2; fill: none; transition: stroke var(--dur) var(--ease), stroke-width var(--dur) var(--ease), opacity var(--dur) var(--ease); }
+  .edge.dim { opacity: 0.22; }
+  .edge.lit.flow-slate   { stroke: var(--muted); stroke-width: 3; }
+  .edge.lit.flow-teal    { stroke: var(--cyan);  stroke-width: 3; }
+  .edge.lit.flow-violet  { stroke: var(--violet);stroke-width: 3; }
+  .edge.lit.flow-indigo  { stroke: var(--indigo-strong); stroke-width: 3; }
+  .edge.lit.flow-emerald { stroke: var(--emerald); stroke-width: 3; }
+
+  .edge-label { font-family: var(--mono); font-size: 10.5px; font-weight: 700; text-anchor: middle; transition: opacity var(--dur) var(--ease); }
+  .edge-label.dim { opacity: 0.25; }
+  .edge-label.none   { fill: #475569; }
+  .edge-label.single { fill: #0e7490; }
+  .edge-label.multi  { fill: #6d28d9; }
+
+  /* caption (aria-live) */
+  .vb-caption {
+    margin-top: 14px; display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius-card); padding: 13px 16px;
+  }
+  .vb-caption-dot {
+    flex: 0 0 auto; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--amber); box-shadow: 0 0 0 4px rgba(245,158,11,0.18);
+    transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .vb.route-none   .vb-caption-dot { background: var(--muted);  box-shadow: 0 0 0 4px rgba(100,116,139,0.18); }
+  .vb.route-single .vb-caption-dot { background: var(--cyan);   box-shadow: 0 0 0 4px rgba(6,182,212,0.18); }
+  .vb.route-multi  .vb-caption-dot { background: var(--violet); box-shadow: 0 0 0 4px rgba(139,92,246,0.18); }
+  .vb-caption-text { font-size: 14.5px; color: var(--body); }
+  .vb-caption-text b { color: var(--heading); }
+  .vb-caption-text code {
+    font-family: var(--mono); font-size: 12.5px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; color: var(--indigo-strong);
+  }
+
+  /* controls (shared with the series player) */
+  .ex-controls { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .ex-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ex-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease),
+                color 160ms var(--ease), transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .ex-btn svg { width: 15px; height: 15px; }
+  .ex-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .ex-btn:active { transform: translateY(1px); }
+  .ex-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); border-color: var(--indigo); }
+  .ex-btn.primary { color: #fff; background: var(--indigo-strong); border-color: var(--indigo-strong); }
+  .ex-btn.primary:hover { background: var(--indigo); border-color: var(--indigo); }
+  .ex-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .ex-status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .ex-stepcount { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ex-stepcount b { color: var(--heading); }
+  .ex-dots { display: flex; gap: 7px; }
+  .ex-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer;
+            transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .ex-dot:hover { background: #cbd5e1; }
+  .ex-dot.is-active { background: var(--indigo); transform: scale(1.35); }
+  .ex-dot.is-past { background: color-mix(in srgb, var(--indigo) 45%, var(--border)); }
+  .ex-dot:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 35%, transparent); }
+
+  .ex-hint { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .ex-hint kbd {
+    font-family: var(--mono); font-size: 11px; background: var(--surface-2);
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+    padding: 1px 5px; color: var(--body);
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .node-box, .diamond, .edge, .edge-label, .route-band, .route-rail, .route-tag,
+    .vb-caption-dot, .ex-dot, .vb-route-pill, .scn { transition: none !important; }
+  }
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .vb-title { font-size: 19px; }
+    .ex-status { margin-left: 0; width: 100%; justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+  <main class="vb route-single" aria-label="A query-complexity router that sends each query to no-retrieval, single-step, or multi-step retrieval">
+    <header class="vb-head">
+      <span class="vb-eyebrow">RAG from First Principles &#183; Part 15</span>
+      <h1 class="vb-title">The complexity router</h1>
+      <p class="vb-sub">Pick a query. The classifier reads it, picks a route, and that path lights up end to end.</p>
+    </header>
+
+    <div class="vb-scn-wrap">
+      <p class="vb-scn-legend" id="scnLegend">Choose a query</p>
+      <div class="vb-scn-grid" id="scnGrid" role="group" aria-labelledby="scnLegend"></div>
+    </div>
+
+    <div class="vb-verdict">
+      <span class="vb-route-pill"><span class="rp-label">Route</span><span id="routeName">single-step</span></span>
+      <span class="vb-cost">Pipelines run: <b id="costVal">1</b></span>
+    </div>
+
+    <div class="vb-canvas">
+      <svg class="vb-svg" id="vbsvg" viewBox="0 0 760 470" role="img"
+           aria-label="A routing diagram. A query flows into a complexity classifier diamond, which branches to three horizontal routes: route A no-retrieval (a single Generate step), route B single-step (Retrieve then Generate, from Part 6), and route C multi-step (Decompose, Retrieve per sub-query, then Synthesize, from Part 10). The selected route is highlighted while the others are dimmed.">
+        <defs>
+          <pattern id="vbgrid" width="36" height="36" patternUnits="userSpaceOnUse">
+            <path d="M36 0 H0 V36" fill="none" stroke="#f1f5f9" stroke-width="1"/>
+          </pattern>
+          <marker id="rt-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#cbd5e1"/>
+          </marker>
+          <marker id="rt-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#64748b"/>
+          </marker>
+          <marker id="rt-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#06b6d4"/>
+          </marker>
+          <marker id="rt-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#8b5cf6"/>
+          </marker>
+          <marker id="rt-indigo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#4f46e5"/>
+          </marker>
+          <marker id="rt-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#10b981"/>
+          </marker>
+        </defs>
+        <rect x="0" y="0" width="760" height="470" fill="url(#vbgrid)"/>
+        <g id="bandG"></g>
+        <g id="edgeG"></g>
+        <g id="nodeG"></g>
+      </svg>
+    </div>
+
+    <div class="vb-caption">
+      <span class="vb-caption-dot" id="captionDot" aria-hidden="true"></span>
+      <p class="vb-caption-text" id="caption" aria-live="polite"></p>
+    </div>
+
+    <div class="ex-controls">
+      <div class="ex-btns">
+        <button class="ex-btn primary" id="btnPlay" aria-label="Play animation">
+          <span id="playIcon" aria-hidden="true"></span><span id="playText">Play</span>
+        </button>
+        <button class="ex-btn" id="btnBack" aria-label="Previous step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="ex-btn" id="btnNext" aria-label="Next step">
+          Next
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="ex-btn" id="btnRestart" aria-label="Restart from the beginning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="ex-status">
+        <span class="ex-stepcount" id="stepCount" aria-hidden="true">Step 1 of 3</span>
+        <div class="ex-dots" id="dots" role="group" aria-label="Jump to step"></div>
+      </div>
+    </div>
+
+    <p class="ex-hint">
+      <kbd>Space</kbd> play / pause &nbsp;&#183;&nbsp; <kbd>&#8592;</kbd> back &nbsp;&#183;&nbsp; <kbd>&#8594;</kbd> next &nbsp;&#183;&nbsp; pick a different <b>query</b> above to re-route
+    </p>
+    <p class="sr-only" id="liveExtra" aria-live="polite"></p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var W = 760, H = 470;
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- SVG helpers ---------- */
+  function el(name, attrs) {
+    var e = document.createElementNS(SVGNS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function diamondPts(cx, cy, hw, hh) {
+    return cx + "," + (cy - hh) + " " + (cx + hw) + "," + cy + " " +
+           cx + "," + (cy + hh) + " " + (cx - hw) + "," + cy + " ";
+  }
+
+  /* ---------- the complexity classifier, ported verbatim ----------
+     This is classify_complexity() from part-15-adaptive-rag/adaptive_rag.py,
+     re-expressed in JavaScript so the widget COMPUTES each query's route from
+     the query string instead of hard-coding a label. Same three checks, same
+     order, same signals, so the widget can never drift from the .py:
+       q = query.lower().strip()
+       none   if /\b(hi|hello|thanks|who are you)\b/ matches q OR q has <= 2 words
+       multi  if q contains a multi_signal phrase OR q has more than one "?"
+       single otherwise */
+  var MULTI_SIGNALS = ["compare", "versus", " vs ", "difference between",
+                       " and then", "across", "each of", "both", "trade-off"];
+  function classifyComplexity(query) {
+    var q = query.toLowerCase().trim();
+    var words = q.split(/\s+/).filter(function (w) { return w.length > 0; });
+    if (/\b(hi|hello|thanks|who are you)\b/.test(q) || words.length <= 2) {
+      return "none";
+    }
+    var hasSignal = MULTI_SIGNALS.some(function (s) { return q.indexOf(s) !== -1; });
+    var questionMarks = (q.match(/\?/g) || []).length;
+    if (hasSignal || questionMarks > 1) {
+      return "multi";
+    }
+    return "single";
+  }
+
+  /* ---------- query scenarios (3 per class), all deterministic ----------
+     Each query's route is COMPUTED by classifyComplexity() above, so every
+     example here is guaranteed to match what adaptive_rag.py would return. The
+     `why` strings name the ACTUAL signal that triggered the route. */
+  var QUERY_DEFS = [
+    { id: "n1", text: "hi there", why: "Matched the greeting word \"hi\"." },
+    { id: "n2", text: "thanks", why: "Matched \"thanks\" (and only one word)." },
+    { id: "n3", text: "who are you", why: "Matched \"who are you\": pure chit-chat, nothing to retrieve." },
+    { id: "s1", text: "What is our refund window?", why: "No multi signal and one \"?\": a plain lookup." },
+    { id: "s2", text: "How do I fix the E-4042 error?", why: "No multi signal and one \"?\": a plain lookup." },
+    { id: "s3", text: "What is the warranty period?", why: "No multi signal and one \"?\": a plain lookup." },
+    { id: "m1", text: "Compare the refund window and the warranty period, and explain the difference.", why: "Matched the comparative \"compare\": decompose into sub-queries." },
+    { id: "m2", text: "What is the difference between the refund window and the warranty?", why: "Matched the phrase \"difference between\": decompose into sub-queries." },
+    { id: "m3", text: "Is the refund window 30 days? And does the warranty cover accidental damage?", why: "Two question marks: the message is really two questions." }
+  ];
+  // Attach the COMPUTED route to each query so chips, caption, and routing all
+  // read from the same source of truth as the .py classifier.
+  var QUERIES = QUERY_DEFS.map(function (q) {
+    return { id: q.id, text: q.text, why: q.why, cls: classifyComplexity(q.text) };
+  });
+
+  /* ---------- geometry builders ---------- */
+  function makeNode(id, role, x, y, w, h, label, sub) {
+    var g = el("g", { "class": "node role-" + role + " dim", id: "node-" + id });
+    g.appendChild(el("rect", { "class": "node-box", x: x, y: y, width: w, height: h, rx: 12, ry: 12 }));
+    var cx = x + w / 2;
+    var labelY = sub ? y + h / 2 - 3 : y + h / 2 + 5;
+    var t = el("text", { "class": "node-label", x: cx, y: labelY, "font-size": 13 });
+    t.textContent = label;
+    g.appendChild(t);
+    if (sub) {
+      var s = el("text", { "class": "node-sub", x: cx, y: y + h / 2 + 12, "font-size": 10 });
+      s.textContent = sub;
+      g.appendChild(s);
+    }
+    g.dataset.cx = cx; g.dataset.cy = y + h / 2;
+    g.dataset.left = x; g.dataset.right = x + w;
+    g.dataset.top = y; g.dataset.bottom = y + h;
+    return g;
+  }
+  function makeDiamond(id, x, y, hw, hh, label, sub) {
+    var g = el("g", { "class": "node role-classify dim", id: "node-" + id });
+    g.appendChild(el("polygon", { "class": "diamond", points: diamondPts(x, y, hw, hh) }));
+    var t = el("text", { "class": "diamond-label", x: x, y: sub ? y - 3 : y + 4, "font-size": 12 });
+    t.textContent = label;
+    g.appendChild(t);
+    if (sub) {
+      var s = el("text", { "class": "diamond-sub", x: x, y: y + 12, "font-size": 10 });
+      s.textContent = sub;
+      g.appendChild(s);
+    }
+    g.dataset.cx = x; g.dataset.cy = y;
+    g.dataset.left = x - hw; g.dataset.right = x + hw;
+    g.dataset.top = y - hh; g.dataset.bottom = y + hh;
+    return g;
+  }
+
+  var bandG = document.getElementById("bandG");
+  var edgeG = document.getElementById("edgeG");
+  var nodeG = document.getElementById("nodeG");
+
+  function addEdge(id, cls, x1, y1, x2, y2, marker) {
+    var p = el("path", { "class": "edge dim " + cls, id: "edge-" + id,
+      d: "M" + x1 + " " + y1 + " L" + x2 + " " + y2, "marker-end": "url(#" + marker + ")" });
+    edgeG.appendChild(p);
+    return p;
+  }
+  function addPathEdge(id, cls, d, marker) {
+    var p = el("path", { "class": "edge dim " + cls, id: "edge-" + id, d: d, "marker-end": "url(#" + marker + ")" });
+    edgeG.appendChild(p);
+    return p;
+  }
+  function addLabel(id, cls, x, y, text) {
+    var t = el("text", { "class": "edge-label dim " + cls, x: x, y: y, id: "elbl-" + id });
+    t.textContent = text;
+    edgeG.appendChild(t);
+    return t;
+  }
+  function addBand(id, cls, x, y, w, h, railColor) {
+    var g = el("g", { id: "band-" + id });
+    g.appendChild(el("rect", { "class": "route-band dim", x: x, y: y, width: w, height: h, rx: 12, ry: 12 }));
+    g.appendChild(el("rect", { "class": "route-rail dim", x: x, y: y, width: 5, height: h, rx: 2.5, ry: 2.5, fill: railColor }));
+    bandG.appendChild(g);
+    return g;
+  }
+
+  /* ---------- build the static diagram once ---------- */
+  var N = {}, E = {}, B = {};
+  // query + classifier (left column)
+  N.query    = makeNode("query", "query", 18, 196, 116, 56, "Query", "user request");
+  N.classify = makeDiamond("classify", 220, 224, 64, 50, "Classify", "complexity?");
+
+  // route bands (right area)
+  B.none   = addBand("none",   "none",   330, 40,  412, 96,  "#64748b");
+  B.single = addBand("single", "single", 330, 200, 412, 70,  "#06b6d4");
+  B.multi  = addBand("multi",  "multi",  330, 334, 412, 110, "#8b5cf6");
+
+  // route A: no-retrieval -> Generate
+  N.aGen = makeNode("aGen", "generate", 360, 64, 130, 48, "Generate", "model answers");
+  // route B: Retrieve -> Generate
+  N.bRet = makeNode("bRet", "retrieve", 360, 218, 116, 36, "Retrieve", "top-k");
+  N.bGen = makeNode("bGen", "generate", 506, 218, 116, 36, "Generate", "grounded");
+  // route C: Decompose -> Retrieve x n -> Synthesize
+  N.cDec = makeNode("cDec", "decompose", 350, 360, 110, 40, "Decompose", "sub-queries");
+  N.cRet = makeNode("cRet", "retrieve",  476, 360, 110, 40, "Retrieve", "per sub-query");
+  N.cSyn = makeNode("cSyn", "generate",  602, 360, 116, 40, "Synthesize", "merge");
+
+  [N.query, N.classify, N.aGen, N.bRet, N.bGen, N.cDec, N.cRet, N.cSyn]
+    .forEach(function (g) { nodeG.appendChild(g); });
+
+  // route tags
+  function tag(id, cls, x, y, text) {
+    var t = el("text", { "class": "route-tag dim " + cls, x: x, y: y, id: "tag-" + id });
+    t.textContent = text; bandG.appendChild(t); return t;
+  }
+  tag("none",   "none",   346, 58,  "ROUTE A · NO RETRIEVAL");
+  tag("single", "single", 346, 218, "ROUTE B · SINGLE-STEP (PART 6)");
+  tag("multi",  "multi",  346, 354, "ROUTE C · MULTI-STEP (PART 10)");
+
+  // edges: query -> classify
+  E.qc = addEdge("qc", "flow-indigo", +N.query.dataset.right + 4, 224, +N.classify.dataset.left - 8, 240, "rt-grey");
+  // classify -> route A (up)
+  E.cA = addPathEdge("cA", "flow-slate", "M" + (+N.classify.dataset.cx) + " " + (+N.classify.dataset.top + 4) +
+    " C " + (+N.classify.dataset.cx) + " 120, 320 100, " + (+N.aGen.dataset.left - 8) + " 88", "rt-slate");
+  addLabel("cA", "none", 318, 150, "none");
+  // classify -> route B (straight)
+  E.cB = addEdge("cB", "flow-teal", +N.classify.dataset.right + 4, 236, +N.bRet.dataset.left - 8, 236, "rt-cyan");
+  addLabel("cB", "single", 320, 226, "single");
+  // classify -> route C (down)
+  E.cC = addPathEdge("cC", "flow-violet", "M" + (+N.classify.dataset.cx) + " " + (+N.classify.dataset.bottom - 4) +
+    " C " + (+N.classify.dataset.cx) + " 330, 320 380, " + (+N.cDec.dataset.left - 8) + " 380", "rt-violet");
+  addLabel("cC", "multi", 318, 330, "multi");
+  // within route B
+  E.bRG = addEdge("bRG", "flow-teal", +N.bRet.dataset.right + 4, 236, +N.bGen.dataset.left - 8, 236, "rt-cyan");
+  // within route C
+  E.cDR = addEdge("cDR", "flow-violet", +N.cDec.dataset.right + 4, 380, +N.cRet.dataset.left - 8, 380, "rt-violet");
+  E.cRS = addEdge("cRS", "flow-emerald", +N.cRet.dataset.right + 4, 380, +N.cSyn.dataset.left - 8, 380, "rt-emerald");
+  // multi loop-back (one pass per sub-query)
+  E.cLoop = addPathEdge("cLoop", "flow-violet",
+    "M" + (+N.cRet.dataset.cx) + " " + (+N.cRet.dataset.bottom + 2) +
+    " C " + (+N.cRet.dataset.cx) + " 426, " + (+N.cDec.dataset.cx) + " 426, " +
+    (+N.cDec.dataset.cx) + " " + (+N.cDec.dataset.bottom + 2), "rt-violet");
+
+  /* ---------- DOM refs ---------- */
+  var container  = document.querySelector(".vb");
+  var caption    = document.getElementById("caption");
+  var captionDot = document.getElementById("captionDot");
+  var stepCount  = document.getElementById("stepCount");
+  var dotsWrap   = document.getElementById("dots");
+  var routeName  = document.getElementById("routeName");
+  var costVal    = document.getElementById("costVal");
+  var liveExtra  = document.getElementById("liveExtra");
+  var scnGrid    = document.getElementById("scnGrid");
+  var btnPlay    = document.getElementById("btnPlay");
+  var btnBack    = document.getElementById("btnBack");
+  var btnNext    = document.getElementById("btnNext");
+  var btnRestart = document.getElementById("btnRestart");
+  var playIcon   = document.getElementById("playIcon");
+  var playText   = document.getElementById("playText");
+
+  var PLAY_ICON  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+  /* ---------- build the scenario chips ---------- */
+  var scnEls = [];
+  QUERIES.forEach(function (q) {
+    var b = document.createElement("button");
+    b.className = "scn"; b.type = "button"; b.dataset.cls = q.cls; b.dataset.qid = q.id;
+    b.setAttribute("aria-pressed", "false");
+    b.innerHTML = '<span class="scn-tag">' + q.cls + '</span><span>' +
+      q.text.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</span>';
+    b.addEventListener("click", function () { pause(); selectQuery(q.id); });
+    scnGrid.appendChild(b);
+    scnEls.push(b);
+  });
+
+  /* ---------- per-class step scripts ----------
+     Each step: { caps, route, cost, lit edges, active nodes, labels } */
+  function caps(q) {
+    var routeWord = q.cls === "none" ? "no-retrieval" : (q.cls === "single" ? "single-step" : "multi-step");
+    var common0 = "<b>The query arrives:</b> <code>" + escapeText(q.text) + "</code>. Before anything else, a small classifier reads it.";
+    if (q.cls === "none") {
+      return [
+        common0,
+        "<b>Classify: trivial.</b> " + q.why + " The classifier returns <code>none</code>, the cheapest route. No index is touched.",
+        "<b>Generate, no retrieval.</b> The model answers directly. <b>One model call, zero retrieval cost.</b> Routing a hard pipeline here would have been pure waste."
+      ];
+    }
+    if (q.cls === "single") {
+      return [
+        common0,
+        "<b>Classify: a single fact.</b> " + q.why + " The classifier returns <code>single</code>, the Part 6 retrieve then generate path.",
+        "<b>Retrieve once.</b> Pull the top-k chunks from the support index. One lookup is enough for a question this focused.",
+        "<b>Generate, grounded.</b> The model answers from those chunks. <b>One retrieval, one generation</b>, no decomposition overhead spent on an easy question."
+      ];
+    }
+    return [
+      common0,
+      "<b>Classify: needs several lookups.</b> " + q.why + " The classifier returns <code>multi</code>, the Part 10 decompose then retrieve then synthesize path.",
+      "<b>Decompose.</b> The query is split into sub-questions, one per thing it actually asks.",
+      "<b>Retrieve per sub-query.</b> Each sub-question gets its own retrieval pass. The loop runs once per sub-question.",
+      "<b>Synthesize.</b> The partial answers are merged into one grounded response. <b>This query earned the extra machinery</b>, so quality is kept where it matters."
+    ];
+  }
+
+  function escapeText(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+  /* ---------- highlight helpers ---------- */
+  function dimEverything() {
+    Object.keys(N).forEach(function (k) {
+      N[k].classList.remove("active", "grounded"); N[k].classList.add("dim");
+    });
+    var es = edgeG.querySelectorAll(".edge");
+    for (var i = 0; i < es.length; i++) { es[i].classList.remove("lit"); es[i].classList.add("dim"); }
+    var ls = edgeG.querySelectorAll(".edge-label");
+    for (var j = 0; j < ls.length; j++) ls[j].classList.add("dim");
+    ["none", "single", "multi"].forEach(function (r) {
+      B[r].querySelector(".route-band").classList.add("dim");
+      B[r].querySelector(".route-rail").classList.add("dim");
+      document.getElementById("tag-" + r).classList.add("dim");
+    });
+  }
+  function activate(node, state) { node.classList.remove("dim"); node.classList.add(state || "active"); }
+  function lit(edge) { edge.classList.add("lit"); edge.classList.remove("dim"); }
+  function showLabel(id) { var l = document.getElementById("elbl-" + id); if (l) l.classList.remove("dim"); }
+  function showBand(r) {
+    B[r].querySelector(".route-band").classList.remove("dim");
+    B[r].querySelector(".route-rail").classList.remove("dim");
+    document.getElementById("tag-" + r).classList.remove("dim");
+  }
+
+  function renderNone(step) {
+    dimEverything();
+    activate(N.query);
+    if (step >= 1) { activate(N.classify); lit(E.qc); }
+    if (step >= 1) { showBand("none"); lit(E.cA); showLabel("cA"); }
+    if (step >= 2) { activate(N.aGen, "grounded"); }
+  }
+  function renderSingle(step) {
+    dimEverything();
+    activate(N.query);
+    if (step >= 1) { activate(N.classify); lit(E.qc); }
+    if (step >= 1) { showBand("single"); lit(E.cB); showLabel("cB"); }
+    if (step >= 2) { activate(N.bRet); }
+    if (step >= 3) { lit(E.bRG); activate(N.bGen, "grounded"); }
+  }
+  function renderMulti(step) {
+    dimEverything();
+    activate(N.query);
+    if (step >= 1) { activate(N.classify); lit(E.qc); }
+    if (step >= 1) { showBand("multi"); lit(E.cC); showLabel("cC"); }
+    if (step >= 2) { activate(N.cDec); }
+    if (step >= 3) { lit(E.cDR); activate(N.cRet); lit(E.cLoop); }
+    if (step >= 4) { lit(E.cRS); activate(N.cSyn, "grounded"); }
+  }
+
+  /* ---------- state ---------- */
+  var qid = "s1", current = 0, dotEls = [];
+  function curQ() { var q = null; QUERIES.forEach(function (x) { if (x.id === qid) q = x; }); return q; }
+
+  function buildDots() {
+    dotsWrap.innerHTML = ""; dotEls = [];
+    var n = caps(curQ()).length;
+    for (var i = 0; i < n; i++) {
+      (function (idx) {
+        var b = document.createElement("button");
+        b.className = "ex-dot"; b.type = "button";
+        b.setAttribute("aria-label", "Go to step " + (idx + 1) + " of " + n);
+        b.addEventListener("click", function () { pause(); go(idx); });
+        dotsWrap.appendChild(b); dotEls.push(b);
+      })(i);
+    }
+  }
+
+  function renderStep(i) {
+    var q = curQ();
+    if (q.cls === "none") renderNone(i);
+    else if (q.cls === "single") renderSingle(i);
+    else renderMulti(i);
+
+    var c = caps(q);
+    var routeWord = q.cls === "none" ? "no-retrieval" : (q.cls === "single" ? "single-step" : "multi-step");
+    caption.innerHTML = '<span class="sr-only">Query "' + escapeText(q.text) + '", routed ' +
+      routeWord + ', step ' + (i + 1) + ' of ' + c.length + '. </span>' + c[i];
+    stepCount.innerHTML = "Step <b>" + (i + 1) + "</b> of " + c.length;
+    dotEls.forEach(function (d, di) {
+      d.classList.toggle("is-active", di === i);
+      d.classList.toggle("is-past", di < i);
+      if (di === i) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+    });
+    btnBack.disabled = (i === 0);
+    btnNext.disabled = (i === c.length - 1);
+  }
+
+  function go(i) {
+    var n = caps(curQ()).length;
+    current = Math.max(0, Math.min(n - 1, i));
+    renderStep(current);
+  }
+
+  function selectQuery(id) {
+    qid = id;
+    var q = curQ();
+    container.classList.remove("route-none", "route-single", "route-multi");
+    container.classList.add("route-" + q.cls);
+    scnEls.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.qid === id ? "true" : "false"); });
+    routeName.textContent = q.cls === "none" ? "no-retrieval" : (q.cls === "single" ? "single-step" : "multi-step");
+    costVal.textContent = q.cls === "none" ? "0 retrievals" : (q.cls === "single" ? "1 retrieval" : "n retrievals");
+    buildDots();
+    go(0);
+    liveExtra.textContent = "Query selected, routed " + routeName.textContent + ".";
+  }
+
+  /* ---------- playback ---------- */
+  var timer = null, playing = false, AUTO_MS = 2500;
+  function tick() {
+    if (current >= caps(curQ()).length - 1) { pause(); return; }
+    go(current + 1);
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function play() {
+    if (reduceMotion || playing) return;
+    if (current >= caps(curQ()).length - 1) go(0);
+    playing = true; setPlayButton();
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function pause() {
+    playing = false;
+    if (timer) { window.clearTimeout(timer); timer = null; }
+    setPlayButton();
+  }
+  function toggle() { playing ? pause() : play(); }
+  function setPlayButton() {
+    if (reduceMotion) {
+      playIcon.innerHTML = PLAY_ICON; playText.textContent = "Auto-play off";
+      btnPlay.setAttribute("aria-label", "Auto-play disabled (reduced motion)");
+      return;
+    }
+    playIcon.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    playText.textContent = playing ? "Pause" : "Play";
+    btnPlay.setAttribute("aria-label", playing ? "Pause animation" : "Play animation");
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /* ---------- wiring ---------- */
+  btnPlay.addEventListener("click", toggle);
+  btnNext.addEventListener("click", function () { pause(); go(current + 1); });
+  btnBack.addEventListener("click", function () { pause(); go(current - 1); });
+  btnRestart.addEventListener("click", function () { pause(); go(0); });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    var focused = container.contains(document.activeElement) && document.activeElement !== document.body;
+    if ((e.code === "Space" || e.key === " ") &&
+        !(e.target && e.target.closest && e.target.closest("button"))) {
+      e.preventDefault(); toggle();
+    } else if (e.key === "ArrowRight" && focused) { e.preventDefault(); pause(); go(current + 1); }
+    else if (e.key === "ArrowLeft" && focused) { e.preventDefault(); pause(); go(current - 1); }
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden) pause(); });
+
+  if (reduceMotion) {
+    btnPlay.disabled = true;
+    btnPlay.title = "Auto-play disabled (reduced motion). Use Next / Back.";
+  }
+
+  /* ---------- init ---------- */
+  setPlayButton();
+  selectQuery("s1");
+})();
+</script>
+</body>
+</html>
