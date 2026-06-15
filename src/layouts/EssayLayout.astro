@@ -9,8 +9,9 @@ interface Props {
   lang?: string;
   translationSlug?: string;
   codeUrl?: string;
+  ogImage?: string;
 }
-const { title, description, date, tags = [], lang = 'en', translationSlug, codeUrl } = Astro.props;
+const { title, description, date, tags = [], lang = 'en', translationSlug, codeUrl, ogImage } = Astro.props;
 const dateFormatted = date.toISOString().slice(0, 10);
 
 const backLabel = lang === 'tr' ? 'geri' : 'back';
@@ -27,7 +28,7 @@ const articleJsonLd = {
 };
 ---
 
-<Layout title={title} description={description} lang={lang}>
+<Layout title={title} description={description} lang={lang} ogImage={ogImage}>
   <script type="application/ld+json" set:html={JSON.stringify(articleJsonLd)} />
   <div class="min-h-screen bg-white text-zinc-500 font-sans">
     <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">

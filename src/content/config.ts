@@ -9,6 +9,8 @@ const essays = defineCollection({
     tags: z.array(z.string()).default([]),
     // Optional link to the essay's companion code (a folder in the rag-by-hand repo).
     codeUrl: z.string().url().optional(),
+    // Optional social-card image (site-relative path, e.g. /og/rag-by-hand.png).
+    ogImage: z.string().optional(),
     draft: z.boolean().default(false),
     // i18n: an essay and its translation point at each other via translationSlug
     // (the counterpart's slug) and declare their own `lang`. The secondary copy
