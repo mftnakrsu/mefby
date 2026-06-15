@@ -11,6 +11,9 @@ const essays = defineCollection({
     codeUrl: z.string().url().optional(),
     // Optional social-card image (site-relative path, e.g. /og/rag-by-hand.png).
     ogImage: z.string().optional(),
+    // Optional position in a numbered series; on the index these sort ascending,
+    // before the non-series essays (which stay newest-first).
+    seriesOrder: z.number().int().positive().optional(),
     draft: z.boolean().default(false),
     // i18n: an essay and its translation point at each other via translationSlug
     // (the counterpart's slug) and declare their own `lang`. The secondary copy

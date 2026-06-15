@@ -1,10 +1,20 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { getCollection } from 'astro:content';
+import { getCollection, type CollectionEntry } from 'astro:content';
 import EssayRow from '../../components/EssayRow.astro';
 
-const essays = (await getCollection('essays', ({ data }) => !data.draft && !data.isTranslation))
-  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+const all = await getCollection('essays', ({ data }) => !data.draft && !data.isTranslation);
+
+// Numbered series (e.g. the RAG series) reads in part order, ascending; everything
+// else follows, newest first. The "New" badge stays on the genuinely newest essay.
+const byDateDesc = (a: CollectionEntry<'essays'>, b: CollectionEntry<'essays'>) =>
+  b.data.date.getTime() - a.data.date.getTime();
+const series = all
+  .filter((e) => e.data.seriesOrder != null)
+  .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
+const rest = all.filter((e) => e.data.seriesOrder == null).sort(byDateDesc);
+const essays = [...series, ...rest];
+const newestSlug = [...all].sort(byDateDesc)[0]?.slug;
 ---
 
 <Layout title="Essays — Meftun Akarsu" description="Long-form technical essays.">
@@ -28,8 +38,8 @@ const essays = (await getCollection('essays', ({ data }) => !data.draft && !data
       </a>
 
       <ul class="border-t border-zinc-100">
-        {essays.map((essay, i) => (
-          <EssayRow essay={essay} featured={i === 0} />
+        {essays.map((essay) => (
+          <EssayRow essay={essay} featured={essay.slug === newestSlug} />
         ))}
       </ul>
     </div>
