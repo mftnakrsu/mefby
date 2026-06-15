@@ -4,7 +4,7 @@ description: "Relevant just means close in embedding space, but how do you turn 
 date: 2026-06-09
 tags: ["RAG", "Embeddings", "Vector Search", "Cosine Similarity", "NLP", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-03-measuring-similarity"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/measuring-similarity.png"
 seriesOrder: 3
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 3 of the series.*
 
 ## What you'll learn
 
@@ -47,7 +46,7 @@ In words: take the difference between the two vectors component by component, sq
 
 It is a *distance*, so smaller means more similar, and identical vectors score 0. It is wonderfully concrete: it is the length of the line you'd draw between the two arrowheads.
 
-So why isn't this the end of the article? Because for text, Euclidean distance has an awkward sensitivity: it cares about **magnitude**, the *length* of the vectors, not just their direction. And vector length often tracks things we do not care about, like how *long* a passage is. A one-line note and a three-paragraph summary can be about the very same topic, yet their embeddings can come out with quite different magnitudes, which pushes their arrowheads far apart in space. Euclidean distance dutifully reports a large gap and concludes "not very similar," even though, in meaning, they nearly are. We need something less fooled by length.
+So why isn't this the end of the article? Because for text, Euclidean distance has an awkward sensitivity: it cares about **magnitude**, the *length* of the vectors, not just their direction. And magnitude is often information we do not want to rank on. For many raw, un-normalized embeddings a vector's length partly tracks incidental things, like how long or emphatic a passage is, rather than its topic, so two notes about the very same subject can sit at different distances from the origin, and Euclidean, which folds that length into its score, can be thrown off by it. What we actually want to compare is the *direction* the vector points, because that is where the model puts meaning. We need a metric less fooled by length. (As we will see in a moment, once vectors are normalized this gap closes entirely; the warning here is really about leaving them un-normalized.)
 
 ## Dot product: overlap, blended with length
 
@@ -69,7 +68,7 @@ That metric is **cosine similarity**, and it is the star of this chapter. The id
 
 The notation `‖A‖` means the **magnitude** (or **norm**) of `A`, its length, computed exactly like Euclidean distance from the origin: `‖A‖ = √(A₁² + A₂² + … + Aₙ²)`. So cosine similarity is just the dot product *divided by both lengths*, which is precisely the step that cancels magnitude out. What survives the division is pure direction.
 
-The intuition to carry around: cosine asks *"are these two arrows pointing the same way?"* and pointedly refuses to ask *"are they the same size?"* Its value runs from `-1` (pointing exactly opposite) through `0` (at right angles, unrelated) to `1` (pointing in exactly the same direction). For typical text embeddings the numbers usually land between `0` and `1`, and a value near `1` is what retrieval is hunting for.
+The intuition to carry around: cosine asks *"are these two arrows pointing the same way?"* and pointedly refuses to ask *"are they the same size?"* Its value runs from `-1` (pointing exactly opposite) through `0` (at right angles, unrelated) to `1` (pointing in exactly the same direction), and a value near `1` is what retrieval is hunting for. One practical caveat: trained text embeddings rarely produce near-zero cosines even for unrelated text, because their vectors crowd into a narrow cone, so the *useful* spread is a compressed positive band (often something like `0.3` to `0.9`) rather than a clean `0` to `1`. Because that band shifts from one model to the next, raw cosine values are not comparable across models, which is why retrieval thresholds get tuned per model rather than fixed at a round number like `0.5` (we do exactly that in Part 11).
 
 Why is "direction only" exactly right for text? Because that is where embedding models put the meaning. Two passages about the same idea are trained to point the *same way*, even if one is a sentence and one is a paragraph and their magnitudes differ. By scoring the angle and ignoring the length, cosine similarity reads the part the model actually encodes meaning into and discards the part (length) that is mostly noise for this purpose. That is the whole reason **cosine similarity is the default metric in RAG**. Below you can feel it directly: two vectors pointing the same way are treated as a near-perfect match no matter how different their lengths are.
 
@@ -87,6 +86,8 @@ Look again at the cosine formula: it is the dot product, divided by the two magn
 
 In words: **cosine similarity is just the dot product of normalized vectors.** Normalize first, and the dot product *is* the cosine. This is not a coincidence; it is the same calculation, with the magnitude either divided out at the end (cosine) or stripped away up front (normalize, then dot).
 
+Euclidean distance joins the same family once you normalize. For two unit vectors a little algebra gives `euclidean(Â, B̂)² = 2 − 2·cos(Â, B̂)`: the straight-line gap is just a function of the angle. So on normalized embeddings, which is exactly what most vector stores keep, Euclidean and cosine **rank results identically**; sorting by one is sorting by the other. Cosine stays the default not because Euclidean is "wrong" on normalized vectors, but because it matches how the models are trained and, once normalized, reduces to the fast dot product. Euclidean only parts ways with cosine when vectors are left un-normalized and their differing lengths start to count, which is the very case we flagged earlier.
+
 That equivalence is quietly load-bearing in real systems. Recall that the dot product is the fast one. So many vector databases do exactly this: they **normalize every embedding once, when it is stored**, and then at query time they run the cheap dot product, getting cosine similarity's meaning-focused, length-blind behavior at the dot product's speed. Best of both. When you read that a database "uses inner product on normalized vectors," that sentence now means something precise to you: it is computing cosine similarity the efficient way.
 
 <Diagram number={2} caption="The same pair of vectors seen three ways: Euclidean is the gap between the tips, the dot product is one vector's projection scaled by length, and cosine is the angle between them.">
@@ -103,7 +104,7 @@ You now have three metrics. Here is how I decide between them, and a rule that s
 |---|---|---|---|---|
 | Euclidean distance | Straight-line gap between the tips | 0 (identical) and up | Yes | Spatial or coordinate data, or when the length of a vector genuinely carries meaning |
 | Dot product | Overlap: angle blended with both lengths | unbounded, can be negative | Yes | You need raw speed at scale, and either your vectors are normalized or length itself is a useful signal |
-| Cosine similarity | The angle between directions | about `-1` to `1` (often `0` to `1` for text) | No | The default for text embeddings, when only meaning, not length, should count |
+| Cosine similarity | The angle between directions | about `-1` to `1` (in practice a compressed band, often ~`0.3`–`0.9` for text) | No | The default for text embeddings, when only meaning, not length, should count |
 
 The practical rule that overrides the table: **match the metric to what the embedding model was trained for.** Model creators document the intended similarity measure (most modern text-embedding models are tuned for cosine, and many already output normalized vectors). Use the one they recommend. Picking a metric the model was not trained against is a quiet way to make good embeddings score badly.
 
@@ -174,14 +175,30 @@ Step back to the vector store. We embed the user's question into a query vector,
 
 So the picture from Part 1 is now fully colored in: we embed (Part 2), we score every chunk against the query with cosine similarity (this part), and we keep the top `k`. Which exposes the next problem, the one Part 2 hinted at. Computing a score against *every* stored vector, called a brute-force or exact search, is perfectly fine for hundreds or a few thousand chunks. But run it against millions, on every single query, and the cost becomes brutal: you're doing millions of multiply-and-add passes per question. Production systems cannot afford to compare against everything every time. The fix is a smarter data structure that finds the nearest vectors *without* checking them all, and building that is exactly what Part 4 is about.
 
+> ⚠️ **Common pitfalls**
+>
+> - **Comparing absolute cosine scores across different models.** A `0.82` from one embedding model and a `0.82` from another are not the same "amount" of similarity. Each model crowds its vectors into a differently shaped cone, so the useful band sits in a different place. Cosine is a within-model ranking signal, not a cross-model unit of meaning; never conclude one model is "more confident" because its numbers run higher.
+> - **Assuming a fixed threshold transfers between models.** Because the band shifts, the cutoff you tuned for "relevant enough" on one model (say, keep everything above `0.75`) can be far too strict or far too loose on the next. Swap the embedding model and you have to re-tune the threshold, not inherit it. Treating `0.5`, or any round number, as a universal "relevant" line is the same mistake wearing a cleaner shirt.
+> - **Mixing metrics between index-build and query time.** If you normalized vectors and stored them for inner-product search, you must query with the inner product too. Build with one metric and query with another (cosine at write time, raw dot product at read time, or vice versa) and the rankings quietly degrade without ever throwing an error. Pick one similarity measure and use it end to end.
+
+## Try it yourself
+
+Reopen the interactive playground above (Figure 3) and run one deliberate experiment, because feeling this beats reading it. Set both vectors to point in the **same direction at different lengths**: drag one tip out to roughly `(3, 4)` and the other along the same ray to about `(6, 8)`, twice as long. Watch what the four numbers do. Cosine similarity sits pinned near `1.00`, because the angle between them is zero, while Euclidean distance reads a fat `5` and the dot product balloons. Same direction, wildly different verdicts: this is the worked example from earlier, now under your own hands.
+
+Then flip the **normalize** toggle. Both arrows snap to unit length, landing on the same point, and the dot product and cosine slide into agreement, both reading `1.00`. That is the 'aha' made physical: once length is gone, the dot product *is* the cosine, and Euclidean stops disagreeing. Nudge one tip slightly off the shared ray and watch all four numbers move together but at different rates, so you can feel which metric is sensitive to angle and which is still listening to length. Five minutes of dragging will teach your fingers what a page of formulas only tells your eyes.
+
 ## Key takeaways
 
 - Retrieval has to rank, and ranking needs a single **similarity** score per chunk. A **similarity** goes up as vectors get more alike; a **distance** goes down. Same idea, opposite direction.
-- **Euclidean distance** is the intuitive straight-line gap, but it is sensitive to **magnitude**, so passages of different lengths about the same topic can look far apart.
+- **Euclidean distance** is the intuitive straight-line gap, but it is sensitive to **magnitude**. On normalized vectors that stops mattering (`euclidean² = 2 − 2·cos`, so it ranks identically to cosine); the magnitude sensitivity only bites when vectors are left un-normalized.
 - The **dot product** is fast (just multiplies and adds) and is what runs at scale, but it is **unnormalized**: longer vectors score higher regardless of direction.
 - **Cosine similarity** measures the *angle* only and ignores length, which is exactly right for text because embedding models put meaning in the direction. It is the default metric in RAG.
 - The three connect: **cosine similarity is the dot product of normalized (unit-length) vectors.** Normalize once at storage time, then use the cheap dot product, and you get cosine's behavior at the dot product's speed.
 - In RAG this score is the ranking function: **top-k retrieval** returns the `k` highest-scoring chunks. Match the metric to what the model was trained for.
+
+## References
+
+- Reimers, N., & Gurevych, I. (2019). *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.* arXiv:1908.10084. [https://arxiv.org/abs/1908.10084](https://arxiv.org/abs/1908.10084): introduces sentence embeddings trained so that cosine similarity between vectors tracks semantic similarity, the property this chapter leans on when it calls cosine the default metric for text.
 
 ## Glossary
 

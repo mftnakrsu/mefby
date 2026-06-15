@@ -4,7 +4,7 @@ description: "Five parts of theory, now one running program. Part 6 of a from-sc
 date: 2026-06-12
 tags: ["RAG", "Python", "Embeddings", "Vector Search", "LLM", "Tutorial", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-06-build-your-first-rag"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/build-your-first-rag.png"
 seriesOrder: 6
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 6 of the series.*
 
 ## What you'll learn
 
@@ -297,7 +296,7 @@ def retrieve(query, k=3):
     return list(zip(res["documents"][0], res["distances"][0]))
 ```
 
-That is the only change. The `ask`, `build_prompt`, and `generate` functions are untouched, because the interface (give me a query, get back relevant chunks) is the same. Chroma is now doing the indexing and nearest-neighbor search we wrote by hand, and it will keep doing it when your five documents become five million. One note: Chroma reports a distance (smaller is closer), not a similarity (larger is closer), so if you ever sort or threshold on the number, mind the direction, exactly the similarity-versus-distance trap from Part 3.
+That is the only change. The `ask`, `build_prompt`, and `generate` functions are untouched, because the interface (give me a query, get back relevant chunks) is the same. Chroma is now doing the indexing and nearest-neighbor search we wrote by hand, and it will keep doing it when your five documents become five million. One note worth getting right: Chroma reports a *distance* (smaller is closer), not a *similarity* (larger is closer). With the cosine space we configured, that distance is `1 - cosine_similarity`, so for the unit vectors we use it runs from `0` (identical) to `2` (opposite), not `0` to `1`, and orthogonal lands at `1.0`, not `0.5`. Recover a familiar similarity you can sort or threshold on with `1 - distance`. So if you ever sort or threshold on the number, mind both the direction and the scale, exactly the similarity-versus-distance trap from Part 3.
 
 ## Cost, latency, and the gotchas that bite first
 
@@ -306,9 +305,58 @@ A working app is not yet a good one. A few things to keep in view:
 - **Cost and latency.** Local embeddings are free but use your CPU or GPU; hosted LLM calls cost money per token and add network latency, and hosted APIs enforce rate limits. The local LLM (Ollama) is free and private but slower and usually weaker than a big hosted model. Pick your trade-off deliberately.
 - **The same-model rule.** Embed your query with the *same* model you embedded the chunks with. Mixing models is the classic silent failure: no error, just quietly meaningless scores and nonsense retrieval.
 - **Tuning top-k.** Too low and you starve the model of context; too high and you bury the answer in noise and waste tokens. Start around 3 to 5 and adjust by watching real results.
-- **Handle the empty case.** Decide what happens when nothing relevant is found. Our grounding instruction already nudges the model to say "I don't know"; you can also threshold on the top score and skip the LLM entirely when the best match is too weak.
+- **Handle the empty case.** Decide what happens when nothing relevant is found. Our grounding instruction already nudges the model to say "I don't know"; you can also threshold on the top score and skip the LLM entirely when the best match is too weak. (If you are on the Chroma path, convert its distance back to a similarity with `1 - distance` first, since its number runs `0` to `2`, not `0` to `1`.)
 
 {/* From experience callout: drop in a real first-person anecdote here (e.g. the time the query and chunks were embedded with different models, or a normalized vs unnormalized mismatch, and retrieval silently returned nonsense with no error, costing hours of debugging), then wrap it as: > 💡 **From experience** ...story... */}
+
+## Try it yourself
+
+The app runs; now poke it until you understand where it breaks. Three small experiments, each touching a different part of the loop.
+
+**Add a relevance floor.** Right now every question reaches the LLM, even one whose best chunk barely clears noise. Threshold on the top score and short-circuit before you spend a model call:
+
+```python
+RELEVANCE_FLOOR = 0.30   # tune by watching real top scores; cosine, unit vectors
+
+def ask(question, k=3):
+    retrieved = retrieve(question, k=k)
+    if not retrieved or retrieved[0][1] < RELEVANCE_FLOOR:
+        return "I don't know based on the provided documents."
+    prompt = build_prompt(question, retrieved)
+    return generate(prompt)
+```
+
+Ask *"Do you offer gift wrapping?"* and watch it return the refusal without ever calling the model. With the hand-rolled store the top score is already a cosine similarity, so the comparison is direct. On the Chroma path you get a distance instead, so convert first with `1 - distance` (and remember that number runs `0` to `2`, not `0` to `1`) before comparing against the floor.
+
+**Surface the source as a citation.** We kept a `source` field on every chunk in Step 1 and then quietly dropped it at retrieval. Carry it through so the answer can point at where it came from. Have `retrieve` return the chunk's source alongside its text and score, then print the cited documents under the answer:
+
+```python
+def retrieve(query, k=3):
+    q = embed([query])[0]
+    scores = vectors @ q
+    top = np.argsort(-scores)[:k]
+    return [(chunks[i]["text"], chunks[i]["source"], float(scores[i])) for i in top]
+```
+
+Adjust `build_prompt` to unpack the extra field, and you can append a line like `Sources: doc_0, doc_1` to every grounded answer. That is the difference between a demo and something a user can trust: a claim they can click back to.
+
+**Break it on purpose.** Embed the *query* with a different model than the *chunks* and watch retrieval quietly fall apart. Keep the chunks on `all-MiniLM-L6-v2` but encode the query with, say, `paraphrase-MiniLM-L3-v2`, and the scores become noise: no exception, no warning, just wrong chunks at the top. (If you pick a model with a different output width the dot product will at least raise a shape error, which is a kinder failure; the dangerous case is two 384-d models whose spaces simply do not line up.) This is the most expensive bug in RAG precisely because nothing crashes. Live through it once here, deliberately, so you recognize the symptom (plausible-looking retrieval that is subtly always wrong) when it happens for real.
+
+Start from the complete base app, [`rag_app.py`](/essays/build-your-first-rag/rag_app.py), and graft each experiment onto it: the `source` field is already on every chunk, so the citation change is small, and the floor and the broken-model test are a few lines each.
+
+> ⚠️ **Common pitfalls**
+>
+> - **Different embedding models for query and chunks.** The single most common silent failure. Same width, different space, meaningless scores, no error. Pin the model name in one constant and reuse it everywhere.
+> - **Forgetting to normalize before the dot product.** `vectors @ q` is cosine *only* when both sides are unit length. Drop `normalize_embeddings=True` and your dot product is an unbounded magnitude score that no longer matches the ranking you reasoned about in Part 3.
+> - **Comparing a Chroma distance against a cosine threshold.** Chroma returns a distance (smaller is closer, range `0` to `2`), not a similarity. Threshold the raw distance against a `0`-to-`1` cosine floor and your relevance gate fires backwards.
+> - **No empty case.** Without a relevance floor every off-topic question still triggers a paid, latent model call, and you lean entirely on the grounding instruction to catch it. Belt and suspenders: gate on the score *and* keep the "answer only from context" instruction.
+
+## How fast, and how much?
+
+A few concrete numbers, because "free and local" and "fast" are easy to say and worth pinning down.
+
+- **Embedding.** `all-MiniLM-L6-v2` produces **384-dimensional** vectors and is tiny (about 22 MB on disk). On a plain CPU it embeds on the order of a few thousand short sentences per second, fast enough that our five-document corpus, or a few thousand, is effectively instant; on a GPU it is faster still. The point: for a personal corpus, embedding is not your bottleneck. (See the [model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) for the exact spec.)
+- **Generation latency.** This is where the wall-clock time goes. A hosted LLM call typically returns a short grounded answer in roughly one to a few seconds, network round-trip included, and it costs money per token and enforces rate limits. A local model under [Ollama](https://ollama.com) costs nothing and keeps your data on your machine, but on CPU-only hardware a comparable answer often takes several seconds to tens of seconds; a GPU narrows that gap a lot. The trade-off is the usual one: hosted buys you speed and quality for money and a dependency; local buys you privacy and zero marginal cost for latency and a weaker model. Measure both on *your* hardware before you commit; the numbers above are order-of-magnitude, not promises.
 
 ## Recap, and the road ahead
 
@@ -324,6 +372,12 @@ It is also, deliberately, a naive system. It does pure dense retrieval (one embe
 - A **prompt template** with a **grounding** instruction ("answer only from the context; otherwise say you don't know") is the highest-leverage line for curbing hallucination (Part 1).
 - Isolate the LLM behind one `generate(prompt)` function so switching providers, hosted or local, is a one-line change.
 - Graduating to a real vector database like **Chroma** swaps out the storage and indexing without touching the rest of the app, because the retrieve interface stays the same (Part 4).
+
+## References
+
+- Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich Küttler, Mike Lewis, Wen-tau Yih, Tim Rocktäschel, Sebastian Riedel, and Douwe Kiela. "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks." NeurIPS 2020. [arXiv:2005.11401](https://arxiv.org/abs/2005.11401). The paper that named and formalized RAG, the retrieve-augment-generate loop this whole app implements.
+- Nils Reimers and Iryna Gurevych. "Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks." EMNLP 2019. [arXiv:1908.10084](https://arxiv.org/abs/1908.10084). The work behind the `sentence-transformers` library ([sbert.net](https://www.sbert.net/)) we use to embed chunks and queries.
+- `all-MiniLM-L6-v2` model card, Hugging Face: [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2). The small, fast, 384-dimensional embedding model driving retrieval in this part.
 
 ## Glossary
 

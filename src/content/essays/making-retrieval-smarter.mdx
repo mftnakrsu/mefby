@@ -4,7 +4,7 @@ description: "Part 8 of a from-scratch series on Retrieval-Augmented Generation.
 date: 2026-06-14
 tags: ["RAG", "Retrieval", "Reranking", "Cross-Encoder", "Vector Search", "LLM", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-08-making-retrieval-smarter"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/making-retrieval-smarter.png"
 seriesOrder: 8
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 8 of the series.*
 
 ## What you'll learn
 
@@ -97,12 +96,34 @@ You get the bi-encoder's speed over the whole corpus and the cross-encoder's pre
 <Diagram number={3} caption="Two-stage retrieval in motion. A fast first pass returns ten candidates in roughly-right order, the chunk that truly answers the question sitting at rank six. Step through the rerank: a cross-encoder rescores every candidate, the real answer climbs to the top, the off-topic distractor sinks, and a cut line keeps only the top three for the generator.">
   <IframeFigure
     src="/essays/making-retrieval-smarter/part8-reranking.html"
-    title="Interactive two-stage retrieval. For the query can I get a refund on a jacket I have already worn, ten candidate chunks appear in first-pass hybrid order with an off-topic winter jacket sale ranked first and the decisive worn clothing chunk stuck at rank six. Stepping forward runs a cross-encoder rerank that rescores and reorders the list so the worn clothing chunk climbs to the top and the sale ad sinks, then a cut line keeps only the top three chunks handed to the generator."
+    title="Interactive two-stage retrieval. For the query can I get a refund on a jacket I have already worn, ten candidate chunks appear in first-pass dense order with an off-topic winter jacket sale ranked first and the decisive worn clothing chunk stuck at rank six. Stepping forward runs a cross-encoder rerank that rescores and reorders the list so the worn clothing chunk climbs to the top and the sale ad sinks, then a cut line keeps only the top three chunks handed to the generator."
     height={900}
   />
 </Diagram>
 
 A practical note, with the usual freshness caveat. There is a healthy supply of ready-made rerankers: open cross-encoder models you can run locally and hosted reranking APIs you call over the network. Reranking models, their APIs, and the recommended model names move fast and I have a knowledge cutoff, so I will keep the code that follows minimal and lean on the local cross-encoder. Check the current docs for today's best model and exact usage before you ship.
+
+## Reranking is a family, not one model
+
+It is tempting to read "reranker" as "the `ms-marco-MiniLM` cross-encoder" and stop there, because that is the one the code below uses. Do not. The pointwise cross-encoder (score one query-chunk pair, sort by the scores) is the oldest and simplest member of a much larger family, and the rest of the family is where most of the recent gains have come from. Three things are worth keeping in your head.
+
+**The hosted APIs have moved well past the 2019 baseline.** If you do not want to host a model, several vendors sell reranking as a single network call, and as of this writing the current generations are larger, longer-context, and multilingual. Cohere's Rerank 4 line (a `pro` and a `fast` variant) carries a 32k-token context window and 100-plus languages. Voyage's `rerank-2.5` and `rerank-2.5-lite` are instruction-following, meaning you can steer relevance with a sentence ("prefer documents that cite primary sources") instead of only a query, also at 32k tokens. The names and numbers here will be stale by the time you read this, which is exactly the point: check the current docs rather than trusting any single model name baked into a tutorial.
+
+**The open models are competitive and you can run them yourself.** You are not forced onto an API to get past the old MiniLM. Mixedbread's `mxbai-rerank-v2` (a 0.5B `base` and a 1.5B `large`, Apache-2.0) and the `bge-reranker-v2` family are open cross-encoders you can download and serve; the BGE rerankers in particular have become a common, easy-to-deploy baseline. These behave like the local model in the code below: a pair goes in, a relevance score comes out, you sort.
+
+**Listwise and LLM rerankers change the shape of the problem.** A pointwise cross-encoder scores each candidate *in isolation*, so it never sees that candidate two and candidate five say nearly the same thing, or that candidate three only makes sense given candidate one. A **listwise** reranker instead reads the query and *several candidates together* and produces an ordering over the whole set, which lets the comparisons inform each other. Jina's `jina-reranker-v3`, for example, is a listwise model that processes a batch of documents in one long-context pass. The most flexible version of this idea is to hand the query and the candidate list straight to a general-purpose language model and ask it to rank them: an **LLM reranker**. It is the most capable and by far the most expensive option, since you pay full generation cost per query, but for low-volume, high-stakes ranking it can beat every dedicated model. The throughline: "rerank" spans a cheap pointwise cross-encoder, a mid-cost listwise model, and a full LLM judge, and the right choice is a budget decision, not a default.
+
+## The candidate-set knob
+
+The two-stage pattern has a single most important tuning lever, and it is not the reranker model. It is **n**, the size of the candidate set you hand from stage one to stage two. Everything else in this chapter is secondary to getting this number right, for one blunt reason: **a reranker can only reorder what it is given.** If the chunk that answers the question is not in stage one's top-n, no reranker, however good, can surface it. It was never in the room. Reranking improves *precision* (the order of the candidates); it does nothing for *recall* (whether the right candidate is present at all). Recall is fixed entirely upstream, by n.
+
+So the quantity to watch, and the one Part 11 will teach you to measure, is **stage-1 recall@n**: across your real queries, how often is the genuinely correct chunk somewhere in the top-n that the first pass returns. That number is the ceiling on your whole pipeline. If recall@50 is 90 percent, then 10 percent of your queries are already lost before the reranker runs, and a better reranker buys you nothing on them. The fix for those is a bigger n, or a better first stage (the hybrid search from Part 7), not a fancier reranker.
+
+Which pushes you to make n large. The counter-pressure is cost, because n is exactly the number of pairs the cross-encoder has to score, and that brings us to the latency budget.
+
+A pointwise cross-encoder runs once per candidate, at query time, so its cost is roughly linear in n. Concrete, order-of-magnitude numbers for a small MiniLM-class model: reranking 50 to 100 candidates adds on the order of 30 to 200 ms to a query, and the spread is mostly hardware. On CPU, scoring 50 to 100 pairs typically lands in the low hundreds of milliseconds; on a GPU the same work drops under about 50 ms, and a big accelerator can do 100 pairs in the low tens of milliseconds. Batching the pairs (scoring them in one forward pass rather than a loop) is where most of the throughput comes from, so always pass the whole candidate list to `predict` at once, never one pair at a time. Push much past 100 to 200 candidates and the rerank starts to dominate your latency, which is the practical reason n usually settles in the 50-to-100 range: large enough to make recall@n high, small enough that the cross-encoder stays cheap. Hosted reranking APIs hide the hardware but bill per document scored, so the same arithmetic applies, just denominated in dollars.
+
+The takeaway is a tuning loop, not a fixed answer: raise n until recall@n is comfortably high on your own queries, then stop, because every extra candidate past that is latency and cost the reranker spends reordering chunks that were never going to win.
 
 ## Putting the levers together
 
@@ -110,7 +131,7 @@ Here is the enhanced query-time pipeline with all three levers in place, in orde
 
 1. **Transform** the raw query (the BEFORE lever): rephrase, expand, or decompose it if this kind of query needs it.
 2. **Filter** by metadata (the DURING lever): restrict to the right tenant, date, or section. Security filters are mandatory.
-3. **Retrieve wide** with hybrid search (Part 7): pull a generous candidate set so recall is high.
+3. **Retrieve wide** (the bi-encoder cosine first pass; in production, the hybrid search from Part 7): pull a generous candidate set so recall is high.
 4. **Rerank** that set with a cross-encoder (the AFTER lever) and keep the top few.
 5. **Generate**: hand only those best chunks to the model, with the grounded prompt from Part 6.
 
@@ -181,6 +202,19 @@ We took the roughly-right ranked list from Part 7 and sharpened it with three le
 
 And yet it is still single-pass: it retrieves once and generates once, and we never questioned *what unit* we retrieve. Every part so far has handed the model whichever chunks scored well, exactly as they were stored. But the best thing to retrieve and the best thing to *show the model* are not always the same chunk. That is the subject of Part 9.
 
+## Try it yourself
+
+The fastest way to feel why the candidate-set knob matters is to turn it yourself. Open [`rag_rerank.py`](/essays/making-retrieval-smarter/rag_rerank.py) and run it once as-is to see the stage-1 and stage-2 orders side by side. Then poke at it:
+
+- **Vary `n` (the wide-net size) and watch which chunks survive into stage two.** Call `smart_retrieve(query, n=3, top_k=3)` and then `smart_retrieve(query, n=10, top_k=3)`. With the decisive "worn clothing" chunk sitting at rank six in the first pass, a small `n` (say 3 or 5) cuts it off *before* the reranker ever sees it, and no reordering can bring it back. Widen `n` and it reappears in the candidate set, and the rerank lifts it to the top. That is recall@n becoming the ceiling, made concrete on ten chunks.
+- **Vary `top_k` (how many survive the rerank) and watch the cut line move.** Keep `n` wide and step `top_k` from 1 to 5. This does not change *which* chunks the cross-encoder scores, only how many you keep for the generator: it is the precision end of the knob, separate from the recall end above.
+- **Swap the reranker model.** The code hard-codes `cross-encoder/ms-marco-MiniLM-L-6-v2`. Change that one string to another local cross-encoder (a `bge-reranker` or `mxbai-rerank` checkpoint) and rerun. The absolute scores will look completely different (recall the MiniLM model emits unbounded logits, not 0-to-1 numbers), but the *order* is what to compare. Seeing two different models agree on the winner, or disagree, is the cheapest possible intuition for why model choice is a real decision and not a detail.
+
+> ⚠️ **Common pitfalls**
+> - **Cross-encoders silently truncate long chunks.** Every reranker has a max input length, and the query plus chunk are concatenated into that one budget. If a chunk is longer than the limit, the model quietly cuts off the tail and scores only what fit, so the part of the chunk that actually answers the question may never be read. There is no error, just a wrong score. Keep chunks comfortably under the model's max tokens, or reach for a long-context reranker, and never assume the whole chunk was judged.
+> - **Reranking cannot fix a stage-1 recall miss.** This is the candidate-set knob restated as a failure mode. If your misses are queries where the right chunk was not in the top-n at all, a better reranker is wasted money: it only ever reorders what stage one handed it. Diagnose first (Part 11), then either widen `n` or improve the first stage. Do not reach for a reranker to fix a recall problem.
+> - **Multi-query times reranking multiplies cost.** The BEFORE lever and the AFTER lever interact badly if you are not careful. If multi-query fans one question into five rephrasings and you retrieve n candidates for each, your reranker now scores up to 5n pairs, not n. Dedupe the unioned candidate set *before* the rerank, and cap the total pairs you feed the cross-encoder, or the two "advanced" techniques quietly multiply your per-query latency.
+
 ## Key takeaways
 
 - First-pass retrieval is only roughly right because it uses a **bi-encoder**: query and chunks are embedded separately, so each text is crushed to one vector that never gets to consider the other. Fast, but structurally imprecise.
@@ -188,7 +222,15 @@ And yet it is still single-pass: it retrieves once and generates once, and we ne
 - **Query transformations** (multi-query, HyDE, step-back, decomposition) turn a poor question into better search queries. Each costs extra LLM calls, so use them where a query type keeps failing.
 - **Metadata filtering** enforces hard criteria (date, section, and critically, access level for security and multi-tenancy) and shrinks the search space. Prefer **pre-filtering**, which scores only matching chunks, over **post-filtering**, which can return fewer than k results even when plenty of chunks match.
 - A **cross-encoder** scores the query and a chunk together and judges relevance far more accurately than a bi-encoder, but it is too slow to run over a whole corpus.
+- "Reranker" is a **family**, not one model: a cheap pointwise cross-encoder (open ones like `bge-reranker` and `mxbai-rerank`, or hosted APIs like Cohere Rerank 4 and Voyage `rerank-2.5`), a mid-cost listwise model that ranks several candidates together, and a full LLM judge. The choice is a budget decision.
+- The most important knob is **n**, the candidate-set size, because a reranker can only reorder what it is given. Tune **recall@n** (is the right chunk in the top-n at all) upstream; reranking only fixes order, never recall. A small cross-encoder adds roughly 30 to 200 ms to rerank 50 to 100 candidates, mostly hardware-dependent.
 - **Two-stage retrieval (retrieve-then-rerank)** resolves the tension: retrieve a wide net fast, rerank it with the cross-encoder, keep the best few. Add levers only where your failure analysis demands it; measure before adding complexity (Part 11).
+
+## References
+
+- Nogueira, R., & Cho, K. (2019). *Passage Re-ranking with BERT.* arXiv:1901.04085. [arxiv.org/abs/1901.04085](https://arxiv.org/abs/1901.04085): the monoBERT cross-encoder that established the retrieve-then-rerank pattern: feed the (query, passage) pair through BERT together and read off a single relevance score.
+- Gao, L., Ma, X., Lin, J., & Callan, J. (2022). *Precise Zero-Shot Dense Retrieval without Relevance Labels.* arXiv:2212.10496. [arxiv.org/abs/2212.10496](https://arxiv.org/abs/2212.10496): HyDE: generate a hypothetical answer with an LLM and search with *its* embedding instead of the short question's.
+- Zheng, H. S., Mishra, S., Chen, X., Cheng, H.-T., Chi, E. H., Le, Q. V., & Zhou, D. (2023). *Take a Step Back: Evoking Reasoning via Abstraction in Large Language Models.* arXiv:2310.06117. [arxiv.org/abs/2310.06117](https://arxiv.org/abs/2310.06117): step-back prompting: derive a broader, more abstract version of the question to gather the foundational context a narrow query would miss.
 
 ## Glossary
 
@@ -196,6 +238,9 @@ And yet it is still single-pass: it retrieves once and generates once, and we ne
 - **Cross-encoder**: a model that takes the query and a candidate chunk *together* as one input and outputs a single relevance score. Far more accurate than a bi-encoder, because the two texts attend to each other, but slow, because it runs per pair at query time.
 - **Reranking**: reordering a set of retrieved candidates by a more accurate relevance model (typically a cross-encoder), so the genuinely best chunk rises to the top.
 - **Two-stage retrieval (retrieve-then-rerank)**: fetch a wide candidate set with fast first-pass retrieval, then reorder just those candidates with a slow, accurate reranker and keep the best few. Speed and precision together.
+- **Pointwise vs listwise reranker**: a pointwise reranker (the classic cross-encoder) scores each candidate against the query *in isolation* and sorts by the scores; a listwise reranker reads the query and *several candidates together* and produces an ordering over the whole set, so the comparisons inform each other.
+- **LLM reranker**: handing the query and the candidate list directly to a general-purpose language model and asking it to rank them. The most flexible and most expensive option, since you pay full generation cost per query.
+- **Candidate set (n) and recall@n**: n is the number of chunks the wide first pass hands to the reranker; recall@n is how often the genuinely correct chunk is somewhere in that top-n. Because a reranker can only reorder what it is given, recall@n is the ceiling on the whole pipeline.
 - **Query transformation**: rewriting the user's raw question into one or more better search queries before retrieval.
 - **Multi-query (query expansion)**: generating several rephrasings of the query, retrieving for each, and merging the results to lift recall.
 - **HyDE (Hypothetical Document Embeddings)**: writing a hypothetical answer with an LLM and searching with *its* embedding, since an answer resembles the target documents more than a short question does.

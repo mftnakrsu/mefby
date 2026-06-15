@@ -4,7 +4,7 @@ description: "The leap from a fixed pipeline that runs the same way every time t
 date: 2026-06-16
 tags: ["RAG", "Agentic RAG", "GraphRAG", "LLM", "AI", "Architecture", "Retrieval"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-10-advanced-architectures"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/advanced-rag-architectures.png"
 seriesOrder: 10
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 10 of the series.*
 
 ## What you'll learn
 
@@ -26,7 +25,7 @@ Parts 1 through 9, and especially the last two: [Making Retrieval Smarter](/essa
 
 Here is exactly where Part 9 left us. We have a well-tuned retriever: hybrid search, a reranker, query decomposition, parent-document retrieval, every trick in the book. And yet the shape of the system has not changed since Part 6. A query comes in, we retrieve once, we stuff the chunks into the prompt, we generate. One path. The same path for "what is our refund window?" and for a question our corpus cannot possibly answer. The pipeline never asks itself whether it should retrieve, never checks whether the chunks it got are relevant, never tries a second time. It is a straight line, run identically every time.
 
-The leap in this part is to add **control flow**: the branches, loops, and conditions that let a program decide what to do next based on what it has seen so far. A naive RAG system has none. An advanced one decides whether to retrieve, judges what came back, retrieves again from a different source if the first attempt was bad, reasons across several steps, or walks a structured graph of knowledge instead of grabbing isolated chunks. That single idea, fixed pipeline becomes decision-making loop, is the umbrella over every named architecture below. They are not five unrelated products. They are five different ways of adding the same thing: the ability to decide.
+The leap in this part is to add **control flow**: the branches, loops, and conditions that let a program decide what to do next based on what it has seen so far. A naive RAG system has none. An advanced one decides whether to retrieve, judges what came back, retrieves again from a different source if the first attempt was bad, reasons across several steps, or walks a structured graph of knowledge instead of grabbing isolated chunks. That single idea, fixed pipeline becomes decision-making loop, is the umbrella over every named architecture below. They are not five unrelated products. Four of them, Agentic RAG, Corrective RAG, Self-RAG, and GraphRAG, are different ways of adding the same thing: the ability to decide. The fifth, Multi-Modal RAG, sits on a separate axis; it does not change whether or how the system decides, it changes what the system can retrieve over. We tour the four control-flow shapes first, then that orthogonal one.
 
 The clearest way to feel the difference is to watch one query travel both shapes. Our store assistant gets asked: "What is the battery life of the X1 wireless earbuds?" The corpus, remember, holds only store policies, refunds, shipping, warranty, not product specs.
 
@@ -40,11 +39,13 @@ The clearest way to feel the difference is to watch one query travel both shapes
 
 That bad-retrieval, then correct, then retry branch is the whole story of this part in miniature. Everything that follows is a way of building that branch, or a richer version of it.
 
-Now that we have the spine, here is the map of the four shapes we are about to tour, drawn so you can see at a glance what control flow each one bolts onto the basic loop.
+Now that we have the spine, here is the map of the four control-flow shapes we are about to tour, drawn so you can see at a glance what control flow each one bolts onto the basic loop.
 
 <Diagram number={2} caption="The map of advanced architectures. Agentic RAG makes retrieval a tool an agent chooses to call; Corrective RAG adds an evaluator that grades chunks and triggers a fallback; Self-RAG has the model reflect on whether to retrieve and whether it is grounded; GraphRAG retrieves over a knowledge graph instead of isolated chunks. Each adds control flow to the same retrieve-generate core.">
   <img src="/essays/advanced-rag-architectures/part10-four-architectures.svg" alt="Four panels around a shared retrieve-generate core. Panel one, Agentic RAG, shows an agent node with arrows to several tools (a vector store, a web-search icon, a database) and a reason-act-observe loop arrow. Panel two, Corrective RAG, shows retrieval feeding an evaluator that grades chunks good or bad, with a bad branch looping back to a web-search fallback. Panel three, Self-RAG, shows the model itself emitting reflection markers that gate retrieval and check groundedness. Panel four, GraphRAG, shows a small graph of entity nodes joined by labelled edges being traversed instead of a flat list of chunks." class="w-full rounded-lg" />
 </Diagram>
+
+These four share one theme: control flow. Multi-Modal RAG is the fifth idea and a different kind, it widens what the loop can read rather than adding a decision, so it sits outside this map and we cover it last.
 
 ## Agentic RAG
 
@@ -130,6 +131,18 @@ The recipe runs in two phases. At build time, you use a language model to read t
 
 GraphRAG shines exactly where flat retrieval fails: multi-hop reasoning, connecting facts that live in different documents, and holistic or summary questions about a whole body of text. The trade-off is steep. Building the graph means running a model over your entire corpus to extract entities and relationships, which is slow and expensive, and the graph must be maintained as documents change. In practice GraphRAG is rarely used alone; it is usually combined with vector search, the graph for the connected and global questions, vectors for the everyday "find me the passage about X."
 
+### Inside the Microsoft GraphRAG pipeline
+
+The two-phase recipe above is the idea. The version that made "GraphRAG" a household word in the RAG world is Microsoft's, and it is worth tracing concretely, because the pipeline tells you exactly where the cost lives and what you get for it.
+
+Indexing runs as a chain of LLM passes over the corpus. First, **entity extraction**: you chunk the documents as usual, then prompt a language model on each chunk to pull out the entities it mentions (people, organizations, products, places) along with a short description of each. Second, **relationship mapping**: the same pass, or a following one, asks the model to name the relationships between those entities ("acquired," "made by," "reports to"), which become the labelled edges. The result is a single knowledge graph stitched together from every chunk, with duplicate mentions of the same entity merged into one node.
+
+Then comes the step that makes the global questions answerable. You run **community detection** on the graph, specifically the **Leiden algorithm**, which partitions the nodes into nested **communities**: tightly interlinked clusters at several levels of granularity, from broad themes down to small tight-knit groups. For each community, you prompt the model again to write a **community summary**, a prose digest of what that cluster of entities and relationships is about. Because the communities are hierarchical, you end up with summaries at multiple zoom levels, a pre-computed table of contents for the whole corpus.
+
+That structure buys you two query modes. **Local search** answers a question about a specific entity by starting at its node, gathering its neighbors, their relationships, and the raw text chunks they came from, then generating from that focused neighborhood: this is the multi-hop, connect-the-dots case. **Global search** answers a corpus-wide question ("what are the main themes?") by fanning the question out across the community summaries, generating a partial answer from each, then reducing those partials into one final answer: this is the holistic case that top-k similarity simply cannot reach.
+
+Notice where the money goes. Every one of those indexing passes is an LLM call, and you make them over the entire corpus, not just the few chunks a query touches. Entity extraction alone can mean a model call per chunk for thousands or millions of chunks; community summarization adds another call per community per level. **Graph construction is LLM-token-expensive**, often by orders of magnitude more than simply embedding the same corpus once, and that cost is paid up front, before a single user question arrives. So the calculus is sharp: GraphRAG pays off when the corpus is **private, connected, and narrative**, an internal wiki, a body of research, a case file, a set of interlinked reports, where questions genuinely span many documents or ask about the whole, and where you will ask enough such questions to amortize the build. It is overkill for a corpus of independent, self-contained passages whose questions each live in one chunk: there, you are paying graph-construction prices for answers a reranker would have found in one hop.
+
 ## Multi-Modal RAG
 
 The last shape relaxes a different assumption, one we have made since Part 2: that everything is text.
@@ -144,7 +157,7 @@ Tie this back to Part 5. There, a figure or a scanned table was a problem: flatt
 
 ## How to choose
 
-Five shapes, five different additions to the same loop. Here is the comparison at a glance.
+Five shapes: four that add decision-making to the loop, and one (Multi-Modal RAG) that widens what the loop can retrieve over. Here is the comparison at a glance.
 
 | Architecture | What it adds | When to reach for it | Main cost |
 |---|---|---|---|
@@ -154,20 +167,56 @@ Five shapes, five different additions to the same loop. Here is the comparison a
 | GraphRAG | Retrieval over a knowledge graph of entities and relationships | Multi-hop, connect-the-dots, and holistic/summary questions | Expensive to build and maintain; usually paired with vectors |
 | Multi-Modal RAG | Retrieval and generation across images, tables, audio, and more | Corpora where the answer lives in figures, not just text | Multimodal models and embeddings; richer ingestion pipeline |
 
+It helps to keep the inverse of that table in your head too, the one-line "when it is overkill" for each, because the failure mode here is reaching for power you do not need:
+
+- **Agentic RAG** is overkill when one retrieval against one index answers the question. A loop that can choose between tools is wasted on a system that only ever has one tool to choose.
+- **CRAG** is overkill when your index is closed and authoritative (it holds the answer or the answer does not exist), because there is no useful outside source to fall back to: a plain grounded refusal is the right behavior.
+- **Self-RAG** is overkill when you cannot or will not run a model trained to emit reflection tokens; bolting an external grader on (that is just CRAG) is simpler and gets you most of the safety.
+- **GraphRAG** is overkill when your questions each live in a single passage; you would pay graph-construction prices for answers flat retrieval already finds.
+- **Multi-Modal RAG** is overkill when your corpus is genuinely text, or when the figures only restate the prose around them.
+
+And get a concrete feel for the cost, because "more expensive" is too vague to budget against. The unit that dominates a RAG bill is LLM calls, and the architectures multiply them very differently. Single-pass RAG is one generation call per query (plus a cheap embedding for the query). CRAG adds roughly one small evaluation call per query, and a second generation only on the fallback path, so call it 1 to 2x in the common case. Self-RAG folds its judgments into the generation itself, so the call count stays close to one, but you pay in a specialized model and longer outputs. An **agentic** loop is the expensive one: each reason-act-observe cycle is a model call, and a multi-hop task can easily run three, five, or more cycles before it answers, so agents commonly cost **3 to 10x the LLM calls of a single-pass query**, and slower wall-clock to match. GraphRAG inverts the timing: query-time cost is modest (local search reads a neighborhood, global search a handful of summaries), but the indexing build is a large fixed LLM bill paid once over the whole corpus and again on every refresh.
+
 Now the reality check, and I mean it as much as anything in this series. Every one of these adds latency, money, new failure modes, and debugging pain. The honest default, for the overwhelming majority of production systems, is well-tuned boring RAG: the hybrid search, reranking, and advanced retrieval patterns of Parts 6 through 9, done carefully. Add at most *one* of these architectures, and add it only where the problem genuinely demands it, proven by failure analysis and measurement, never because agents are exciting. The fact that you *can* build a five-tool agent that traverses a knowledge graph over multimodal embeddings does not mean your refund-policy bot should.
 
 {/* From experience callout: drop in a real first-person anecdote here (e.g. the time I reached for a full agent when a reranker-plus-hybrid setup from Parts 7-8 would have solved the same problem for a tenth of the cost and latency, the agent looped, the bill climbed, and the fix was deleting code, not adding it), then wrap it as: > 💡 **From experience** ...story... */}
 
 The discipline this requires, default to simple, add complexity only on evidence, depends entirely on having evidence. Which is exactly where the next two parts go: measuring whether your system is any good (Part 11) and running it in production (Part 12).
 
+## Try it yourself
+
+The cleanest way to feel the difference between a grader-gated branch and an open-ended loop is to count the calls. [agentic_loop.py](/essays/advanced-rag-architectures/agentic_loop.py) is the smallest honest sketch: a mocked policy-only local index, a web "fallback," a retrieval evaluator that grades the best chunk, and two control flows over them, CRAG (retrieve, grade, fall back only when the grade is bad) and an agentic ReAct loop (reason-act-observe, with a hard step cap). No real LLM, so it runs in a second on numpy alone; if you have `sentence-transformers` the grader actually routes by meaning.
+
+Run it and watch the `llm_calls` counter. The in-corpus refund question is answered locally; the out-of-corpus battery question forces the corrective branch to the web. Then notice the gap: CRAG spends one generation call, the agent spends two or three for the same answers, a miniature of the 3 to 10x the table warns about. Three experiments worth doing:
+
+- Raise the grader's `irrelevant_below` threshold and re-run. The web fallback starts triggering on good local answers (over-triggering): more calls, more latency, and every query leaking to an outside source.
+- Set `max_steps=1` on the agent, then very high. Watch how the cap is the only thing standing between a stuck loop and a runaway bill.
+- Add a question your local index *can* answer well and confirm the agent never bothers with the web tool: routing falling out of the grade, for free.
+
+> ⚠️ **Common pitfalls**
+>
+> - **Agents that loop without converging.** An agent that keeps grading its own retrieval as "not quite good enough" will reason-act-observe forever, one model call per turn, until your bill (or your patience) runs out. Always set a hard **step cap and a token/cost budget**, and define what the agent does when it hits them (answer from what it has, or refuse honestly), the same way the sketch stops at `max_steps`. An uncapped agent is not a feature, it is an incident waiting to happen.
+> - **CRAG over-triggering its web fallback.** Set the evaluator's "irrelevant" bar too aggressively and it will reject perfectly good local chunks and fall back to web search on queries your own index answered fine. That is slower, costlier, and quietly exfiltrates every query to an outside service. Tune the grading thresholds on real traffic, and log how often the fallback fires: if it is firing on most queries, the grader is miscalibrated, not the index.
+> - **GraphRAG going stale.** The graph is a snapshot of your corpus at build time. As documents change, the extracted entities, relationships, and community summaries silently drift out of date, and nothing in the query path tells you. Treat the graph like any other index that needs refreshing: budget for re-extraction (it is the expensive LLM pass, so you cannot do it on every edit), track what has changed since the last build, and remember that a confidently wrong answer from a stale graph looks exactly like a correct one.
+
 ## Key takeaways
 
-- The leap of this part is from a **fixed pipeline** (retrieve, then generate, the same way every time) to a **decision-making loop** with control flow: decide whether to retrieve, judge what came back, retry, reason in steps, traverse structure. Every architecture here is a different way of adding that.
+- The leap of this part is from a **fixed pipeline** (retrieve, then generate, the same way every time) to a **decision-making loop** with control flow: decide whether to retrieve, judge what came back, retry, reason in steps, traverse structure. Four of the architectures here (Agentic, CRAG, Self-RAG, GraphRAG) are different ways of adding that decision-making; Multi-Modal RAG is orthogonal, relaxing the assumption that everything is text.
 - **Agentic RAG** makes retrieval one **tool** an **agent** can choose in a reason-act-observe (**ReAct**) loop, enabling **query routing** and **multi-hop retrieval**, at the cost of latency, money, and unpredictability.
 - **Corrective RAG (CRAG)** adds a **retrieval evaluator** that grades chunks and, when they are bad, triggers a fallback such as web search before generating. Cheap, predictable, and great for open-domain gaps.
 - **Self-RAG** moves the judgment inside the model via **reflection tokens** that decide whether to retrieve and whether each claim is grounded; CRAG gates from the outside, Self-RAG reflects from the inside.
 - **GraphRAG** retrieves over a **knowledge graph** of entities and relationships (with optional **community summarization**) to win on multi-hop and global questions isolated chunks cannot answer, while **Multi-Modal RAG** retrieves over images, tables, and audio via **multimodal embeddings** (a shared CLIP-style space) or by translating media to text. Both are powerful, specialized, and pricier to build.
 - Default to well-tuned simple RAG and add **one** advanced architecture only when measurement, not excitement, proves the problem needs it. This field moves fast and I have a knowledge cutoff, so treat every named method here as a snapshot and verify the current state.
+
+## References
+
+Each named architecture in this part traces to a specific paper. If you want the primary sources rather than my summaries:
+
+- Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K., & Cao, Y. (2022). *ReAct: Synergizing Reasoning and Acting in Language Models.* arXiv:2210.03629. [https://arxiv.org/abs/2210.03629](https://arxiv.org/abs/2210.03629)
+- Asai, A., Wu, Z., Wang, Y., Sil, A., & Hajishirzi, H. (2023). *Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection.* arXiv:2310.11511. [https://arxiv.org/abs/2310.11511](https://arxiv.org/abs/2310.11511)
+- Yan, S.-Q., Gu, J.-C., Zhu, Y., & Ling, Z.-H. (2024). *Corrective Retrieval Augmented Generation.* arXiv:2401.15884. [https://arxiv.org/abs/2401.15884](https://arxiv.org/abs/2401.15884)
+- Edge, D., Trinh, H., Cheng, N., Bradley, J., Chao, A., Mody, A., Truitt, S., & Larson, J. (2024). *From Local to Global: A Graph RAG Approach to Query-Focused Summarization.* arXiv:2404.16130. [https://arxiv.org/abs/2404.16130](https://arxiv.org/abs/2404.16130)
+- Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., Krueger, G., & Sutskever, I. (2021). *Learning Transferable Visual Models From Natural Language Supervision.* arXiv:2103.00020. [https://arxiv.org/abs/2103.00020](https://arxiv.org/abs/2103.00020)
 
 ## Glossary
 

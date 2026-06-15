@@ -4,7 +4,8 @@ description: "Eight parts in, your pipeline retrieves well. But it still assumes
 date: 2026-06-15
 tags: ["RAG", "Retrieval", "Chunking", "Vector Search", "LLM", "Python", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-09-advanced-retrieval-patterns"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/advanced-retrieval-patterns.png"
+summary: "Decouple what you search from what you generate from. Part 9: parent-document, sentence-window, self-querying, and contextual compression, built by hand."
 seriesOrder: 9
 lang: "en"
 ---
@@ -12,7 +13,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 9 of the series.*
 
 ## What you'll learn
 
@@ -97,7 +97,7 @@ The catch is the one we keep meeting: this adds an LLM call before every search,
 
 The first three patterns decide *which* text reaches the model. The last one cleans up *the text itself* once it has been chosen.
 
-The problem: even a perfect retrieval returns chunks that are mostly padding. A chunk that genuinely contains the answer also contains four sentences that have nothing to do with this particular question. That noise is not harmless. It burns context budget you are paying for, and worse, it dilutes the signal: recall "lost in the middle" from Part 7, where a model's attention sags on information buried in a long, noisy context. Relevant chunks, full of irrelevant sentences, make the answer worse.
+The problem: even a perfect retrieval returns chunks that are mostly padding. A chunk that genuinely contains the answer also contains four sentences that have nothing to do with this particular question. That noise is not harmless. It burns context budget you are paying for, and worse, it dilutes the signal: recall "lost in the middle" from Part 7, where a model uses information buried in the middle of a long, noisy context less reliably than what sits at its ends. Relevant chunks, full of irrelevant sentences, make the answer worse.
 
 The pattern, **contextual compression**: after retrieval and before generation, run each chunk through a step that strips it down to just the parts relevant to the query. Two flavours:
 
@@ -186,22 +186,37 @@ def retrieve_small_return_big(query, k_children=1):
     }
 ```
 
-Run it on a query whose sharp match is a thin sentence, and watch the before/after of what the model actually receives:
+Run it on a question about timing, whose sharp match is a thin sentence, and watch the before/after of what the model actually receives (the output below is the file's deterministic keyword-overlap fallback, used so it runs with no model installed):
 
 ```text
-Query: 'can I get my money back if the box is already open?'
+Query: 'how long until I get my refund after sending the item back?'
 
 NAIVE  (search small, return small)  ->  the LLM receives:
-  [0.158] Once we receive the item, your refund is processed back to the
+  [0.211] Once we receive the item, your refund is processed back to the
           original payment method within five business days.
 
 PARENT-DOCUMENT  (search small, return big)  ->  the LLM receives:
-  Refunds. We accept refunds within 30 days of purchase, as long as the item is
-  unused and in its original packaging. To start a return, email
-  support@example.com with your order number. Shipping fees are not refundable.
+  Refunds. We accept refunds within 30 days of purchase. To qualify, the item
+  must be unused and in its original packaging. To start a return, email
+  support@example.com with your order number. Once we receive the item, your
+  refund is processed back to the original payment method within five business
+  days. Shipping fees are not refundable.
 ```
 
-The naive path matched a true sentence and starved the model: it never learns about the 30-day window or the "unused and in original packaging" condition that actually decides this question. Parent-document hands over the whole refund section. Same sharp match; far more to answer from. The matched child is an implementation detail. The parent you serve is the answer. The full runnable file, including a transparent fallback scorer so it runs without any model installed, is [rag_parent_document.py](/essays/advanced-retrieval-patterns/rag_parent_document.py).
+The naive path matched a single true sentence about timing and starved the model: that sentence never mentions the 30-day window or the "unused and in original packaging" condition that a returns question can hinge on. Parent-document hands over the whole refund section. Same sharp match; far more to answer from. With the real sentence-transformers model the match is sharper still (cosine around 0.855 on the very same timing sentence), and it still lives inside the refund parent, so the parent you serve is identical. The matched child is an implementation detail. The parent you serve is the answer. The full runnable file, including a transparent fallback scorer so it runs without any model installed, is [rag_parent_document.py](/essays/advanced-retrieval-patterns/rag_parent_document.py).
+
+## Try it yourself
+
+The point of [rag_parent_document.py](/essays/advanced-retrieval-patterns/rag_parent_document.py) is to make the decoupling visible by changing one thing at a time. Two experiments are worth running yourself.
+
+First, change the demo query and watch which child wins while the same parent is served. The default query is about refund timing, which matches the "five business days" sentence. Swap it for `"do I have to keep the box my order came in?"` and a *different* child wins (the "unused and in its original packaging" sentence), but it still lives in parent 0, so the model receives the identical refund section. That is the whole lesson in one keystroke: which sentence you search on is an implementation detail; which parent you serve is the answer. The match moved, the served context did not.
+
+Second, raise `k_children` and watch the parent de-duplication do its job. The `__main__` demo calls `retrieve_small_return_big(query, k_children=1)` to keep the before/after crisp. Bump it to `k_children=3` and the top three children will often point back into the *same* parent (a returns question lights up several sentences in the refund section). The line `parent_ids = list(dict.fromkeys(child_to_parent[i] for i in top))` collapses those duplicate hits into a single parent, so you do not paste the same paragraph into the prompt three times. Try a query that spans sections, like `"what are my options if the size is wrong, refund or exchange?"`, and you will see two *distinct* parents come back instead. That de-duplication is exactly the seed of auto-merging retrieval: it is already counting how many children of a parent were hit, one short step from letting that count decide whether to merge.
+
+> ⚠️ **Common pitfalls**
+>
+> - **A self-querying LLM will confidently invent a filter field that does not exist in your store.** Ask it to filter "by department" when your metadata only has `year` and `type`, and it may emit `{"department": "finance"}` against a field nothing was ever indexed under. Depending on the store, that either throws or silently matches nothing, and the user just sees an empty answer. Always *validate the parsed filter against a known schema* (an allow-list of fields and, ideally, their types) before it touches the vector store, and on a mismatch drop the bad clause or fall back to an unfiltered search rather than passing it through blind.
+> - **Parent-document and auto-merging can blow your context budget when parents are huge.** The pattern is seductive precisely because bigger parents give the model more to work with, but "the whole document" as a parent means one sharp child hit can dump tens of thousands of tokens into the prompt, and three hits across three large parents can overflow the window outright (or quietly trigger "lost in the middle" from Part 7). Size your parents deliberately (a paragraph or a section, not a book), cap how many parents you serve, and if your parents are genuinely large, pair the pattern with contextual compression so what reaches the model is large *and* clean rather than just large.
 
 ## Recap and what is next
 
@@ -216,6 +231,14 @@ But look at the pipeline we have built. For all its sophistication, it is still 
 - **Self-querying turns natural language into a search plus a filter**, automating the metadata filtering you did by hand in Part 8 so users can express hard constraints in plain words.
 - **Contextual compression trims content within a chunk** after retrieval, where metadata filtering removes whole chunks before it; reach for it when good chunks arrive padded with noise.
 - **These patterns stack and are not free.** They coexist with hybrid search, filtering, and reranking. Add one when failure analysis points at the specific problem it solves, never by default, and confirm it helped by measuring (Part 11).
+
+## References
+
+These are the framework docs that turn the four patterns into running code, useful when you want a maintained implementation rather than the by-hand version above.
+
+- LangChain, ["ParentDocumentRetriever."](https://reference.langchain.com/python/langchain-classic/retrievers/parent_document_retriever/ParentDocumentRetriever) API reference for the parent-document pattern: retrieve small child chunks, then return the larger parent documents they belong to.
+- LangChain, ["ContextualCompressionRetriever."](https://reference.langchain.com/python/langchain-classic/retrievers/contextual_compression/ContextualCompressionRetriever) API reference for the contextual-compression idea: a retriever that wraps a base retriever and compresses the results, with document compressors such as `LLMChainExtractor` (abstractive) and `EmbeddingsFilter` (extractive).
+- LlamaIndex, ["Auto Merging Retriever."](https://developers.llamaindex.ai/python/examples/retrievers/auto_merging_retriever/) Example walking through auto-merging retrieval over a hierarchy of parent and child nodes, merging children back into a parent once enough of that parent's children are retrieved.
 
 ## Glossary
 

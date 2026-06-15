@@ -4,7 +4,7 @@ description: "A chunk that reads fine in isolation can be uninterpretable once i
 date: 2026-06-20
 tags: ["RAG", "Chunking", "Late Chunking", "Contextual Retrieval", "Embeddings", "Retrieval", "LLM", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-14-context-aware-chunking"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/context-aware-chunking.png"
 seriesOrder: 14
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 14 of the series, on the Frontier Track.*
 
 ## What you'll learn
 
@@ -20,7 +19,7 @@ Way back in Part 5 we cut our documents into chunks, and we treated each chunk a
 
 ## Prerequisites
 
-This part builds on two earlier ones. [Chunking and Preprocessing](/essays/chunking-and-preprocessing) (Part 5) is where we first split documents and where I first hand-waved past the context-loss problem, so it helps to have that in your head. [Advanced Retrieval Patterns](/essays/advanced-retrieval-patterns) (Part 9) introduced the idea of decoupling what you embed from what you store and feed the model, and late chunking is a sharp instance of that same idea. You should also remember cosine similarity from [Vectors and Embeddings](/essays/vectors-and-embeddings) (Part 3), since every ranking below is just cosine scores sorted. No new math beyond a mean and a dot product. The running companion code stays framework-free and offline, numpy and the standard library only, with the real long-context encoder behind a fallback so it runs anywhere.
+This part builds on two earlier ones. [Documents and Chunking](/essays/documents-and-chunking) (Part 5) is where we first split documents and where I first hand-waved past the context-loss problem, so it helps to have that in your head. [Advanced Retrieval Patterns](/essays/advanced-retrieval-patterns) (Part 9) introduced the idea of decoupling what you embed from what you store and feed the model, and late chunking is a sharp instance of that same idea. You should also remember cosine similarity from [Measuring Similarity](/essays/measuring-similarity) (Part 3), since every ranking below is just cosine scores sorted. No new math beyond a mean and a dot product. The running companion code stays framework-free and offline, numpy and the standard library only, with the real long-context encoder behind a fallback so it runs anywhere.
 
 A quick note on where this sits. The core series ended at Part 12, which is the finale. This is the Frontier Track: optional 2026-frontier material you reach for once the core pipeline is solid. Nothing here is required to ship a good RAG system. It is here for when boring, well-tuned chunking starts costing you recall and you want to know what the next move is.
 
@@ -60,7 +59,7 @@ Here is the ordinary, naive recipe we have used since Part 5. For each chunk, ru
 
 Late chunking flips the order of two operations. Instead of "chunk, then embed each chunk", it does "embed the whole document, then chunk the token vectors". Concretely: take the entire document, all four sentences as one long string, and run it through a **long-context encoder**, an embedding model whose context window is long enough to hold the whole document at once. The encoder produces one contextualized vector per token across the entire document. Because every token attended to every other token during that single forward pass, the token vectors sitting under chunk `[1]` have already absorbed information from "Alice" and "Acme" and "refund" elsewhere in the document. Only *after* that whole-document pass do we pool. We carve the token-vector sequence back into chunks by token offsets, and for each chunk we average just the token vectors belonging to it, producing one chunk vector.
 
-The pooling step is almost embarrassingly simple. Here is the function from the companion code, verbatim:
+The pooling step is almost embarrassingly simple. Here is the function from the companion code ([late_vs_contextual_chunking.py](/essays/context-aware-chunking/late_vs_contextual_chunking.py), which scores all three approaches on this exact refund note), verbatim:
 
 ```python
 def late_chunk(token_vecs, spans):
@@ -124,9 +123,23 @@ This is the section where I have to be disciplined, because Contextual Retrieval
 
 Here is the one figure I will stand behind. In Anthropic's own evaluation, using contextual embeddings alone, the kind we just built, prepend a situating sentence then embed, cut the top-20 retrieval failure rate by **35%**, from 5.7% down to 3.7%. "Top-20 retrieval failure rate" means: out of the queries you run, what fraction fail to surface the right chunk anywhere in the top 20 retrieved. Dropping that from 5.7% to 3.7% is a real, meaningful improvement, and it is attributable specifically to the contextual-embedding step.
 
-What I will *not* quote, and what you should be wary of seeing quoted, are the bigger cumulative numbers floating around. Those larger reductions are not the effect of contextual chunking alone. They bundle in other components, contextual sparse retrieval and a reranking stage, on top of the contextual embeddings. They are real numbers for the *full stack*, but they are not the number for the technique in this essay, and attributing them to contextual chunking by itself overstates what prepending a sentence does. When you read about this method, check whether a quoted improvement is the contextual-embedding step on its own or the whole pipeline. For the technique we built here, the honest figure is 35%, 5.7% to 3.7%.
+What I will *not* quote, and what you should be wary of seeing quoted, are the bigger cumulative numbers floating around. Those larger reductions are not the effect of contextual chunking alone. They bundle in other components on top of the contextual embeddings. Anthropic reports that adding **Contextual BM25**, the sparse-retrieval twin that indexes the same situated text in a keyword index, brings the reduction to **49%** (5.7% down to 2.9%), and stacking a reranking stage on top of both pushes it to **67%** (down to 1.9%). Those are real numbers for the *full stack*, and the 49% in particular is the figure people most often misattribute to contextual chunking by itself. It is not: it is contextual embeddings *plus* contextual sparse retrieval. The number for the dense-embedding technique in this essay, on its own, is 35%. When you read about this method, check whether a quoted improvement is the contextual-embedding step alone or the whole pipeline. For the technique we built here, the honest figure is 35%, 5.7% to 3.7%.
 
 Now the honest cost. Contextual Retrieval is not free, even though it is cheap. It requires one language-model call per chunk at index time, to write each situating sentence. If you have a hundred thousand chunks, that is a hundred thousand small generation calls before you have indexed anything. That sounds alarming, and it is the most common objection, but two things soften it. First, it is a one-time, offline, index-time cost, not a per-query cost, so it does not touch your serving latency at all. Second, prompt caching makes it dramatically cheaper in practice: the document text is the same across all of its chunks, so you cache the document once and only pay for the small per-chunk variation. The situating sentences are short, the document is cached, and the bill is far lower than the raw chunk count suggests. It is still a real cost line, and you should budget for it, but it is an index-time line, not a query-time one.
+
+## Two fixes, one problem
+
+Step back and look at the two methods side by side, because they are solving the identical disease from opposite ends of the pipeline.
+
+Anthropic's **Contextual Retrieval** works on the *text*, before the encoder. For each chunk you ask a language model to write a short situating blurb, roughly 50 to 100 tokens, that says where the chunk sits in its document, and you prepend that blurb before you embed. Anthropic pairs this with a second, sparse-retrieval twin they call **Contextual BM25**: you run the same situated text through a BM25 keyword index too, so the prepended context helps lexical matching as much as it helps the dense vector. The contextual-embedding step alone is the technique we built here; adding the contextual sparse twin is the combination Anthropic reports the bigger number for.
+
+Jina's **late chunking** works inside the *encoder*, on the token vectors, and it touches no text at all. You embed the whole document through a long-context encoder so every token attends to every other token, then mean-pool each chunk's token span afterward. There is no language model, no prompt, no generation: it is **training-free**, a reordering of two operations you already perform. That is its whole appeal. The cost is that it leans entirely on the encoder's context window being long enough to hold the document.
+
+Which brings up the number that quietly decides whether late chunking is even available to you: the **token budget**. The short-context embedding model we have used since Part 6, `all-MiniLM-L6-v2`, caps at 256 tokens, a couple of paragraphs at most, so it cannot hold a whole document in one pass and cannot do late chunking at all. Jina's long-context encoders handle around 8192 tokens, a factor of roughly thirty more, which is what makes the whole-document forward pass possible in the first place. If your encoder is short-context, late chunking is simply off the table and Contextual Retrieval, which fixes the text rather than relying on the window, is your move. If your encoder is long-context, late chunking is close to free.
+
+There is a sharp failure mode hiding in that token budget: silent truncation. If you hand a whole document to a 512-token model expecting late chunking, the encoder does not warn you, it just throws away everything past its window, and the chunks that fell outside it come back as garbage vectors. The fix is a one-line habit: check the encoder's max sequence length before you reach for late chunking, because late chunking is only ever as good as the window you pour the document into.
+
+One more thing, and it is the same instinct from Part 9: **what you store and index is not what you have to serve.** Both fixes change the vector (and, for Contextual Retrieval, the text) that you *index* and search against, the situated text or the late-pooled embedding. They do not oblige you to hand that doctored text to the generator. You can index the context-aware vector for sharp retrieval and still feed the model the *original*, clean chunk, with no prepended blurb cluttering the prompt. The situating sentence earns its keep at index time, where matching happens, and then gets out of the way at generation time. The companion code closes on exactly this reminder. Decoupling the indexed unit from the served unit is the through-line of the back half of this series, and context-aware chunking is one more place it pays off.
 
 ## Choosing and combining
 
@@ -161,6 +174,25 @@ And the most useful thing to know: they compose. They fix the context-loss probl
 
 {/* author: swap the benefits-handbook anecdote above for your own real story of a chunk that lost its context and tanked retrieval, e.g. a contract clause that read "the above limitations" with no antecedent, or a changelog entry that said "fixed this" with no subject; keep the closing lesson about reading the chunk as the embedder sees it. */}
 
+## Try it yourself
+
+You do not need a long-context encoder to feel Contextual Retrieval work, because the text edit it makes is something you can do by hand. Open the companion code, [late_vs_contextual_chunking.py](/essays/context-aware-chunking/late_vs_contextual_chunking.py), and run it with no arguments. The offline path is deterministic, so you will get the numbers from the prose every time: under naive chunking the answer chunk `[1]` sits at rank 2, buried by the off-topic `[2]`, and both fixes lift it to rank 1.
+
+Now make the situating sentence yourself and watch the ranking move:
+
+1. Take the bare chunk `"She set the refund window at 30 days."` and the query `"what is Alice's refund window?"`. Score them under naive chunking and note where `[1]` lands.
+2. Prepend a one-sentence blurb that names the antecedent: `"This chunk is from a note about Alice and Acme's refund policy. She set the refund window at 30 days."` Re-embed and re-score. The pronoun now has "Alice" sitting right next to it in the encoded text, and `[1]` climbs.
+3. Change the blurb. Try a vague one that names the wrong thing, like `"This is a document about shipping."`, and watch the gain evaporate or even reverse. The lift comes from the blurb actually resolving the ambiguity, not from prepending *any* text. This is why the per-chunk note matters more than a static title.
+4. If you have a long-context encoder installed (jina), run with `--online` and compare. A strong real encoder may already rank `[1]` first under naive, in which case the trap does not bite on that run and the script tells you so. That is the honest situation from the prose: the trap is real but intermittent, and the offline path is where it reliably shows.
+
+The whole exercise takes a few minutes and it makes the mechanism physical: you are editing the text the embedder reads, and you can watch the cosine score for the answer chunk rise as the situating sentence does its job.
+
+> ⚠️ **Common pitfalls.**
+> - **Offset-mapping bugs in late chunking.** The entire correctness of late chunking lives in carving the document's token-vector sequence back into the right per-chunk spans. Off-by-one on the token offsets, forgetting that the tokenizer inserts special tokens like `[CLS]` and `[SEP]`, or letting a sub-word token straddle a chunk boundary, and you pool the wrong vectors into the wrong chunk. The pooling math is trivial; the bookkeeping is where it breaks. Use the tokenizer's own offset mapping rather than re-tokenizing chunks separately.
+> - **`[CLS]`-pooled models that never expose token vectors.** Late chunking needs the per-token output of the encoder. Many embedding models hand you only the pooled sentence vector (a `[CLS]` token or an internal mean) and give you no way to reach the underlying token vectors. On those models late chunking is simply not implementable, no matter how long the context window is. Check that your model exposes token embeddings before you plan around it.
+> - **Situating-sentence hallucination.** The blurb in Contextual Retrieval is written by a language model, and a language model can invent facts. If the model writes "This chunk is from the 2023 premium-plan policy" when the document never said premium or 2023, you have just embedded a confident lie, and it will pull queries toward the wrong chunk. Keep the prompt tightly scoped to the document, prefer extractive over inventive phrasing, and spot-check the generated sentences.
+> - **Confusing what you store with what you serve.** The doctored text (the prepended blurb) and the doctored vector (the late-pooled embedding) belong at *index* time. If you also feed the situating sentence to the generator you have padded every prompt with redundant boilerplate, wasting tokens and sometimes confusing the model. Index the context-aware representation; serve the original chunk.
+
 ## Key takeaways
 
 - A chunk that reads fine inside its document can be uninterpretable once embedded alone. **Coreference** is the usual culprit: "She", "the policy", "that error" lose the antecedents that gave them meaning, and the chunk's vector stops pointing at the queries it should answer. In our refund note, the answer chunk "She set the refund window at 30 days" got buried at rank 2 under naive chunking.
@@ -168,6 +200,11 @@ And the most useful thing to know: they compose. They fix the context-loss probl
 - **Contextual Retrieval** (Anthropic) prepends a short, LLM-written situating sentence to each chunk *before* embedding, so the antecedent sits right next to the pronoun in the text the embedder encodes. It also moved the answer chunk to rank 1, and it is the richer cousin of Part 5's static title-prepend because the note is written per chunk.
 - The one defensible quantitative claim is that contextual embeddings alone cut top-20 retrieval failure by **35%** (5.7% to 3.7%). Bigger cumulative numbers you may see bundle in sparse retrieval and reranking; do not attribute those to contextual chunking by itself.
 - Late chunking needs a long-context encoder but no language model; Contextual Retrieval is model-agnostic on the embedder but costs one LLM call per chunk at index time, which prompt caching makes cheap and which never touches serving latency. They fix the problem at different stages, so they **compose**. This field moves fast and I have a knowledge cutoff, so treat the specific figures and model names here as a snapshot and verify the current state.
+
+## References
+
+- Anthropic, "Introducing Contextual Retrieval" (2024). The source for Contextual Retrieval, Contextual BM25, and the failure-rate numbers quoted here: 35% for contextual embeddings alone (5.7% to 3.7%), 49% adding Contextual BM25 (to 2.9%), 67% adding reranking (to 1.9%). [https://www.anthropic.com/news/contextual-retrieval](https://www.anthropic.com/news/contextual-retrieval)
+- Günther, M., Mohr, I., Williams, D. J., Wang, B., and Xiao, H., "Late Chunking: Contextual Chunk Embeddings Using Long-Context Embedding Models," arXiv:2409.04701 (2024). The late-chunking paper from the Jina AI team, including the long-context encoders (around 8192 tokens) the method relies on. [https://arxiv.org/abs/2409.04701](https://arxiv.org/abs/2409.04701)
 
 ## Glossary
 
