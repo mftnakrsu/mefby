@@ -17,6 +17,9 @@ const tags = topicTags(essay.data.tags);
     class={`group block py-5 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${featured ? '-ml-2 -mr-2 pl-3 pr-2 rounded-l-none border-l-2 border-emerald-300' : '-mx-2 px-2'}`}
   >
     <div class="flex items-baseline gap-2">
+      {essay.data.seriesOrder != null && (
+        <span class="shrink-0 font-mono text-[10px] text-zinc-500 border border-zinc-200 rounded px-1.5 py-px" aria-label={`Part ${essay.data.seriesOrder}`}>Part {essay.data.seriesOrder}</span>
+      )}
       <h3 class={`font-medium text-zinc-900 leading-snug group-hover:text-emerald-700 transition-colors ${featured ? 'text-base' : 'text-[15px]'}`}>
         {essay.data.title}
       </h3>
@@ -28,7 +31,7 @@ const tags = topicTags(essay.data.tags);
       <span aria-hidden="true" class="ml-auto pl-2 text-zinc-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all">&rarr;</span>
     </div>
 
-    <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-zinc-400">
+    <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-zinc-600">
       <time datetime={essay.data.date.toISOString().slice(0, 10)}>{fmtDate(essay.data.date)}</time>
       <span aria-hidden="true" class="text-zinc-300">&middot;</span>
       <span>{readingTime(essay.body)} min read</span>
@@ -45,7 +48,7 @@ const tags = topicTags(essay.data.tags);
     {tags.length > 0 && (
       <ul class="mt-2.5 flex flex-wrap gap-x-1.5 gap-y-1" aria-label="Topics">
         {tags.map((tag) => (
-          <li class="text-[10px] font-mono text-zinc-400 group-hover:text-emerald-600/80 transition-colors">#{tag}</li>
+          <li class="text-[10px] font-mono text-zinc-500 group-hover:text-emerald-600/80 transition-colors">#{tag}</li>
         ))}
       </ul>
     )}

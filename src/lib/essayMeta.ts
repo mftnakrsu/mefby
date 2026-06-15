@@ -23,7 +23,7 @@ export const readingTime = (body: string): number => {
   return Math.max(1, Math.round(words / 200));
 };
 
-// Every essay is bilingual; surface its languages EN-first regardless of canonical.
+// Surface each essay's languages EN-first regardless of canonical (not all are bilingual).
 export const essayLangs = (lang: 'en' | 'tr', hasTranslation: boolean): string[] =>
   hasTranslation ? ['EN', 'TR'] : [lang.toUpperCase()];
 

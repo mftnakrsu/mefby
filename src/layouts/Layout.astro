@@ -1,22 +1,35 @@
 ---
 import '../styles/global.css';
 
+interface Alternate {
+  hreflang: string;
+  href: string;
+}
 interface Props {
   title?: string;
   description?: string;
   ogImage?: string;
   lang?: string;
+  ogType?: string;
+  publishedTime?: string;
+  tags?: string[];
+  alternates?: Alternate[];
 }
 
 const {
   title = 'Meftun Akarsu',
   description = 'AI Engineer — LLM infrastructure, computer vision, data pipelines.',
-  ogImage,
+  ogImage = '/profile.jpg',
   lang = 'en',
+  ogType = 'website',
+  publishedTime,
+  tags = [],
+  alternates = [],
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined;
+const locale = lang === 'tr' ? 'tr_TR' : 'en_US';
 ---
 
 <!DOCTYPE html>
@@ -30,12 +43,33 @@ const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined
     <link rel="icon" type="image/png" href="/icon.png" />
     <link rel="apple-touch-icon" href="/icon.png" />
 
-    <meta property="og:type" content="website" />
+    {alternates.map((a) => (
+      <link rel="alternate" hreflang={a.hreflang} href={a.href} />
+    ))}
+
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content="Meftun Akarsu" />
+    <meta property="og:locale" content={locale} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
-    {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    {ogImageUrl && (
+      <Fragment>
+        <meta property="og:image" content={ogImageUrl} />
+        <meta property="og:image:alt" content={title} />
+      </Fragment>
+    )}
+    {ogType === 'article' && publishedTime && (
+      <meta property="article:published_time" content={publishedTime} />
+    )}
+    {ogType === 'article' && tags.map((t) => (
+      <meta property="article:tag" content={t} />
+    ))}
+
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
 
     <script type="application/ld+json" set:html={JSON.stringify({
       "@context": "https://schema.org",

@@ -1,35 +1,103 @@
 ---
 import Layout from './Layout.astro';
 
+interface SeriesLink {
+  slug: string;
+  title: string;
+  seriesOrder?: number;
+}
 interface Props {
   title: string;
   description: string;
   date: Date;
   tags?: string[];
   lang?: string;
+  slug?: string;
+  summary?: string;
   translationSlug?: string;
   codeUrl?: string;
   ogImage?: string;
+  seriesOrder?: number;
+  seriesTotal?: number | null;
+  prevEssay?: SeriesLink | null;
+  nextEssay?: SeriesLink | null;
 }
-const { title, description, date, tags = [], lang = 'en', translationSlug, codeUrl, ogImage } = Astro.props;
+const { title, description, date, tags = [], lang = 'en', slug, summary, translationSlug, codeUrl, ogImage, seriesOrder, seriesTotal, prevEssay, nextEssay } = Astro.props;
 const dateFormatted = date.toISOString().slice(0, 10);
 
 const backLabel = lang === 'tr' ? 'geri' : 'back';
 const langs = ['en', 'tr'] as const;
 
+const inSeries = seriesOrder != null && seriesTotal != null;
+const seriesLabel = lang === 'tr'
+  ? `RAG: İLK İLKELERDEN · BÖLÜM ${seriesOrder} / ${seriesTotal}`
+  : `RAG FROM FIRST PRINCIPLES · PART ${seriesOrder} OF ${seriesTotal}`;
+
+const abs = (path: string) => new URL(path, Astro.site).toString();
+const canonicalUrl = slug ? abs(`/essays/${slug}/`) : abs(Astro.url.pathname);
+const metaDescription = summary ?? description;
+const ogImageUrl = ogImage ? abs(ogImage) : undefined;
+
+// hreflang alternates for a translated pair: self, counterpart, and x-default → EN.
+const counterpartLang = lang === 'en' ? 'tr' : 'en';
+const alternates = (translationSlug && slug)
+  ? [
+      { hreflang: lang, href: abs(`/essays/${slug}/`) },
+      { hreflang: counterpartLang, href: abs(`/essays/${translationSlug}/`) },
+      { hreflang: 'x-default', href: abs(`/essays/${lang === 'en' ? slug : translationSlug}/`) },
+    ]
+  : [];
+
 const articleJsonLd = {
   "@context": "https://schema.org",
   "@type": "Article",
   headline: title,
-  description,
+  description: metaDescription,
   datePublished: dateFormatted,
+  dateModified: dateFormatted,
   inLanguage: lang,
-  author: { "@type": "Person", name: "Meftun Akarsu" },
+  mainEntityOfPage: canonicalUrl,
+  keywords: tags.join(", "),
+  ...(ogImageUrl ? { image: ogImageUrl } : {}),
+  author: {
+    "@type": "Person",
+    name: "Meftun Akarsu",
+    url: "https://mefby.vercel.app",
+    sameAs: [
+      "https://www.linkedin.com/in/meftunakarsu/",
+      "https://github.com/mftnakrsu",
+    ],
+  },
+  publisher: {
+    "@type": "Organization",
+    name: "Meftun Akarsu",
+    logo: { "@type": "ImageObject", url: abs("/icon.png") },
+  },
+};
+
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Home", item: abs("/") },
+    { "@type": "ListItem", position: 2, name: "Essays", item: abs("/essays/") },
+    { "@type": "ListItem", position: 3, name: title, item: canonicalUrl },
+  ],
 };
 ---
 
-<Layout title={title} description={description} lang={lang} ogImage={ogImage}>
+<Layout
+  title={title}
+  description={metaDescription}
+  lang={lang}
+  ogImage={ogImage}
+  ogType="article"
+  publishedTime={dateFormatted}
+  tags={tags}
+  alternates={alternates}
+>
   <script type="application/ld+json" set:html={JSON.stringify(articleJsonLd)} />
+  <script type="application/ld+json" set:html={JSON.stringify(breadcrumbJsonLd)} />
   <div class="min-h-screen bg-white text-zinc-500 font-sans">
     <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
       <div class="flex items-center justify-between mb-12">
@@ -66,6 +134,9 @@ const articleJsonLd = {
       </div>
 
       <article lang={lang}>
+        {inSeries && (
+          <a href="/essays/rag" class="inline-block text-[11px] font-mono uppercase tracking-widest text-emerald-700 hover:text-emerald-800 transition-colors mb-3">{seriesLabel}</a>
+        )}
         <p class="text-xs font-mono text-zinc-400 mb-3 tracking-wider">{dateFormatted}</p>
         <h1 class="text-2xl sm:text-[28px] font-semibold text-zinc-900 leading-[1.25] tracking-tight mb-6">{title}</h1>
         <p class="text-[15px] text-zinc-600 italic leading-relaxed border-l-2 border-emerald-400 pl-4 mb-10">{description}</p>
@@ -82,6 +153,23 @@ const articleJsonLd = {
           </div>
         )}
       </article>
+
+      {inSeries && (prevEssay || nextEssay) && (
+        <nav class="mt-14 pt-8 border-t border-zinc-100 grid grid-cols-2 gap-4" aria-label="Series navigation">
+          {prevEssay ? (
+            <a href={`/essays/${prevEssay.slug}`} class="group block rounded-lg -m-2 p-2 transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
+              <span class="block text-[11px] font-mono uppercase tracking-wider text-zinc-400">&larr; Part {prevEssay.seriesOrder}</span>
+              <span class="block mt-1 text-[13px] font-medium text-zinc-700 group-hover:text-emerald-700 transition-colors">{prevEssay.title}</span>
+            </a>
+          ) : <span></span>}
+          {nextEssay ? (
+            <a href={`/essays/${nextEssay.slug}`} class="group block rounded-lg -m-2 p-2 text-right transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
+              <span class="block text-[11px] font-mono uppercase tracking-wider text-zinc-400">Part {nextEssay.seriesOrder} &rarr;</span>
+              <span class="block mt-1 text-[13px] font-medium text-zinc-700 group-hover:text-emerald-700 transition-colors">{nextEssay.title}</span>
+            </a>
+          ) : <span></span>}
+        </nav>
+      )}
     </div>
   </div>
 </Layout>
@@ -119,6 +207,7 @@ const articleJsonLd = {
   }
   /* Fenced code blocks: a light, bordered surface that matches the palette. */
   .prose-essay pre {
+    position: relative;
     background-color: #f8fafc !important;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
@@ -128,6 +217,24 @@ const articleJsonLd = {
     font-size: 13.5px;
     line-height: 1.65;
   }
+  /* Copy-to-clipboard button injected per code block (see the script below). */
+  .essay-copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #64748b;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .prose-essay pre:hover .essay-copy-btn,
+  .essay-copy-btn:focus-visible { opacity: 1; }
+  .essay-copy-btn:hover { color: #047857; border-color: #6ee7b7; }
   /* Reset the inline-code styling inside fenced blocks so Shiki's token
      colors show on the block surface (more specific than .prose-essay code). */
   .prose-essay pre code {
@@ -137,6 +244,10 @@ const articleJsonLd = {
     border-radius: 0;
     font-size: inherit;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  /* On narrow screens, wrap long code lines rather than forcing a second scroll axis. */
+  @media (max-width: 640px) {
+    .prose-essay pre code { white-space: pre-wrap; word-break: break-word; }
   }
   .prose-essay ul {
     margin-bottom: 1.5rem;
@@ -194,3 +305,26 @@ const articleJsonLd = {
   .prose-essay blockquote p:last-child { margin-bottom: 0; }
   .prose-essay blockquote strong { font-style: normal; }
 </style>
+
+<script>
+  // Add a copy-to-clipboard button to every fenced code block.
+  document.querySelectorAll<HTMLPreElement>('.prose-essay pre').forEach((pre) => {
+    const code = pre.querySelector('code');
+    if (!code) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'essay-copy-btn';
+    btn.textContent = 'Copy';
+    btn.setAttribute('aria-label', 'Copy code to clipboard');
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(code.innerText);
+        btn.textContent = 'Copied';
+      } catch {
+        btn.textContent = 'Failed';
+      }
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    });
+    pre.appendChild(btn);
+  });
+</script>
