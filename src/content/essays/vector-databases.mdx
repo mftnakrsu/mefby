@@ -4,7 +4,7 @@ description: "You can score one chunk against a query, but doing it for every ch
 date: 2026-06-10
 tags: ["RAG", "Vector Database", "ANN", "HNSW", "IVF", "Vector Search", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-04-vector-databases"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/vector-databases.png"
 seriesOrder: 4
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 4 of the series.*
 
 ## What you'll learn
 
@@ -88,6 +87,8 @@ A search starts at an entry point in the sparse top layer and walks **greedily**
 
 That layered, greedy walk is why HNSW is fast and why its recall is excellent: in practice it finds the true nearest neighbors the overwhelming majority of the time while visiting only a sliver of the graph. Its main cost is memory. The graph (all those nodes and their links) lives in RAM, and storing the links on top of the vectors themselves is real overhead. HNSW is the default in many vector databases precisely because, for typical workloads, its speed and recall are hard to beat, and you pay for that with memory.
 
+To put a number on "fast," and treat this as a ballpark, not a promise: on a few million vectors, a tuned HNSW index commonly answers a query in **single-digit milliseconds at 0.95 or better recall**, on a single machine, in RAM. The exact figure swings with your dimensionality, hardware, and how hard you push recall (chasing the last few points of recall costs disproportionately more time), but that order of magnitude is why HNSW feels instant in a chatbot and why brute force, which would take far longer at the same scale, is the thing you are escaping.
+
 ## IVF: sorting vectors onto shelves
 
 The other family you will meet takes a different route to the same goal. **IVF**, the **Inverted File Index**, is about not searching shelves you already know are irrelevant.
@@ -104,11 +105,25 @@ The knob that sets IVF's place on the speed-recall curve is **nprobe**: the numb
 
 Compared with HNSW, IVF's profile is different. It is typically lighter on memory, and its clusters map naturally onto disk, so it scales comfortably to very large, on-disk collections; HNSW's graph wants to live in RAM. IVF's recall and speed depend heavily on how many clusters you create and on `nprobe`, and it usually needs a representative sample of your data to train the clustering well. As a rough rule of thumb: HNSW tends to win on raw query speed and recall when memory is available; IVF tends to win when collections are huge and memory or disk economics dominate. Neither is universally "better"; they simply sit at different points on the same curve.
 
+If you want HNSW-grade recall but cannot fit the graph in RAM, the option to know by name is **DiskANN**, built on a graph called **Vamana**. The idea is to keep the graph on a fast SSD and fetch only the neighbor lists the search actually touches, so a single modest machine can serve a billion-vector index that would never fit in memory. It is the on-disk graph answer to "I have HNSW-scale recall ambitions and IVF-scale data," and several databases now offer it as an index type.
+
+There is also a failure mode that surprises people the first time, and it is worth naming before it bites you: **filtered-ANN recall collapse**. You learned above that good databases fuse a metadata filter into the search. But the index itself, the HNSW graph or the IVF clusters, was built on the vectors' geometry alone, with no knowledge of your filters. So when you ask for "the nearest chunks, but only those tagged `2024`," the search still walks the graph (or probes the clusters) by distance, and only afterward keeps the ones that pass the filter. If your filter is very selective (say it matches one chunk in ten thousand), the candidates the search naturally visits may contain almost none that survive it, and recall craters even though the index is healthy: the filter has starved the candidate set. The cures are all about getting the filter into the search rather than after it: raise the candidate budget (a larger `ef` or `nprobe`) so more survivors slip through, lean on a database whose filtering is genuinely fused into the traversal, or for a tiny, hyper-selective subset, just fall back to brute force over the handful of vectors that match. The trap is assuming a filter is free; on an ANN index, an aggressive filter and high recall are in tension.
+
 ## Shrinking the vectors: a word on compression
 
 Both approaches still store the vectors, and vectors are not small: a million 768-dimensional vectors in standard 32-bit floats is several gigabytes before you add any index. So there is a third lever, orthogonal to the index: **compression**.
 
 The term to recognize is **Product Quantization (PQ)**. The intuition: instead of storing every vector at full precision, PQ chops each vector into short sub-vectors and replaces each piece with the nearest entry from a small learned codebook, so a long list of precise floats collapses into a handful of compact codes. The vectors get dramatically smaller in memory, distances can be computed directly on the compressed form, and the price is a little lost precision, a small hit to recall. PQ is frequently paired with clustering, an arrangement you will see written as **IVF+PQ**: cluster to narrow the search, then store the cluster members compressed so far more of them fit in memory. You do not need the internals today; just recognize the name and the idea (compress to save memory at a small accuracy cost) when you meet it in a database's settings.
+
+## Beyond PQ: scalar and binary quantization
+
+PQ is the elaborate option, and worth knowing, but two simpler schemes show up constantly in vector-database settings, and they are easier to reason about. They are both forms of **quantization**: turning each of a vector's full-precision numbers into something coarser and smaller.
+
+**Scalar quantization (int8)** is the gentle one. A 32-bit float takes four bytes; an 8-bit integer takes one. So you map each dimension's float range onto the 256 values an `int8` can hold, store the integer, and remember the scale to undo it later. That is roughly **4x smaller** memory at a precision cost small enough that, for most embedding models, recall barely moves. It is the default first compression to reach for: large savings, almost no thinking required, and it composes cleanly with HNSW or IVF underneath.
+
+**Binary quantization** is the aggressive one. Collapse each dimension to a single bit (is it above or below zero, roughly), and a 768-dimensional float vector that was about 3 kilobytes becomes 768 bits, about 96 bytes: on the order of **32x smaller**. The distance between two binary vectors is then just a Hamming distance, a count of differing bits, which CPUs compute astonishingly fast. The catch is obvious: you have thrown away almost everything, so a binary-only search has mediocre recall on its own. The trick that rescues it is **rescoring** (sometimes called rerank or refinement): use the binary vectors to find a generous set of candidates fast, say the top few hundred, then re-rank just those candidates with the full-precision vectors to pick the final top-k. Done that way, binary quantization can hold **90 percent or better recall** while shrinking the bulk of memory by an order of magnitude, because the precision only has to be right for the short list you actually rescore, not for the whole collection. The pattern to internalize: coarse-and-fast to narrow, then precise-and-slow to finish.
+
+The mental model across all three (scalar, binary, PQ) is the same dial you have seen all along: trade a slice of precision for a large drop in memory, and where you can, claw the precision back with a cheap rescoring pass over a small candidate set.
 
 ## So what is a vector database, really?
 
@@ -160,14 +175,35 @@ Step back and see how much of the pipeline is now colored in. We can turn text i
 
 But notice the assumption we have leaned on since Part 1 and never examined. We keep saying "the chunks," as if our documents arrived pre-cut into tidy, self-contained pieces. They do not. A real source is a sprawling PDF, a long web page, a thread of messages, and *we* have to decide where to cut it into the chunks we embed and store. That decision turns out to matter enormously: cut badly and you embed half-thoughts and split answers across pieces, and no amount of fast, high-recall retrieval can find an answer that your chunking already destroyed. How to split documents well, and why it quietly makes or breaks a RAG system, is Part 5.
 
+## Try it yourself
+
+The fastest way to make the speed-versus-recall curve stop being abstract is to sweep one knob and watch both numbers move together. You do not need a real database for this; a single ANN library and a few hundred thousand vectors are plenty.
+
+Pick an index, build it once, and hold a fixed set of test queries for which you have computed the *true* top-k by brute force (that brute-force answer is your ground truth, the thing recall is measured against). Now sweep the search-effort knob: `ef` (the candidate-list size, sometimes called `efSearch`) for HNSW, or `nprobe` (the number of clusters probed) for IVF. For each setting, run all your test queries and record two things: the average query latency, and the recall (of each query's true top-k, what fraction did the index return). Plot recall on one axis and latency on the other.
+
+You will watch the trade-off draw itself. At the low end the queries are very fast and recall is poor; as you raise `ef` or `nprobe`, recall climbs steeply at first, then flattens toward 1.0, while latency keeps rising roughly linearly. That flattening is the lesson: the last few points of recall cost wildly more time than the first, which is exactly why "0.95-ish" is where most production systems choose to sit. Then change one more thing, the metric, or whether your vectors were normalized, and watch the whole curve shift, which makes the pitfalls below concrete rather than theoretical. (A `faiss` benchmark is the standard way to run this: build an `IndexHNSWFlat` or `IndexIVFFlat`, loop over `index.hnsw.efSearch` or `index.nprobe`, and compare against an `IndexFlatIP` brute-force baseline. It needs the extra `faiss-cpu` dependency, so it lives outside this series' stdlib-plus-numpy companions, but the loop is only a dozen lines.)
+
+> ⚠️ **Common pitfalls**
+>
+> - **Filtered-ANN recall collapse.** A selective metadata filter applied *after* the ANN traversal can starve the candidate set, because the index was built on geometry alone and never knew about your filter. Recall quietly tanks while the index looks healthy. Raise the candidate budget (`ef` / `nprobe`), use a database that fuses the filter into the search, or brute-force the tiny matching subset.
+> - **Blind `ef` / `nprobe` tuning.** Cranking these knobs without measuring recall against a brute-force ground truth is flying blind: you cannot tell whether you are buying recall or just burning latency. Always sweep against a true top-k baseline so you can see where the curve flattens and stop there.
+> - **Metric / normalization mismatch.** The similarity metric the index uses must match how your vectors were produced. If your embeddings were normalized to unit length for cosine similarity but you query the index with a Euclidean or raw dot-product metric (or vice versa), the "nearest" neighbors are subtly wrong and recall suffers for reasons no amount of `ef` will fix. Match the metric to the model, every time.
+
 ## Key takeaways
 
 - Comparing a query against every stored vector is **exact, brute-force k-NN**: perfectly accurate but **O(n)** per query, which is fine for thousands of chunks and unworkable at millions.
 - Ordinary database indexes like the **B-tree** do not help, because nearest-neighbor in hundreds of dimensions is not a sorted-column lookup, and tree-based partitioning collapses under the **curse of dimensionality**.
 - The fix is to stop being exact: **Approximate Nearest Neighbor (ANN)** search trades a little **recall** (the fraction of the true top-k you return) for a huge speed gain. Every index is a point on the **speed-versus-recall** curve.
 - **HNSW** navigates a layered graph greedily, long hops up top and short hops at the bottom, for excellent speed and recall at a higher memory cost; it is today's most common default.
-- **IVF** clusters vectors around **centroids** and searches only the nearest few clusters, tuned by **nprobe**; it is lighter on memory and scales well on disk. **Product Quantization (PQ)** compresses vectors to save still more memory at a small accuracy cost.
+- **IVF** clusters vectors around **centroids** and searches only the nearest few clusters, tuned by **nprobe**; it is lighter on memory and scales well on disk, and **DiskANN/Vamana** offers HNSW-grade recall from an on-disk graph when the data will not fit in RAM. **Quantization** compresses vectors to save memory at a small accuracy cost: scalar `int8` (~4x), binary (~32x, with 90 percent or better recall when you rescore the top candidates at full precision), and **Product Quantization (PQ)**.
 - A **vector database** is index plus storage plus API plus operational machinery: it holds the vectors and their text and **metadata**, supports **metadata filtering** and **upserts**, and persists and scales. Start simple and local; graduate to a managed or scalable store when a real constraint demands it, and verify the fast-moving landscape yourself.
+
+## References
+
+- Yu. A. Malkov and D. A. Yashunin (2018). *Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs.* IEEE Transactions on Pattern Analysis and Machine Intelligence. [arXiv:1603.09320](https://arxiv.org/abs/1603.09320). The HNSW paper.
+- Hervé Jégou, Matthijs Douze, and Cordelia Schmid (2011). *Product Quantization for Nearest Neighbor Search.* IEEE Transactions on Pattern Analysis and Machine Intelligence, 33(1), 117-128. [hal.science/inria-00514462](https://inria.hal.science/inria-00514462). The Product Quantization paper.
+- Hervé Jégou, Matthijs Douze, Jeff Johnson, et al. *FAISS (Facebook AI Similarity Search)*, the reference open-source toolkit of ANN indexes (HNSW, IVF, PQ, and more). [github.com/facebookresearch/faiss](https://github.com/facebookresearch/faiss); the GPU work is described in Johnson, Douze, and Jégou, *Billion-scale similarity search with GPUs*, [arXiv:1702.08734](https://arxiv.org/abs/1702.08734).
+- Suhas Jayaram Subramanya, Devvrit, Rohan Kadekodi, Ravishankar Krishnaswamy, and Harsha Vardhan Simhadri (2019). *DiskANN: Fast Accurate Billion-point Nearest Neighbor Search on a Single Node.* NeurIPS 2019. [proceedings.neurips.cc](https://proceedings.neurips.cc/paper/2019/hash/09853c7fb1d3f8ee67a61b6bf4a7f8e6-Abstract.html). The on-disk Vamana graph.
 
 ## Glossary
 
@@ -182,6 +218,11 @@ But notice the assumption we have leaned on since Part 1 and never examined. We 
 - **k-means**: a clustering algorithm that partitions vectors into a chosen number of groups by proximity, each summarized by its centroid; the clustering step behind IVF.
 - **nprobe**: in IVF, the number of clusters searched per query; higher means better recall and slower, lower means faster and riskier.
 - **Product Quantization (PQ)**: a compression scheme that splits vectors into sub-vectors and encodes each with a small codebook, shrinking memory at a small cost in precision; often combined as IVF+PQ.
+- **Scalar quantization**: storing each dimension as an 8-bit integer instead of a 32-bit float, about 4x smaller memory at little cost to recall for most embedding models.
+- **Binary quantization**: collapsing each dimension to a single bit, about 32x smaller memory; needs a full-precision **rescoring** pass over the top candidates to recover high recall (90 percent or better).
+- **Rescoring (rerank/refinement)**: re-ranking a generous candidate set returned by a fast, coarse search using the full-precision vectors, to recover recall lost to compression.
+- **DiskANN / Vamana**: a graph-based ANN index (Vamana) kept on SSD (DiskANN) so a single machine can serve billion-vector collections that would not fit in RAM, at HNSW-grade recall.
+- **Filtered-ANN recall collapse**: the drop in recall when a selective metadata filter is applied after a metric-only ANN traversal, starving the candidate set; mitigated by larger candidate budgets, search-fused filtering, or brute-forcing a tiny matching subset.
 - **Vector database**: a system organized around similarity search that combines an ANN index, vector and payload storage, an API, and operational machinery.
 - **Metadata filtering**: restricting a similarity search by structured fields stored with each vector, such as date, source, tags, or owner.
 - **Upsert**: a write that inserts a vector if its id is new and updates it if the id already exists; the basic operation for keeping an index current.

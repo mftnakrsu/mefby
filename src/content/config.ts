@@ -11,6 +11,9 @@ const essays = defineCollection({
     codeUrl: z.string().url().optional(),
     // Optional social-card image (site-relative path, e.g. /og/rag-by-hand.png).
     ogImage: z.string().optional(),
+    // Optional ~155-char summary used for the <meta description> / og:description.
+    // Falls back to `description` (which doubles as the long on-page intro) when absent.
+    summary: z.string().optional(),
     // Optional position in a numbered series; on the index these sort ascending,
     // before the non-series essays (which stay newest-first).
     seriesOrder: z.number().int().positive().optional(),

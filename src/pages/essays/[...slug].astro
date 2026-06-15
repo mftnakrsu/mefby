@@ -4,16 +4,45 @@ import EssayLayout from '../../layouts/EssayLayout.astro';
 
 export async function getStaticPaths() {
   const essays = await getCollection('essays', ({ data }) => !data.draft);
-  return essays.map((essay) => ({
-    params: { slug: essay.slug },
-    props: { essay },
-  }));
+
+  // The numbered RAG series, in part order. Used to derive prev/next links and
+  // the "Part X of N" badge so they can never drift from the actual content.
+  const series = essays
+    .filter((e) => e.data.seriesOrder != null)
+    .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
+  const seriesTotal = series.length;
+  const posInSeries = new Map(series.map((e, i) => [e.slug, i]));
+
+  const lite = (e: CollectionEntry<'essays'> | undefined | null) =>
+    e ? { slug: e.slug, title: e.data.title, seriesOrder: e.data.seriesOrder } : null;
+
+  return essays.map((essay) => {
+    const i = posInSeries.get(essay.slug);
+    const inSeries = i !== undefined;
+    return {
+      params: { slug: essay.slug },
+      props: {
+        essay,
+        prevEssay: inSeries && i > 0 ? lite(series[i - 1]) : null,
+        nextEssay: inSeries && i < series.length - 1 ? lite(series[i + 1]) : null,
+        seriesTotal: inSeries ? seriesTotal : null,
+      },
+    };
+  });
 }
 
+interface SeriesLink {
+  slug: string;
+  title: string;
+  seriesOrder?: number;
+}
 interface Props {
   essay: CollectionEntry<'essays'>;
+  prevEssay: SeriesLink | null;
+  nextEssay: SeriesLink | null;
+  seriesTotal: number | null;
 }
-const { essay } = Astro.props;
+const { essay, prevEssay, nextEssay, seriesTotal } = Astro.props;
 const { Content } = await essay.render();
 ---
 
@@ -23,9 +52,15 @@ const { Content } = await essay.render();
   date={essay.data.date}
   tags={essay.data.tags}
   lang={essay.data.lang}
+  slug={essay.slug}
+  summary={essay.data.summary}
   translationSlug={essay.data.translationSlug}
   codeUrl={essay.data.codeUrl}
-  ogImage={essay.data.ogImage}
+  ogImage={essay.data.ogImage ?? (essay.data.seriesOrder != null ? '/og/rag-by-hand.png' : undefined)}
+  seriesOrder={essay.data.seriesOrder}
+  seriesTotal={seriesTotal}
+  prevEssay={prevEssay}
+  nextEssay={nextEssay}
 >
   <Content />
 </EssayLayout>

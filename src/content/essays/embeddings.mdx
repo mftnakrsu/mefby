@@ -4,7 +4,7 @@ description: "RAG retrieves the 'relevant' information, but how does a computer 
 date: 2026-06-09
 tags: ["RAG", "Embeddings", "Vectors", "NLP", "Semantic Search", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-02-embeddings"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/embeddings.png"
 seriesOrder: 2
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 2 of the series.*
 
 ## What you'll learn
 
@@ -137,6 +136,8 @@ Nobody can picture a 768-dimensional space, and you don't need to. But you do ne
 
 Why so many dimensions? Because meaning has *many independent aspects at once*, and each dimension gives the model another axis to vary. A single passage can be, simultaneously, about money, about a policy, formal in tone, written in English, time-sensitive, and customer-facing. Two dimensions force all of that to collapse onto a flat sheet where unrelated aspects collide; hundreds of dimensions give the model room to keep those shades on separate axes, so it can place "refund policy" near "return policy" yet still distinct from "privacy policy." Our 2D drawings are the cartoon; the real space is roomier and finer than we can see.
 
+The dimension count is a real engineering knob, not a curiosity. A small model like `all-MiniLM-L6-v2` emits **384** numbers per text and runs comfortably on a CPU; OpenAI's `text-embedding-3-small` emits **1,536** and `text-embedding-3-large` emits **3,072**. More dimensions usually buys a little more accuracy, but you pay for every one of them, forever, in storage and in the cost of each search. Here's the back-of-envelope that makes it concrete. Each number is typically a 4-byte float, so one 768-dimension vector is `768 × 4 ≈ 3 KB`. Index a million chunks and that's `1,000,000 × 768 × 4 bytes ≈ 3 GB` of vectors alone, before any index overhead. Swap to a 1,536-dimension model and the same corpus is `6 GB`; jump to 3,072 and it's `12 GB`. This is exactly why the Matryoshka trick below, and the dimension count on the leaderboard, are things you actually weigh rather than ignore.
+
 ## Make it concrete (just enough)
 
 Everything above is intuition, which is what this part is for. But it's worth seeing, once, just how literal "text in, numbers out" really is. Here is the entire idea in a handful of lines. It is *illustrative*, meant to show you the *shape* of the thing, not a pipeline to build (that comes later in the series):
@@ -166,6 +167,62 @@ This is why our running example finally works. "What is our refund window?" and 
 
 Which leaves one honest gap. I've kept saying "close" and "closest" as if it were obvious how to measure the distance between two points in a 768-dimensional space. It isn't, quite, and the choice you make there has real consequences. That measurement is the whole subject of Part 3.
 
+## Choosing an embedding model
+
+You don't train your own embedding model; you pick one off the shelf. The good news is there are excellent ones, free and paid. The trap is choosing by vibes or by whatever the last blog post praised, so let me give you the literacy to read the field honestly.
+
+The map most people start with is the **MTEB** leaderboard (the Massive Text Embedding Benchmark): a public ranking of embedding models across many tasks (retrieval, clustering, classification, semantic similarity) and many languages. Its cousin, **BEIR**, focuses specifically on *zero-shot retrieval*, scoring how well a model retrieves on datasets it was never tuned for. For RAG, the retrieval-flavored scores (MTEB's retrieval slice, and BEIR) are the ones to weight; a model that tops the *classification* average can still be mediocre at finding the right chunk.
+
+Three habits will keep you out of trouble reading these boards. First, **MTEB has versions, and the scores are not comparable across them.** The benchmark was overhauled (the v2 leaderboards changed which tasks and datasets are in the average, and the evaluation protocol), so a 70 on the new board and a 70 on the old one are different numbers; never line them up side by side. Second, **look at the model's output dimension and context length, not just its rank.** A model that scores half a point higher but emits twice as many numbers per chunk may quietly double your storage and slow every search. Third, **the leaderboard is a starting point, not a verdict.** It measures average performance on public datasets, and your refund policies, your defense specs, your Turkish support tickets are not in those datasets. The only score that truly matters is the one you measure on *your* documents and *your* questions.
+
+As of writing, a handful of models are the ones people reach for. On the open-weights side, **Qwen3-Embedding** (released in 0.6B, 4B, and 8B sizes, multilingual across roughly 119 languages, instruction-aware) sits at the top of the multilingual MTEB board; **BGE-M3** is a popular multilingual workhorse that produces dense, sparse, and multi-vector outputs from one model. On the paid-API side, **Voyage-3.5** (and the cheaper **voyage-3.5-lite**) target the cost/quality frontier for retrieval, **Cohere Embed v4** is multilingual and multimodal with a 128k-token context, and OpenAI's **text-embedding-3** family is the default many teams already have keys for. Names and rankings churn every few months, so treat this paragraph as a snapshot, not gospel: go check the live board when you choose.
+
+That brings up the question I get asked most: **should I fine-tune an embedding model on my own data?** The honest rule is *start with a strong off-the-shelf model and only fine-tune when you have evidence it's the bottleneck.* Fine-tuning needs labeled pairs (queries matched to the right passages), a real evaluation set, and ongoing upkeep as your documents change, and a good general model is often already better than a hastily fine-tuned one. Reach for fine-tuning when your domain vocabulary is genuinely alien to general text (specialized jargon, internal part numbers, a low-resource language) *and* you've confirmed retrieval is what's failing. For most teams, most of the time, picking the right off-the-shelf model and chunking well beats fine-tuning.
+
+## Matryoshka embeddings
+
+Here's a property worth knowing about, because it changes the cost math. Some modern models are trained with **Matryoshka Representation Learning** (MRL), named after the nested Russian dolls. The trick: during training, the model is pushed to pack the *most important* information into the *earliest* dimensions of the vector, so that the first 256 numbers are already a usable embedding on their own, the first 512 are a better one, and the full 1,024 are the best. One forward pass produces a vector you can *truncate* (slice off the tail) to any of these nested sizes after the fact, no re-embedding required.
+
+Why care? Because dimensions cost money. A 1,024-dimension vector takes four times the storage and roughly four times the per-comparison work of a 256-dimension one. With an MRL model you can store the full vector, then run a fast first-pass search over the truncated 256-dimension prefixes to narrow millions of chunks down to a few hundred candidates, and only then re-rank those few with the full-length vectors. You trade a little accuracy for a lot of speed and storage, and you choose where on that curve to sit *without retraining anything.* OpenAI's text-embedding-3 models expose this through a `dimensions` parameter, and Voyage and Cohere's recent models support nested sizes too. When you see a model advertise dimensions like "256 / 512 / 1024," that's MRL talking.
+
+## When embeddings fail: language and domain mismatch
+
+It's tempting to treat an embedding model as a universal meaning-meter. It isn't. A model only learned the geometry of the text it was *trained on*, and outside that distribution the space gets unreliable. Three mismatches bite hardest in practice.
+
+**Language.** A model trained mostly on English builds an English-shaped space. Feed it Turkish and it will still emit a vector, confidently, but the placement is poor: synonyms don't land near each other, and a Turkish question may sit closer to an unrelated English chunk than to its own Turkish answer. The fix is not a clever trick; it's using a genuinely **multilingual** model (BGE-M3, multilingual-E5, Qwen3-Embedding, Cohere) when your corpus or your users aren't all in English.
+
+**Code and structured text.** Source code, log lines, config files, and tables don't read like prose, and a prose-trained model places them clumsily. A query about a function and the function's body can land far apart even though they're "about" the same thing. If retrieval over code matters, use a model trained with code in its mix, or you'll keep missing.
+
+**Specialized domains.** Defense, medicine, and law are full of terms that are rare or differently-weighted in general web text. "TOYGUN," a specific munition designation, an internal part number: a general model has barely seen these and gives them vague, poorly-separated vectors, so it can't tell two distinct systems apart. This is exactly the situation where measuring on *your own* questions (and, if the gap is real, a domain-adapted or fine-tuned model) earns its keep. The failure is quiet: you get vectors and you get results, they're just subtly wrong, which is why you have to *test*, not assume.
+
+> ⚠️ **Common pitfalls**
+>
+> - **Embed your queries and your documents with the *same* model.** The two vectors only live in a shared space, and "closest point" only means anything, if the same function produced both. Index your chunks with one model and query with another and you're comparing points in two unrelated spaces; retrieval silently turns to noise. This includes versions: if you upgrade the model, you must re-embed the entire corpus, not just new queries.
+> - **Mind asymmetric query/passage prefixes.** Several strong models expect you to *tell them* which side is which. The E5 and BGE families want you to prepend `query:` to questions and `passage:` to documents; Nomic models use task prefixes like `search_query:` and `search_document:`. Skip the prefix, or use the wrong one, and you lose a chunk of the model's quality for free. Read the model card before you embed a single thing; the defaults are not universal.
+> - **Don't compare scores across MTEB versions or across different models' raw distances.** A leaderboard number is only meaningful next to others computed the same way.
+
+## Try it yourself
+
+The whole claim of this part is testable in a few lines, and seeing it happen on your own machine beats any diagram. Embed three short texts: the user's question, the chunk that actually answers it, and one unrelated chunk. Then check that the question lands closest to the right chunk.
+
+```python
+# Needs: pip install sentence-transformers
+from sentence_transformers import SentenceTransformer, util
+
+model = SentenceTransformer("all-MiniLM-L6-v2")   # small, 384-d, runs on CPU
+
+query    = "What is our refund window?"
+refund   = "Refunds are accepted within 30 days of purchase."
+unrelated = "Our office is open Monday to Friday, 9am to 5pm."
+
+q, r, u = model.encode([query, refund, unrelated])
+
+print("query vs refund   :", round(float(util.cos_sim(q, r)), 3))
+print("query vs unrelated:", round(float(util.cos_sim(q, u)), 3))
+```
+
+You should see the question score clearly higher against the refund chunk than against the office-hours chunk, even though the question and the refund chunk share almost no words. That gap *is* "search by meaning," reduced to two numbers. Now poke at it: change the unrelated chunk to something about *returns* or *cancellations* and watch its score creep up (related meanings really do sit nearer); switch to a non-English question against English chunks and watch the gap collapse (the language mismatch from the section above, live). If you don't want to install anything, the same experiment runs in any hosted notebook.
+
 ## Key takeaways
 
 - Computers compare *numbers*, not *meanings*, so search by meaning requires first turning text into numbers in a way that preserves meaning.
@@ -174,6 +231,13 @@ Which leaves one honest gap. I've kept saying "close" and "closest" as if it wer
 - An **embedding model** is a neural network that learns this layout from raw text via the **distributional hypothesis**, "you shall know a word by the company it keeps." RAG uses **sentence/passage** embeddings, not single-word ones.
 - Real embeddings live in hundreds or thousands of **dimensions**; the 2D pictures we draw are flattened shadows, and the extra dimensions are the room the model needs to separate fine shades of meaning.
 - This is what makes RAG's **retrieve** step work: embed the chunks, embed the question into the same space, and "relevant" simply means "closest point."
+
+## References
+
+- Firth, J.R. (1957). *A Synopsis of Linguistic Theory, 1930–1955.* In *Studies in Linguistic Analysis.* Oxford: Blackwell. (Source of "You shall know a word by the company it keeps," the distributional hypothesis.)
+- Mikolov, T., Chen, K., Corrado, G., & Dean, J. (2013). *Efficient Estimation of Word Representations in Vector Space.* arXiv:1301.3781. [arxiv.org/abs/1301.3781](https://arxiv.org/abs/1301.3781) (word2vec; the home of `king − man + woman ≈ queen`.)
+- Pennington, J., Socher, R., & Manning, C.D. (2014). *GloVe: Global Vectors for Word Representation.* EMNLP 2014, pp. 1532–1543. [aclanthology.org/D14-1162](https://aclanthology.org/D14-1162/)
+- Muennighoff, N., Tazi, N., Magne, L., & Reimers, N. (2022). *MTEB: Massive Text Embedding Benchmark.* arXiv:2210.07316. [arxiv.org/abs/2210.07316](https://arxiv.org/abs/2210.07316)
 
 ## Glossary
 
@@ -190,6 +254,9 @@ Which leaves one honest gap. I've kept saying "close" and "closest" as if it wer
 - **Word embedding**: an embedding computed per individual word, looked up like a dictionary; the home of the `king − man + woman ≈ queen` trick.
 - **Sentence/passage embedding**: an embedding computed for a whole span of text read together, so context shapes the result; the kind RAG uses.
 - **Semantic similarity**: how close two pieces of text are *in meaning*, which in embedding-space shows up as how close their vectors are.
+- **MTEB / BEIR**: public benchmarks for ranking embedding models. MTEB (Massive Text Embedding Benchmark) spans many tasks and languages; BEIR focuses on zero-shot retrieval. MTEB scores are not comparable across benchmark versions.
+- **Matryoshka embedding (MRL)**: an embedding trained so the most important information sits in its earliest dimensions, letting you truncate one vector to smaller sizes (e.g. 1,024 → 256) to trade a little accuracy for less storage and faster search, with no re-embedding.
+- **Query/passage prefix**: a short tag (like `query:` / `passage:` for E5 and BGE, or `search_query:` / `search_document:` for Nomic) some models require you to prepend so they know which side of a search a text is; using the wrong one or none degrades quality.
 
 ---
 

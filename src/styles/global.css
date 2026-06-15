@@ -6,8 +6,10 @@
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 }
 
-html {
-  scroll-behavior: smooth;
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 body {
@@ -16,8 +18,26 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Guard against horizontal page scroll from wide/full-bleed figures (Diagram
+   breaks out of the column with negative margins). `clip` avoids creating a
+   scroll container the way `hidden` would. */
+html,
+body {
+  overflow-x: clip;
+}
+
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: #ffffff; }
 ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 2px; }
 
 a { transition: color 0.15s; }
+
+/* Consistent keyboard-focus indicator for links, buttons, and embedded figures. */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible,
+iframe:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+  border-radius: 2px;
+}

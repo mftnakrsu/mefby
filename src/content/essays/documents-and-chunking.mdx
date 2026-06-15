@@ -4,7 +4,7 @@ description: "We have a retrieval engine, but it rests on one quiet assumption: 
 date: 2026-06-11
 tags: ["RAG", "Chunking", "Document Processing", "Vector Search", "NLP", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-05-chunking"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/documents-and-chunking.png"
 seriesOrder: 5
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 5 of the series.*
 
 ## What you'll learn
 
@@ -60,7 +59,7 @@ Cut **too small** and you destroy context. A chunk that reads only *"within 30 d
 
 There is no single correct way to chunk; there is a ladder of strategies, each smarter and a little more expensive than the last. Here are the four you will actually meet, plus one on the horizon.
 
-**Fixed-size chunking** splits the text every `N` tokens or characters, full stop. It is the simplest, fastest, and most predictable approach, and it is blind: it will happily cut through the middle of a sentence, a word, or an idea, because it counts characters and nothing else. Good for a quick baseline, rough on meaning.
+**Fixed-size chunking** splits the text every `N` tokens or characters, full stop. It is the simplest, fastest, and most predictable approach, and it is blind: it will happily cut through the middle of a sentence, a word, or an idea, because it counts a fixed length (characters by default, tokens if you wire in a tokenizer) and nothing else. Good for a quick baseline, rough on meaning.
 
 **Recursive character chunking** fixes most of that blindness. It tries a hierarchy of separators in order, paragraphs first, then sentences, then words, splitting on the coarsest boundary that keeps chunks under the size limit. The effect is that it respects natural boundaries when it can and only resorts to finer cuts when a piece is still too big. This is the sensible default for most prose, and it is what most people should reach for first.
 
@@ -87,7 +86,11 @@ The second dial is **chunk overlap**, and it is the fix for the worst failure of
   <img src="/essays/documents-and-chunking/part5-overlap-window.svg" alt="A single line of text with three chunk windows drawn as rounded rectangles beneath it. Adjacent windows overlap at their seams, and the overlapping regions are shaded. A key phrase that sits on the boundary between the first and second chunk is shown fully contained inside the second chunk because the overlap captured it, with a note contrasting the split result when there is no overlap." class="w-full rounded-lg" />
 </Diagram>
 
-Here is the hard part, and the only rule that really matters: **the right values depend on your content and your embedding model, so measure, do not guess.** Dense legal text packs a lot of meaning into few words and tends to want smaller, careful chunks; chatty support docs can take larger ones; source code wants to be split along functions, not by character count at all. The common rules of thumb (chunks of a few hundred tokens, overlap of roughly ten to twenty percent of the size) are starting points, not answers. Try a few settings, look at the chunks they produce, and evaluate retrieval on real questions. The playground below lets you feel exactly how the strategy and the two dials reshape the boundaries on a sample document; drag the sliders and watch the chunks redraw.
+Here is the hard part, and the only rule that really matters: **the right values depend on your content and your embedding model, so measure, do not guess.** Dense legal text packs a lot of meaning into few words and tends to want smaller, careful chunks; chatty support docs can take larger ones; source code wants to be split along functions, not by character count at all. The common rules of thumb (chunks of a few hundred tokens, overlap of roughly ten to twenty percent of the size) are starting points, not answers. Try a few settings, look at the chunks they produce, and evaluate retrieval on real questions.
+
+One unit caveat before you turn the dials: embedding input limits are counted in **tokens**, but the simplest splitters, including the code and the playground here, count **characters**. In English a token is roughly four characters, so a 512-token cap is about 2,000 characters; mixing the two units silently mis-sizes your chunks. When the gap matters, size chunks with a token-aware length function (`tiktoken` or a Hugging Face tokenizer) rather than a raw character count.
+
+The playground below lets you feel exactly how the strategy and the two dials reshape the boundaries on a sample document; drag the sliders and watch the chunks redraw.
 
 <Diagram number={3} caption="Switch strategy and drag the two dials. The sample document re-splits live: each chunk gets its own color, the shaded seams show overlap, and the readout reports how many chunks you get and how big they are.">
   <IframeFigure
@@ -135,6 +138,21 @@ The `fixed` list will contain pieces that stop mid-sentence, even mid-word. The 
 
 Step back and look at what we now hold. We can extract clean text, split it into coherent chunks with the right strategy and the right dials, and enrich each chunk with metadata. Combined with the earlier parts, that completes every ingredient of a retrieval system: embeddings (Part 2), similarity scoring (Part 3), fast retrieval at scale (Part 4), and now well-formed, well-described chunks (this part). Good chunks are the foundation the rest of RAG stands on, the quiet decision that decides the ceiling for everything above it. With all the pieces finally in hand, Part 6 assembles them into a complete, working RAG application, end to end.
 
+## Try it yourself
+
+The playground above rewards a little poking. Two experiments make the dials click into place.
+
+First, push **overlap** up toward the **chunk size** and watch the chunks duplicate. With a chunk size of 200 and an overlap of 20, neighbors share a thin seam; bump the overlap to 100 and each chunk now repeats half of the one before it; push it to the chunk size itself and consecutive chunks become near-copies, the window barely advancing. You will see the chunk count climb while the new information per chunk collapses. That is the picture of wasted storage and wasted compute: you embed and store the same sentences over and over for almost no protection you did not already have at twenty percent.
+
+Second, hold the document fixed and switch **strategies** on it. Toggle from fixed-size to recursive at the same size cap and watch the boundaries jump off the mid-word cuts and onto paragraph and sentence breaks, the chunk sizes growing slightly uneven as the splitter trades exact length for coherent edges. Same text, same budget, visibly better seams. That side-by-side is the whole argument of this part in one gesture: the strategy decides *where* the cuts land, and the dials decide *how big* the pieces are, and both are choices you make, not defaults you inherit.
+
+> ⚠️ **Common pitfalls**
+>
+> - **Overlap as large as (or larger than) the chunk size.** Overlap is cheap insurance, not a free lunch. When it approaches the chunk size, consecutive chunks become near-duplicates: you multiply your chunk count, pay to embed and store the same text repeatedly, and clog retrieval with redundant near-identical hits. Keep overlap a fraction of the size (the ten-to-twenty-percent rule of thumb is a sane ceiling, not a floor to exceed).
+> - **Chunking by characters against a token limit.** As covered above, embedding caps are in tokens but the simple splitters count characters, and a token is roughly four characters in English. Size by characters against a token budget and you silently over- or under-fill every chunk. Cross-reference: use a token-aware length function (`tiktoken` or a Hugging Face tokenizer) when the gap matters.
+> - **Embedding raw markup and boilerplate as if it were content.** HTML tags, navigation menus, cookie banners, repeated footers, Markdown syntax noise: none of it is the thing your user asked about, yet all of it lands in the vector if you embed it. It dilutes the chunk's meaning and surfaces junk at retrieval time. Strip it before you embed.
+> - **Chunking before stripping headers and footers.** Order matters. If you split first and clean second, a running header or page footer gets baked into the seam of every chunk and is far harder to remove cleanly. Do the document loading and cleanup (drop headers, footers, boilerplate) *first*, then chunk the clean text.
+
 ## Key takeaways
 
 - **Chunking** is one of the highest-leverage and most underrated steps in RAG: it sits at the bottom of the stack, so its mistakes propagate everywhere. Garbage chunks in, garbage retrieval out, and no reranker or bigger model rescues a chunk that never held the answer.
@@ -143,6 +161,11 @@ Step back and look at what we now hold. We can extract clean text, split it into
 - The central tension: too small loses context and turns ambiguous; too large blurs the embedding and wastes budget. Aim for **semantically coherent units**.
 - The strategies climb a ladder: **fixed-size** (fast, blind), **recursive character** (the sensible default), **structure-aware** (follows the document's own boundaries), and **semantic** (cuts on meaning, slower). LLM-based chunking is an emerging frontier.
 - The two dials are **chunk size** and **chunk overlap** (a sliding window that protects ideas on a boundary). The right values depend on your content and embedding model, so measure, do not guess, and attach **metadata** to every chunk.
+
+## References
+
+- LangChain, [Text splitter integrations](https://docs.langchain.com/oss/python/integrations/splitters): the recommended starting point for the `RecursiveCharacterTextSplitter` and the recursive-character approach (keep paragraphs intact, fall back to sentences, then words, under a size cap), plus the `chunk_size`, `chunk_overlap`, and `separators` parameters used in the code above.
+- LlamaIndex, [Node Parser Modules](https://developers.llamaindex.ai/python/framework/module_guides/loading/node_parsers/modules/): the equivalent text-splitter catalog, covering the sentence-respecting `SentenceSplitter` (the default node parser) and the embedding-driven `SemanticSplitterNodeParser` that adaptively picks breakpoints where meaning shifts, the structure-aware and semantic strategies from the ladder above.
 
 ## Glossary
 

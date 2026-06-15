@@ -178,7 +178,7 @@
       <span class="rr-stage s1" id="stage">Stage 1 &#183; retrieve</span>
     </div>
 
-    <div class="rr-legend"><span class="dot fp" id="legendDot"></span><span id="legendText">First-pass score (fast, hybrid)</span></div>
+    <div class="rr-legend"><span class="dot fp" id="legendDot"></span><span id="legendText">First-pass score (fast, dense)</span></div>
 
     <div class="rr-list" id="list" role="list" aria-label="Candidate chunks, reordered as you step"></div>
 
@@ -218,7 +218,7 @@
 (function () {
   "use strict";
 
-  // Canonical chunk list. fp = first-pass (hybrid) score, ce = cross-encoder score.
+  // Canonical chunk list. fp = first-pass (dense) score, ce = cross-encoder score.
   // Designed so the genuinely best chunk (worn clothing) sits at rank 6 on the
   // first pass and climbs to rank 1 after reranking, while an off-topic "jacket
   // sale" distractor starts at rank 1 and sinks.
@@ -247,7 +247,7 @@
   var CE_ORDER = orderBy("ce");
 
   var STEP_CAPS = [
-    "<b>Cast a wide net.</b> First-pass retrieval (the hybrid search from Part 7) returns the top 10 candidates, ordered by its fast score. Wide enough to not miss the answer, too rough to trust the order.",
+    "<b>Cast a wide net.</b> First-pass retrieval (fast dense search; the hybrid search from Part 7 in production) returns the top 10 candidates, ordered by its fast score. Wide enough to not miss the answer, too rough to trust the order.",
     "<b>The catch.</b> The chunk that actually answers the question sits at rank 6, buried under an off-topic 'winter jacket sale' that only looks relevant because it shares the word jacket. A bi-encoder cannot tell them apart.",
     "<b>Rerank.</b> A cross-encoder reads the query and each candidate together and scores true relevance (the indigo bars). 'Worn clothing counts as used' now scores highest; the sale ad scores near zero.",
     "<b>Reorder.</b> Sort by the cross-encoder score. The real answer climbs from rank 6 to the top, and the distractor sinks from rank 1 to 7. Same candidates, far better order.",
@@ -313,7 +313,7 @@
 
     listEl.classList.toggle("mode-ce", useCe);
     legendDot.className = "dot " + (useCe ? "ce" : "fp");
-    legendText.textContent = useCe ? "Rerank score (cross-encoder)" : "First-pass score (fast, hybrid)";
+    legendText.textContent = useCe ? "Rerank score (cross-encoder)" : "First-pass score (fast, dense)";
     stageEl.textContent = useCe ? "Stage 2 · rerank" : "Stage 1 · retrieve";
     stageEl.className = "rr-stage " + (useCe ? "s2" : "s1");
 

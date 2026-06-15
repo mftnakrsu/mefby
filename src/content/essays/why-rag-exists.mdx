@@ -4,7 +4,7 @@ description: "Even a powerful LLM answers confidently and wrong about your own d
 date: 2026-06-09
 tags: ["RAG", "LLM", "Retrieval", "Embeddings", "AI", "NLP"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-01-why-rag"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/why-rag-exists.png"
 seriesOrder: 1
 lang: "en"
 translationSlug: "why-rag-exists-tr"
@@ -13,11 +13,12 @@ translationSlug: "why-rag-exists-tr"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 1 of the series.*
 
 ## What you'll learn
 
 By the end of this part you'll understand, in plain language, why a large language model, however impressive, gets confident and wrong about your own documents and about anything recent, and how **RAG** (Retrieval-Augmented Generation) fixes that by handing the model the right information at the moment it answers. We'll stay conceptual here: no code, just the four problems RAG solves, one durable mental model (the open-book exam), and a bird's-eye map of the whole pipeline you'll spend the rest of the series building.
+
+A word on scope: this series covers RAG end to end, from embeddings and chunking through retrieval, re-ranking, and evaluation, but it is *not* a general LLM course, so we won't teach you to train or fine-tune a base model, and we'll keep prompt engineering to only what retrieval needs. And if you've ever watched a chatbot search the web and answer from what it found, you've already used a flavor of RAG: it sits alongside tool-use, agents, and web-search as one specific pattern (retrieve-then-generate over *your* data), and web-search-augmented chat is just retrieval you've already used, pointed at the open internet instead of your documents.
 
 ## Prerequisites
 
@@ -85,9 +86,9 @@ The **context window** is the maximum number of tokens the model can hold in min
 
 So pasting "everything" fails for concrete reasons:
 
-- **It doesn't fit.** A modest knowledge base is millions of tokens; a context window holds a few hundred thousand at most. Most of your data physically cannot be in the prompt at the same time.
+- **It doesn't fit, and even when it does, that isn't the win it sounds like.** Context windows have grown fast: several frontier models now hold hundreds of thousands of tokens, and a few (Gemini, GPT-4.1, Claude) reach about a million. To put that in perspective, a single ~200-page manual is roughly 150K tokens (ballpark, since token counts depend on the text), so one big document can eat a sizable chunk of even a large window on its own. But a real knowledge base, every wiki page, ticket, contract, and PDF, is easily tens of millions of tokens or more, so most of your data still physically cannot sit in one prompt. And the catch is that even for the slice that *does* fit, the two problems below don't go away, which is why "just use a bigger window" isn't the answer.
 - **It's wasteful.** Even when something fits, every token you send costs money and time on every single request. Shipping your entire handbook to answer one refund question is like re-reading the whole binder out loud before every sentence.
-- **It degrades.** Bury one relevant line in a hundred thousand irrelevant ones and models get measurably worse at finding and using it; the signal drowns. More context is not the same as more *relevant* context.
+- **It degrades.** Bury one relevant line in a hundred thousand irrelevant ones and models get measurably worse at finding and using it; the signal drowns. This is a measured property even of long-context frontier models, not a quirk of small ones: it's the U-shaped "lost in the middle" effect ([Liu et al., 2023](https://arxiv.org/abs/2307.03172)), where text at the start and end of a long context is used more reliably than text stranded in the middle. More context is not the same as more *relevant* context.
 
 The fix isn't a bigger desk. It's putting *only the right page* on the desk at the right moment. Which is exactly what RAG does.
 
@@ -143,7 +144,7 @@ There are two phases. The first happens once, up front, whenever your documents 
 
 1. **Document.** Start with your raw source: a PDF, a wiki page, a transcript, a database row.
 2. **Chunk.** Split each document into smaller passages. A **chunk** is a bite-sized piece of text, a few sentences or a paragraph, small enough to be specific, big enough to stand on its own. (We chunk because we want to retrieve *the relevant paragraph*, not an entire 80-page manual.)
-3. **Embed.** Convert each chunk into an **embedding**: a list of numbers that captures the chunk's *meaning*, such that passages about similar ideas end up with similar numbers. That list of numbers is called a **vector**. This is the quiet trick that lets a computer search by meaning instead of by exact keywords, and it's important enough that it's the entire subject of Part 2.
+3. **Embed.** Convert each chunk into an **embedding**: a list of numbers that captures the chunk's *meaning*, such that passages about similar ideas end up with similar numbers. That list of numbers is called a **vector**, and in practice it has a few hundred to a few thousand entries (typical embedding dimensions run from 384 to 3072, ballpark, depending on the model). This is the quiet trick that lets a computer search by meaning instead of by exact keywords, and it's important enough that it's the entire subject of Part 2.
 4. **Store.** Save all those vectors in a **vector store**, a database built to answer one question blazingly fast: "which stored vectors are most similar to *this* one?"
 
 **Querying (done per question):**
@@ -174,6 +175,19 @@ RAG is not the only tool, and reaching for it reflexively is its own mistake. He
 
 Here's the decision in a sentence: *if the failure is the model not knowing your current, specific information, RAG is the fix, and almost every "the AI made something up about our business" problem is that failure in disguise.*
 
+There's a fourth option worth flagging now and revisiting later: sometimes you may not need RAG at all, because the knowledge is small and stable enough to just keep loaded. Part 16 takes this seriously and compares RAG against long-context prompting and cache-augmented generation (CAG), where you preload the whole source once and reuse the model's cached state across questions.
+
+## Try it yourself
+
+You don't need any code to feel the whole problem (and the whole fix) in about two minutes. Open any general chatbot and ask it an org-only fact: something that lives in your handbook, your wiki, or your onboarding doc and nowhere on the public internet. "What's our refund window?" "Who approves expense reports over $5,000?" "What's the SLA in our standard support contract?" Watch what comes back. You'll usually get a fluent, specific, confident answer, and it will be invented, because the model has never seen the document that holds the real one. That confident-but-groundless reply *is* the confabulation we opened with.
+
+Now do retrieval by hand. Find the actual paragraph in the real document, paste it into the chat, and ask the exact same question again, this time with "answer using only the text above." The answer should snap to what the page says. You just ran a one-shot RAG pipeline manually: you retrieved the relevant passage, augmented the prompt with it, and let the model generate from it. Everything in this series is about automating those three moves across thousands of documents so you don't have to find and paste the right page yourself.
+
+> ⚠️ **Common pitfalls**
+>
+> - **RAG is not a hallucination cure-all.** It moves the model's answer from "spun from memory" to "grounded in whatever you retrieved," which is a real improvement, but it only shifts where the truth has to come from. Retrieve the *wrong* page and the model will read it faithfully and hand you a confident, well-cited, wrong answer. Garbage in, fluent garbage out. This is why retrieval quality, not the LLM, is the part you'll spend most of the series tuning.
+> - **More retrieved context is not always better.** It's tempting to stuff the top 20 chunks into the prompt "just in case," but extra context costs money and latency, and it can actively hurt: the relevant passage gets diluted, and models read the middle of a long context less reliably than the ends (the "lost in the middle" effect). The goal is the *right* page, not the *most* pages.
+
 ## Key takeaways
 
 - A vanilla LLM predicts likely text; it has **no built-in notion of truth, no clock, and no access to your private data**, which is why it hallucinates, has a knowledge cutoff, can't see proprietary information, and can't simply be handed "everything" due to context-window limits.
@@ -182,6 +196,11 @@ Here's the decision in a sentence: *if the failure is the model not knowing your
 - The pipeline is one arc to remember: **document → chunk → embed → store → retrieve → augment → generate**, split into a one-time *indexing* phase and a per-question *querying* phase.
 - **Retrieval quality decides everything.** RAG can only ground answers in what you actually retrieve; flip to the wrong page and it'll be confidently wrong about that page instead.
 - Choose deliberately: a **bigger prompt** for tiny known sources, **RAG** for large/changing/private knowledge, **fine-tuning** to change style and behavior rather than facts.
+
+## References
+
+- Lewis et al. (2020), *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*. The paper that introduced RAG and gave this series its name. [arXiv:2005.11401](https://arxiv.org/abs/2005.11401)
+- Liu et al. (2023), *Lost in the Middle: How Language Models Use Long Contexts*. The measured U-shaped effect behind "more context is not more relevant context." [arXiv:2307.03172](https://arxiv.org/abs/2307.03172)
 
 ## Glossary
 

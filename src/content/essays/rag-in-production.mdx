@@ -4,7 +4,8 @@ description: "The finale. A RAG system that works in a notebook is about 20 perc
 date: 2026-06-18
 tags: ["RAG", "Production", "Latency", "Caching", "Security", "Observability", "LLM", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-12-rag-in-production"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/rag-in-production.png"
+summary: "The other 80 percent: making a RAG system fast, cheap, reliable, secure, and observable under real traffic. Part 12, the finale, plus a capstone checklist."
 seriesOrder: 12
 lang: "en"
 ---
@@ -12,7 +13,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 12 of the series, and the finale.*
 
 ## What you'll learn
 
@@ -38,11 +38,11 @@ We will walk the layers from the outside in: latency, cost, caching, observabili
 
 ## Where the time goes: latency optimization
 
-Users forgive a lot, but they do not forgive slow. So the first question is where a RAG request actually spends its time. Trace one and you find four stages: embedding the query, searching the vector index, reranking the candidates, and generating the answer. The first three are fast, milliseconds to tens of milliseconds. The last one, the language model writing tokens, almost always dominates, often by an order of magnitude. Keep that shape in your head: **the LLM is the slow part**, and most latency wins come from changing how, or whether, you call it.
+Users forgive a lot, but they do not forgive slow. So the first question is where a RAG request actually spends its time. Trace one and you find four stages: embedding the query, searching the vector index, reranking the candidates, and generating the answer. The first three are fast, milliseconds to tens of milliseconds. The last one, the language model writing tokens, almost always dominates, often by an order of magnitude or two: generation is routinely **10 to 100x** the cost of everything before it combined. A full answer of a few hundred tokens takes seconds; the retrieval that fed it took milliseconds. Keep that shape in your head: **the LLM is the slow part**, and most latency wins come from changing how, or whether, you call it.
 
 A handful of techniques cover most of the ground.
 
-**Streaming.** This is the highest-leverage trick and it does not make anything actually faster. Instead of waiting for the full answer and then showing it, you stream tokens to the user as they are generated, so the first words appear almost immediately. The total time is unchanged, but **perceived latency**, how slow it *feels*, drops dramatically. A two-second answer that starts appearing in 300 milliseconds feels fast; the same answer delivered all at once after two seconds of blank screen feels broken. Stream by default.
+**Streaming.** This is the highest-leverage trick and it does not make anything actually faster. Instead of waiting for the full answer and then showing it, you stream tokens to the user as they are generated, so the first words appear almost immediately. The total time is unchanged, but **perceived latency**, how slow it *feels*, drops dramatically. The number that matters here is **time-to-first-byte** (sometimes time-to-first-token): how long until the first words appear. With streaming this is typically a few hundred milliseconds to about a second, dominated by retrieval plus the model's prefill, while the full answer still takes its usual several seconds to finish writing. A two-second answer that starts appearing in 300 milliseconds feels fast; the same answer delivered all at once after two seconds of blank screen feels broken. Stream by default.
 
 **Parallelization.** Anything independent should run at the same time. If you use the multi-query or decomposition transforms from Part 8, fire the sub-retrievals concurrently rather than one after another. Embedding a batch of texts, hitting two retrievers for hybrid search (Part 7), querying several indexes: all of it parallelizes. Latency becomes the slowest branch, not the sum.
 
@@ -76,6 +76,25 @@ The interactive below makes that triangle tangible. It breaks a single request i
     height={860}
   />
 </Diagram>
+
+## What RAG actually costs
+
+The section above is the operator's view of cost: which levers to pull. This one is the accountant's view: a rough model of where the money goes before you pull anything, and the one counterintuitive fact that surprises almost everyone. There are three pools.
+
+**Embedding and indexing compute.** You pay to embed every chunk once at ingestion, and you pay again to embed every query. Ingestion is a one-time (or incremental) cost per document; query embedding is a tiny per-request cost. For a corpus of a few hundred thousand chunks this is real but modest, and it is the cheapest pool of the three. Re-embedding the whole corpus (when you change the embedding model, the gotcha from the freshness section) is the spike to budget for: it is the ingestion cost paid all at once, across everything.
+
+**Vector storage.** Your vectors live somewhere, and you pay for that somewhere by the gigabyte and by the query throughput, every month, whether or not anyone asks a question. The driver is dimensionality times corpus size: a million chunks at 1536 float32 dimensions is about six gigabytes of raw vectors before index overhead, and the index (HNSW graph edges, Part 4) adds more on top. Two levers shrink this directly. **Quantization** stores each dimension in fewer bits (int8, or even binary), cutting memory severalfold for a small recall hit. **Matryoshka** embeddings, trained so that the first *k* dimensions are themselves a usable embedding, let you store a 1536-dim vector but search on its first 256 or 512, shrinking both storage and search cost with a tunable quality floor. (Both are Part 2 and Part 4 ideas cashing out as money here.)
+
+**Context inflation at inference.** This is the pool nobody plans for, and it is usually the largest. Here is the uncomfortable inversion: **RAG can make your bill go up, not down.** The intuition is that retrieval saves money by letting you use a smaller model or a shorter system prompt. The reality is that every retrieved chunk is appended to the prompt, and you pay for those input tokens on *every single request*. Send ten chunks of 200 tokens each and you have added two thousand input tokens to a query that might have been twenty. A bare model call is cheap; a RAG call drags its entire retrieved context through the model's input every time. The cost shape of a RAG request is dominated by input tokens in a way a plain chat call never is.
+
+So the levers that matter most are the ones that govern how much context you ship, and how often you ship it at all:
+
+- **Top-k tuning.** The single most direct lever. Each unit of *k* is chunks worth of input tokens on every request. Past the point where extra chunks are noise (Part 7), they cost money and *hurt* quality (lost-in-the-middle). Tune *k* down until evaluation (Part 11) says quality drops, not up until it stops rising.
+- **Rerank, then truncate.** Retrieve broadly, rerank to order by true relevance (Part 8), then keep only the top few and *discard the rest before they reach the prompt*. The reranker is cheap; the discarded chunks would have been expensive input tokens forever.
+- **Prompt caching.** Providers will cache a stable prefix of your prompt (a long system instruction, a fixed set of few-shot examples) and charge a fraction of the normal input rate for those tokens on subsequent calls. If your prompt has a large fixed head and a small variable tail, this is close to free money. It rewards putting the stable parts first and the query last.
+- **Quantization and Matryoshka**, from the storage pool above, which also shrink the per-query search cost.
+
+The throughline mirrors the latency section: input tokens are the part of RAG that scales with your design choices, so the discipline is to ship the fewest, most relevant tokens you can, as rarely as you can.
 
 ## Caching: stop paying for the same answer twice
 
@@ -115,6 +134,8 @@ cache.get("What's the window to get a refund?")     # different words, same ques
   -> "Refunds are accepted within 30 days..."        # HIT: cosine above threshold, no model call
 ```
 
+How much does caching actually buy you? It depends entirely on your traffic, and the honest range is wide: a system whose every query is unique sees a **0 percent** hit rate and caching is pure overhead, while a system with a heavy head of repeated and paraphrased questions (an FAQ-style support bot) can see **50 percent or more** of requests served from cache, halving generation cost and latency for that slice. Most real workloads land somewhere in between. The point is not to chase a number but to *measure* yours: log hits and misses, watch the rate, and decide whether the hit rate justifies the cache's complexity and staleness risk.
+
 The caveat is the whole game, so do not skip it. Set the threshold too low and the cache will confidently serve a cached answer to a *subtly different* question: "can I return a worn jacket?" is close to "can I return an unworn jacket?" but the answer is the opposite. And every cache risks **staleness**: if the underlying policy changed yesterday, a cached answer from last week is now wrong. So tune the threshold against real query traffic, and expire cache entries when the source data changes. A semantic cache is a sharp knife. Worth having, easy to cut yourself on.
 
 ## Monitoring and observability: you cannot fix what you cannot see
@@ -133,6 +154,8 @@ Four things to put in place.
 
 A note on tooling, with the usual caveat: there is a healthy market of observability and tracing platforms aimed specifically at LLM and RAG apps, and the list changes fast. Treat any specific tool as a snapshot and check what is current before you commit. The *practice*, trace everything, log the context, sample quality, watch for drift, outlives any product.
 
+There is one piece of standardization worth knowing precisely because it is built to survive that churn. The **OpenTelemetry GenAI semantic conventions** define a vendor-neutral schema for naming the spans and attributes of an LLM or RAG request: the model and provider, the input and output token counts, the operation (inference, embedding, retrieval), latency, and so on. The value of a convention is that it decouples your instrumentation from your backend. If you emit traces in this shape, you can swap the observability vendor underneath without re-instrumenting your pipeline, and your dashboards keep working. The conventions are still evolving (they were in development as of 2026), so pin a version and watch for breaking changes, but instrumenting against an open standard rather than one vendor's SDK is the move that ages best.
+
 ## Failure modes and robustness: fail gracefully, not confidently
 
 Everything that can break, will, at scale. The goal is not a system that never fails. It is a system that fails *honestly* and recovers. Here are the failures worth designing for.
@@ -140,7 +163,7 @@ Everything that can break, will, at scale. The goal is not a system that never f
 **No relevant context found.** This is the most important one, and it loops all the way back to Part 1. When retrieval comes back with nothing good, with low similarity scores across the board, the worst thing the model can do is answer anyway, which is exactly when it hallucinates (Parts 1 and 6). The fix is a guard: check the top retrieval score, and if it is below a floor you trust, decline. Say "I do not know" instead of inventing. This is grounding taken seriously.
 
 ```python
-RELEVANCE_FLOOR = 0.15   # below this, do not trust the retrieval
+RELEVANCE_FLOOR = 0.15   # embedder-specific; calibrate against real traffic
 
 def answer(query):
     hits = retrieve(query, k=3)                  # Part 6 retrieval (or the hybrid + rerank stack)
@@ -158,6 +181,8 @@ answer("What is the boiling point of water?")
 
 A short, honest "I do not know" is a feature. It is the system respecting its own limits, and users trust it more for it.
 
+One caveat before you copy that `0.15`: it is not a universal number. Cosine magnitudes are not comparable across embedding models, and many modern embedders squeeze even unrelated text into a narrow high band (real queries scoring 0.6 to 0.9 regardless of true relevance), so a floor that refuses junk for one embedder will refuse almost nothing for another. Calibrate the floor against real traffic, exactly as you would the cache threshold above. And because a single absolute cutoff is fragile, sturdier systems lean on stronger signals: the reranker's own score (on its own scale, not the cosine one), the gap between the top hit and the rest of the top-k, or a small learned or LLM relevance check that decides whether the retrieved context is good enough to answer from.
+
 **LLM and API errors or timeouts.** Model APIs fail, time out, and rate-limit. Wrap calls in retries with backoff, set sensible timeouts, and have a fallback ready: a smaller or alternate model, a cached answer, or a graceful message. Degrade, do not collapse.
 
 **Stale data.** Covered under caching, but it bears repeating: an answer that was right last month can be wrong today. Expire caches and refresh the index (next section).
@@ -170,7 +195,7 @@ The complete, runnable file ties the last two ideas together: [`rag_production.p
 
 ## Security: the most underrated part of production RAG
 
-If you take one thing from this chapter, take this section seriously. Security is the part of production RAG that teams skip most often and regret most deeply. RAG has a security problem that ordinary apps do not, because its entire premise is feeding *external, often untrusted, content* straight into a powerful model's prompt.
+If you take one thing from this chapter, take this section seriously. Security is the part of production RAG that teams skip most often and regret most deeply. RAG has a security problem that ordinary apps do not, because its entire premise is feeding *external, often untrusted, content* straight into a powerful model's prompt. What follows is the working core: enough to ship responsibly. If you want the full treatment, a later entry in the series, **Part 17, is a dedicated deep-dive on RAG security**, with the threat model, the attack catalog, and the defenses worked out in depth.
 
 ### Prompt injection
 
@@ -252,6 +277,18 @@ This is the payoff of the whole series. Here is a consolidated, stage-by-stage c
 
 And the meta-principle that has run underneath all twelve parts, the spine of the whole series, said plainly: **start simple, measure, and add complexity only where the evidence demands it.** Every part has been an instance of it. Naive retrieval before hybrid. One chunk size before decoupling. A pipeline before an agent. A measurement before a fix. If you remember nothing else, remember that.
 
+> ⚠️ **Common pitfalls**
+>
+> - **A semantic cache key that omits tenant or user identity.** This is the sharp edge where two sections of this chapter collide. A semantic cache returns a previous answer when a new query is close enough in meaning. If your cache key is the query embedding *alone*, then tenant A's question can match tenant B's cached answer, and you will hand B's private answer to A. The cache silently defeats the access control you worked so hard to enforce, because it never re-runs the access-filtered retrieval. The fix is to scope the cache key to identity: include the tenant or user id (and any access-relevant filters) in the key, so a cache hit can only ever be served from an entry that belongs to the *same* caller. A shared semantic cache across tenants is a data-leak waiting to happen.
+> - **Cache staleness when source data changes.** Every cache layer (embedding, retrieval, full-response, semantic) is a snapshot of an answer that was correct *when it was stored*. Change the underlying policy or delete a source document and the cache keeps confidently serving the old answer. Tie cache invalidation to your ingestion pipeline: when a document is upserted or deleted, expire the cache entries that depended on it. A cache with no invalidation path is a slow-motion correctness bug.
+
+## Try it yourself
+
+The companion file makes two of this chapter's sharpest claims concrete in code you can run and break: [`rag_production.py`](/essays/rag-in-production/rag_production.py). Run it once as-is and you will see a paraphrase hit the semantic cache (Q2 reuses Q1's answer) and an off-topic question get refused by the relevance floor (Q3, top score 0.000, below the floor of 0.15). Now go make it fail on purpose, which is where the intuition lives.
+
+- **Lower the relevance floor and watch a junk answer slip through.** Change `RELEVANCE_FLOOR = 0.15` to `RELEVANCE_FLOOR = 0.0` and re-run. The boiling-point question, which has no business being answered from a refund corpus, now sails past the guard and gets a confident, grounded-looking, wrong answer built from the nearest chunk. That is exactly the failure the floor exists to prevent. This is the demo-to-production gap in one line of code: the floor is the only thing standing between "I do not know" and a fluent hallucination.
+- **Add a tenant id to the cache key.** The `SemanticCache` keys on the query embedding alone, the pitfall above made executable. As an exercise, give `get` and `put` a `tenant` argument and require both an identity match *and* the cosine threshold before returning a hit (store `(tenant, query_vector, answer)` and skip any entry whose tenant differs). Then call the cache with two different tenants asking the same question and confirm the second one misses instead of borrowing the first's answer. You have just turned a cross-tenant leak back into a per-tenant cache.
+
 ## Key takeaways
 
 - A RAG system that works in a notebook is about 20 percent of the job. The **demo-to-production gap**, latency, cost, reliability, security, and observability, is the other 80, and it is a different discipline from building.
@@ -261,6 +298,11 @@ And the meta-principle that has run underneath all twelve parts, the spine of th
 - Fail gracefully: when retrieval finds nothing good, say "I do not know" rather than hallucinate, and wrap fragile calls in retries, fallbacks, and backoff.
 - Take **security** seriously. **Prompt injection** through retrieved documents is unique to RAG; treat retrieved content as untrusted data, wall it off from instructions, and keep tool permissions minimal. Enforce per-user **access control** so retrieval never leaks across tenants.
 - Production RAG is never build-once: keep the index fresh with incremental ingestion, real deletions, versioning, and a full re-embed whenever the embedding model changes.
+
+## References
+
+- OWASP, *OWASP Top 10 for LLM Applications 2025* (released November 17, 2024). The community-maintained catalog of the top security risks for LLM applications, including prompt injection (LLM01), sensitive information disclosure (LLM02), excessive agency (LLM06), and vector and embedding weaknesses (LLM08), all of which this chapter's security section touches. [genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025](https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/)
+- OpenTelemetry, *Semantic Conventions for Generative AI (GenAI)*. The vendor-neutral schema for naming spans, metrics, and attributes of GenAI and RAG telemetry (inference, embeddings, retrievals, tool calls). Still evolving as of 2026, so pin a version. Repository: the [OpenTelemetry GenAI semantic-conventions repository](https://github.com/open-telemetry/semantic-conventions-genai)
 
 ## Glossary
 

@@ -8,13 +8,18 @@ export async function GET(context: APIContext) {
     title: 'Meftun Akarsu — Essays',
     description: 'Long-form technical essays from Meftun Akarsu.',
     site: context.site!,
+    // Top-level feed language; per-item language travels in customData below.
+    customData: '<language>en-us</language>',
     items: essays
       .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
       .map(essay => ({
         title: essay.data.title,
         pubDate: essay.data.date,
-        description: essay.data.description,
+        description: essay.data.summary ?? essay.data.description,
         link: `/essays/${essay.slug}/`,
+        categories: essay.data.tags,
+        customData: `<dc:language>${essay.data.lang}</dc:language>`,
       })),
+    xmlns: { dc: 'http://purl.org/dc/elements/1.1/' },
   });
 }

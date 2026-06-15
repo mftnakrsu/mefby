@@ -4,7 +4,7 @@ description: "How to replace vibes with numbers. Part 11 of a from-scratch serie
 date: 2026-06-17
 tags: ["RAG", "Evaluation", "RAGAS", "LLM-as-a-judge", "Faithfulness", "LLM", "AI", "Retrieval"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-11-evaluating-rag"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/evaluating-rag.png"
 seriesOrder: 11
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 11 of the series.*
 
 ## What you'll learn
 
@@ -187,6 +186,31 @@ What is the battery life of the X1 wireless ea    n/a     1.00   correct refusal
 
 Look at the last two rows. They produce the identical answer, "I don't know," and to a vibes check they are indistinguishable. But context recall pulls them apart: the battery-life question is a correct refusal, because nothing in the corpus could answer it, while the earbud-repair question is a retrieval miss, because the warranty chunk that does answer it was in the corpus and lexical search simply failed to find it (precisely the dense-versus-sparse gap from Part 7). That distinction, invisible to the eye, decides whether you touch the retriever or leave it alone. It is the entire reason to measure. (A real harness would add answer relevance and correctness; two metrics are enough to show the shape, and remember that judge APIs and libraries move fast.)
 
+## Is the delta real?
+
+The loop tells you to keep a change only if it beats the baseline, but that hides a statistical question we have so far been glib about: is the delta real, or is it noise? A faithfulness that went from 0.82 to 0.88 looks like progress. If you measured it on five cases, it is almost certainly nothing. Five cases means each one is worth 0.20, so the entire "improvement" is a single case flipping from fail to pass, and that one case could just as easily flip back tomorrow on a judge that is not perfectly consistent (recall that even at temperature zero, a judge re-scores the same input with a little jitter). You have not measured an improvement; you have measured the variance of your instrument.
+
+Three habits keep you honest here. First, **use enough cases.** There is no magic number, but a handful is for smoke-testing the harness, not for trusting a delta; you want enough that a single case flipping cannot move the headline metric by more than a sliver. Second, **fix and vary the seeds.** Pin the seed for anything random (sampling, shuffling, the judge's temperature where you can) so a re-run is reproducible, then deliberately run across a few seeds to see how much the score wobbles when only the seed changes. That wobble is your noise floor, and any delta smaller than it is not a delta. Third, **bootstrap a confidence interval.** Resample your per-case scores with replacement a few thousand times, recompute the mean each time, and read off the 2.5th and 97.5th percentiles: that is a 95% interval on your metric. If the baseline's interval and the candidate's interval overlap heavily, the change has not earned the word "better" yet. A bootstrap is a dozen lines of numpy and it converts "0.82 to 0.88" from a vibe into a claim you can defend or retract.
+
+This discipline pays off most when you automate it. The eval loop belongs in **CI/CD as a quality gate**: run the offline eval set on every change, and block the deploy if a headline metric regresses past your noise floor, the same way a failing unit test blocks a merge. A faithfulness drop of three points on a real set should turn the build red, not slip out unnoticed because nobody happened to re-run the eval. And once the system is live, the gate has an online counterpart: **monitor retrieval-relevance drift against a gold set.** Re-score a fixed slice of golden questions on a schedule, and alert when context recall or relevance sags below its established band. Drift is usually quiet, a corpus that grew, an embedding model you swapped, a query distribution that shifted, and the only way you notice before users do is by watching the number against a baseline you trust.
+
+## Public benchmarks vs your own eval set
+
+It is tempting to skip the work of building an eval set and lean on a public benchmark instead, and the public ones are genuinely useful: [BEIR](https://arxiv.org/abs/2104.08663) measures zero-shot retrieval across many domains (its headline number is **NDCG@10**, a ranking-quality metric that rewards putting relevant documents near the top), [MTEB](https://arxiv.org/abs/2210.07316) ranks embedding models across dozens of tasks, and [ViDoRe](https://arxiv.org/abs/2407.01449) does the same for visual document retrieval, where the "documents" are page images rather than extracted text. They are the right tool for a narrow job: choosing a starting embedding model, or sanity-checking that a retriever is not broken in some general way. But a high leaderboard rank is not a promise about *your* corpus. A model that tops MTEB on web text can still trail a humbler one on your dense, jargon-heavy contracts, because your distribution is nowhere in the benchmark. So treat public benchmarks as a way to pick a sensible default, then **build a domain eval set and let it overrule the leaderboard.** The fifty painful questions from your own support queue tell you more about what to ship than any rank does.
+
+## Try it yourself
+
+Two short exercises, each one closing a gap the prose only described.
+
+**Write three out-of-scope questions and confirm the refusals.** Pick three questions your corpus genuinely cannot answer (for the store-policy corpus in [`rag_eval.py`](/essays/evaluating-rag/rag_eval.py): "What is the CEO's salary?", "Do you ship to Antarctica?", "What is the battery life of the X1 earbuds?"), add each as a case with an empty `golden` list, and run the eval. A correct system refuses all three, and the harness should label them `correct refusal` rather than scoring them as answers. If even one comes back with a confident invented answer, you have just caught the recklessness that an answers-everything system hides, the exact failure no amount of faithfulness-on-the-answered-cases would have surfaced.
+
+**Hand-label ten cases and compute Cohen's kappa against the judge.** This is how you earn the right to trust the automated judge. Take ten answered cases, label each yourself as faithful or not (a binary call), then have the LLM judge label the same ten, and compute **Cohen's kappa**, the chance-corrected agreement score the part kept gesturing at. Raw agreement flatters you: if 9 of 10 cases are faithful, a judge that blindly says "faithful" every time scores 90% and has learned nothing. Kappa subtracts the agreement you would expect by chance, so a high kappa means the judge tracks your hard calls, not just the easy ones. Rough reading: above about 0.6 is decent agreement, below it means do not trust the judge on this task yet, re-prompt it or fall back to more human labels. The arithmetic is a handful of lines (it is in [`rag_eval.py`](/essays/evaluating-rag/rag_eval.py)), and the number you get is the difference between a judge you have calibrated and a judge you are merely hoping is right.
+
+> ⚠️ **Common pitfalls**
+>
+> - **Faithfulness is not correctness.** This is the trap that catches everyone first. Faithfulness asks only whether the answer is supported by the retrieved context, so an answer that faithfully repeats a *wrong* retrieved chunk scores a perfect 1.0 while being flatly wrong. Retrieve the outdated refund policy and the model will ground its answer in it beautifully, and your faithfulness metric will applaud. Faithfulness guards against the model inventing things; it says nothing about whether the documents it grounded on were right. Catching wrong-but-grounded answers needs correctness against a reference, not faithfulness.
+> - **Mistaking noise for a result.** A 0.82-to-0.88 move on five cases is not an improvement, it is the variance of your harness wearing a result's clothing. Before you believe a delta, run enough cases that a single one flipping cannot move the headline number much, vary the seed to find your noise floor, and bootstrap a confidence interval; if the baseline and candidate intervals overlap, you have not shown anything yet. Shipping on an unmeasured delta is just vibes with a decimal point.
+
 ## Recap and forward
 
 You can now do the thing the whole series has quietly depended on. You can put a number on quality, you can split a failure into retrieval or generation and point at the half that broke, and you can improve a system methodically, one measured change at a time, instead of by feel. Vibes are out; deltas are in.
@@ -221,6 +245,17 @@ A closing pointer, flagged clearly as recent and medium-confidence: this is a si
 - **LLM-as-a-judge is how you measure at scale, but it is biased** (verbosity, position, self-preference) and inconsistent, so validate it against human labels before you trust it. Lexical metrics like BLEU and ROUGE miss meaning and grounding entirely.
 - **Your evaluation is only as good as your evaluation set.** Cover the real distribution, including out-of-scope questions that should be refused; bootstrap with synthetic generation but always review by hand.
 - **The loop is the deliverable:** build an eval set, measure a baseline, change one thing, re-measure, keep or revert. This field moves fast, so treat every named tool and metric here as a snapshot and verify the current state.
+
+## References
+
+- Shahul Es, Jithin James, Luis Espinosa-Anke, and Steven Schockaert. "RAGAS: Automated Evaluation of Retrieval Augmented Generation." EACL 2024 (system demonstrations); first posted 2023. [arXiv:2309.15217](https://arxiv.org/abs/2309.15217). The framework behind the context-precision, recall, faithfulness, and answer-relevance metrics this part leans on, and the reference-free, LLM-as-judge approach to scoring them.
+- Nandan Thakur, Nils Reimers, Andreas Rücklé, Abhishek Srivastava, and Iryna Gurevych. "BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models." NeurIPS 2021 Datasets and Benchmarks. [arXiv:2104.08663](https://arxiv.org/abs/2104.08663). The zero-shot IR benchmark whose headline NDCG@10 ranks retrievers across many domains.
+- Niklas Muennighoff, Nouamane Tazi, Loïc Magne, and Nils Reimers. "MTEB: Massive Text Embedding Benchmark." EACL 2023. [arXiv:2210.07316](https://arxiv.org/abs/2210.07316). The benchmark and leaderboard most used to compare embedding models across tasks.
+- Manuel Faysse, Hugues Sibille, Tony Wu, Bilel Omrani, Gautier Viaud, Céline Hudelot, and Pierre Colombo. "ColPali: Efficient Document Retrieval with Vision Language Models." 2024. [arXiv:2407.01449](https://arxiv.org/abs/2407.01449). Introduces the ViDoRe benchmark for visual document retrieval over page images.
+- Yunfan Gao, Yun Xiong, Wenlong Wu, Zijing Huang, Bohan Li, and Haofen Wang. "U-NIAH: Unified RAG and LLM Evaluation for Long Context Needle-In-A-Haystack." 2025. [arXiv:2503.00353](https://arxiv.org/abs/2503.00353). The leakage-free fictional-corpus method (the Starlight Academy dataset) behind the long-context-versus-RAG comparison.
+- Kuan Li, Liwen Zhang, Yong Jiang, Pengjun Xie, Fei Huang, Shuai Wang, and Minhao Cheng. "LaRA: Benchmarking Retrieval-Augmented Generation and Long-Context LLMs - No Silver Bullet for LC or RAG Routing." ICML 2025. [arXiv:2502.09977](https://arxiv.org/abs/2502.09977). The benchmark whose subtitle frames the "it depends" answer this part adopts.
+- Zhuowan Li et al. "Retrieval Augmented Generation or Long-Context LLMs? A Comprehensive Study and Hybrid Approach." EMNLP 2024 (industry track). [arXiv:2407.16833](https://arxiv.org/abs/2407.16833). The Self-Route method that routes easy queries to cheap retrieval and escalates hard ones to long context.
+- "RAGCap-Bench: Benchmarking Capabilities of LLMs in Agentic Retrieval-Augmented Generation Systems." 2025. [arXiv:2510.13910](https://arxiv.org/abs/2510.13910). The capability-level evaluation proposal in the frontier note; treat its findings as early.
 
 ## Glossary
 

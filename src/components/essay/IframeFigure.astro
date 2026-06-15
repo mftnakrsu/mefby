@@ -19,6 +19,9 @@ const { src, title, height = 760 } = Astro.props;
   class="w-full block rounded-lg"
   style={`height:${height}px;border:0;`}
 ></iframe>
+<p class="mt-1 text-right text-[11px]">
+  <a href={src} target="_blank" rel="noopener noreferrer" class="font-mono text-zinc-400 hover:text-emerald-600">Open figure &#8599;</a>
+</p>
 
 <script>
   // Auto-fit same-origin figure iframes to their content height.

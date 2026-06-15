@@ -4,7 +4,7 @@ description: "Not every query needs the same machinery: a greeting needs no retr
 date: 2026-06-21
 tags: ["RAG", "Adaptive RAG", "Routing", "Query Complexity", "Retrieval", "LLM", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-15-adaptive-rag"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/adaptive-rag.png"
 seriesOrder: 15
 lang: "en"
 ---
@@ -12,7 +12,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 15 of the series, and the close of the Frontier Track.*
 
 ## What you'll learn
 
@@ -48,7 +47,7 @@ That is the whole menu: none, single, multi. Cheapest to costliest, matched to e
 
 ## The complexity classifier
 
-The classifier is smaller than you might expect, and deliberately so. In the companion code I wrote it as a handful of deterministic rules over the lowercased query. This is the function verbatim from the runnable artifact, and it is the only part of the routing logic that is not free to vary, because the routing decisions in this part come straight out of it:
+The classifier is smaller than you might expect, and deliberately so. In the companion code I wrote it as a handful of deterministic rules over the lowercased query. This is the function verbatim from the runnable artifact ([rag_router.py](/essays/adaptive-rag/rag_router.py)), and it is the only part of the routing logic that is not free to vary, because the routing decisions in this part come straight out of it:
 
 ```python
 def classify_complexity(query: str) -> str:
@@ -80,7 +79,7 @@ It helps to see the classifier and the three routes as one connected machine, wh
 
 This is the payoff of the whole series, so it is worth stating plainly. Adaptive RAG does not introduce a new retrieval technique. It is the conductor standing in front of the pipelines you spent Parts 6 through 10 building, and its instrument is the classifier. The **none** route is the recognition that the Part 6 lookup is sometimes unnecessary. The **single** route *is* the Part 6 lookup. The **multi** route is the Part 10 decompose-and-synthesize shape. Adaptive RAG is the layer that decides which of those to invoke. Once you see it that way, every earlier part clicks into place as a tool the conductor can reach for.
 
-In the companion code, the `route` function is exactly that dispatcher. It calls `classify_complexity`, then branches: a `none` query gets a direct templated reply with no retrieval, a `single` query goes through retrieve-then-generate, and a `multi` query is decomposed into sub-queries that are each retrieved and then synthesized. The six demo queries in the artifact split two to a class, and they make the behavior concrete. "Hi there" and "thanks" route to **none** and never touch the index. "What is our refund window?" and "How do I fix the E-4042 error?" route to **single** and each retrieve their one relevant chunk, the refund-policy chunk and the E-4042 error-code chunk respectively, reusing the same support knowledge base from the earlier parts. "Compare the refund window and the warranty period, and explain the difference" and "What is the difference between the refund window and the warranty period?" route to **multi**, decompose into a refund sub-query and a warranty sub-query, retrieve each chunk separately, and synthesize. The routing decisions are deterministic and identical whether you run the real-model path or the offline fallback. Only the underlying similarity scores shift between paths; which chunk each sub-query lands on, and which route each query takes, do not.
+In the companion code, the `route` function in [rag_router.py](/essays/adaptive-rag/rag_router.py) is exactly that dispatcher. It calls `classify_complexity`, then branches: a `none` query gets a direct templated reply with no retrieval, a `single` query goes through retrieve-then-generate, and a `multi` query is decomposed into sub-queries that are each retrieved and then synthesized. The six demo queries in the artifact split two to a class, and they make the behavior concrete. "Hi there" and "thanks" route to **none** and never touch the index. "What is our refund window?" and "How do I fix the E-4042 error?" route to **single** and each retrieve their one relevant chunk, the refund-policy chunk and the E-4042 error-code chunk respectively, reusing the same support knowledge base from the earlier parts. "Compare the refund window and the warranty period, and explain the difference" and "What is the difference between the refund window and the warranty period?" route to **multi**, decompose into a refund sub-query and a warranty sub-query, retrieve each chunk separately, and synthesize. The routing decisions are deterministic and identical whether you run the real-model path or the offline fallback. Only the underlying similarity scores shift between paths; which chunk each sub-query lands on, and which route each query takes, do not.
 
 Now the contrasts, because this is where Adaptive RAG gets confused with its neighbors.
 
@@ -108,6 +107,24 @@ The caveat that matters most is that the classifier is itself a new failure surf
 
 {/* author: swap the above for your own real first-person routing story if you have a better one, e.g. a time an over-eager complexity classifier under-retrieved a multi-part question and answered half of it; keep the asymmetry lesson (under-serving a hard query is a wrong answer, over-serving an easy one is just wasted cost) and keep it em-dash-free. */}
 
+## Try it yourself
+
+The router is small enough that you can feel every decision by editing one file. Grab [rag_router.py](/essays/adaptive-rag/rag_router.py) (numpy only, with an optional sentence-transformers path behind the usual offline guard) and run it. You will see the six demo queries split two to a class, exactly as the prose describes: the greetings take the `none` route and touch the index zero times, the refund and E-4042 questions take `single` with one retrieval each, and the two comparison queries take `multi` and fan out into two sub-queries apiece. Then try these three exercises, in order.
+
+First, watch the asymmetry. Take the second `multi` demo, "What is the difference between the refund window and the warranty period?", and delete its single question mark so it reads as a statement: "What is the difference between the refund window and the warranty period". The phrase "difference between" is still a multi-signal, so it stays on `multi`. Now also rename that phrase to something the classifier does not key on, say "how the refund window compares to the warranty period" without the word "compare" (write it as "the refund window relative to the warranty period"). Suddenly nothing trips a multi-signal, the question-mark count is zero, and the query falls through to `single`. Run it: you get **one** retrieval, the answer is grounded in the refund chunk alone, and the warranty side is silently missing. That is the half-answer failure mode from the "From experience" note, reproduced in three lines. Notice how nothing in the output looks broken: the chunk it retrieved is real and correct, the answer is fluent, and only a human who knew there were two sides would catch it.
+
+Second, mis-tune a threshold on purpose. The classifier has no numeric threshold to slide, but it has the moral equivalent: the `multi_signals` tuple and the `q.count("?") > 1` test. Make the router *aggressive about the cheap route* the way a cost dashboard would tempt you to: change that test to `q.count("?") > 2` (so two question marks no longer escalate) and drop `"difference between"` from `multi_signals`. Re-run the demos. The second comparison query now routes to `single` and under-retrieves, while the cost-per-query line in the figure drops beautifully. This is the exact trade the essay warns against: you bought a lower cost number by quietly making hard queries answer half of themselves. Then put both back and confirm all six routes return to matching the prose (the bottom line of the script prints `all six routes match the prose: True`).
+
+Third, add a fourth route. Real systems often need one the three-route menu does not cover: a query whose answer is not in the knowledge base at all and needs **web search**, the escalation Part 10 called source routing. Add a `web` branch to `classify_complexity` (for example, route to `web` when the query mentions a competitor, a price, or "latest"/"today", none of which your static policy chunks can answer), and a matching arm in `route` that calls a stub `web_search(query)` instead of the local `retrieve`. The point is not the search itself, which you can leave mocked, but the shape: complexity routing and source routing now sit side by side, and you can see for yourself that they are orthogonal decisions, one asking *how much* to retrieve and the other asking *from where*.
+
+> ⚠️ **Common pitfalls**
+>
+> - **Tuning to the cost graph.** Aggressively widening the cheap routes (more traffic to `none` and `single`) makes the cost dashboard fall and looks like a win, but every misroute toward "cheaper" is a hard query answered with too little evidence. That failure is invisible in cost metrics and visible only to the user it failed. Tune for the asymmetry: an over-served easy query costs money, an under-served hard query costs a wrong answer.
+> - **Treating a lone "and" as a multi-signal.** A bare "and" joins clauses far more often than it bundles tasks ("refunds and exchanges are handled by support" is one lookup). Keying the multi route on every "and" floods the expensive path. The classifier here keys on specific conjunction-of-tasks phrases ("and then", "both", "each of"), not on "and" alone; "and" is used later, *inside* decomposition, to split a query that already routed multi.
+> - **Confusing the router with a query transform (Part 8).** A transform changes *what you search with* and always assumes you will retrieve. The router decides *whether and how much* to retrieve at all. If your "adaptive" layer only rewrites queries and still runs one retrieval every time, you built a transform, not a router.
+> - **Confusing complexity routing with source routing (Part 10).** Picking *which index* a query hits (HR store vs code store vs web) is orthogonal to picking *how much* retrieval it needs. Building a source router and calling it adaptive leaves every query triggering the same amount of retrieval it always did.
+> - **Shipping the router before you can measure it.** A fixed pipeline fails predictably; a router introduces a new failure surface that fails silently in the dangerous direction. Add it only once you can measure the under-serve rate on hard queries, which is the Part 11 discipline.
+
 ## Key takeaways
 
 - **Adaptive RAG** classifies each query by **complexity** and routes it to the pipeline that fits, instead of running one fixed pipeline for everything. It is the answer to the problem that a single pipeline over-serves easy queries and under-serves hard ones.
@@ -116,6 +133,10 @@ The caveat that matters most is that the classifier is itself a new failure surf
 - Adaptive RAG is the **conductor over Parts 6 to 10**, not a new retrieval technique. Do not confuse it with Part 8 (which transforms *what you search with*) or Part 10's source routing (which picks *which index* to search). Complexity routing asks the prior question: whether and how much to retrieve at all.
 - The benefit is **structural**: stop paying for machinery an easy query never needed, keep the heavy machinery for the hard query that does. Vendor figures like roughly 35 percent lower latency and 28 percent lower cost are **indicative, not measured**; your real savings depend on your traffic mix.
 - The classifier is a **new failure surface**, and the dangerous direction is **under-classification**: a hard query routed to single-step under-retrieves and silently answers half the question. Tune for that asymmetry, and add the router only once you can measure the tradeoff.
+
+## References
+
+- Soyeong Jeong, Jinheon Baek, Sukmin Cho, Sung Ju Hwang, and Jong C. Park. "Adaptive-RAG: Learning to Adapt Retrieval-Augmented Large Language Models through Question Complexity." NAACL 2024. [arXiv:2403.14403](https://arxiv.org/abs/2403.14403). This is the paper the whole part is built on. It frames retrieval as a per-query choice and trains a small classifier to predict each question's complexity, then dispatches to one of three strategies: no retrieval, a single retrieval, or iterative multi-step retrieval. The headline result is not a latency percentage but a balance: across open-domain QA benchmarks, the adaptive system "enhances the overall efficiency and accuracy" versus baselines by spending the right amount of retrieval per query. Its accuracy lands between the single-step and the iterative multi-step strategies while using fewer retrieval steps on average than the pure multi-step approach (on HotpotQA, for instance, the reported run averaged roughly 1.6 steps against the iterative baseline's roughly 2.1). That step-count style of efficiency, not a fixed cost-saving number, is what the paper actually claims, which is why the figures in this part are flagged as indicative vendor reports rather than measured guarantees.
 
 ## Glossary
 

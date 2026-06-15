@@ -4,7 +4,8 @@ description: "Our Part 6 app works, but it retrieves naively: pure semantic sear
 date: 2026-06-13
 tags: ["RAG", "Retrieval", "BM25", "Hybrid Search", "Vector Search", "NLP", "AI"]
 codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-07-retrieval-deep-dive"
-ogImage: "/og/rag-by-hand.png"
+ogImage: "/og/retrieval-deep-dive.png"
+summary: "Dense retrieval whiffs on exact codes and names; sparse nails them. Part 7: TF-IDF, BM25, hybrid search (weighted sum and RRF), and the top-k trap."
 seriesOrder: 7
 lang: "en"
 ---
@@ -12,7 +13,6 @@ lang: "en"
 import Diagram from '../../components/essay/Diagram.astro';
 import IframeFigure from '../../components/essay/IframeFigure.astro';
 
-*RAG from First Principles. Part 7 of the series.*
 
 ## What you'll learn
 
@@ -68,6 +68,18 @@ Those two corrections are why BM25 is so dependable. It has no model to train, i
 
 Its weakness is the exact inverse of dense retrieval's strength. BM25 is literal. It has no notion of meaning, so it cannot connect *"car"* to *"automobile"*: if the query and the chunk use different words for the same idea, BM25 sees no overlap and scores zero. This is the classic **vocabulary mismatch** problem, and it is the price of taking words at face value.
 
+## Tokenization decides whether sparse works
+
+There is a quiet assumption buried in everything above, and it is the one that bites people in production. The whole rescue in this chapter depends on `E-4042` surviving as a *single token* in both the query and the chunk. If BM25 indexes one thing and your query produces another, the rare, decisive term you were counting on never lines up, and sparse retrieval fails on exactly the case it was supposed to own. The scoring formula is rarely the problem. The **tokenizer** that runs before it usually is.
+
+The trouble is that the default text analyzers shipped with most search engines were tuned for natural-language prose, not for codes and identifiers, and they do three things that quietly shatter the very tokens you care about.
+
+- **Splitting on hyphens and underscores.** A common analyzer treats `-` and `_` as word boundaries, so `E-4042` becomes two tokens, `e` and `4042`, and `error_code_4042` becomes three. Now the query for `E-4042` matches the bare `4042` (which may appear in a dozen unrelated chunks) and the precise, rare pairing is gone. The single most informative token in the query has been ground into common dust.
+- **Stemming.** Stemmers chop words to a root: `authentication` becomes `authent`, `expired` becomes `expir`. Harmless for prose, occasionally harmful for identifiers, because a stemmer can mangle a token that happens to end in a stemmable suffix and make the query form and the indexed form disagree.
+- **Lowercasing and aggressive normalization.** Lowercasing is usually fine (and the `tokenize` in our companion code does it deliberately, on both sides, so it stays consistent), but normalization that strips punctuation or folds character classes can turn `SKU#A12` or `v2.0.1` into something that no longer matches what the user typed.
+
+The rule that keeps you out of trouble is simple: **the query and the documents must be tokenized the same way, and that tokenization must keep your identifiers whole.** Our companion `tokenize` does precisely this with one regex, `[a-z0-9]+(?:-[a-z0-9]+)*`, which lowercases and then keeps hyphenated codes like `e-4042` intact as one token instead of splitting on the hyphen. In a real engine the equivalent move is to configure a keyword field, a whitespace analyzer, or a custom analyzer for the fields that hold codes, separate from the stemmed full-text analyzer you use for prose. Index the SKU column as an exact term; index the description as analyzed text. When someone reports that "BM25 cannot find an exact code that is right there in the data," the cause is almost always here, not in the ranking.
+
 ## The complementarity insight
 
 Put the two failure modes side by side and the whole chapter clicks into place.
@@ -102,6 +114,16 @@ The second strategy sidesteps the scale problem entirely by throwing away the ra
 
 The intuition: appearing near the top of *either* list is worth a lot, and appearing near the top of *both* is worth even more, while exact score magnitudes never enter the picture. Because it only ever compares positions, RRF is immune to the normalization headache that haunts the weighted sum. That robustness, plus having only one gentle parameter, is why RRF is such a popular default and the merge built into many vector databases.
 
+### Which one should you reach for?
+
+It is tempting to crown one of these the winner, but they answer different questions, and the honest framing is about *default* versus *ceiling*.
+
+**RRF is the better default.** It needs no tuning, it cannot be broken by mismatched score scales, and it behaves sensibly the moment you wire it up. You hand it two ranked lists and it just works, which is exactly what you want before you have a labelled dev set or any sense of how your two retrievers' scores are distributed. Most teams should start here and may never need to leave.
+
+**Weighted sum has the higher ceiling, but only if you earn it.** The cost is real: you have to normalize honestly, and you have to tune alpha against a dev set of queries with known-relevant chunks. Once you pay that cost, the weighted sum can beat RRF, because it uses information RRF deliberately throws away. RRF only knows that a chunk was ranked second; the weighted sum knows that it scored 0.91 versus the next chunk's 0.40, that the gap is huge, that this match is decisive rather than marginal. When your scores are *calibrated* (when a 0.9 cosine reliably means more than a 0.6, and your BM25 scores are stable across queries), that magnitude information is signal, and a tuned alpha exploits it. The flip side is the failure mode: a single per-query outlier score can dominate a poorly normalized weighted sum, whereas RRF shrugs it off.
+
+So the practical path is RRF first, and weighted sum later, once you have an evaluation set worth tuning against and evidence that the extra ceiling is worth the tuning burden. Reach for the ceiling only after you can measure whether you have actually reached it.
+
 Either way, hybrid usually wins. It gets semantic recall and lexical precision in one list, and it is more robust across query types: the woolly conceptual question and the give-me-this-exact-code question both get answered well, instead of the system being great at one and hopeless at the other.
 
 The figure below makes it tangible. It is the centerpiece of this part, so spend a minute with it.
@@ -122,6 +144,19 @@ Notice what happens. In the dense list, the `E-4042` chunk languishes near the b
 >
 > The first time hybrid search saved me, I had spent two days blaming the embedding model. A whole class of user queries, the ones with an exact order ID or part number in them, kept returning sensible-looking but wrong chunks, and I cycled through fancier embedding models and finer chunking convinced the problem was upstream. It was not. The queries all shared one trait: they hinged on a rare literal token that semantic search was averaging into oblivion. Bolting a BM25 retriever onto the existing pipeline and fusing with RRF fixed the entire category in an afternoon. The lesson stuck: when retrieval fails specifically on codes, names, and IDs, do not reach for a bigger model, reach for keywords.
 
+## Cross-lingual retrieval
+
+So far we have assumed query and corpus speak the same language. Many real corpora do not: a German user asks a question of an English knowledge base, or a support archive mixes Turkish, English, and a sprinkling of product names that belong to no language at all. This changes the calculus for both retrievers, and it is worth knowing the failure modes before you trip over them.
+
+Dense retrieval has a genuine edge here, *if* the embedding model was trained to be multilingual. A model trained on aligned text across languages places *"car"*, *"Auto"*, and *"araba"* near each other in the same space, so a German query can find an English chunk with no translation step at all. That is the cleanest version of cross-lingual retrieval, and it is a real reason to prefer a multilingual embedding model when your corpus is mixed. The common alternative when your embedding model is monolingual is **translate-query-then-retrieve**: machine-translate the query into the corpus language, then run ordinary same-language retrieval. Simple, and it leans on machine translation that is now very good, but it inherits every translation error, and it pushes the whole burden onto one brittle step.
+
+Two failure modes recur often enough to name.
+
+- **Transliteration and the literal tokens that survive translation.** The exact-token problem from the start of this chapter gets worse across languages, because the one token you most need preserved is the one translation is most likely to mangle. A product name, a person's name, or a place name often gets *transliterated* rather than translated (rendered into another script or spelling), so `İstanbul` becomes `Istanbul`, a name picks up or loses diacritics, and your sparse retriever's exact match silently breaks. This is the tokenization lesson again, now with an extra adversary. Codes and identifiers should ride through untranslated; make sure your pipeline does not "helpfully" rewrite them.
+- **Calibration across languages.** Scores are not comparable across languages the way you assume. A monolingual BM25 run against a translated query produces scores on a different footing than the same query in its native language, and a multilingual embedding model is often better calibrated within a language than across language pairs (cosine 0.7 may mean one thing English-to-English and another German-to-English). That wrecks the weighted-sum fusion from earlier, because alpha was tuned on one footing and is being applied on another. RRF, which ignores magnitudes entirely, is more forgiving here, one more reason it makes a sane cross-lingual default.
+
+The short version: prefer a multilingual embedding model if your corpus is genuinely mixed, treat machine translation as a fallback with known leaks, guard your identifiers against transliteration, and lean on rank-based fusion when scores stop being comparable.
+
 ## Top-k is a real knob now
 
 We have been treating **top-k**, the number of retrieved chunks we keep and pass to the generator, as a fixed constant. It is not. It is a dial, and now that retrieval is better, where you set it genuinely matters.
@@ -130,9 +165,9 @@ The trade-off is honest in both directions.
 
 Set **k too small** and you risk missing the chunk that holds the answer. This is exactly our opening failure: the right article was at rank five, but with the cutoff at three it fell outside the net and the generator never saw it. Low recall, and a generator that can only guess because it was starved of the evidence.
 
-Set **k too large** and a different problem appears. The prompt fills up with marginally relevant chunks, and that noise costs you three ways: it burns context-window budget (the wall from Part 1 is still real), it costs more money per call, and, least intuitively, it can actually make the answer *worse*. Long, padded contexts trigger a well-documented effect called **lost in the middle**: language models attend most to the beginning and end of their context and least to the middle, so a crucial chunk stranded in the middle of a long pile can be effectively ignored even though it was retrieved. More context is not free, and past a point it is not even helpful.
+Set **k too large** and a different problem appears. The prompt fills up with marginally relevant chunks, and that noise costs you three ways: it burns context-window budget (the wall from Part 1 is still real), it costs more money per call, and, least intuitively, it can actually make the answer *worse*. Long, padded contexts trigger a well-documented effect called **lost in the middle**: models tend to use information at the start and end of a long context more reliably than information buried in the middle, the U-shaped accuracy curve measured by [Liu et al. (2023)](https://arxiv.org/abs/2307.03172). A relevant chunk stranded in the middle of a long pile can be effectively ignored even though it was retrieved. (The leading explanation is a positional bias in how transformers encode position; newer long-context models mitigate this but do not fully eliminate it.) More context is not free, and past a point it is not even helpful.
 
-<Diagram number={3} caption="The top-k dial on one ranked list. Too small drops the answer chunk entirely (low recall); too large buries it among noise, stranded in the middle the model attends to least; the sweet spot keeps it near the top with little noise.">
+<Diagram number={3} caption="The top-k dial on one ranked list. Too small drops the answer chunk entirely (low recall); too large buries it among noise, stranded in the middle the model uses least reliably; the sweet spot keeps it near the top with little noise.">
   <img src="/essays/retrieval-deep-dive/part7-topk-tradeoff.svg" alt="Three panels over the same ranked list of twelve chunks, with the answer chunk drawn in green. The first panel, too small with k equals one, keeps only the top chunk and drops the answer at rank four, labelled answer never retrieved. The second panel, too large with k equals twelve, keeps all chunks with the middle ones faded to show attention sagging, and the answer buried at rank six is lost in the middle. The third panel, the sweet spot with k equals five, keeps the top five including the answer near the top and trims the noisy tail." class="w-full rounded-lg" />
 </Diagram>
 
@@ -234,6 +269,20 @@ Dense alone never surfaces the `E-4042` chunk in its top three (it sits at rank 
 
 A freshness note: BM25 and dense embedding both have excellent off-the-shelf libraries (`rank_bm25`, `sentence-transformers`, and the hybrid mode built into most vector databases), and their APIs change quickly. The hand-rolled BM25 above is for understanding the mechanism. Before you ship, prefer a maintained library and verify its current usage.
 
+> ⚠️ **Common pitfalls**
+>
+> - **The tokenizer shatters your codes.** This is the single most common reason "BM25 cannot find an exact code that is right there." A default analyzer splits `E-4042` on the hyphen into `e` and `4042`, stems or normalizes the pieces, and the rare, decisive token you were counting on dissolves into common dust. Tokenize the query and the documents the same way, and configure an exact/keyword field for identifiers. Verify it: print the token list for a known code and confirm it survives whole.
+> - **Per-query min-max normalization is fragile.** Min-max scaling to 0..1 is computed *per query*, so a single outlier score stretches or compresses the whole range, and a query that happens to return one runaway BM25 score can squash every other chunk toward zero. The alpha you tuned on average-looking queries then misbehaves on the odd one. RRF avoids this entirely by ignoring magnitudes; if you do use weighted sum, sanity-check it on your weird queries, not just your clean ones.
+> - **Forgetting to dedup before you fuse.** Dense and sparse return overlapping candidate sets, and if the same chunk appears under two different ids (or you merge lists without collapsing duplicates), fusion double-counts it and floats a near-duplicate to the top. Dedup the union of candidates to a single entry per chunk *before* RRF or weighted sum runs, or the merge quietly rewards redundancy.
+
+## Try it yourself
+
+The interactive figure and [`rag_hybrid.py`](/essays/retrieval-deep-dive/rag_hybrid.py) are built for poking at. Three experiments make the chapter's claims concrete in a few minutes.
+
+1. **Sweep RRF's `k` from 1 to 100.** In `rrf`, the constant `k` damps how much a top rank dominates. Call `rrf(dense_rank, sparse_rank, k=1)` and then `k=100` and reorder each time. At a tiny `k`, rank 1 in either list is overwhelmingly decisive (the gap between `1/2` and `1/3` is large), so the `E-4042` chunk that sparse ranks first jumps up to rank 2 in the merge; at a large `k`, all ranks flatten toward equal weight and the two lists blend more gently, settling it at rank 3. The paper's default of 60 sits deliberately in that calm upper region. Watch the code chunk slide between rank 2 and rank 3 as you turn the dial, and notice how *gentle* the whole effect is: `k` shapes the blend, it does not flip the outcome.
+2. **Flip alpha to find where `E-4042` reaches rank 1.** Call `weighted_fusion(dense, sparse, alpha=a)` for `a` stepping from 1.0 down to 0.0 and reorder each time. At `alpha=1.0` you have pure dense and the code chunk languishes at rank 5; as you lean toward sparse it climbs, reaching rank 1 once alpha drops to about 0.2. Record the exact crossover. That single number is the whole dense-versus-sparse trade-off made visible on one query.
+3. **Break `tokenize` and watch the code shatter.** Temporarily change the regex in `tokenize` to `re.findall(r"[a-z0-9]+", text.lower())` (dropping the `(?:-[a-z0-9]+)*` part), which splits on hyphens like a naive analyzer. Print `tokenize("Error E-4042")` before and after: you will see `["error", "e-4042"]` become `["error", "e", "4042"]`. Re-run the demo and watch the sparse ranking for `E-4042` degrade as the rare token dissolves into the common `4042`. This is the production failure from the tokenization section, reproduced in two characters of diff.
+
 ## Recap and what's next
 
 We started Part 7 with a working but naive app: pure dense retrieval and a fixed top-k, failing on a question whose answer was sitting right there. We now understand why. Dense retrieval is fluent in meaning but blurs exact tokens; sparse retrieval is precise on exact tokens but deaf to meaning; and because they fail in opposite directions, hybrid search fuses them, by weighted sum or by Reciprocal Rank Fusion, to get the best of both. We also promoted top-k from a hidden constant to a deliberate dial, with low recall on one side and noise and lost-in-the-middle on the other.
@@ -249,6 +298,12 @@ But even excellent retrieval only gets you a ranked list that is *roughly* right
 - **Top-k** is a real knob: too small misses the answer (low recall, starved generator); too large adds noise, wastes budget, and triggers **lost in the middle**.
 - The pattern that resolves the top-k tension is to retrieve generously, then **rerank** down to the best few, which is Part 8.
 
+## References
+
+- Robertson, S., & Zaragoza, H. (2009). *The Probabilistic Relevance Framework: BM25 and Beyond.* Foundations and Trends in Information Retrieval, 3(4), 333-389. [https://doi.org/10.1561/1500000019](https://doi.org/10.1561/1500000019): the definitive treatment of BM25, deriving its term-frequency saturation and document-length normalization from the probabilistic relevance model.
+- Cormack, G. V., Clarke, C. L. A., & Buettcher, S. (2009). *Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods.* SIGIR '09, 758-759. [https://doi.org/10.1145/1571941.1572114](https://doi.org/10.1145/1571941.1572114): the paper that introduced RRF; its pilot found k=60 near-optimal and noted the choice "was not critical," which is why 60 is the common default.
+- Liu, N. F., Lin, K., Hewitt, J., Paranjape, A., Bevilacqua, M., Petroni, F., & Liang, P. (2023). *Lost in the Middle: How Language Models Use Long Contexts.* [https://arxiv.org/abs/2307.03172](https://arxiv.org/abs/2307.03172): the empirical U-shaped accuracy curve cited for the top-k noise failure mode.
+
 ## Glossary
 
 - **Dense retrieval**: ranking chunks by cosine similarity between dense query and chunk embeddings; strong on meaning, weak on exact rare tokens.
@@ -263,7 +318,7 @@ But even excellent retrieval only gets you a ranked list that is *roughly* right
 - **Alpha (weighted combination)**: the knob in a weighted sum that trades dense against sparse (1 is all dense, 0 is all sparse).
 - **Reciprocal Rank Fusion (RRF)**: merging by rank rather than raw score, where each chunk earns 1/(k + rank) from each list; robust because it needs no normalization.
 - **Top-k**: the number of retrieved chunks kept and passed to the generator; a trade-off between recall and noise.
-- **Lost in the middle**: the tendency of language models to attend less to information in the middle of a long context, so a relevant chunk buried there can be effectively ignored.
+- **Lost in the middle**: the empirically measured tendency (Liu et al., 2023) for language models to use information in the middle of a long context less reliably than information at the start or end, so a relevant chunk buried there can be effectively ignored.
 
 ---
 
