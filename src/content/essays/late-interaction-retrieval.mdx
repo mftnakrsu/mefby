@@ -55,7 +55,7 @@ Each token vector is L2-normalized, meaning scaled to unit length, the small tri
 
 Now we need a single number that scores how well a bag of query-token vectors matches a bag of document-token vectors. The operation late interaction uses is **MaxSim**, and the rule is short enough to say in one sentence: for each query token, find its single best-matching document token, and then add up those best matches across all the query tokens.
 
-In numpy it is barely longer than the sentence. Here is the function exactly as it ships in [rag_maxsim.py](/essays/late-interaction-retrieval/rag_maxsim.py), the runnable companion for this part:
+In numpy it is barely longer than the sentence. Here is the function exactly as it ships in [late_interaction.py](/essays/late-interaction-retrieval/late_interaction.py), the runnable companion for this part:
 
 ```python
 import numpy as np
@@ -165,7 +165,7 @@ That `1.062` is not a claim about ColPali's real-world accuracy. It is a demonst
 
 ## Try it yourself
 
-The fastest way to feel why MaxSim behaves the way it does is to perturb the worked example in [rag_maxsim.py](/essays/late-interaction-retrieval/rag_maxsim.py) and watch the score move.
+The fastest way to feel why MaxSim behaves the way it does is to perturb the worked example in [late_interaction.py](/essays/late-interaction-retrieval/late_interaction.py) and watch the score move.
 
 - **Change a query token and watch MaxSim drop.** Edit the `QUERY` from `"E-4042 error"` to `"E-9999 error"`. The token `4042` no longer has an exact match anywhere in the exact-term document, so its row maximum collapses from about 1.0 to whatever weak cosine the hashing stand-in gives an unrelated token, and the exact-term document's MaxSim falls by roughly a full point. That one missing match is the difference between surfacing the right page and burying it: late interaction is only as good as the tokens your query actually shares with the document.
 - **Watch the score grow with query length.** Append a word to the query, say `"E-4042 error log"`, and notice the absolute MaxSim numbers go *up* across the board, because you are now summing four row-maxima instead of three. The ranking is still meaningful, but the raw scores are not comparable to the three-token query's. This is the second pitfall below, made concrete.

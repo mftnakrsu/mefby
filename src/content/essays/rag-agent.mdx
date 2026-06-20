@@ -59,7 +59,7 @@ The two retrievers are the same lexical retriever used across the whole series, 
 
 Now the heart of it. The controller is the part that decides, each turn, what to do next. In a production system the controller is a language model: you hand it the goal, the running transcript, and the tool palette, and it emits the next Thought and Action. In this artifact the controller is instead a small set of deterministic rules, and that choice is deliberate. It mirrors exactly how Part 15's `classify_complexity` was a rule block here and a trained model in production. The teaching value of a transparent rule policy is that you can read precisely why the agent took each step, with nothing hidden inside a model. The companion code keeps the real LLM path behind `generate()` (OpenAI active, Ollama and a claude-opus-4-8 variant in comments, the repo convention) and prints a banner when an API key is set, but it always falls through to the deterministic policy so the file runs anywhere.
 
-Here is the controller verbatim from the runnable artifact. It takes the goal and the list of prior steps and returns the next step as a Thought, a tool name, and an argument:
+Here is the controller verbatim from the runnable artifact, [rag_agent.py](/essays/rag-agent/rag_agent.py). It takes the goal and the list of prior steps and returns the next step as a Thought, a tool name, and an argument:
 
 ```python
 def controller(goal, transcript_steps):

@@ -59,7 +59,7 @@ Here is the ordinary, naive recipe we have used since Part 5. For each chunk, ru
 
 Late chunking flips the order of two operations. Instead of "chunk, then embed each chunk", it does "embed the whole document, then chunk the token vectors". Concretely: take the entire document, all four sentences as one long string, and run it through a **long-context encoder**, an embedding model whose context window is long enough to hold the whole document at once. The encoder produces one contextualized vector per token across the entire document. Because every token attended to every other token during that single forward pass, the token vectors sitting under chunk `[1]` have already absorbed information from "Alice" and "Acme" and "refund" elsewhere in the document. Only *after* that whole-document pass do we pool. We carve the token-vector sequence back into chunks by token offsets, and for each chunk we average just the token vectors belonging to it, producing one chunk vector.
 
-The pooling step is almost embarrassingly simple. Here is the function from the companion code ([late_vs_contextual_chunking.py](/essays/context-aware-chunking/late_vs_contextual_chunking.py), which scores all three approaches on this exact refund note), verbatim:
+The pooling step is almost embarrassingly simple. Here is the function from the companion code ([context_aware_chunking.py](/essays/context-aware-chunking/context_aware_chunking.py), which scores all three approaches on this exact refund note), verbatim:
 
 ```python
 def late_chunk(token_vecs, spans):
@@ -176,7 +176,7 @@ And the most useful thing to know: they compose. They fix the context-loss probl
 
 ## Try it yourself
 
-You do not need a long-context encoder to feel Contextual Retrieval work, because the text edit it makes is something you can do by hand. Open the companion code, [late_vs_contextual_chunking.py](/essays/context-aware-chunking/late_vs_contextual_chunking.py), and run it with no arguments. The offline path is deterministic, so you will get the numbers from the prose every time: under naive chunking the answer chunk `[1]` sits at rank 2, buried by the off-topic `[2]`, and both fixes lift it to rank 1.
+You do not need a long-context encoder to feel Contextual Retrieval work, because the text edit it makes is something you can do by hand. Open the companion code, [context_aware_chunking.py](/essays/context-aware-chunking/context_aware_chunking.py), and run it with no arguments. The offline path is deterministic, so you will get the numbers from the prose every time: under naive chunking the answer chunk `[1]` sits at rank 2, buried by the off-topic `[2]`, and both fixes lift it to rank 1.
 
 Now make the situating sentence yourself and watch the ranking move:
 

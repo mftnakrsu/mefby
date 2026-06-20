@@ -152,11 +152,21 @@ import re
 
 # Each string is a PARENT: a coherent section, the unit generation wants.
 PARENTS = [
-    "Refunds. We accept refunds within 30 days of purchase, as long as the "
-    "item is unused and in its original packaging. To start a return, email "
-    "support@example.com with your order number. Shipping fees are not refundable.",
-    "Exchanges. For a different size or color, request an exchange instead of a "
-    "refund. Exchanges ship free of charge. Final sale items cannot be returned.",
+    # parent 0
+    "Refunds. We accept refunds within 30 days of purchase. To qualify, the item "
+    "must be unused and in its original packaging. To start a return, email "
+    "support@example.com with your order number. Once we receive the item, your "
+    "refund is processed back to the original payment method within five business "
+    "days. Shipping fees are not refundable.",
+    # parent 1
+    "Exchanges. If you want a different size or color, request an exchange instead "
+    "of a refund. Exchanges ship free of charge. Items marked final sale cannot be "
+    "returned or exchanged. Gift cards are non-refundable and cannot be exchanged.",
+    # parent 2
+    "Warranty. All electronics include a one-year limited warranty that covers "
+    "manufacturing defects. The warranty does not cover accidental damage or normal "
+    "wear. To make a warranty claim, contact support with a photo of the defect and "
+    "your order number.",
 ]
 
 def split_sentences(text):                       # children are single sentences
@@ -173,7 +183,7 @@ for p_idx, parent in enumerate(PARENTS):
 The only new state is `child_to_parent`, a list as long as `children`, where entry *i* is the index of the parent that child *i* was carved from. Now the retrieval. In your real app, `child_scores` is Part 6's cosine-over-embeddings search run against the *child* vectors; the lookup at the end is what is new:
 
 ```python
-def retrieve_small_return_big(query, k_children=1):
+def retrieve_small_return_big(query, k_children=3):
     scores = child_scores(query)                 # Part 6 search, but over CHILDREN
     top = sorted(range(len(children)),
                  key=lambda i: scores[i], reverse=True)[:k_children]
