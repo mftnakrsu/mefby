@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Walk a multi-turn conversation: condense, then retrieve</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 20 (Conversational RAG)
+     Interactive stepped player: walk one 3-turn conversation, one turn at a
+     time, accumulating the chat thread. Each step reveals the raw user query,
+     the condensed standalone query, the retrieved chunk, and the grounded
+     answer. A "condensation: on / off" toggle re-runs turn 2 both ways
+     (off -> visible miss, rose; on -> hit, emerald). Data = the canonical
+     conversational_rag.py trace. Self-contained: no CDN, no web fonts, inline
+     SVG/CSS/JS only. Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --radius-card: 14px;
+    --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 320ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .vb { max-width: 900px; margin: 0 auto; }
+
+  .vb-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 14px; }
+  .vb-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .vb-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .vb-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* toggle bar + stats */
+  .vb-modebar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 4px 0 14px; }
+  .vb-toggle-wrap { display: inline-flex; align-items: center; gap: 10px; }
+  .vb-toggle-label { font-size: 13px; font-weight: 600; color: var(--body); }
+  .vb-modes { display: inline-flex; border: 1px solid var(--border); border-radius: 11px; padding: 3px; background: var(--surface-1); gap: 3px; }
+  .vb-mode {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--muted);
+    background: transparent; border: none; border-radius: 8px; padding: 7px 15px; cursor: pointer;
+    transition: background-color 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .vb-mode[aria-pressed="true"] { background: #fff; color: var(--heading); box-shadow: 0 1px 2px rgba(15,23,42,0.10); }
+  .vb-mode#modeOn[aria-pressed="true"] { color: #047857; }
+  .vb-mode#modeOff[aria-pressed="true"] { color: #be123c; }
+  .vb-mode:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); }
+
+  .vb-stats { display: flex; gap: 10px; margin-left: auto; }
+  .stat { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 7px 14px; min-width: 124px; }
+  .stat .s-label { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .stat .s-val { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--heading); line-height: 1.3; }
+  .vb.cond-on .s-cond { border-color: #a7f3d0; }
+  .vb.cond-on .s-cond .s-val { color: #047857; }
+  .vb.cond-off .s-cond { border-color: #fecdd3; }
+  .vb.cond-off .s-cond .s-val { color: #be123c; }
+
+  /* canvas: a memory rail, then the accumulating chat thread */
+  .vb-canvas {
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: radial-gradient(120% 100% at 50% -10%, var(--surface-1) 0%, var(--bg) 60%);
+    padding: 16px;
+  }
+
+  /* the rolling conversation-memory rail */
+  .mem-row {
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+    padding-bottom: 13px; margin-bottom: 14px; border-bottom: 1px dashed var(--border);
+  }
+  .mem-tag {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--violet);
+  }
+  .mem-chip {
+    font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+    color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe;
+    border-radius: 999px; padding: 3px 10px;
+    opacity: 0; transform: translateY(3px);
+    transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  }
+  .mem-chip.is-shown { opacity: 1; transform: none; }
+  .mem-empty { font-size: 12.5px; color: var(--muted); font-style: italic; }
+  .mem-empty.is-hidden { display: none; }
+
+  /* the accumulating chat thread */
+  .thread { display: flex; flex-direction: column; gap: 14px; min-height: 200px; }
+  .turn {
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: #fff; overflow: hidden;
+    opacity: 0; transform: translateY(6px);
+    transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease),
+                border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .turn.is-shown { opacity: 1; transform: none; }
+  .turn.is-current { border-color: #cbd5e1; box-shadow: 0 4px 14px rgba(15,23,42,0.07); }
+  .turn.is-current.t-hit { border-color: var(--emerald); box-shadow: 0 4px 14px rgba(16,185,129,0.16); }
+  .turn.is-current.t-miss { border-color: var(--rose); box-shadow: 0 4px 14px rgba(244,63,94,0.16); }
+
+  .turn-head {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 14px; background: var(--surface-1); border-bottom: 1px solid var(--border);
+  }
+  .turn-num {
+    font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--muted);
+    background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px;
+  }
+  .turn-kind { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); text-transform: uppercase; }
+
+  .turn-body { padding: 11px 14px 13px; display: flex; flex-direction: column; gap: 9px; }
+
+  /* one labelled stage line (raw / condensed / retrieved / answer) */
+  .stage { display: flex; gap: 9px; align-items: flex-start; }
+  .stage-rail {
+    flex: 0 0 auto; margin-top: 5px; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--border);
+  }
+  .stage.s-raw       .stage-rail { background: var(--amber); }
+  .stage.s-cond      .stage-rail { background: var(--cyan); }
+  .stage.s-cond.is-passthrough .stage-rail { background: var(--muted); }
+  .stage.s-ret       .stage-rail { background: var(--teal); }
+  .stage.s-ret.is-miss .stage-rail { background: var(--rose); }
+  .stage.s-ret.is-hit  .stage-rail { background: var(--emerald); }
+  .stage-tag {
+    flex: 0 0 auto; min-width: 92px;
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em;
+  }
+  .stage.s-raw  .stage-tag { color: #b45309; }
+  .stage.s-cond .stage-tag { color: #0e7490; }
+  .stage.s-ret  .stage-tag { color: #0f766e; }
+  .stage.s-ret.is-miss .stage-tag { color: #be123c; }
+  .stage.s-ret.is-hit  .stage-tag { color: #047857; }
+  .stage-content { font-size: 13.5px; color: var(--body); }
+
+  /* user "bubble" feel for the raw query */
+  .bubble {
+    display: inline-block; font-size: 13.5px; font-weight: 600; color: var(--heading);
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-chip);
+    padding: 6px 11px;
+  }
+  /* condensed standalone query (cyan) */
+  .standalone {
+    font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: #0e7490;
+    background: #ecfeff; border: 1px solid #a5f3fc; border-radius: var(--radius-chip);
+    padding: 6px 11px; display: inline-block;
+  }
+  .standalone.is-passthrough {
+    color: var(--muted); background: var(--surface-2); border-color: var(--border);
+  }
+  .stage-note { font-size: 11.5px; color: var(--muted); font-style: italic; margin-left: 4px; }
+  .stage-note.note-splice { color: var(--cyan); font-style: normal; font-weight: 600; }
+
+  /* retrieved chunk */
+  .chunk {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.55; color: var(--body);
+    background: var(--surface-1); border: 1px solid var(--border); border-left: 3px solid var(--teal);
+    border-radius: var(--radius-chip); padding: 8px 11px;
+  }
+  .chunk.is-miss { border-left-color: var(--rose); background: #fff1f2; }
+  .chunk.is-hit  { border-left-color: var(--emerald); background: #ecfdf5; }
+  .chunk-score { color: var(--muted); }
+  .verdict { font-size: 12px; font-weight: 700; margin-top: 2px; }
+  .verdict.v-miss { color: #be123c; }
+  .verdict.v-hit  { color: #047857; }
+
+  /* grounded answer */
+  .answer {
+    margin-top: 2px; font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: var(--radius-chip);
+    padding: 9px 12px;
+  }
+  .answer.is-miss { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
+
+  /* caption (aria-live) */
+  .vb-caption {
+    margin-top: 14px; display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius-card); padding: 13px 16px;
+  }
+  .vb-caption-dot {
+    flex: 0 0 auto; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 0 4px rgba(6,182,212,0.18);
+    transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .vb-caption-dot.is-done { background: var(--emerald); box-shadow: 0 0 0 4px rgba(16,185,129,0.18); }
+  .vb-caption-dot.is-miss { background: var(--rose); box-shadow: 0 0 0 4px rgba(244,63,94,0.18); }
+  .vb-caption-text { font-size: 14.5px; color: var(--body); }
+  .vb-caption-text b { color: var(--heading); }
+  .vb-caption-text code {
+    font-family: var(--mono); font-size: 12.5px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; color: var(--indigo-strong);
+  }
+
+  /* controls (shared with the series player) */
+  .ex-controls { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .ex-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ex-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease),
+                color 160ms var(--ease), transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .ex-btn svg { width: 15px; height: 15px; }
+  .ex-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .ex-btn:active { transform: translateY(1px); }
+  .ex-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); border-color: var(--indigo); }
+  .ex-btn.primary { color: #fff; background: var(--indigo-strong); border-color: var(--indigo-strong); }
+  .ex-btn.primary:hover { background: var(--indigo); border-color: var(--indigo); }
+  .ex-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .ex-status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .ex-stepcount { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ex-stepcount b { color: var(--heading); }
+  .ex-dots { display: flex; gap: 7px; }
+  .ex-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer;
+            transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .ex-dot:hover { background: #cbd5e1; }
+  .ex-dot.is-active { background: var(--cyan); transform: scale(1.35); }
+  .ex-dot.is-past { background: #a5f3fc; }
+  .ex-dot:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); }
+
+  .ex-hint { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .ex-hint kbd {
+    font-family: var(--mono); font-size: 11px; background: var(--surface-2);
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+    padding: 1px 5px; color: var(--body);
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .turn, .mem-chip, .vb-caption-dot, .ex-dot { transition: none !important; }
+    .turn { opacity: 1; transform: none; }
+    .mem-chip { opacity: 1; transform: none; }
+  }
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .vb-title { font-size: 19px; }
+    .vb-stats { margin-left: 0; width: 100%; }
+    .stat { flex: 1; min-width: 0; }
+    .ex-status { margin-left: 0; width: 100%; justify-content: space-between; }
+    .stage-tag { min-width: 76px; }
+    .vb-modebar { gap: 10px; }
+  }
+</style>
+</head>
+<body>
+  <main class="vb cond-on" aria-label="An interactive walk through a multi-turn conversational RAG exchange">
+    <header class="vb-head">
+      <span class="vb-eyebrow">RAG from First Principles &#183; Part 20</span>
+      <h1 class="vb-title">Walk a multi-turn conversation: condense, then retrieve</h1>
+      <p class="vb-sub">Step through one chat: each turn reveals the raw follow-up, the <b>condensed standalone query</b>, the retrieved chunk, and the grounded answer &mdash; accumulating like a thread.</p>
+    </header>
+
+    <div class="vb-modebar">
+      <div class="vb-toggle-wrap">
+        <span class="vb-toggle-label" id="toggleLabel">Condensation</span>
+        <div class="vb-modes" role="group" aria-labelledby="toggleLabel">
+          <button class="vb-mode" id="modeOn" type="button" aria-pressed="true">on</button>
+          <button class="vb-mode" id="modeOff" type="button" aria-pressed="false">off</button>
+        </div>
+      </div>
+      <div class="vb-stats">
+        <div class="stat s-cond"><span class="s-label">Condensation</span><span class="s-val" id="statCond">on</span></div>
+        <div class="stat"><span class="s-label">Turn</span><span class="s-val" id="statTurn">1 / 3</span></div>
+      </div>
+    </div>
+
+    <div class="vb-canvas">
+      <div class="mem-row" aria-label="Conversation memory: topics the condenser can read">
+        <span class="mem-tag">Memory</span>
+        <span class="mem-empty" id="memEmpty">empty &mdash; nothing said yet</span>
+        <span class="mem-chip" id="memChip1">topic: refund window</span>
+        <span class="mem-chip" id="memChip2">topic: damaged-items refund</span>
+      </div>
+
+      <div class="thread" id="thread"></div>
+    </div>
+
+    <div class="vb-caption">
+      <span class="vb-caption-dot" id="captionDot" aria-hidden="true"></span>
+      <p class="vb-caption-text" id="caption" aria-live="polite"></p>
+    </div>
+
+    <div class="ex-controls">
+      <div class="ex-btns">
+        <button class="ex-btn primary" id="btnPlay" aria-label="Play animation">
+          <span id="playIcon" aria-hidden="true"></span><span id="playText">Play</span>
+        </button>
+        <button class="ex-btn" id="btnBack" aria-label="Previous turn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="ex-btn" id="btnNext" aria-label="Next turn">
+          Next
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="ex-btn" id="btnRestart" aria-label="Restart from the beginning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="ex-status">
+        <span class="ex-stepcount" id="stepCount" aria-hidden="true">Turn 1 of 3</span>
+        <div class="ex-dots" id="dots" role="group" aria-label="Jump to turn"></div>
+      </div>
+    </div>
+
+    <p class="ex-hint">
+      <kbd>Space</kbd> play / pause &nbsp;&#183;&nbsp; <kbd>&#8592;</kbd> back &nbsp;&#183;&nbsp; <kbd>&#8594;</kbd> next &nbsp;&#183;&nbsp; toggle condensation <b>on</b> / <b>off</b> above to re-run turn 2
+    </p>
+    <p class="sr-only" id="liveExtra" aria-live="polite"></p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ====================================================================
+     The 3-turn conversation. Every raw query, condensed query, retrieved
+     chunk (and score), and answer string is copied verbatim from the
+     canonical conversational_rag.py trace. Turn 2 carries an alternate
+     "off" branch (condensation disabled): the raw follow-up is retrieved
+     as-is and misses, landing on the no-refund distractor chunk.
+     ==================================================================== */
+  var TURNS = [
+    {
+      num: 1, kind: "already standalone",
+      raw: "What's our refund window?",
+      condensed: "What's our refund window?",
+      passthrough: true,
+      condNote: "already standalone — no rewrite",
+      score: "0.41",
+      chunk: "Our refund window is 30 days from purchase, as long as the product is unused and in its original packaging.",
+      answer: "Our refund window is 30 days from purchase, as long as the product is unused and in its original packaging.",
+      caption: "<b>Turn 1 &mdash; already standalone.</b> A complete question on its own, so the condenser leaves it <b>alone</b> and passes it straight to the retriever. The right chunk wins: the refund window is <b>30 days</b>. The topic <code>refund</code> now enters memory."
+    },
+    {
+      num: 2, kind: "needs history",
+      raw: "What about damaged items?",
+      condensed: "refund policy for damaged items",
+      condNote: "spliced topic 'refund' from history",
+      splice: true,
+      score: "0.26",
+      chunk: "Merchandise that arrives damaged qualifies for a full refund even outside the usual window; email a photo to support@example.com.",
+      answer: "Merchandise that arrives damaged qualifies for a full refund even outside the usual window; email a photo to support@example.com.",
+      caption: "<b>Turn 2 &mdash; needs history.</b> <code>What about damaged items?</code> never says “refund,” so on its own it can't find a refund chunk. The condenser splices <code>refund</code> from memory → <code>refund policy for damaged items</code>, which lands on the <b>damaged-items refund</b> clause.",
+      off: {
+        condensed: "What about damaged items?",
+        condNote: "condensation OFF — the raw fragment hits the index",
+        score: "0.19",
+        chunk: "Damaged goods caused by customer misuse are not covered and must be replaced at full price.",
+        answer: "Damaged goods caused by customer misuse are not covered and must be replaced at full price.",
+        caption: "<b>Turn 2, condensation OFF &mdash; the miss.</b> The raw <code>What about damaged items?</code> goes to the index unchanged. With no “refund” in it, the closest match is the <b>no-refund misuse distractor</b> — the wrong chunk, the wrong answer. <b>This is the lesson:</b> toggle it back on."
+      }
+    },
+    {
+      num: 3, kind: "coreference",
+      raw: "And how long does that refund take to process?",
+      condensed: "how long does the refund take to process",
+      condNote: "resolved 'that' → refund",
+      score: "0.41",
+      chunk: "We process a refund back to your original card within five business days of receiving the return.",
+      answer: "We process a refund back to your original card within five business days of receiving the return.",
+      caption: "<b>Turn 3 &mdash; coreference.</b> <code>that</code> has no meaning to an index. The condenser resolves it against history — <code>that</code> → <b>the refund</b> — giving <code>how long does the refund take to process</code>. Back comes the timing: <b>five business days</b>."
+    }
+  ];
+
+  /* ---------- DOM refs ---------- */
+  var container   = document.querySelector(".vb");
+  var caption     = document.getElementById("caption");
+  var captionDot  = document.getElementById("captionDot");
+  var stepCount   = document.getElementById("stepCount");
+  var dotsWrap    = document.getElementById("dots");
+  var thread      = document.getElementById("thread");
+  var statCond    = document.getElementById("statCond");
+  var statTurn    = document.getElementById("statTurn");
+  var liveExtra   = document.getElementById("liveExtra");
+  var modeOn      = document.getElementById("modeOn");
+  var modeOff     = document.getElementById("modeOff");
+  var memEmpty    = document.getElementById("memEmpty");
+  var memChips    = [document.getElementById("memChip1"), document.getElementById("memChip2")];
+  var btnPlay     = document.getElementById("btnPlay");
+  var btnBack     = document.getElementById("btnBack");
+  var btnNext     = document.getElementById("btnNext");
+  var btnRestart  = document.getElementById("btnRestart");
+  var playIcon    = document.getElementById("playIcon");
+  var playText    = document.getElementById("playText");
+
+  var PLAY_ICON  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  /* ---------- step machine ---------- */
+  /* condense: "on" or "off"; only affects turn 2 */
+  var condense = "on", current = 0, dotEls = [], turnEls = [];
+
+  /* Resolve a turn's effective view depending on the condensation toggle. */
+  function view(t) {
+    if (condense === "off" && t.off) {
+      return {
+        raw: t.raw,
+        condensed: t.off.condensed,
+        condNote: t.off.condNote,
+        passthrough: true,        // no real rewrite happened
+        splice: false,
+        score: t.off.score,
+        chunk: t.off.chunk,
+        answer: t.off.answer,
+        caption: t.off.caption,
+        isMiss: true
+      };
+    }
+    return {
+      raw: t.raw,
+      condensed: t.condensed,
+      condNote: t.condNote,
+      passthrough: !!t.passthrough,
+      splice: !!t.splice,
+      score: t.score,
+      chunk: t.chunk,
+      answer: t.answer,
+      caption: t.caption,
+      isMiss: false
+    };
+  }
+
+  /* Build one chat-turn card (hidden until its turn is reached). */
+  function buildTurnCard(t) {
+    var v = view(t);
+    var card = document.createElement("div");
+    card.className = "turn" + (v.isMiss ? " t-miss" : " t-hit");
+
+    var head = document.createElement("div");
+    head.className = "turn-head";
+    head.innerHTML =
+      '<span class="turn-num">Turn ' + t.num + '</span>' +
+      '<span class="turn-kind">' + esc(t.kind) + '</span>';
+    card.appendChild(head);
+
+    var bodyEl = document.createElement("div");
+    bodyEl.className = "turn-body";
+
+    // raw user query (amber bubble)
+    var rawRow = document.createElement("div");
+    rawRow.className = "stage s-raw";
+    rawRow.innerHTML =
+      '<span class="stage-rail" aria-hidden="true"></span>' +
+      '<span class="stage-tag">User (raw)</span>' +
+      '<span class="stage-content"><span class="bubble">' + esc(v.raw) + '</span></span>';
+    bodyEl.appendChild(rawRow);
+
+    // condensed standalone query (cyan)
+    var condRow = document.createElement("div");
+    condRow.className = "stage s-cond" + (v.passthrough ? " is-passthrough" : "");
+    var noteClass = v.splice ? "stage-note note-splice" : "stage-note";
+    condRow.innerHTML =
+      '<span class="stage-rail" aria-hidden="true"></span>' +
+      '<span class="stage-tag">Condensed</span>' +
+      '<span class="stage-content">' +
+      '<span class="standalone' + (v.passthrough ? " is-passthrough" : "") + '">' + esc(v.condensed) + '</span>' +
+      '<span class="' + noteClass + '">[' + esc(v.condNote) + ']</span>' +
+      '</span>';
+    bodyEl.appendChild(condRow);
+
+    // retrieved chunk (teal / hit-emerald / miss-rose)
+    var retRow = document.createElement("div");
+    retRow.className = "stage s-ret" + (v.isMiss ? " is-miss" : " is-hit");
+    retRow.innerHTML =
+      '<span class="stage-rail" aria-hidden="true"></span>' +
+      '<span class="stage-tag">Retrieved</span>' +
+      '<span class="stage-content">' +
+      '<span class="chunk ' + (v.isMiss ? "is-miss" : "is-hit") + '">' +
+      esc(v.chunk) + ' <span class="chunk-score">(score=' + esc(v.score) + ')</span></span>' +
+      '<div class="verdict ' + (v.isMiss ? "v-miss" : "v-hit") + '">' +
+      (v.isMiss ? "→ MISS: the raw fragment never mentions refunds, so the index returns the wrong chunk."
+                : "→ HIT: the standalone query lands on the right chunk.") +
+      '</div>' +
+      '</span>';
+    bodyEl.appendChild(retRow);
+
+    // grounded answer
+    var ansRow = document.createElement("div");
+    ansRow.className = "stage";
+    ansRow.innerHTML =
+      '<span class="stage-rail" aria-hidden="true" style="background:' + (v.isMiss ? "#f43f5e" : "#10b981") + '"></span>' +
+      '<span class="stage-tag" style="color:' + (v.isMiss ? "#be123c" : "#047857") + '">Assistant</span>' +
+      '<span class="stage-content"><span class="answer' + (v.isMiss ? " is-miss" : "") + '">' + esc(v.answer) + '</span></span>';
+    bodyEl.appendChild(ansRow);
+
+    card.appendChild(bodyEl);
+    return card;
+  }
+
+  function buildThread() {
+    thread.innerHTML = "";
+    turnEls = [];
+    TURNS.forEach(function (t) {
+      var card = buildTurnCard(t);
+      thread.appendChild(card);
+      turnEls.push(card);
+    });
+  }
+
+  function buildDots() {
+    dotsWrap.innerHTML = "";
+    dotEls = [];
+    TURNS.forEach(function (t, idx) {
+      var b = document.createElement("button");
+      b.className = "ex-dot"; b.type = "button";
+      b.setAttribute("aria-label", "Go to turn " + (idx + 1) + " of " + TURNS.length);
+      b.addEventListener("click", function () { pause(); go(idx); });
+      dotsWrap.appendChild(b);
+      dotEls.push(b);
+    });
+  }
+
+  /* Reveal memory chips for turns ALREADY answered (topic enters memory after
+     a turn completes). Turn 1 -> chip 1 after; turn 2 -> chip 2 after. */
+  function setMemory(i) {
+    var shown = i; // number of completed prior turns whose topic is in memory
+    memEmpty.classList.toggle("is-hidden", shown > 0);
+    memChips.forEach(function (chip, ci) {
+      chip.classList.toggle("is-shown", ci < shown);
+    });
+  }
+
+  function tintCaptionDot(v, isLast) {
+    captionDot.classList.remove("is-done", "is-miss");
+    if (v.isMiss) captionDot.classList.add("is-miss");
+    else if (isLast) captionDot.classList.add("is-done");
+  }
+
+  function render(i) {
+    var t = TURNS[i];
+    var v = view(t);
+
+    // reveal cumulative thread, mark current
+    turnEls.forEach(function (card, ci) {
+      card.classList.toggle("is-shown", ci <= i);
+      card.classList.toggle("is-current", ci === i);
+    });
+
+    setMemory(i);
+
+    var isLast = (i === TURNS.length - 1);
+    tintCaptionDot(v, isLast);
+
+    var label = (condense === "off" && t.off) ? "condensation off" : "condensation on";
+    caption.innerHTML = '<span class="sr-only">Turn ' + (i + 1) + " of " + TURNS.length +
+      ", " + label + ". </span>" + v.caption;
+    stepCount.innerHTML = "Turn <b>" + (i + 1) + "</b> of " + TURNS.length;
+    statTurn.textContent = (i + 1) + " / " + TURNS.length;
+
+    dotEls.forEach(function (d, di) {
+      d.classList.toggle("is-active", di === i);
+      d.classList.toggle("is-past", di < i);
+      if (di === i) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+    });
+    btnBack.disabled = (i === 0);
+    btnNext.disabled = (i === TURNS.length - 1);
+  }
+
+  function go(i) {
+    current = Math.max(0, Math.min(TURNS.length - 1, i));
+    render(current);
+  }
+
+  /* Toggle condensation on/off. Only turn 2 differs; rebuild cards so the
+     turn-2 card reflects the active branch, and jump focus to turn 2 so the
+     contrast is immediately visible. */
+  function setCondense(mode, jumpToContrast) {
+    condense = mode;
+    container.classList.toggle("cond-on", mode === "on");
+    container.classList.toggle("cond-off", mode === "off");
+    modeOn.setAttribute("aria-pressed", mode === "on" ? "true" : "false");
+    modeOff.setAttribute("aria-pressed", mode === "off" ? "true" : "false");
+    statCond.textContent = mode;
+    buildThread();
+    if (jumpToContrast) {
+      current = 1; // turn 2 is where the contrast lives
+    }
+    render(current);
+    liveExtra.textContent = "Condensation " + mode + ". " +
+      (mode === "off" ? "Turn 2 now retrieves the raw follow-up and misses."
+                      : "Turn 2 condenses the follow-up and hits the damaged-items clause.");
+  }
+
+  /* ---------- playback ---------- */
+  var timer = null, playing = false, AUTO_MS = 3000;
+  function tick() {
+    if (current >= TURNS.length - 1) { pause(); return; }
+    go(current + 1);
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function play() {
+    if (reduceMotion || playing) return;
+    if (current >= TURNS.length - 1) go(0);
+    playing = true; setPlayButton();
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function pause() {
+    playing = false;
+    if (timer) { window.clearTimeout(timer); timer = null; }
+    setPlayButton();
+  }
+  function toggle() { playing ? pause() : play(); }
+  function setPlayButton() {
+    if (reduceMotion) {
+      playIcon.innerHTML = PLAY_ICON; playText.textContent = "Auto-play off";
+      btnPlay.setAttribute("aria-label", "Auto-play disabled (reduced motion)");
+      return;
+    }
+    playIcon.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    playText.textContent = playing ? "Pause" : "Play";
+    btnPlay.setAttribute("aria-label", playing ? "Pause animation" : "Play animation");
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /* ---------- wiring ---------- */
+  modeOn.addEventListener("click", function () { pause(); setCondense("on", true); });
+  modeOff.addEventListener("click", function () { pause(); setCondense("off", true); });
+  btnPlay.addEventListener("click", toggle);
+  btnNext.addEventListener("click", function () { pause(); go(current + 1); });
+  btnBack.addEventListener("click", function () { pause(); go(current - 1); });
+  btnRestart.addEventListener("click", function () { pause(); go(0); });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    var focused = container.contains(document.activeElement) && document.activeElement !== document.body;
+    if ((e.code === "Space" || e.key === " ") &&
+        !(e.target && e.target.closest && e.target.closest("button"))) {
+      e.preventDefault(); toggle();
+    } else if (e.key === "ArrowRight" && focused) { e.preventDefault(); pause(); go(current + 1); }
+    else if (e.key === "ArrowLeft" && focused) { e.preventDefault(); pause(); go(current - 1); }
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden) pause(); });
+
+  if (reduceMotion) {
+    btnPlay.disabled = true;
+    btnPlay.title = "Auto-play disabled (reduced motion). Use Next / Back.";
+  }
+
+  /* ---------- init ---------- */
+  buildDots();
+  setCondense("on", false);
+  setPlayButton();
+})();
+</script>
+</body>
+</html>
