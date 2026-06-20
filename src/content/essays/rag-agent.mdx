@@ -1,0 +1,224 @@
+---
+title: "Building a RAG Agent"
+description: "Part 16 of a from-scratch series on Retrieval-Augmented Generation and the opener of the Applied Track: take the agentic RAG that Part 10 only toured in prose (the ReAct loop, tool use, routing, multi-hop) and build a real agent by hand, with four tools, a reason/act/observe loop, an honest step budget, and three traces you can read line by line."
+date: 2026-06-22
+tags: ["RAG", "Agentic RAG", "ReAct", "Agents", "Tool Use", "Retrieval", "LLM", "AI"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-16-rag-agent"
+ogImage: "/og/rag-by-hand.png"
+seriesOrder: 16
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+*RAG from First Principles. Part 16 of the series, and the start of the Applied Track.*
+
+## What you'll learn
+
+For fifteen parts our pipeline decided its own shape only at the edges. Part 10 gave it control flow, Part 15 gave it a conductor, but the steps in between were always ours to wire up in advance. In this part we hand that wiring to the model. We will build a small **agent**: a system that, at every step, reads the running record of what it has done so far, thinks about what to do next, picks exactly one tool, observes the result, and loops, until it decides it is finished. The route is not fixed when we write the code. It is decided at run time, one step at a time. That loop has a name, **ReAct** (short for Reason plus Act), and Part 10 toured it in prose without ever running it: the multi-hop earbuds question, the four tools, the routing decision were all described and never executed. This part executes them. We will build four tools, a real reason/act/observe loop, an honest guard against looping forever, and three traces you can read line by line. I am not going to re-explain everything Part 10 covered about agentic RAG; I am going to build the thing it described.
+
+## Prerequisites
+
+This part sits on top of the retrieval machinery from the core series, so you will get the most from it if those pieces are already in your head. You need [Build Your First RAG](/essays/build-your-first-rag) (Part 6), because two of our four tools are retrievers and they are exactly the retrieve-then-use loop from there, just wrapped so an agent can call them. You need [Making Retrieval Smarter](/essays/making-retrieval-smarter) (Part 8) for the idea that a hard question often needs more than one retrieval, which is the seed of multi-hop. And you need [Advanced RAG Architectures](/essays/advanced-rag-architectures) (Part 10), because that is where the ReAct loop, tool use, query routing, and the multi-hop earbuds example were first introduced as prose. This part is the runnable version of that one. No new math. It is control flow and judgment, plus a few dozen lines of deterministic Python you could read in one sitting.
+
+## From a pipeline to an agent
+
+Every part so far has built a **pipeline**: a fixed sequence of steps we chose in advance. Embed the query, search the store, rerank, build a prompt, generate. Part 15 put a classifier in front of three such pipelines and let it pick one, but each pipeline was still a straight line we had drawn. An **agent** is different in one specific way. An agent does not run a route we drew. It runs a loop, and inside that loop a controller looks at the situation and chooses the next action itself. The shape of the run, how many steps it takes, which tools it calls and in what order, is not in the source code. It emerges at run time from a sequence of decisions the controller makes as it goes.
+
+The pattern we are building is **ReAct**, introduced by Yao and colleagues in "ReAct: Synergizing Reasoning and Acting in Language Models" (Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao, ICLR 2023, arXiv:2210.03629). The insight in that paper is small and powerful: interleave reasoning and acting in the same loop. Instead of asking a model to plan everything up front, or to act blindly without explaining itself, you let it alternate. It writes a **Thought** (a short line of reasoning about what to do next), then takes an **Action** (one tool call), then reads an **Observation** (the result the tool returned), and then loops back to a fresh Thought that can use what it just observed. Reasoning steers the acting; acting feeds the reasoning. That alternation is the whole idea, and it is what turns a flat pipeline into something that can chain its own steps.
+
+<Diagram number={1} caption="The reason/act/observe cycle. Each turn the controller emits a Thought (amber), picks one Action from the four-tool palette, and reads an Observation (cyan) before looping back to a fresh Thought. The two retrievers (search_policy, search_products) sit in teal; calculator is a non-retrieval tool; finish (emerald) is the one exit that ends the loop. The crucial point the figure makes is that the cycle is decided at run time: nothing in the code fixes how many times it turns or which tool each turn picks. The loop runs until finish is called or a step budget stops it.">
+  <img src="/essays/rag-agent/part16-react-loop.svg" alt="A circular loop diagram. At the top, an amber node labelled Thought (reason about what to do next) has an arrow into a node labelled Action (pick one tool), which fans down to a palette of four tools: search_policy and search_products in teal, both labelled retrieve a chunk; calculator, labelled evaluate arithmetic; and finish in emerald, labelled end the loop with the answer. The non-finish tools return an arrow up into a cyan node labelled Observation (the tool result), which loops back to Thought, closing the cycle. The finish tool instead points to an emerald exit node labelled Answer. A caption strip along the bottom reads: the route is decided at run time, not fixed in code; the loop turns until finish or a max-steps budget." class="w-full rounded-lg" />
+</Diagram>
+
+## The four tools
+
+An agent is only as capable as the things it can do, and the things it can do are its **tools**. A tool is just a named function the controller is allowed to call, with a documented argument and a result it returns. The agent never touches the underlying data directly; it can only act through this fixed set of functions, and each one hands back an Observation string the controller reads on the next turn. This is the idea usually called **tool use** or function calling. There is no single canonical paper for the provider-style function-calling APIs you use in practice today, since those are an API convention rather than a research result, but the early academic work on teaching language models to use tools is worth a nod: Toolformer (Schick and Dwivedi-Yu and colleagues, arXiv:2302.04761, 2023) showed a model learning to call tools in a self-supervised way. The deployed function-calling style differs from that approach, but it is useful background for where tool use came from.
+
+Our agent has four tools, and they were chosen to make a point about variety:
+
+1. **search_policy(query)** retrieves the single best chunk from the support and policy corpus we have carried since Parts 6 through 12: refunds, the E-4042 payment-declined error, shipping, warranty. This is a retriever, the familiar one.
+2. **search_products(query)** retrieves from a small new products source describing an acquisition and a warranty chain. It is deliberately split so that no single chunk holds both "who acquired Acme" and "the earbuds warranty," which is exactly what forces a real multi-hop later.
+3. **calculator(expr)** evaluates simple arithmetic. It exists to prove that not every question is a retrieval question. Some answers are computed, not looked up.
+4. **finish(answer)** terminates the loop with the final answer. Treating "stop" as a tool is a small, clean trick: the controller ends the run by choosing an action, the same way it does anything else.
+
+In the code these are ordinary Python functions collected into a registry, which is exactly the available-action palette a real LLM controller would be handed:
+
+```python
+TOOLS = {
+    "search_policy": search_policy,
+    "search_products": search_products,
+    "calculator": calculator,
+    "finish": finish,
+}
+```
+
+The two retrievers are the same lexical retriever used across the whole series, so the demo runs offline with no sentence-transformers download and no network call, and the chosen tools and observed facts are reproducible. There is a real dense-embedding path behind an environment flag, but it changes only the printed similarity scores; which tool the agent picks and which chunk it lands on are identical either way.
+
+## The loop: reason, act, observe, repeat
+
+Now the heart of it. The controller is the part that decides, each turn, what to do next. In a production system the controller is a language model: you hand it the goal, the running transcript, and the tool palette, and it emits the next Thought and Action. In this artifact the controller is instead a small set of deterministic rules, and that choice is deliberate. It mirrors exactly how Part 15's `classify_complexity` was a rule block here and a trained model in production. The teaching value of a transparent rule policy is that you can read precisely why the agent took each step, with nothing hidden inside a model. The companion code keeps the real LLM path behind `generate()` (OpenAI active, Ollama and a claude-opus-4-8 variant in comments, the repo convention) and prints a banner when an API key is set, but it always falls through to the deterministic policy so the file runs anywhere.
+
+Here is the controller verbatim from the runnable artifact. It takes the goal and the list of prior steps and returns the next step as a Thought, a tool name, and an argument:
+
+```python
+def controller(goal, transcript_steps):
+    """Decide the next ReAct step deterministically (the offline policy).
+
+    `transcript_steps` is the list of prior (thought, tool, arg, observation)
+    tuples. Returns (thought, tool_name, argument) for the next step.
+    """
+    g = goal.lower()
+    n = len(transcript_steps)
+
+    # --- No-retrieval branch: arithmetic. Compute once, then finish. ---------
+    pct = _PERCENT_RE.search(g)
+    if pct or ("%" in g and "of" in g) or "calculate" in g:
+        if n == 0:
+            rate, base = pct.group(1), pct.group(2)
+            expr = f"{float(rate) / 100} * {base}"
+            return ("This is arithmetic, not a knowledge lookup; use the calculator.",
+                    "calculator", expr)
+        value = transcript_steps[-1][3]               # the calculator observation
+        return ("I have the computed value; finish.",
+                "finish", f"18% of a $250 order is ${float(value):.2f}.")
+
+    # --- Multi-hop branch: an acquisition + downstream warranty question. -----
+    # NO single chunk holds both facts, so the agent must chain two retrievals:
+    # hop 1 finds WHO acquired Acme; hop 2 uses that name to find the warranty.
+    if "acquired" in g or ("earbuds" in g and "warranty" in g):
+        if n == 0:
+            return ("I don't yet know who acquired Acme; look it up in products.",
+                    "search_products", "who acquired Acme")
+        if n == 1:
+            # Read the hop-1 observation to learn the acquirer's name, then use
+            # it to phrase hop 2. THIS is multi-hop: an observation feeds the
+            # next action, which a single-pass pipeline can never do.
+            obs1 = transcript_steps[0][3]
+            acquirer = _acquirer_from(obs1)           # "Globex" from the obs text
+            return (f"Acme was acquired by {acquirer}; now find {acquirer}'s earbuds warranty.",
+                    "search_products", f"{acquirer} earbuds warranty")
+        obs2 = transcript_steps[1][3]
+        acquirer = _acquirer_from(transcript_steps[0][3])
+        return ("I have the warranty term for the earbuds; finish.",
+                "finish", f"The earbuds are made by {acquirer} (which acquired Acme), "
+                          f"and they carry a 2-year limited warranty.")
+
+    # --- Routing branch: a policy question goes to the POLICY index. ----------
+    if n == 0:
+        # Strip the question framing so retrieval scores the content words.
+        sub = re.sub(r"^(what'?s?|what is)\s+(our\s+)?", "", g).strip(" ?")
+        return ("This is a policy question; search the policy index.",
+                "search_policy", sub or goal)
+    obs = transcript_steps[-1][3]
+    return ("The policy chunk answers the question; finish.", "finish", obs)
+```
+
+The thing to notice is that every branch reads `transcript_steps`, the record of what has happened so far, to decide what to do next. That is what makes this a loop and not a straight line. The multi-hop branch in particular keys on `n`, the number of steps already taken: on step zero it has no idea who acquired Acme, so it searches; on step one it reads the answer out of the first observation and uses that name to phrase the second search; on step two it finishes. Each turn's decision depends on the previous turn's result. The rules here key on the same cheap signals a language model would weigh anyway: arithmetic in the goal sends it to the calculator, an acquisition-plus-warranty question sends it on a two-hop search, and anything else is treated as a policy lookup.
+
+Wrapping the controller is the loop itself, which is small enough to hold in your head. Each turn it asks the controller for the next Thought, tool, and argument, calls the tool, records the observation, and loops. There are exactly two ways out, and both are honest. The first is the controller choosing `finish`, the normal exit that returns the answer. The second is **termination by step budget**: if the loop runs `max_steps` turns without ever calling `finish`, it stops anyway. That second exit is not a nice-to-have. An agent loop can get stuck (repeating a failing action, oscillating between two states, or simply never deciding it is done) and the only reliable defense is a hard cap on the number of steps. Almost every production agent has one for exactly this reason. In the artifact the budget defaults to six, comfortably more than any of our three runs needs, and the loop prints an honest "step budget exhausted" line if it is ever hit.
+
+## Multi-hop, for real
+
+Here is the run that earns the whole part. The question is the exact one Part 10 used as prose and never executed: "what is the warranty on the earbuds made by the company that acquired Acme?" It cannot be answered by a single retrieval, and the reason is structural. The answer depends on a fact (which company acquired Acme) that you need before you can even phrase the second search (that company's earbuds warranty). No single chunk in the products corpus holds both, by design. A single-pass pipeline retrieves once against the whole sentence, pulls back a couple of individually-relevant chunks, and has no way to connect them. It might surface the acquisition fact or the warranty fact, but it cannot use the first to look up the second, because it only gets one look.
+
+The agent gets as many looks as it needs. Watch the trace:
+
+```text
+  Step 1
+    Thought: I don't yet know who acquired Acme; look it up in products.
+    Action: search_products("who acquired Acme")
+    Observation: Acme Corp was acquired by Globex in 2024. (score=0.58)
+  Step 2
+    Thought: Acme was acquired by Globex; now find Globex's earbuds warranty.
+    Action: search_products("Globex earbuds warranty")
+    Observation: Globex-branded wireless earbuds carry a 2-year limited warranty. (score=0.58)
+  Step 3
+    Thought: I have the warranty term for the earbuds; finish.
+    Action: finish("The earbuds are made by Globex (which acquired Acme), and they carry a 2-year limited warranty.")
+```
+
+Read step two carefully, because it is the entire concept of **multi-hop retrieval** in one line. The agent does not search for "Globex" because we wrote "Globex" anywhere. It searches for "Globex" because step one's observation told it that Globex acquired Acme, and the controller read that observation back out of the transcript to phrase the next query. An observation fed the next action. That feedback (one retrieval's result shaping the next retrieval's query) is the move a single-pass pipeline structurally cannot make, and it is why the agent answers a question the pipeline cannot. Three steps, two retrievals, one correct answer that chains Acme to Globex to the warranty term.
+
+<Diagram number={2} caption="The same earbuds question down two shapes. Left, a naive single-pass pipeline retrieves once against the whole sentence and pulls back chunks that are individually relevant but isolated: it surfaces the Acme acquisition fact and the warranty fact as separate, unconnected pieces and cannot bridge them, so it answers wrong or incomplete (rose). Right, the agent does hop one (who acquired Acme, returning Globex), then uses that result to phrase hop two (Globex earbuds warranty, returning 2 years), then finishes (emerald). The difference is chaining: the pipeline gets one look, the agent lets each observation steer the next query.">
+  <img src="/essays/rag-agent/part16-agent-vs-pipeline.svg" alt="A two-column comparison diagram. The shared question at the top reads: what is the warranty on the earbuds made by the company that acquired Acme? The left column, labelled single-pass pipeline, shows one Retrieve box feeding two isolated chunk cards: one saying Acme was acquired by Globex, one saying earbuds carry a 2-year warranty, drawn disconnected with a broken link between them, ending in a rose Answer box labelled wrong or incomplete: cannot connect Acme to Globex to warranty. The right column, labelled agent (ReAct), shows a vertical chain: hop 1, search_products who acquired Acme, returning Globex; an arrow carrying the word Globex down into hop 2, search_products Globex earbuds warranty, returning 2-year limited warranty; then an emerald finish box with the full grounded answer. A footer reads: the pipeline retrieves once and cannot chain; the agent lets each observation steer the next query." class="w-full rounded-lg" />
+</Diagram>
+
+The interactive figure below lets you step through this run yourself, and toggle to the no-retrieval run for contrast. Each press reveals the next Thought, Action, and Observation, highlights the tool being called, and accumulates the transcript, ending on finish.
+
+<Diagram number={3} caption="Step through the agent's trace. Use the mode toggle to switch between the multi-hop earbuds run and the no-retrieval calculator run, then walk it one step at a time. Each step reveals the next Thought, Action, and Observation, lights up the tool the agent calls, and adds the line to the running transcript; the multi-hop run ends after two chained searches and a finish, the calculator run after one computation and a finish, touching the index zero times.">
+  <IframeFigure
+    src="/essays/rag-agent/part16-agent-loop.html"
+    title="Interactive ReAct trace player. A mode toggle switches between two runs of the agent. In the multi-hop run, the goal is what is the warranty on the earbuds made by the company that acquired Acme; stepping forward shows the agent searching the products index for who acquired Acme (observing that Globex acquired Acme), then using that name to search for the Globex earbuds warranty (observing a 2-year limited warranty), then calling finish with the chained answer. In the no-retrieval run, the goal is what is 18 percent of a 250 dollar order; the agent calls the calculator with 0.18 times 250, observes 45, and calls finish with 45 dollars, never touching either index. Each step highlights the tool being called and appends the Thought, Action, and Observation to a running transcript, ending on finish."
+    height={760}
+  />
+</Diagram>
+
+## Routing, and when not to retrieve at all
+
+The other two runs make a quieter point that matters just as much: the agent decides not only how many times to retrieve, but whether to retrieve and which index to use. This is the agent doing **query routing**, the same idea Part 10 introduced, but now as a live decision rather than a description.
+
+The no-retrieval run is "what is 18% of a $250 order?" There is nothing to look up here. The answer is arithmetic, and the right tool is the calculator, not an index. The agent computes it and finishes:
+
+```text
+  Step 1
+    Thought: This is arithmetic, not a knowledge lookup; use the calculator.
+    Action: calculator("0.18 * 250")
+    Observation: 45.0
+  Step 2
+    Thought: I have the computed value; finish.
+    Action: finish("18% of a $250 order is $45.00.")
+```
+
+Two steps, zero retrievals. The agent touched neither index. That is the calculator tool justifying its place in the palette: it lets the agent recognize a question that retrieval would only get in the way of, and answer it directly. A RAG system that can only retrieve will gamely embed "18% of $250," search a policy store, and stuff irrelevant chunks into a prompt, paying for machinery the question never needed. An agent with a calculator simply does the arithmetic.
+
+The routing run is "what's our refund window?" This is a genuine policy question, and the agent sends it to the policy index rather than the products one:
+
+```text
+  Step 1
+    Thought: This is a policy question; search the policy index.
+    Action: search_policy("refund window")
+    Observation: Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging. (score=0.20)
+  Step 2
+    Thought: The policy chunk answers the question; finish.
+    Action: finish("Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.")
+```
+
+Two steps, one retrieval, and it landed on the right store on the first try. This is the contrast with the naive misroute Part 10 warned about: a system with two indexes that does not route will search the wrong one, or search both and hope, but an agent that reasons about the question first picks the policy index because the question is about policy. Across the three runs the agent picked a different path each time (two chained searches, a calculator call, a single routed lookup) and none of those paths was written into the code as a fixed route. Each one emerged from the controller's per-step decisions.
+
+## The honest caveats
+
+I would be doing you a disservice if I left you thinking agents are a free upgrade over pipelines. They are a real trade, and the trade is reliability for autonomy. Here is the honest framing, and notice there are no invented numbers in it, because the real characteristics follow directly from the loop's structure and need none.
+
+Because each step issues another controller call, a multi-step agent costs more tokens and more latency than a single retrieve-and-answer pass. Worse, that cost is not known in advance. A pipeline always runs the same fixed number of steps, so you can budget it exactly. An agent runs as many reasoning-and-acting cycles as the controller decides to take, which means the cost of any given query is variable and discovered only as the loop runs. For a simple question that might be two steps; for a tangled one it might be many more, and you do not know which until it happens.
+
+Agents can also get stuck. The same autonomy that lets the agent chain hops also lets it repeat a failing action over and over, oscillate between two states, or never decide it is done. None of these is exotic; they fall straight out of a loop whose iteration count is determined by the model rather than the code. This is precisely why production systems almost always impose a hard cap on the number of steps, the **step budget** we built into the loop. It is not a polish detail. It is the one guarantee that the agent terminates at all.
+
+And then there is debugging. A pipeline that returns a wrong answer fails in a place you can point to, because the steps are fixed. An agent that returns a wrong answer might have taken a path no one anticipated: a tool called with a malformed argument, an observation misread, a hop skipped. The transcript is your lifeline here, which is part of why ReAct's explicit Thought and Action and Observation lines are so valuable. They are not decoration; they are the trace you read when you need to know why the agent did what it did. Build your agent so that trace is always captured, because when something goes wrong it is the only thing that will tell you where.
+
+> 💡 **From experience.** The first agent I shipped had a research tool and a summarize tool, and I was proud of how it would chase a question across several sources. Then one weekend an on-call alert told me a single user session had burned through more tokens than the rest of the day's traffic combined. I pulled the transcript and watched the agent search, read a result it did not like, reword the query a fraction, search again, get a near-identical result, reword again, and loop like that for dozens of steps, slowly paraphrasing its way into the same wall. It never crashed and never errored. It was perfectly happy. There was no `finish` in sight because nothing in its little world told it the question was unanswerable from the sources it had, so it just kept trying. The fix was embarrassingly simple and I should have had it from day one: a hard step budget, plus a rule that if two consecutive searches returned substantially the same result the agent had to either finish or give up. The lesson I took was that an agent without a budget is not an agent, it is an open-ended bill, and the budget is the difference between a tool you can put in front of users and a science experiment you have to babysit.
+
+{/* author: swap the above for your own real first-person agent story if you have a better one, e.g. a deployed ReAct loop that repeated a failing tool call or never called finish and ran up token cost; keep the concrete failure (looping / over-calling) and the lesson that a hard step budget is non-negotiable, and keep it em-dash-free. */}
+
+## Key takeaways
+
+- An **agent** runs a loop, not a fixed pipeline. At each step a controller reads the running transcript, emits a Thought, picks one Action (a tool call), reads an Observation, and repeats. The shape of the run is decided at run time, not written into the code.
+- The pattern is **ReAct** (Reason plus Act): interleave a reasoning step and an acting step in the same loop so that reasoning steers the next action and each observation feeds the next thought. It is the runnable version of the agentic RAG Part 10 only described.
+- **Tools** are the named functions the agent may call. Ours are four: two retrievers (search_policy, search_products), a calculator (proving not every question is a retrieval), and finish (which ends the loop). The agent acts only through these.
+- **Multi-hop retrieval** is the move a single-pass pipeline cannot make: one retrieval's observation shapes the next retrieval's query. The earbuds question (Acme to Globex to warranty) needs two chained searches because no single chunk holds both facts.
+- The agent also does **query routing** as a live decision: arithmetic goes to the calculator and touches no index, a policy question goes to the policy store and not the products store, each chosen by reasoning about the question first.
+- Agents trade **reliability for autonomy**. They cost more tokens and latency than a single pass, the cost is variable and not known in advance, and they can get stuck looping or never finishing. A hard **step budget** is the non-negotiable guard, and the explicit transcript is what you debug with.
+
+## Glossary
+
+- **Agent**: a system that solves a goal by running a loop in which a controller chooses the next action itself at each step, rather than executing a fixed sequence of steps written in advance.
+- **ReAct loop**: the reason/act/observe cycle (Reason plus Act) in which the controller emits a Thought, takes one Action, reads an Observation, and repeats; reasoning and acting are interleaved so each steers the other.
+- **Tool use**: the mechanism by which an agent acts on the world, through a fixed set of named functions (tools) it is allowed to call, each with a documented argument and a returned result; also called function calling.
+- **Query routing**: the agent's decision about whether to retrieve at all and which index or tool to use for a given question, made by reasoning about the question before acting (arithmetic to the calculator, a policy question to the policy store).
+- **Multi-hop retrieval**: answering a question that needs more than one retrieval, where the result of an earlier retrieval is used to phrase a later one; the chained-search move a single-pass pipeline cannot perform.
+- **Termination / step budget**: the two ways an agent loop ends, namely the controller calling finish with the answer, or a hard maximum number of steps that stops the loop even if it never finishes; the step budget is the defense against an agent that loops forever.
+
+---
+
+That opens the Applied Track. We took the agentic RAG that Part 10 only toured and built it by hand: four tools, a real reason/act/observe loop, an honest step budget, and three traces that each chose their own path at run time. But our agent answered one question and stopped; it had no memory of anything said before. Real assistants live inside a conversation, where "what about the warranty?" only makes sense if you remember we were just talking about the earbuds. Part 17, Conversational RAG, is about that: carrying context across turns, rewriting follow-up questions into standalone ones, and retrieving against a dialogue rather than a single query. Bring the agent. It is about to start remembering.
