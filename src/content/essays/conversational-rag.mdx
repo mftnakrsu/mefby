@@ -1,0 +1,211 @@
+---
+title: "Conversational RAG"
+description: "Part 20 of a from-scratch series on Retrieval-Augmented Generation: give the one-shot agent a memory. Build multi-turn RAG by hand, where query condensation rewrites a context-dependent follow-up into a standalone question before retrieval, so 'what about damaged items?' finally finds the right chunk."
+date: 2026-06-26
+tags: ["RAG", "Conversational RAG", "Multi-turn", "Query Rewriting", "Memory", "Agents", "Retrieval", "LLM", "AI"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-20-conversational-rag"
+ogImage: "/og/rag-by-hand.png"
+seriesOrder: 20
+lang: "en"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 19 ended on a confession. We had built a real agent, a reason/act/observe loop that chained its own retrievals and chose its own path at run time, and then it answered one question and stopped. It had no memory of anything said before. That is fine for a search box, but it is not how anyone actually talks to an assistant. Real conversations are full of fragments that mean nothing on their own. You ask "what's our refund window?", get an answer, and then say "what about damaged items?" The second question is not a question at all unless you remember the first. Sent to a retriever exactly as typed, "what about damaged items?" never mentions refunds, so it cannot possibly find the refund clause. In this part we fix that by hand. We give the pipeline a **memory** of the conversation so far, and we build the one mechanism that turns that memory into useful retrieval: **query condensation**, which rewrites a context-dependent follow-up into a self-contained, standalone question before we ever touch the index. We will walk three turns of a single conversation, watch each follow-up get condensed, and put turn two side by side with and without condensation so you can see the exact failure that memory prevents. The raw fragment never touches the index. The standalone query does.
+
+## Prerequisites
+
+This part sits on the retrieval machinery from the core series, so it helps to have those pieces in your head. You need [Build Your First RAG](/essays/build-your-first-rag) (Part 6), because the retrieve-then-answer loop we are wrapping in a conversation is exactly the one from there. You need [Making Retrieval Smarter](/essays/making-retrieval-smarter) (Part 8), but with a sharp distinction I want to draw early, because the two are easy to confuse. Part 8's **query transformation** takes a query that already stands on its own and improves it: it expands a terse query, clarifies an ambiguous one, or splits a compound one, all to retrieve better. Condensation is a different job. It takes a query that does not stand on its own, a context-dependent fragment like "what about damaged items?", and makes it standalone by folding in the conversation history. Part 8 makes a good query better. Condensation makes a broken query whole. And you need [Building a RAG Agent](/essays/rag-agent) (Part 19), because the agent we built there is the thing we are now giving a memory. No new math here. It is text, history, and a rewrite step you can read line by line, plus a few dozen lines of deterministic Python.
+
+## The problem: single-shot RAG breaks on follow-ups
+
+Every retrieval system we have built so far treats each query as a fresh, complete thought. That assumption holds right up until the second message in a real chat. Picture a support assistant. The user asks "what's our refund window?" and the system does its job: it embeds the query, searches the store, finds the chunk that says refunds are accepted within thirty days, and answers. So far so good. Then the user types the most natural follow-up in the world: "what about damaged items?"
+
+Read that fragment the way the retriever has to read it, with no memory. It contains the words "damaged" and "items". It does not contain the word "refund". It does not contain "policy", or "return", or anything that ties it to the thread you were just on. If your knowledge base has a clause about merchandise that arrives damaged qualifying for a full refund, that clause is exactly what the user wants, but the fragment cannot find it, because the fragment never says "refund". Worse, if the base also has a clause about damaged goods caused by customer misuse that are not covered, the bare fragment matches that one better. It shares the word "damaged", it is short, and it is wrong. The user asked, in context, about refunds for damaged items, and a memoryless system confidently hands back the no-refund policy. That is not a small ranking miss. It is the opposite answer.
+
+The fix is not a bigger index or a better embedder. The right chunk is already sitting in the store. The problem is that the query we send to the store is missing the one word the conversation already established. So the fix is to read the conversation before we retrieve, and put that word back.
+
+## Query condensation: the core mechanism
+
+The mechanism is **query condensation**, also called history-aware query rewriting or standalone-question rewriting. Before retrieval, we rewrite the user's latest turn into a self-contained query using the conversation so far, then send the rewritten query, not the raw turn, to the retriever. "What about damaged items?", in a thread about refunds, condenses to "refund policy for damaged items". That standalone query mentions refunds, so it finds the damaged-items refund clause. The raw fragment is never what hits the index.
+
+It is worth being honest about where this pattern comes from, because it does not belong to a single paper. It is best understood as established practice. The names you will hear, query condensation, condense-question, history-aware retrieval, standalone-question rewriting, are practitioner and framework vocabulary that was popularized in production by conversational retrieval chains, most visibly LangChain's ConversationalRetrievalChain and its condense-question step, since refactored into a create-history-aware-retriever helper. Underneath the catchy names sits an academic line known as conversational query rewriting, where a context-dependent follow-up is rewritten into a self-contained query before retrieval. If you want a single light reference, CANARD (Elgohary and colleagues, EMNLP 2019) introduced question-in-context rewriting, turning a context-dependent question into a standalone one. The rewrite-then-retrieve mechanism predates all the catchy names, so I will not claim any one paper coined them.
+
+In this artifact the condenser is deterministic and rule-based. That is a deliberate teaching choice, exactly the one we made in Part 15 for `classify_complexity` and in Part 19 for the controller: a transparent rule block here, a trained model in production. The value of the rule version is that you can see precisely how each follow-up becomes a standalone query, with nothing hidden inside a model. With an API key set, the companion code's `generate()` and `build_condense_prompt()` show the real LLM condensation prompt, but the file always falls through to the deterministic rewriter so it runs offline, and `generate()` keeps OpenAI active with Ollama and a commented claude-opus-4-8 variant, the repo convention. Here is the heart of it, the rule rewriter, verbatim from the runnable artifact:
+
+```python
+def condense(conversation, follow_up):
+    """Rewrite a follow-up into a standalone query using the history.
+
+    Returns (standalone_query, note). `note` is a short, human-readable reason
+    that the trace prints so you can SEE why the query came out the way it did.
+    """
+    raw = follow_up.strip()
+    low = raw.lower()
+
+    # --- Turn 1 / no history: nothing to condense against. -------------------
+    if conversation.is_empty():
+        return raw, "already standalone -- no rewrite"
+
+    # We condense a follow-up when it is CONTEXT-DEPENDENT: an ellipsis
+    # ("what about ...?") or a dangling pronoun ("that"/"it"). We test those
+    # signals BEFORE the standalone check, because a question can mention the
+    # topic word and STILL dangle -- "how long does that refund take?" says
+    # "refund" yet "that" still needs resolving.
+    is_ellipsis = bool(_WHAT_ABOUT_RE.match(raw))
+    has_pronoun = bool(_PRONOUN_RE.search(raw))
+
+    # --- Already standalone: carries its own topic AND has no dangling
+    #     pronoun/ellipsis. Leave it alone -- splicing a stale topic into a
+    #     fresh question would pollute the retrieval (the "don't condense a
+    #     fresh question" caveat, enforced). ---------------------------------
+    if not is_ellipsis and not has_pronoun and any(t in low for t in _STANDALONE_MARKERS):
+        return raw, "already standalone -- no rewrite"
+
+    topic = _topic_from_history(conversation)
+    if not topic:
+        # Under-rewrite guard: with no recoverable topic we cannot safely fill
+        # the blank, so we pass the raw fragment through rather than invent one.
+        return raw, "no topic in history -- left as-is (would need clarification)"
+
+    # --- Ellipsis: "what about <X>?" -> "<topic> policy for <X>". ------------
+    if is_ellipsis:
+        tail = _WHAT_ABOUT_RE.match(raw).group(1).strip().rstrip("?")
+        standalone = f"{topic} policy for {tail}"
+        return standalone, f"spliced topic '{topic}' from history"
+
+    # --- Coreference: a pronoun ("that"/"it") -> the history topic. ----------
+    if has_pronoun:
+        pron = _PRONOUN_RE.search(raw).group(0)
+        # Replace the FIRST pronoun with the topic noun, then tidy: drop a
+        # leading "and", a trailing "?", and any doubled topic word the user
+        # already supplied ("that refund" -> "<topic> refund" -> "the refund").
+        resolved = _PRONOUN_RE.sub(topic, raw, count=1)
+        resolved = re.sub(r"^\s*and\s+", "", resolved, flags=re.IGNORECASE)
+        resolved = re.sub(rf"\b{topic}\s+{topic}\b", f"the {topic}", resolved,
+                          flags=re.IGNORECASE)
+        resolved = resolved.strip().rstrip("?")
+        return resolved, f"resolved '{pron}' -> {topic}"
+
+    # --- Fallback: prepend the topic so retrieval at least sees it. ----------
+    return f"{topic} {raw.rstrip('?')}", f"prepended topic '{topic}'"
+```
+
+The structure is a short ladder of guards, each returning a human-readable note so the trace tells you not just the rewritten query but why. Turn one, with no history, is left untouched. Then the rewriter checks two signals of context-dependence: an elliptical "what about ...?" shape, and a dangling pronoun like "that" or "it". If neither is present and the query already names a topic of its own, it is a fresh standalone question and is left alone, because forcing a stale topic into it would only pollute retrieval. Otherwise the rewriter recovers the topic from history, and if it cannot find one it passes the fragment through rather than invent a topic. With a topic in hand, an ellipsis splices it back in front of the leftover phrase, a pronoun is resolved to the topic noun, and anything else gets the topic prepended as a light hint. The standalone guard is the one to internalize, and I will come back to it: a question that stands on its own is left alone on purpose, because forcing a stale topic into it would break it.
+
+<Diagram number={1} caption="The history-aware pipeline, and why it matters. The conversation history (violet) carries the topic 'refund' from turn one. The raw follow-up 'what about damaged items?' (amber) enters the CONDENSE box, which splices that topic back in to produce the standalone query 'refund policy for damaged items' (cyan). The contrast is the lesson. The naive branch sends the raw fragment straight to Retrieve and lands on the wrong, no-refund chunk (rose), because 'damaged items' alone never mentions refunds. The condensed branch sends the standalone query and lands on the damaged-items refund clause (emerald). Same index, same retriever; the only difference is whether the query was condensed first.">
+  <img src="/essays/conversational-rag/part20-condensation.svg" alt="A pipeline diagram. On the left, a violet box labelled conversation history holds the topic refund from a prior turn, and an amber box holds the raw follow-up what about damaged items. Both feed into a central box labelled CONDENSE, which outputs a cyan box labelled standalone query: refund policy for damaged items. The diagram then splits into two branches that each reach a Retrieve box. The upper naive branch carries the raw amber fragment directly to Retrieve and ends in a rose chunk card reading damaged goods caused by customer misuse are not covered, labelled MISS, wrong chunk. The lower condensed branch carries the cyan standalone query to Retrieve and ends in an emerald chunk card reading merchandise that arrives damaged qualifies for a full refund, labelled HIT. A footer reads: same index, same retriever; the only difference is whether the query was condensed first." class="w-full rounded-lg" />
+</Diagram>
+
+## Conversation memory: the rolling transcript
+
+Condensation needs something to read, and that something is **conversation memory**: a rolling transcript of the turns so far, each one a pair of a role (user or assistant) and the text that role said. It is not a vector store and it is not retrieved against. It is just the running record of the dialogue, kept in order, that the condenser scans to recover the topic the latest turn left implicit. When the user says "what about damaged items?", the condenser looks back through this transcript, sees that the immediately prior exchange was about the refund window, and concludes that "refund" is the live topic to splice in.
+
+In the artifact this is a small helper, `_topic_from_history(conversation)`, that scans the recent turns newest first for a known topic noun, the topic the follow-up is hanging off of. It is deliberately simple: in a thread that has been about refunds, it returns "refund", and if it finds nothing it returns an empty string so the rewriter knows not to guess. A production condenser would not pull a single keyword; it would hand the whole transcript to a language model and let the model decide what the antecedent is. But the shape is identical either way. There is a memory of the conversation, and the rewrite step reads it. The memory is what makes turn two and turn three possible at all; without it, every turn would be an island, which is precisely the single-shot behavior we are trying to escape.
+
+One thing to flag now, because it becomes a caveat later: this transcript grows with every turn. A long conversation is a long history, and a condenser that naively reads all of it will start dragging in topics from twenty turns ago that have nothing to do with the current question. Production systems truncate the window to the last few turns, or summarize older turns into a compact running summary, so the history the condenser reads stays both relevant and bounded. We will come back to this.
+
+## Coreference and ellipsis: the two ways follow-ups hide their topic
+
+Follow-ups hide their topic in two main ways, and the condenser has a rule for each. The first is **ellipsis**: the user simply omits the topic, trusting you to carry it over. "What about damaged items?" is elliptical; the full thought is "what about the refund policy for damaged items?", and the user dropped everything except the new part. The condenser's `_WHAT_ABOUT_RE` branch catches the "what about ...?" shape, takes the leftover noun phrase ("damaged items"), and splices the topic back in front of it to rebuild "refund policy for damaged items". The dropped topic is restored from memory.
+
+The second is **coreference**: the user names the topic, but with a pronoun. Turn three of our conversation is "and how long does that refund take to process?" The word "that" is a pronoun pointing back at the refund we have been discussing. A retriever does not resolve pronouns; "that" carries no content for it to match. So the condenser's pronoun branch resolves the reference to its antecedent, the topic noun from history, turning the turn into "how long does the refund take to process". Now there is a real content word, "refund", for retrieval to land on, and it finds the chunk about processing a refund within five business days.
+
+The figure below lays the whole conversation out so you can see which fragments depend on history and which do not. Turn one stands on its own and is left untouched. Turns two and three each hang off the history, one by ellipsis, one by coreference, and each resolves to a standalone query that names the topic the raw turn only implied.
+
+<Diagram number={2} caption="A three-turn chat, and the standalone query each follow-up condenses to. On the left, the alternating user and assistant bubbles of one conversation, with the context-dependent fragments highlighted: turn two's elliptical 'what about ___ items?' and turn three's pronoun in 'how long does that refund take'. On the right, the resolved standalone query for each turn, with arrows running from each pronoun or ellipsis back to the history turn it resolves against. Turn one is already standalone and gets no rewrite. Turn two recovers its dropped topic by ellipsis; turn three resolves 'that' by coreference. The pattern is that a follow-up borrows the missing word from the turn it points back to.">
+  <img src="/essays/conversational-rag/part20-coreference.svg" alt="A two-column diagram. The left column is a chat transcript of alternating bubbles. Turn one, user: what's our refund window, with no highlight, marked already standalone. Assistant: refunds within 30 days. Turn two, user: what about damaged items, with what about ___ items highlighted in amber and marked ellipsis. Assistant: damaged items qualify for a full refund. Turn three, user: and how long does that refund take to process, with the word that highlighted in amber and marked coreference. The right column lists the resolved standalone query for each turn: turn one, what's our refund window (unchanged); turn two, refund policy for damaged items; turn three, how long does the refund take to process. Arrows run from the highlighted fragments in turns two and three back to the refund topic established in turn one's exchange, showing where each follow-up borrows its missing word." class="w-full rounded-lg" />
+</Diagram>
+
+## The three turns, end to end
+
+Here is the whole conversation as the artifact prints it: one thread, three turns, each showing the raw query, the condensed standalone query, the retrieved chunk, and the grounded answer. The knowledge base is the support corpus we have carried since Parts 6 through 12, with a damaged-items refund clause added so turn two has a real target, and a deliberate no-refund distractor so the contrast has teeth.
+
+```text
+TURN 1
+  user (raw):   What's our refund window?
+  condensed:    What's our refund window?   [already standalone -- no rewrite]
+  retrieved (score=0.41): Our refund window is 30 days from purchase, as long as the product is unused and in its original packaging.
+  assistant:    Our refund window is 30 days from purchase, as long as the product is unused and in its original packaging.
+
+TURN 2
+  user (raw):   What about damaged items?
+  condensed:    refund policy for damaged items   [spliced topic 'refund' from history]
+  retrieved (score=0.26): Merchandise that arrives damaged qualifies for a full refund even outside the usual window; email a photo to support@example.com.
+  assistant:    Merchandise that arrives damaged qualifies for a full refund even outside the usual window; email a photo to support@example.com.
+
+TURN 3
+  user (raw):   And how long does that refund take to process?
+  condensed:    how long does the refund take to process   [resolved 'that' -> refund]
+  retrieved (score=0.41): We process a refund back to your original card within five business days of receiving the return.
+  assistant:    We process a refund back to your original card within five business days of receiving the return.
+```
+
+Turn one is already standalone, so the condenser leaves it alone and retrieval lands on the refund-window chunk. Turn two is the ellipsis case: the raw fragment is condensed to "refund policy for damaged items", which now mentions refunds and lands on the damaged-items clause. Turn three is the coreference case: "that" resolves to "refund", and the condensed query finds the processing-time chunk. Three follow-ups, each underspecified in its own way, each made whole by reading the history first.
+
+Now the contrast that is the actual lesson, turn two run both ways:
+
+```text
+THE CONTRAST: turn 2 WITHOUT vs WITH condensation
+Follow-up: "What about damaged items?"  (history topic: refund)
+
+  WITHOUT condensation (retrieve the RAW follow-up):
+    retrieved (score=0.19): Damaged goods caused by customer misuse are not covered and must be replaced at full price.
+    -> MISS: 'damaged items' alone never mentions refunds, so the index returns the wrong chunk.
+
+  WITH condensation (retrieve "refund policy for damaged items"):
+    retrieved (score=0.26): Merchandise that arrives damaged qualifies for a full refund even outside the usual window; email a photo to support@example.com.
+    -> HIT: the spliced 'refund' topic lands the query on the damaged-items clause.
+```
+
+This is the whole argument in eight lines. Without condensation, the raw fragment shares only the word "damaged" with the corpus, and the chunk it shares it with most strongly is the no-refund misuse clause. The system answers that damaged items are not covered, which is the opposite of the truth in context. With condensation, the standalone query carries the word "refund" the conversation had already established, and lands on the clause that says damaged items qualify for a full refund. Same retriever, same index, same user intent. The only difference is whether we read the conversation before retrieving.
+
+The interactive figure lets you walk this for yourself. Step through the three turns and watch the chat thread accumulate, then flip the condensation toggle to re-run turn two both ways and see the miss turn into a hit.
+
+<Diagram number={3} caption="Step through the conversation turn by turn. Each press reveals the raw user query, the condensed standalone query, the retrieved chunk, and the grounded answer, accumulating into a chat thread the way a real session would. The condensation toggle re-runs turn two both ways: off, the raw 'what about damaged items?' retrieves the no-refund misuse clause and visibly misses (rose); on, the condensed 'refund policy for damaged items' lands on the damaged-items refund clause (emerald). The data is the canonical code's actual trace, so what you step through is exactly what the artifact prints.">
+  <IframeFigure
+    src="/essays/conversational-rag/part20-conversation.html"
+    title="Interactive conversational RAG player. A stepped player walks a three-turn support conversation. Turn one, the user asks what's our refund window; it is already standalone, retrieves the 30-day refund-window chunk, and answers. Turn two, the user asks what about damaged items; the player shows it condensing to refund policy for damaged items and retrieving the damaged-items full-refund clause. Turn three, the user asks how long does that refund take to process; the player resolves that to refund, condenses, and retrieves the five-business-day processing chunk. A condensation on/off toggle re-runs turn two: with condensation off, the raw what about damaged items retrieves the no-refund misuse clause and is marked a miss in rose; with condensation on, the condensed query retrieves the full-refund clause and is marked a hit in emerald. Each step reveals the raw query, the condensed query, the retrieved chunk, and the answer, accumulating into a running chat thread."
+    height={760}
+  />
+</Diagram>
+
+## When not to condense, and the honest caveats
+
+Condensation is a rewrite step on the critical path, and like the agent loop in Part 19, it is a real trade, not a free upgrade. There are no invented numbers in what follows, because the failure modes follow directly from the mechanism and need none.
+
+Start with the most important rule, the one the first branch of `condense` encodes: do not condense a genuinely fresh standalone question. If the user has been talking about refunds and then abruptly asks "how do I track my order?", that is a new, self-contained question. Splicing "refund" into it produces "refund how do I track my order", which is worse than the original, because now retrieval is being pulled toward a topic the user just abandoned. This is the **topic-switching** problem, and it is why conditioning on history is sometimes actively harmful. The rewriter has to recognize when a turn stands on its own and leave it alone. Our rule version does this by checking, before it ever looks up a topic, whether the query already carries one of its own (the `_STANDALONE_MARKERS` test) and has no dangling pronoun or ellipsis; if so it returns the query untouched. A model-based rewriter has to learn the same restraint, and when it fails to, it drags the conversation's stale topic into a question that had moved on.
+
+Then there is the rewrite itself, which can fail in two opposite directions. It can **over-rewrite**, inventing a constraint the user never expressed and narrowing retrieval to something the user did not ask for. Or it can **under-rewrite**, leaving the query still context-dependent, a dangling pronoun or an unresolved ellipsis, so retrieval matches only generic terms and misses. And the rewrite is itself a model call that can simply mangle the query. Sitting underneath both is **pronoun and coreference ambiguity**: when a turn says "it", there may be more than one thing "it" could refer to, and a wrong antecedent silently sends retrieval after the wrong entity. Nothing errors. You just get a confident answer about the wrong thing, which is the most expensive kind of bug because it is the hardest to notice.
+
+The **history window** is the other standing tension. Fold in too much prior context and you dilute retrieval with stale, off-topic turns; fold in too little and you drop the antecedent the current turn depends on. Because the transcript grows without bound, production systems truncate it to a recent window or summarize older turns, and where they draw that line is a real tuning decision, not a detail. Finally, remember that condensation adds latency and a new failure point on the critical path. A wrong rewrite poisons everything downstream, and errors now compound across three stages instead of two: rewrite, then retrieve, then read. The payoff is large, a one-shot retriever becomes a real conversation, but it is bought with an extra moving part you have to get right.
+
+> 💡 **From experience.** The first conversational assistant I shipped condensed too eagerly, and it took me an embarrassingly long afternoon to see why. A user had spent several turns deep in our billing flow, then switched gears completely and asked something like "and is there a mobile app?" My rewriter, proud of its memory, helpfully condensed that into a billing-flavored query, retrieved a chunk about invoice exports, and answered a question about the mobile app with a paragraph about downloading invoices. The user, reasonably, thought the bot was broken. What made it maddening was that the same rewriter was the hero on every follow-up that actually was a follow-up; it was only the topic switches it mangled. The fix was not to condense harder, it was to teach the thing to not condense, to recognize a self-contained question and pass it through untouched. I have trusted "leave it alone" as a first-class branch of every condenser I have built since. The rewrite that does the most damage is the one applied to a question that never needed it.
+
+{/* author: swap the above for your own real first-person conversational-RAG story if you have a better one, e.g. a chatbot that answered a follow-up against the wrong history topic, or a condenser that over-rewrote a fresh question, or a dangling pronoun that retrieved the wrong entity; keep the concrete failure and the lesson that not condensing is a real branch, and keep it em-dash-free. */}
+
+## Key takeaways
+
+- **Single-shot RAG breaks on follow-ups.** "What about damaged items?", sent to a retriever as typed, never mentions refunds, so it cannot find the refund clause and may match the opposite, a no-refund distractor. The right chunk is in the store; the query is missing the word the conversation already established.
+- **Query condensation** is the fix: before retrieving, rewrite the context-dependent follow-up into a self-contained standalone query using the history, and send that to the index. "What about damaged items?" becomes "refund policy for damaged items". The raw fragment never touches the index.
+- **Conversation memory** is the rolling transcript of (user, assistant) turns the condenser reads to recover the topic a follow-up left implicit. It is the difference between every turn being an island and the dialogue carrying context forward.
+- Follow-ups hide their topic by **ellipsis** (the topic is dropped, as in "what about ...?") and by **coreference** (the topic is named by a pronoun, as in "how long does that take?"). The condenser splices the dropped topic back in or resolves the pronoun to its antecedent from history.
+- **Do not condense a fresh standalone question.** On a topic switch, folding in the old topic pollutes a query that had moved on. Recognizing when to leave a turn alone is a first-class branch, not an afterthought.
+- The honest trade: condensation can over-rewrite (inventing a constraint) or under-rewrite (leaving a dangling pronoun); pronouns can be ambiguous; the history window grows without bound and must be truncated or summarized; and the rewrite adds latency and a new failure point, with errors compounding across rewrite, retrieve, and read.
+
+## Glossary
+
+- **Conversational RAG**: retrieval-augmented generation that operates inside a multi-turn dialogue, carrying context across turns so that follow-up questions which only make sense given the history are answered correctly, rather than treating each query as an isolated, complete thought.
+- **Query condensation**: the step, also called history-aware query rewriting or standalone-question rewriting, that rewrites a context-dependent follow-up into a self-contained standalone query using the conversation history, before retrieval, so the rewritten query is what hits the index.
+- **Conversation memory**: the rolling transcript of (user, assistant) turns kept in order, which the condenser reads to recover the topic a follow-up left implicit; not a vector store and not retrieved against, just the running record of the dialogue.
+- **Coreference**: a follow-up naming its topic with a pronoun ("that", "it", "this") that stands in for an antecedent established earlier in the conversation; the condenser resolves the pronoun to the topic noun so retrieval has a content word to match.
+- **Ellipsis**: a follow-up that omits its topic entirely, trusting the listener to carry it over ("what about damaged items?" for "what about the refund policy for damaged items?"); the condenser splices the dropped topic back in from history.
+- **History window**: the slice of prior turns the condenser is allowed to read; too wide dilutes retrieval with stale off-topic context, too narrow drops the antecedent the current turn needs, so production systems truncate to recent turns or summarize older ones to keep it relevant and bounded.
+
+---
+
+That closes the loop the last part left open. Part 19 built an agent that could reason and act but forgot every question the moment it answered it. Here we gave the pipeline a memory and the one mechanism that turns memory into retrieval: condense each follow-up into a standalone question, read the conversation before you read the index. Turn one stood on its own, turn two borrowed "refund" from history by ellipsis, and turn three resolved "that" by coreference, and across all three the raw fragment never touched the store. The standalone query did. That is the whole move, small and load-bearing, and it is what separates a search box from something you can actually talk to. If you want to revisit any thread of how we got here, from the first embedding to this conversation, the full series is collected at the [RAG from First Principles hub](/essays/rag). Bring the conversation. It remembers now.

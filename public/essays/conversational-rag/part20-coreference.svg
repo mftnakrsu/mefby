@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 660" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p20cr-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="p20cr-arr-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#06b6d4"/>
+    </marker>
+    <marker id="p20cr-arr-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b5cf6"/>
+    </marker>
+    <marker id="p20cr-arr-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="p20cr-arr-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="660" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">A follow-up means nothing on its own &#8212; condense it first</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">Each context-dependent turn is rewritten into a self-contained query against the history before it ever touches the index.</text>
+
+  <!-- column headers -->
+  <text x="64" y="104" font-size="11.5" font-weight="700" letter-spacing="0.05em" fill="#64748b">THE CONVERSATION &#183; RAW TURNS</text>
+  <text x="624" y="104" font-size="11.5" font-weight="700" letter-spacing="0.05em" fill="#64748b">CONDENSED &#183; STANDALONE QUERY TO THE INDEX</text>
+
+  <!-- ===================================================================== -->
+  <!-- LEFT: 3-turn chat transcript                                          -->
+  <!-- ===================================================================== -->
+
+  <!-- TURN 1 -->
+  <!-- user bubble (indigo) -->
+  <rect x="64" y="122" width="370" height="44" rx="14" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="80" y="140" font-size="9.5" font-weight="700" letter-spacing="0.05em" fill="#6366f1">USER &#183; TURN 1</text>
+  <text x="80" y="158" font-size="12.5" font-weight="600" fill="#0f172a">What's our refund window?</text>
+  <!-- assistant bubble (surface) -->
+  <rect x="170" y="174" width="376" height="44" rx="14" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <text x="186" y="192" font-size="9.5" font-weight="700" letter-spacing="0.05em" fill="#64748b">ASSISTANT</text>
+  <text x="186" y="210" font-size="11.5" fill="#334155">30 days from purchase, unused, original packaging.</text>
+
+  <!-- TURN 2 -->
+  <rect x="64" y="246" width="370" height="44" rx="14" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="80" y="264" font-size="9.5" font-weight="700" letter-spacing="0.05em" fill="#6366f1">USER &#183; TURN 2</text>
+  <text x="80" y="282" font-size="12.5" font-weight="600" fill="#0f172a">What about <tspan fill="#b45309" font-weight="700">damaged items</tspan>?</text>
+  <!-- ellipsis highlight underline -->
+  <rect x="156" y="287" width="206" height="3" rx="1.5" fill="#f59e0b"/>
+  <text x="80" y="302" font-size="9.5" font-style="italic" fill="#b45309">elliptical &#8212; "what about ___?" drops the topic</text>
+  <rect x="170" y="316" width="376" height="44" rx="14" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <text x="186" y="334" font-size="9.5" font-weight="700" letter-spacing="0.05em" fill="#64748b">ASSISTANT</text>
+  <text x="186" y="352" font-size="11.5" fill="#334155">Damaged-on-arrival items get a full refund.</text>
+
+  <!-- TURN 3 -->
+  <rect x="64" y="388" width="370" height="44" rx="14" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="80" y="406" font-size="9.5" font-weight="700" letter-spacing="0.05em" fill="#6366f1">USER &#183; TURN 3</text>
+  <text x="80" y="424" font-size="12.5" font-weight="600" fill="#0f172a">And how long does <tspan fill="#b45309" font-weight="700">that</tspan> refund take?</text>
+  <!-- coreference highlight underline (under "that") -->
+  <rect x="207" y="429" width="34" height="3" rx="1.5" fill="#f59e0b"/>
+  <text x="80" y="444" font-size="9.5" font-style="italic" fill="#b45309">coreference &#8212; "that" points back into history</text>
+  <rect x="170" y="458" width="376" height="44" rx="14" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <text x="186" y="476" font-size="9.5" font-weight="700" letter-spacing="0.05em" fill="#64748b">ASSISTANT</text>
+  <text x="186" y="494" font-size="11.5" fill="#334155">Back to your card within five business days.</text>
+
+  <!-- history-memory rail down the left edge of the transcript -->
+  <rect x="48" y="122" width="6" height="380" rx="3" fill="#8b5cf6"/>
+  <text x="40" y="540" font-size="10" font-weight="700" letter-spacing="0.05em" fill="#8b5cf6" transform="rotate(-90 40 540)">CONVERSATION MEMORY (ROLLING HISTORY)</text>
+
+  <!-- ===================================================================== -->
+  <!-- RIGHT: condensed standalone queries                                    -->
+  <!-- ===================================================================== -->
+
+  <!-- TURN 1: already standalone, no rewrite (emerald-passthrough) -->
+  <rect x="624" y="122" width="416" height="62" rx="14" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.8"/>
+  <rect x="624" y="122" width="5" height="62" rx="2.5" fill="#06b6d4"/>
+  <text x="644" y="146" font-size="10" font-weight="700" letter-spacing="0.04em" fill="#0e7490">STANDALONE QUERY &#183; TURN 1</text>
+  <text x="644" y="167" font-size="12.5" font-weight="700" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">What's our refund window?</text>
+  <g transform="translate(940,156)">
+    <rect x="0" y="-13" width="92" height="22" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+    <text x="46" y="2" font-size="9.5" font-weight="700" fill="#047857" text-anchor="middle">no rewrite</text>
+  </g>
+
+  <!-- TURN 2: condensed -->
+  <rect x="624" y="262" width="416" height="62" rx="14" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.8"/>
+  <rect x="624" y="262" width="5" height="62" rx="2.5" fill="#06b6d4"/>
+  <text x="644" y="286" font-size="10" font-weight="700" letter-spacing="0.04em" fill="#0e7490">STANDALONE QUERY &#183; TURN 2</text>
+  <text x="644" y="307" font-size="12.5" font-weight="700" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"><tspan fill="#0e7490">refund policy</tspan> for damaged items</text>
+  <g transform="translate(896,296)">
+    <rect x="0" y="-13" width="136" height="22" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="68" y="2" font-size="9.5" font-weight="700" fill="#b45309" text-anchor="middle">spliced 'refund'</text>
+  </g>
+
+  <!-- TURN 3: condensed -->
+  <rect x="624" y="402" width="416" height="62" rx="14" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.8"/>
+  <rect x="624" y="402" width="5" height="62" rx="2.5" fill="#06b6d4"/>
+  <text x="644" y="426" font-size="10" font-weight="700" letter-spacing="0.04em" fill="#0e7490">STANDALONE QUERY &#183; TURN 3</text>
+  <text x="644" y="447" font-size="12.5" font-weight="700" fill="#0f172a" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">how long does <tspan fill="#0e7490">the refund</tspan> take to process</text>
+  <g transform="translate(896,436)">
+    <rect x="0" y="-13" width="136" height="22" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="68" y="2" font-size="9.5" font-weight="700" fill="#b45309" text-anchor="middle">'that' &#8594; refund</text>
+  </g>
+
+  <!-- raw -> condensed flow arrows (per turn, slate, straight across) -->
+  <line x1="436" y1="153" x2="620" y2="153" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#p20cr-arr-slate)"/>
+  <text x="528" y="146" font-size="9.5" fill="#64748b" text-anchor="middle">passes through</text>
+
+  <line x1="436" y1="278" x2="620" y2="293" stroke="#06b6d4" stroke-width="2" marker-end="url(#p20cr-arr-cyan)"/>
+  <text x="528" y="277" font-size="9.5" font-weight="700" fill="#0e7490" text-anchor="middle">condense</text>
+
+  <line x1="436" y1="420" x2="620" y2="433" stroke="#06b6d4" stroke-width="2" marker-end="url(#p20cr-arr-cyan)"/>
+  <text x="528" y="416" font-size="9.5" font-weight="700" fill="#0e7490" text-anchor="middle">condense</text>
+
+  <!-- ===================================================================== -->
+  <!-- RESOLUTION ARROWS: each fragment back to the history turn it resolves   -->
+  <!-- against. Amber = the rewrite step pulling the antecedent from memory.   -->
+  <!-- ===================================================================== -->
+
+  <!-- Turn 2 ellipsis: "what about ___?" resolves against turn-1 topic (refund) -->
+  <!-- from the spliced 'refund policy' chip on the right, arc back to the turn-1 user bubble -->
+  <path d="M644,307 C540,360 470,250 434,176" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#p20cr-arr-amber)"/>
+  <rect x="468" y="338" width="150" height="20" rx="7" fill="#fffbeb" stroke="#f59e0b"/>
+  <text x="543" y="352" font-size="9.5" font-weight="700" fill="#b45309" text-anchor="middle">resolves vs. turn 1</text>
+
+  <!-- Turn 3 'that': resolves against turn-2 topic (the damaged-items refund) -->
+  <path d="M736,447 C600,510 470,360 416,294" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#p20cr-arr-amber)"/>
+  <rect x="470" y="556" width="150" height="20" rx="7" fill="#fffbeb" stroke="#f59e0b"/>
+  <text x="545" y="570" font-size="9.5" font-weight="700" fill="#b45309" text-anchor="middle">resolves vs. turn 2</text>
+
+  <!-- index target labels (teal) on the right -->
+  <text x="624" y="200" font-size="9.5" fill="#0f766e">&#8594; hits the refund-window clause</text>
+  <text x="624" y="340" font-size="9.5" fill="#0f766e">&#8594; hits the damaged-items refund clause</text>
+  <text x="624" y="480" font-size="9.5" fill="#0f766e">&#8594; hits the refund-timing clause</text>
+
+  <!-- ===================================================================== -->
+  <!-- bottom note                                                            -->
+  <!-- ===================================================================== -->
+  <rect x="40" y="592" width="1000" height="50" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <g transform="translate(72,617)">
+    <circle cx="0" cy="0" r="13" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.6"/>
+    <path d="M-6,0 L-2,5 L7,-6" fill="none" stroke="#0e7490" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="100" y="612" font-size="12.5" font-weight="700" fill="#0e7490">The raw fragment never touches the index &#8212; the standalone query does.</text>
+  <text x="100" y="630" font-size="11.5" fill="#334155">Turn 1 was already self-contained, so the condenser left it alone; turns 2&#8211;3 borrowed the missing topic from memory before retrieval.</text>
+</svg>

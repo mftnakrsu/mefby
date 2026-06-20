@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 640" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p20cd-arr-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b5cf6"/>
+    </marker>
+    <marker id="p20cd-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="p20cd-arr-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#06b6d4"/>
+    </marker>
+    <marker id="p20cd-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#14b8a6"/>
+    </marker>
+    <marker id="p20cd-arr-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#10b981"/>
+    </marker>
+    <marker id="p20cd-arr-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f43f5e"/>
+    </marker>
+    <marker id="p20cd-arr-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="640" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">History-aware condensation: rewrite the follow-up, then retrieve</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">A bare follow-up means nothing on its own. Fold in the conversation, condense to a standalone query, and the index finally hits the right clause.</text>
+
+  <!-- ===================================================================== -->
+  <!-- INPUTS: conversation history (violet) + raw follow-up (amber)          -->
+  <!-- ===================================================================== -->
+
+  <!-- Conversation history (violet) -->
+  <rect x="40" y="110" width="280" height="116" rx="14" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.8"/>
+  <text x="60" y="136" font-size="11.5" font-weight="700" letter-spacing="0.05em" fill="#7c3aed">CONVERSATION HISTORY</text>
+  <text x="60" y="160" font-size="10.5" fill="#7c3aed">U: What&#8217;s our refund window?</text>
+  <text x="60" y="178" font-size="10.5" fill="#7c3aed">A: 30 days from purchase&#8230;</text>
+  <line x1="60" y1="190" x2="300" y2="190" stroke="#ddd6fe" stroke-width="1.2"/>
+  <text x="60" y="210" font-size="10" font-style="italic" fill="#8b5cf6">rolling memory &#183; topic so far: refund</text>
+
+  <!-- Raw follow-up (amber) -->
+  <rect x="40" y="252" width="280" height="84" rx="14" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8"/>
+  <text x="60" y="278" font-size="11.5" font-weight="700" letter-spacing="0.05em" fill="#b45309">RAW FOLLOW-UP</text>
+  <text x="60" y="304" font-size="14" font-weight="700" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" fill="#b45309">&#8220;What about damaged items?&#8221;</text>
+  <text x="60" y="324" font-size="10" fill="#b45309">no &#8220;refund&#8221; word &#8212; context-dependent, underspecified</text>
+
+  <!-- arrows from inputs into CONDENSE -->
+  <path d="M320,168 C360,168 372,200 408,210" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#p20cd-arr-violet)"/>
+  <path d="M320,294 C360,294 372,262 408,252" fill="none" stroke="#f59e0b" stroke-width="2" marker-end="url(#p20cd-arr-amber)"/>
+
+  <!-- ===================================================================== -->
+  <!-- CONDENSE box (amber-rimmed rewrite step)                               -->
+  <!-- ===================================================================== -->
+  <rect x="416" y="186" width="176" height="92" rx="14" fill="#fff7ed" stroke="#f59e0b" stroke-width="2.4"/>
+  <text x="504" y="216" font-size="15" font-weight="700" fill="#b45309" text-anchor="middle">CONDENSE</text>
+  <text x="504" y="236" font-size="10" fill="#b45309" text-anchor="middle">resolve pronouns + ellipsis</text>
+  <text x="504" y="252" font-size="10" fill="#b45309" text-anchor="middle">splice the history topic in</text>
+  <text x="504" y="268" font-size="9.5" font-style="italic" fill="#92400e" text-anchor="middle">a query-rewrite model call</text>
+
+  <!-- CONDENSE -> standalone query (cyan) -->
+  <line x1="592" y1="232" x2="664" y2="232" stroke="#06b6d4" stroke-width="2.2" marker-end="url(#p20cd-arr-cyan)"/>
+
+  <!-- ===================================================================== -->
+  <!-- STANDALONE QUERY (cyan)                                                 -->
+  <!-- ===================================================================== -->
+  <rect x="672" y="190" width="368" height="84" rx="14" fill="#ecfeff" stroke="#06b6d4" stroke-width="2"/>
+  <text x="692" y="216" font-size="11.5" font-weight="700" letter-spacing="0.05em" fill="#0e7490">STANDALONE QUERY</text>
+  <text x="692" y="244" font-size="15" font-weight="700" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" fill="#0e7490">&#8220;refund policy for damaged items&#8221;</text>
+  <text x="692" y="263" font-size="10" fill="#0e7490">self-contained &#8212; this is what touches the index</text>
+
+  <!-- ===================================================================== -->
+  <!-- THE FORK: down to two retrieval branches                               -->
+  <!-- ===================================================================== -->
+
+  <!-- branch label -->
+  <text x="540" y="312" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#64748b" text-anchor="middle">TWO WAYS TO RETRIEVE THE SAME TURN</text>
+
+  <!-- NAIVE branch (rose): raw follow-up bypasses condensation -->
+  <!-- dashed shortcut from RAW follow-up straight down to naive retrieve -->
+  <path d="M180,336 C180,372 180,372 180,396" fill="none" stroke="#f43f5e" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#p20cd-arr-rose)"/>
+  <text x="196" y="372" font-size="9.5" font-weight="700" fill="#e11d48">skips condensation</text>
+
+  <!-- CONDENSED branch (cyan->teal): standalone query down to retrieve -->
+  <path d="M856,274 C856,330 600,340 600,396" fill="none" stroke="#06b6d4" stroke-width="2" marker-end="url(#p20cd-arr-cyan)"/>
+
+  <!-- ===================================================================== -->
+  <!-- NAIVE RETRIEVE -> MISS (rose)                                           -->
+  <!-- ===================================================================== -->
+  <g transform="translate(40,398)">
+    <rect width="470" height="170" rx="14" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.8"/>
+    <text x="20" y="28" font-size="12" font-weight="700" letter-spacing="0.04em" fill="#e11d48">NAIVE &#183; RETRIEVE THE RAW FOLLOW-UP</text>
+
+    <!-- retrieve chip -->
+    <rect x="20" y="44" width="120" height="40" rx="8" fill="#ffffff" stroke="#f43f5e"/>
+    <text x="80" y="69" font-size="12" font-weight="700" fill="#e11d48" text-anchor="middle">Retrieve</text>
+    <line x1="140" y1="64" x2="184" y2="64" stroke="#f43f5e" stroke-width="2" marker-end="url(#p20cd-arr-rose)"/>
+
+    <!-- wrong chunk -->
+    <rect x="190" y="42" width="262" height="44" rx="8" fill="#ffffff" stroke="#fda4af"/>
+    <text x="202" y="61" font-size="10" font-weight="700" fill="#e11d48">wrong chunk &#183; score 0.19</text>
+    <text x="202" y="77" font-size="9.5" fill="#9f1239">&#8220;Damaged goods by misuse are not covered&#8230;&#8221;</text>
+
+    <!-- miss answer -->
+    <rect x="20" y="104" width="432" height="48" rx="8" fill="#ffe4e6" stroke="#f43f5e"/>
+    <g transform="translate(44,128)">
+      <circle cx="0" cy="0" r="11" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.6"/>
+      <path d="M-4,-4 L4,4 M4,-4 L-4,4" fill="none" stroke="#e11d48" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <text x="66" y="124" font-size="11.5" font-weight="700" fill="#e11d48">MISS &#8212; the no-refund answer</text>
+    <text x="66" y="140" font-size="10" fill="#9f1239">&#8220;damaged items&#8221; alone never says refund, so the index returns the distractor.</text>
+  </g>
+
+  <!-- ===================================================================== -->
+  <!-- CONDENSED RETRIEVE -> HIT -> ANSWER (teal -> emerald)                   -->
+  <!-- ===================================================================== -->
+  <g transform="translate(570,398)">
+    <rect width="470" height="170" rx="14" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.8"/>
+    <text x="20" y="28" font-size="12" font-weight="700" letter-spacing="0.04em" fill="#0f766e">CONDENSED &#183; RETRIEVE THE STANDALONE QUERY</text>
+
+    <!-- retrieve chip -->
+    <rect x="20" y="44" width="120" height="40" rx="8" fill="#ffffff" stroke="#14b8a6"/>
+    <text x="80" y="69" font-size="12" font-weight="700" fill="#0f766e" text-anchor="middle">Retrieve</text>
+    <line x1="140" y1="64" x2="184" y2="64" stroke="#14b8a6" stroke-width="2" marker-end="url(#p20cd-arr-teal)"/>
+
+    <!-- right chunk -->
+    <rect x="190" y="42" width="262" height="44" rx="8" fill="#ffffff" stroke="#5eead4"/>
+    <text x="202" y="61" font-size="10" font-weight="700" fill="#0f766e">damaged-items clause &#183; score 0.26</text>
+    <text x="202" y="77" font-size="9.5" fill="#115e59">&#8220;Arrives damaged &#8594; full refund, email a photo&#8230;&#8221;</text>
+
+    <!-- grounded answer -->
+    <line x1="80" y1="86" x2="80" y2="100" stroke="#14b8a6" stroke-width="2" marker-end="url(#p20cd-arr-emerald)"/>
+    <rect x="20" y="104" width="432" height="48" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+    <g transform="translate(44,128)">
+      <circle cx="0" cy="0" r="11" fill="#ecfdf5" stroke="#10b981" stroke-width="1.6"/>
+      <path d="M-5,0 L-1.5,4 L6,-5" fill="none" stroke="#047857" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="66" y="124" font-size="11.5" font-weight="700" fill="#047857">HIT &#8212; the grounded answer</text>
+    <text x="66" y="140" font-size="10" fill="#065f46">The spliced &#8220;refund&#8221; topic lands the query on the right damaged-items clause.</text>
+  </g>
+
+  <!-- ===================================================================== -->
+  <!-- bottom note                                                           -->
+  <!-- ===================================================================== -->
+  <rect x="40" y="586" width="1000" height="40" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="60" y="611" font-size="11.5" fill="#334155"><tspan font-weight="700" fill="#0f172a">The raw fragment never touches the index &#8212; the standalone query does.</tspan>  Already-standalone turns are left alone; only context-dependent follow-ups get rewritten.</text>
+</svg>
