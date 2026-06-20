@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Walk the agent's reason/act/observe loop</title>
+<style>
+  /* ====================================================================
+     RAG from First Principles, Part 16 (Applied Track opener)
+     Interactive stepped player: walk the ReAct loop's trace, one step at a
+     time, accumulating the transcript. Mode toggle between the multi-hop run
+     and the no-retrieval calculator run (data = the canonical rag_agent.py
+     trace). Self-contained: no CDN, no web fonts, inline SVG/CSS/JS only.
+     Shares the exact design tokens used across the series.
+     ==================================================================== */
+  :root {
+    --bg: #ffffff;
+    --surface-1: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --heading: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --indigo: #6366f1;
+    --indigo-strong: #4f46e5;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --radius-card: 14px;
+    --radius-chip: 8px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur: 320ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  .vb { max-width: 900px; margin: 0 auto; }
+
+  .vb-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 14px; }
+  .vb-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo-strong); }
+  .vb-title { font-size: 21px; font-weight: 700; color: var(--heading); margin: 0; letter-spacing: -0.01em; }
+  .vb-sub { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* mode toggle + stats */
+  .vb-modebar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 4px 0 14px; }
+  .vb-modes { display: inline-flex; border: 1px solid var(--border); border-radius: 11px; padding: 3px; background: var(--surface-1); gap: 3px; }
+  .vb-mode {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--muted);
+    background: transparent; border: none; border-radius: 8px; padding: 7px 15px; cursor: pointer;
+    transition: background-color 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .vb-mode[aria-pressed="true"] { background: #fff; color: var(--heading); box-shadow: 0 1px 2px rgba(15,23,42,0.10); }
+  .vb-mode:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); }
+
+  .vb-stats { display: flex; gap: 10px; margin-left: auto; }
+  .stat { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 7px 14px; min-width: 116px; }
+  .stat .s-label { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .stat .s-val { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--heading); line-height: 1.3; }
+  .vb.mode-hop .s-mode { border-color: #99f6e4; }
+  .vb.mode-hop .s-mode .s-val { color: #0f766e; }
+  .vb.mode-calc .s-mode { border-color: #fde68a; }
+  .vb.mode-calc .s-mode .s-val { color: #b45309; }
+  .stat .s-val.is-done { color: var(--emerald); }
+
+  /* canvas: a question banner, the four-tool palette, then the transcript */
+  .vb-canvas {
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: radial-gradient(120% 100% at 50% -10%, var(--surface-1) 0%, var(--bg) 60%);
+    padding: 16px;
+  }
+
+  .goal-row {
+    display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+    padding-bottom: 13px; margin-bottom: 14px; border-bottom: 1px dashed var(--border);
+  }
+  .goal-tag {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .goal-text { font-size: 14.5px; font-weight: 600; color: var(--heading); }
+
+  /* the four-tool palette */
+  .palette { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .tool {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+    color: var(--muted); background: #fff;
+    border: 1.5px solid var(--border); border-radius: var(--radius-chip);
+    padding: 6px 11px;
+    transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+                color var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+                transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  }
+  .tool .tool-swatch {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--border);
+    transition: background var(--dur) var(--ease);
+  }
+  .tool[data-tool="search_policy"]   .tool-swatch { background: #5eead4; }
+  .tool[data-tool="search_products"] .tool-swatch { background: #5eead4; }
+  .tool[data-tool="calculator"]      .tool-swatch { background: #c4b5fd; }
+  .tool[data-tool="finish"]          .tool-swatch { background: #6ee7b7; }
+  /* dimmed when this run never uses the tool */
+  .tool.is-off { opacity: 0.4; }
+  /* lit when the current step calls this tool */
+  .tool.is-active { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(15,23,42,0.08); }
+  .tool[data-tool="search_policy"].is-active,
+  .tool[data-tool="search_products"].is-active {
+    color: #0f766e; border-color: var(--teal); background: #f0fdfa;
+  }
+  .tool[data-tool="calculator"].is-active {
+    color: #6d28d9; border-color: var(--violet); background: #f5f3ff;
+  }
+  .tool[data-tool="finish"].is-active {
+    color: #047857; border-color: var(--emerald); background: #ecfdf5;
+  }
+  .tool.is-active .tool-swatch { box-shadow: 0 0 0 3px rgba(20,184,166,0.18); }
+  .tool[data-tool="calculator"].is-active .tool-swatch { box-shadow: 0 0 0 3px rgba(139,92,246,0.18); }
+  .tool[data-tool="finish"].is-active .tool-swatch { box-shadow: 0 0 0 3px rgba(16,185,129,0.18); }
+
+  /* the accumulating transcript */
+  .transcript { display: flex; flex-direction: column; gap: 12px; min-height: 180px; }
+  .tx-step {
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: #fff; overflow: hidden;
+    opacity: 0; transform: translateY(6px);
+    transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease),
+                border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .tx-step.is-shown { opacity: 1; transform: none; }
+  .tx-step.is-current { border-color: #cbd5e1; box-shadow: 0 4px 14px rgba(15,23,42,0.07); }
+  .tx-step.is-finish.is-current { border-color: var(--emerald); box-shadow: 0 4px 14px rgba(16,185,129,0.16); }
+
+  .tx-head {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 14px; background: var(--surface-1); border-bottom: 1px solid var(--border);
+  }
+  .tx-step.is-finish .tx-head { background: #ecfdf5; border-bottom-color: #a7f3d0; }
+  .tx-num {
+    font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--muted);
+    background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px;
+  }
+  .tx-step.is-finish .tx-num { color: #047857; border-color: #a7f3d0; background: #fff; }
+  .tx-kind { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); text-transform: uppercase; }
+  .tx-step.is-finish .tx-kind { color: #047857; }
+
+  .tx-body { padding: 11px 14px 13px; display: flex; flex-direction: column; gap: 9px; }
+  .tx-line { display: flex; gap: 9px; align-items: flex-start; }
+  .tx-rail {
+    flex: 0 0 auto; margin-top: 5px; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--border);
+  }
+  .tx-line.l-thought .tx-rail { background: var(--amber); }
+  .tx-line.l-action  .tx-rail { background: var(--teal); }
+  .tx-line.l-action.a-calc  .tx-rail { background: var(--violet); }
+  .tx-line.l-action.a-finish .tx-rail { background: var(--emerald); }
+  .tx-line.l-obs     .tx-rail { background: var(--cyan); }
+  .tx-tag {
+    flex: 0 0 auto; min-width: 78px;
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em;
+  }
+  .tx-line.l-thought .tx-tag { color: #b45309; }
+  .tx-line.l-action  .tx-tag { color: #0f766e; }
+  .tx-line.l-action.a-calc  .tx-tag { color: #6d28d9; }
+  .tx-line.l-action.a-finish .tx-tag { color: #047857; }
+  .tx-line.l-obs     .tx-tag { color: #0e7490; }
+  .tx-content { font-size: 13.5px; color: var(--body); }
+  .tx-line.l-thought .tx-content { font-style: italic; color: #334155; }
+  .tx-line.l-action .tx-content,
+  .tx-line.l-obs .tx-content { font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
+  .tx-line.l-action .tx-content { color: var(--heading); font-weight: 600; }
+  .tx-line.l-action .tx-content .tx-call { color: #0f766e; }
+  .tx-line.l-action.a-calc .tx-content .tx-call { color: #6d28d9; }
+  .tx-line.l-action.a-finish .tx-content .tx-call { color: #047857; }
+  .tx-line.l-obs .tx-content { color: var(--body); }
+  .tx-score { color: var(--muted); }
+  .tx-answer {
+    margin-top: 2px; font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: var(--radius-chip);
+    padding: 9px 12px;
+  }
+
+  /* caption (aria-live) */
+  .vb-caption {
+    margin-top: 14px; display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius-card); padding: 13px 16px;
+  }
+  .vb-caption-dot {
+    flex: 0 0 auto; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--teal); box-shadow: 0 0 0 4px rgba(20,184,166,0.18);
+    transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .vb.mode-calc .vb-caption-dot { background: var(--violet); box-shadow: 0 0 0 4px rgba(139,92,246,0.18); }
+  .vb-caption-dot.is-thought { background: var(--amber); box-shadow: 0 0 0 4px rgba(245,158,11,0.18); }
+  .vb-caption-dot.is-obs { background: var(--cyan); box-shadow: 0 0 0 4px rgba(6,182,212,0.18); }
+  .vb-caption-dot.is-done { background: var(--emerald); box-shadow: 0 0 0 4px rgba(16,185,129,0.18); }
+  .vb-caption-text { font-size: 14.5px; color: var(--body); }
+  .vb-caption-text b { color: var(--heading); }
+  .vb-caption-text code {
+    font-family: var(--mono); font-size: 12.5px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; color: var(--indigo-strong);
+  }
+
+  /* controls (shared with the series player) */
+  .ex-controls { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .ex-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ex-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--body);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease),
+                color 160ms var(--ease), transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .ex-btn svg { width: 15px; height: 15px; }
+  .ex-btn:hover { background: var(--surface-1); border-color: #cbd5e1; }
+  .ex-btn:active { transform: translateY(1px); }
+  .ex-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); border-color: var(--indigo); }
+  .ex-btn.primary { color: #fff; background: var(--indigo-strong); border-color: var(--indigo-strong); }
+  .ex-btn.primary:hover { background: var(--indigo); border-color: var(--indigo); }
+  .ex-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .ex-status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .ex-stepcount { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ex-stepcount b { color: var(--heading); }
+  .ex-dots { display: flex; gap: 7px; }
+  .ex-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer;
+            transition: background-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .ex-dot:hover { background: #cbd5e1; }
+  .ex-dot.is-active { background: var(--teal); transform: scale(1.35); }
+  .ex-dot.is-past { background: #99f6e4; }
+  .vb.mode-calc .ex-dot.is-active { background: var(--violet); }
+  .vb.mode-calc .ex-dot.is-past { background: #ddd6fe; }
+  .ex-dot:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); }
+
+  .ex-hint { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .ex-hint kbd {
+    font-family: var(--mono); font-size: 11px; background: var(--surface-2);
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+    padding: 1px 5px; color: var(--body);
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tx-step, .tool, .tool .tool-swatch, .vb-caption-dot, .ex-dot { transition: none !important; }
+    .tx-step { opacity: 1; transform: none; }
+  }
+  @media (max-width: 560px) {
+    body { padding: 16px; }
+    .vb-title { font-size: 19px; }
+    .vb-stats { margin-left: 0; width: 100%; }
+    .stat { flex: 1; min-width: 0; }
+    .ex-status { margin-left: 0; width: 100%; justify-content: space-between; }
+    .tx-tag { min-width: 64px; }
+  }
+</style>
+</head>
+<body>
+  <main class="vb mode-hop" aria-label="An interactive walk through a RAG agent's reason, act, observe loop">
+    <header class="vb-head">
+      <span class="vb-eyebrow">RAG from First Principles &#183; Part 16</span>
+      <h1 class="vb-title">Walk the agent's reason/act/observe loop</h1>
+      <p class="vb-sub">Step through the trace: each step the agent thinks, picks one tool, reads the observation, and loops &mdash; until it calls <code style="font-family:var(--mono)">finish()</code>.</p>
+    </header>
+
+    <div class="vb-modebar">
+      <div class="vb-modes" role="group" aria-label="Which run to walk">
+        <button class="vb-mode" id="modeHop" type="button" aria-pressed="true">Multi-hop run</button>
+        <button class="vb-mode" id="modeCalc" type="button" aria-pressed="false">Calculator run</button>
+      </div>
+      <div class="vb-stats">
+        <div class="stat s-mode"><span class="s-label">Run</span><span class="s-val" id="statMode">multi-hop</span></div>
+        <div class="stat"><span class="s-label">Retrievals</span><span class="s-val" id="statHits">0</span></div>
+      </div>
+    </div>
+
+    <div class="vb-canvas">
+      <div class="goal-row">
+        <span class="goal-tag">Goal</span>
+        <span class="goal-text" id="goalText"></span>
+      </div>
+
+      <div class="palette" id="palette" role="list" aria-label="The four tools the agent can call">
+        <span class="tool" data-tool="search_policy" role="listitem"><span class="tool-swatch" aria-hidden="true"></span>search_policy</span>
+        <span class="tool" data-tool="search_products" role="listitem"><span class="tool-swatch" aria-hidden="true"></span>search_products</span>
+        <span class="tool" data-tool="calculator" role="listitem"><span class="tool-swatch" aria-hidden="true"></span>calculator</span>
+        <span class="tool" data-tool="finish" role="listitem"><span class="tool-swatch" aria-hidden="true"></span>finish</span>
+      </div>
+
+      <div class="transcript" id="transcript"></div>
+    </div>
+
+    <div class="vb-caption">
+      <span class="vb-caption-dot" id="captionDot" aria-hidden="true"></span>
+      <p class="vb-caption-text" id="caption" aria-live="polite"></p>
+    </div>
+
+    <div class="ex-controls">
+      <div class="ex-btns">
+        <button class="ex-btn primary" id="btnPlay" aria-label="Play animation">
+          <span id="playIcon" aria-hidden="true"></span><span id="playText">Play</span>
+        </button>
+        <button class="ex-btn" id="btnBack" aria-label="Previous step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          Back
+        </button>
+        <button class="ex-btn" id="btnNext" aria-label="Next step">
+          Next
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="ex-btn" id="btnRestart" aria-label="Restart from the beginning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="ex-status">
+        <span class="ex-stepcount" id="stepCount" aria-hidden="true">Step 1 of 3</span>
+        <div class="ex-dots" id="dots" role="group" aria-label="Jump to step"></div>
+      </div>
+    </div>
+
+    <p class="ex-hint">
+      <kbd>Space</kbd> play / pause &nbsp;&#183;&nbsp; <kbd>&#8592;</kbd> back &nbsp;&#183;&nbsp; <kbd>&#8594;</kbd> next &nbsp;&#183;&nbsp; toggle <b>Multi-hop</b> / <b>Calculator</b> run above
+    </p>
+    <p class="sr-only" id="liveExtra" aria-live="polite"></p>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ====================================================================
+     The two runs. Every Thought / Action / Observation / answer string is
+     copied verbatim from the canonical rag_agent.py trace (runs (a) and (b)).
+     Each step lists the lines it reveals; `tool` is which palette chip lights.
+     ==================================================================== */
+  var RUNS = {
+    hop: {
+      label: "multi-hop",
+      goal: "what is the warranty on the earbuds made by the company that acquired Acme?",
+      usesTools: ["search_products", "finish"],
+      steps: [
+        {
+          num: 1, tool: "search_products", kind: "Reason → Act → Observe",
+          lines: [
+            { type: "thought", text: "I don't yet know who acquired Acme; look it up in products." },
+            { type: "action", tool: "search_products", arg: "who acquired Acme" },
+            { type: "obs", text: "Acme Corp was acquired by Globex in 2024.", score: "0.58" }
+          ],
+          caption: "<b>Hop 1 — who acquired Acme?</b> The agent thinks, then picks <code>search_products</code>. The observation comes back: <b>Globex</b> acquired Acme. One fact down; it still doesn't know the warranty."
+        },
+        {
+          num: 2, tool: "search_products", kind: "Reason → Act → Observe",
+          lines: [
+            { type: "thought", text: "Acme was acquired by Globex; now find Globex's earbuds warranty." },
+            { type: "action", tool: "search_products", arg: "Globex earbuds warranty" },
+            { type: "obs", text: "Globex-branded wireless earbuds carry a 2-year limited warranty.", score: "0.58" }
+          ],
+          caption: "<b>Hop 2 — chain the observation forward.</b> The first observation (“Globex”) feeds the second action. This is the multi-hop a single-pass pipeline can't do: the new query is <code>Globex earbuds warranty</code>, and back comes <b>2 years</b>."
+        },
+        {
+          num: 3, tool: "finish", kind: "Finish", isFinish: true,
+          lines: [
+            { type: "thought", text: "I have the warranty term for the earbuds; finish." },
+            { type: "action", tool: "finish", arg: "The earbuds are made by Globex (which acquired Acme), and they carry a 2-year limited warranty." }
+          ],
+          answer: "The earbuds are made by Globex (which acquired Acme), and they carry a 2-year limited warranty.",
+          caption: "<b>Finish.</b> Both facts are in hand, so the agent calls <code>finish(…)</code> and the loop stops. <b>3 steps, 2 retrievals</b> — chained at run time, not wired at author time."
+        }
+      ]
+    },
+    calc: {
+      label: "no-retrieval",
+      goal: "what is 18% of a $250 order?",
+      usesTools: ["calculator", "finish"],
+      steps: [
+        {
+          num: 1, tool: "calculator", kind: "Reason → Act → Observe",
+          lines: [
+            { type: "thought", text: "This is arithmetic, not a knowledge lookup; use the calculator." },
+            { type: "action", tool: "calculator", arg: "0.18 * 250" },
+            { type: "obs", text: "45.0" }
+          ],
+          caption: "<b>Not everything is retrieval.</b> The agent recognizes arithmetic and reaches for <code>calculator</code> instead of an index. The observation is the computed value, <code>45.0</code> — the index is touched zero times."
+        },
+        {
+          num: 2, tool: "finish", kind: "Finish", isFinish: true,
+          lines: [
+            { type: "thought", text: "I have the computed value; finish." },
+            { type: "action", tool: "finish", arg: "18% of a $250 order is $45.00." }
+          ],
+          answer: "18% of a $250 order is $45.00.",
+          caption: "<b>Finish.</b> With the value computed, the agent calls <code>finish(…)</code>. <b>2 steps, 0 retrievals</b> — the same loop, a different route, decided at run time."
+        }
+      ]
+    }
+  };
+
+  /* ---------- DOM refs ---------- */
+  var container   = document.querySelector(".vb");
+  var caption     = document.getElementById("caption");
+  var captionDot  = document.getElementById("captionDot");
+  var stepCount   = document.getElementById("stepCount");
+  var dotsWrap    = document.getElementById("dots");
+  var transcript  = document.getElementById("transcript");
+  var goalText    = document.getElementById("goalText");
+  var palette     = document.getElementById("palette");
+  var statMode    = document.getElementById("statMode");
+  var statHits    = document.getElementById("statHits");
+  var liveExtra   = document.getElementById("liveExtra");
+  var modeHop     = document.getElementById("modeHop");
+  var modeCalc    = document.getElementById("modeCalc");
+  var btnPlay     = document.getElementById("btnPlay");
+  var btnBack     = document.getElementById("btnBack");
+  var btnNext     = document.getElementById("btnNext");
+  var btnRestart  = document.getElementById("btnRestart");
+  var playIcon    = document.getElementById("playIcon");
+  var playText    = document.getElementById("playText");
+  var toolEls     = {};
+  Array.prototype.forEach.call(palette.querySelectorAll(".tool"), function (t) {
+    toolEls[t.getAttribute("data-tool")] = t;
+  });
+
+  var PLAY_ICON  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  /* ---------- step machine ---------- */
+  var mode = "hop", current = 0, dotEls = [], stepEls = [];
+
+  function run() { return RUNS[mode]; }
+  function steps() { return run().steps; }
+
+  /* Build one transcript card (hidden until its step is reached). */
+  function buildStepCard(st) {
+    var card = document.createElement("div");
+    card.className = "tx-step" + (st.isFinish ? " is-finish" : "");
+
+    var head = document.createElement("div");
+    head.className = "tx-head";
+    head.innerHTML =
+      '<span class="tx-num">Step ' + st.num + '</span>' +
+      '<span class="tx-kind">' + st.kind + '</span>';
+    card.appendChild(head);
+
+    var bodyEl = document.createElement("div");
+    bodyEl.className = "tx-body";
+    st.lines.forEach(function (ln) {
+      var row = document.createElement("div");
+      if (ln.type === "thought") {
+        row.className = "tx-line l-thought";
+        row.innerHTML =
+          '<span class="tx-rail" aria-hidden="true"></span>' +
+          '<span class="tx-tag">Thought</span>' +
+          '<span class="tx-content">' + esc(ln.text) + '</span>';
+      } else if (ln.type === "action") {
+        var aClass = ln.tool === "calculator" ? " a-calc" : (ln.tool === "finish" ? " a-finish" : "");
+        row.className = "tx-line l-action" + aClass;
+        row.innerHTML =
+          '<span class="tx-rail" aria-hidden="true"></span>' +
+          '<span class="tx-tag">Action</span>' +
+          '<span class="tx-content"><span class="tx-call">' + esc(ln.tool) +
+          '</span>("' + esc(ln.arg) + '")</span>';
+      } else { // obs
+        row.className = "tx-line l-obs";
+        var scoreHtml = ln.score ? ' <span class="tx-score">(score=' + esc(ln.score) + ')</span>' : "";
+        row.innerHTML =
+          '<span class="tx-rail" aria-hidden="true"></span>' +
+          '<span class="tx-tag">Observation</span>' +
+          '<span class="tx-content">' + esc(ln.text) + scoreHtml + '</span>';
+      }
+      bodyEl.appendChild(row);
+    });
+    if (st.answer) {
+      var ans = document.createElement("div");
+      ans.className = "tx-answer";
+      ans.textContent = "Answer: " + st.answer;
+      bodyEl.appendChild(ans);
+    }
+    card.appendChild(bodyEl);
+    return card;
+  }
+
+  function buildTranscript() {
+    transcript.innerHTML = "";
+    stepEls = [];
+    steps().forEach(function (st) {
+      var card = buildStepCard(st);
+      transcript.appendChild(card);
+      stepEls.push(card);
+    });
+  }
+
+  function buildDots() {
+    dotsWrap.innerHTML = "";
+    dotEls = [];
+    steps().forEach(function (st, idx) {
+      var b = document.createElement("button");
+      b.className = "ex-dot"; b.type = "button";
+      b.setAttribute("aria-label", "Go to step " + (idx + 1) + " of " + steps().length);
+      b.addEventListener("click", function () { pause(); go(idx); });
+      dotsWrap.appendChild(b);
+      dotEls.push(b);
+    });
+  }
+
+  function setPalette() {
+    var uses = run().usesTools;
+    Object.keys(toolEls).forEach(function (name) {
+      toolEls[name].classList.toggle("is-off", uses.indexOf(name) === -1);
+    });
+  }
+
+  function tintCaptionDot(st) {
+    captionDot.classList.remove("is-thought", "is-obs", "is-done");
+    if (st.isFinish) captionDot.classList.add("is-done");
+    else captionDot.classList.add("is-obs");
+  }
+
+  function countHits(uptoIdx) {
+    var n = 0;
+    for (var i = 0; i <= uptoIdx; i++) {
+      var t = steps()[i].tool;
+      if (t === "search_policy" || t === "search_products") n++;
+    }
+    return n;
+  }
+
+  function render(i) {
+    var st = steps()[i];
+
+    // reveal cumulative transcript, mark current
+    stepEls.forEach(function (card, ci) {
+      card.classList.toggle("is-shown", ci <= i);
+      card.classList.toggle("is-current", ci === i);
+    });
+
+    // light the active tool chip
+    Object.keys(toolEls).forEach(function (name) {
+      toolEls[name].classList.toggle("is-active", name === st.tool);
+    });
+
+    // stats
+    var hits = countHits(i);
+    statHits.textContent = String(hits);
+    statHits.classList.toggle("is-done", st.isFinish);
+
+    tintCaptionDot(st);
+    caption.innerHTML = '<span class="sr-only">' + run().label +
+      " run, step " + (i + 1) + " of " + steps().length + ". </span>" + st.caption;
+    stepCount.innerHTML = "Step <b>" + (i + 1) + "</b> of " + steps().length;
+
+    dotEls.forEach(function (d, di) {
+      d.classList.toggle("is-active", di === i);
+      d.classList.toggle("is-past", di < i);
+      if (di === i) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+    });
+    btnBack.disabled = (i === 0);
+    btnNext.disabled = (i === steps().length - 1);
+  }
+
+  function go(i) {
+    current = Math.max(0, Math.min(steps().length - 1, i));
+    render(current);
+  }
+
+  function setMode(m) {
+    pause();
+    mode = m;
+    container.classList.toggle("mode-hop", m === "hop");
+    container.classList.toggle("mode-calc", m === "calc");
+    modeHop.setAttribute("aria-pressed", m === "hop" ? "true" : "false");
+    modeCalc.setAttribute("aria-pressed", m === "calc" ? "true" : "false");
+    goalText.textContent = run().goal;
+    statMode.textContent = run().label;
+    setPalette();
+    buildTranscript();
+    buildDots();
+    go(0);
+    liveExtra.textContent = (m === "hop" ? "Multi-hop" : "Calculator") + " run.";
+  }
+
+  /* ---------- playback ---------- */
+  var timer = null, playing = false, AUTO_MS = 2800;
+  function tick() {
+    if (current >= steps().length - 1) { pause(); return; }
+    go(current + 1);
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function play() {
+    if (reduceMotion || playing) return;
+    if (current >= steps().length - 1) go(0);
+    playing = true; setPlayButton();
+    timer = window.setTimeout(tick, AUTO_MS);
+  }
+  function pause() {
+    playing = false;
+    if (timer) { window.clearTimeout(timer); timer = null; }
+    setPlayButton();
+  }
+  function toggle() { playing ? pause() : play(); }
+  function setPlayButton() {
+    if (reduceMotion) {
+      playIcon.innerHTML = PLAY_ICON; playText.textContent = "Auto-play off";
+      btnPlay.setAttribute("aria-label", "Auto-play disabled (reduced motion)");
+      return;
+    }
+    playIcon.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    playText.textContent = playing ? "Pause" : "Play";
+    btnPlay.setAttribute("aria-label", playing ? "Pause animation" : "Play animation");
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+  }
+
+  /* ---------- wiring ---------- */
+  modeHop.addEventListener("click", function () { setMode("hop"); });
+  modeCalc.addEventListener("click", function () { setMode("calc"); });
+  btnPlay.addEventListener("click", toggle);
+  btnNext.addEventListener("click", function () { pause(); go(current + 1); });
+  btnBack.addEventListener("click", function () { pause(); go(current - 1); });
+  btnRestart.addEventListener("click", function () { pause(); go(0); });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    var focused = container.contains(document.activeElement) && document.activeElement !== document.body;
+    if ((e.code === "Space" || e.key === " ") &&
+        !(e.target && e.target.closest && e.target.closest("button"))) {
+      e.preventDefault(); toggle();
+    } else if (e.key === "ArrowRight" && focused) { e.preventDefault(); pause(); go(current + 1); }
+    else if (e.key === "ArrowLeft" && focused) { e.preventDefault(); pause(); go(current - 1); }
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden) pause(); });
+
+  if (reduceMotion) {
+    btnPlay.disabled = true;
+    btnPlay.title = "Auto-play disabled (reduced motion). Use Next / Back.";
+  }
+
+  /* ---------- init ---------- */
+  setMode("hop");
+  setPlayButton();
+})();
+</script>
+</body>
+</html>

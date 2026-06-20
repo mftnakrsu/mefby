@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 620" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p16-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="p16-arr-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f43f5e"/>
+    </marker>
+    <marker id="p16-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#14b8a6"/>
+    </marker>
+    <marker id="p16-arr-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#06b6d4"/>
+    </marker>
+    <marker id="p16-arr-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#10b981"/>
+    </marker>
+    <marker id="p16-hop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6366f1"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="620" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">One retrieval, or one hop at a time</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">A single-pass pipeline retrieves once and cannot bridge the chain. An agent loops, each observation feeding the next action.</text>
+
+  <!-- shared question banner -->
+  <rect x="40" y="86" width="1000" height="46" rx="14" fill="#eef2ff" stroke="#6366f1"/>
+  <path d="M70,109 L82,97 L94,109 L82,121 Z" fill="#6366f1" stroke="#ffffff" stroke-width="1.5"/>
+  <text x="112" y="106" font-size="10" font-weight="700" letter-spacing="0.06em" fill="#6366f1">THE MULTI-HOP QUESTION</text>
+  <text x="112" y="123" font-size="13" font-weight="700" fill="#4f46e5">"What is the warranty on the earbuds made by the company that acquired Acme?"</text>
+
+  <!-- ===================================================================== -->
+  <!-- LEFT PANEL: NAIVE SINGLE-PASS PIPELINE (rose failure)                  -->
+  <!-- ===================================================================== -->
+  <rect x="40" y="150" width="490" height="430" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <rect x="40" y="150" width="6" height="430" rx="3" fill="#f43f5e"/>
+  <text x="64" y="180" font-size="11.5" font-weight="700" letter-spacing="0.05em" fill="#64748b">NAIVE PIPELINE &#183; RETRIEVE ONCE</text>
+
+  <!-- retrieve step -->
+  <rect x="64" y="196" width="120" height="34" rx="8" fill="#ecfeff" stroke="#06b6d4"/>
+  <text x="124" y="218" font-size="11" font-weight="700" fill="#0e7490" text-anchor="middle">Retrieve (once)</text>
+  <line x1="184" y1="213" x2="216" y2="213" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#p16-arr)"/>
+  <text x="232" y="210" font-size="10.5" fill="#64748b">top-k matches the question's words,</text>
+  <text x="232" y="224" font-size="10.5" fill="#64748b">returns each chunk in isolation.</text>
+
+  <!-- isolated chunks (individually relevant, but unconnected) -->
+  <rect x="64" y="244" width="442" height="42" rx="8" fill="#ffffff" stroke="#06b6d4" stroke-width="2"/>
+  <rect x="64" y="244" width="5" height="42" rx="2.5" fill="#06b6d4"/>
+  <text x="84" y="262" font-size="11.5" fill="#0f172a">"Acme Corp was acquired by Globex in 2024."</text>
+  <text x="84" y="278" font-size="9.5" font-weight="700" fill="#0e7490">RETRIEVED &#183; matches "Acme", "acquired"</text>
+
+  <rect x="64" y="294" width="442" height="42" rx="8" fill="#ffffff" stroke="#06b6d4" stroke-width="2"/>
+  <rect x="64" y="294" width="5" height="42" rx="2.5" fill="#06b6d4"/>
+  <text x="84" y="312" font-size="11.5" fill="#0f172a">"All electronics include a one-year limited warranty."</text>
+  <text x="84" y="328" font-size="9.5" font-weight="700" fill="#0e7490">RETRIEVED &#183; matches "warranty"</text>
+
+  <!-- the chunk it actually needed, NOT retrieved -->
+  <rect x="64" y="344" width="442" height="40" rx="8" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <rect x="64" y="344" width="5" height="40" rx="2.5" fill="#94a3b8"/>
+  <text x="84" y="369" font-size="11.5" fill="#64748b">"Globex-branded wireless earbuds carry a 2-year warranty."</text>
+  <text x="368" y="338" font-size="9.5" font-weight="700" fill="#f43f5e" text-anchor="middle">never surfaced &#8212; no "Acme"</text>
+
+  <!-- the gap: cannot connect the chain -->
+  <path d="M285,392 V414" fill="none" stroke="#f43f5e" stroke-width="1.8" stroke-dasharray="4 4" marker-end="url(#p16-arr-rose)"/>
+
+  <!-- answer (incomplete / wrong) -->
+  <rect x="64" y="424" width="442" height="74" rx="10" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.6"/>
+  <g transform="translate(92,461)">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#f43f5e" stroke-width="1.6"/>
+    <path d="M-5,-5 L5,5 M5,-5 L-5,5" stroke="#f43f5e" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <text x="118" y="448" font-size="10" font-weight="700" letter-spacing="0.05em" fill="#e11d48">ANSWERS INCOMPLETELY</text>
+  <text x="118" y="466" font-size="11.5" fill="#334155">"Electronics carry a one-year warranty."</text>
+  <text x="118" y="484" font-size="11" fill="#9f1239">Two relevant chunks, but no edge from <tspan font-weight="700">Acme</tspan> to <tspan font-weight="700">Globex</tspan>.</text>
+
+  <text x="64" y="528" font-size="11.5" fill="#334155">The earbuds fact sits one hop away. A single pass</text>
+  <text x="64" y="544" font-size="11.5" font-weight="700" fill="#f43f5e">never gets to ask the second question.</text>
+
+  <!-- ===================================================================== -->
+  <!-- RIGHT PANEL: THE AGENT, CHAINING HOPS                                  -->
+  <!-- ===================================================================== -->
+  <rect x="550" y="150" width="490" height="430" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <rect x="550" y="150" width="6" height="430" rx="3" fill="#10b981"/>
+  <text x="574" y="180" font-size="11.5" font-weight="700" letter-spacing="0.05em" fill="#64748b">REACT AGENT &#183; CHAIN THE HOPS</text>
+
+  <!-- HOP 1 -->
+  <g>
+    <rect x="574" y="196" width="442" height="74" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="574" y="196" width="5" height="74" rx="2.5" fill="#14b8a6"/>
+    <circle cx="600" cy="216" r="11" fill="#14b8a6"/>
+    <text x="600" y="220" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+    <text x="620" y="213" font-size="9.5" font-weight="700" letter-spacing="0.04em" fill="#f59e0b">THOUGHT</text>
+    <text x="620" y="227" font-size="10.5" fill="#334155">I don't know who acquired Acme &#8212; look it up.</text>
+    <text x="620" y="246" font-size="9.5" font-weight="700" letter-spacing="0.04em" fill="#0f766e">ACTION</text>
+    <text x="688" y="246" font-size="10.5" fill="#475569" font-family="'JetBrains Mono', ui-monospace, monospace">search_products("who acquired Acme")</text>
+    <text x="620" y="262" font-size="9.5" font-weight="700" letter-spacing="0.04em" fill="#0e7490">OBSERVE</text>
+    <text x="688" y="262" font-size="10.5" font-weight="700" fill="#0f172a">Acme was acquired by Globex.</text>
+  </g>
+
+  <!-- feed-forward arrow: observation 1 -> action 2 -->
+  <path d="M620,270 q-30,18 0,34" fill="none" stroke="#06b6d4" stroke-width="2" marker-end="url(#p16-arr-cyan)"/>
+  <text x="636" y="294" font-size="9.5" font-style="italic" fill="#0891b2">"Globex" feeds the next action</text>
+
+  <!-- HOP 2 -->
+  <g>
+    <rect x="574" y="306" width="442" height="74" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="574" y="306" width="5" height="74" rx="2.5" fill="#14b8a6"/>
+    <circle cx="600" cy="326" r="11" fill="#14b8a6"/>
+    <text x="600" y="330" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+    <text x="620" y="323" font-size="9.5" font-weight="700" letter-spacing="0.04em" fill="#f59e0b">THOUGHT</text>
+    <text x="620" y="337" font-size="10.5" fill="#334155">Now find Globex's earbuds warranty.</text>
+    <text x="620" y="356" font-size="9.5" font-weight="700" letter-spacing="0.04em" fill="#0f766e">ACTION</text>
+    <text x="688" y="356" font-size="10.5" fill="#475569" font-family="'JetBrains Mono', ui-monospace, monospace">search_products("Globex earbuds warranty")</text>
+    <text x="620" y="372" font-size="9.5" font-weight="700" letter-spacing="0.04em" fill="#0e7490">OBSERVE</text>
+    <text x="688" y="372" font-size="10.5" font-weight="700" fill="#0f172a">Globex earbuds carry a 2-year warranty.</text>
+  </g>
+
+  <!-- feed-forward arrow into finish -->
+  <path d="M620,380 q-30,16 0,30" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#p16-arr-emerald)"/>
+
+  <!-- FINISH (emerald) -->
+  <g>
+    <rect x="574" y="416" width="442" height="64" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="1.6"/>
+    <g transform="translate(602,448)">
+      <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#10b981" stroke-width="1.6"/>
+      <path d="M-6,0 L-2,5 L7,-6" fill="none" stroke="#047857" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="628" y="440" font-size="9.5" font-weight="700" letter-spacing="0.05em" fill="#047857">FINISH</text>
+    <text x="628" y="458" font-size="11.5" font-weight="700" fill="#065f46">The earbuds are made by Globex (which acquired Acme):</text>
+    <text x="628" y="474" font-size="11.5" font-weight="700" fill="#065f46">a 2-year limited warranty.</text>
+  </g>
+
+  <!-- payoff line -->
+  <text x="574" y="528" font-size="11.5" fill="#334155">Two chained retrievals reach a fact no single pass</text>
+  <text x="574" y="544" font-size="11.5" font-weight="700" fill="#059669">could connect &#8212; then the loop stops on finish().</text>
+
+  <!-- ===================================================================== -->
+  <!-- WALKED EDGES strip: Acme -> Globex -> warranty                        -->
+  <!-- ===================================================================== -->
+  <text x="40" y="590" font-size="10.5" font-weight="700" letter-spacing="0.05em" fill="#64748b">THE AGENT WALKS THE EDGES</text>
+
+  <!-- Acme node -->
+  <circle cx="320" cy="600" r="15" fill="#94a3b8" stroke="#ffffff" stroke-width="2"/>
+  <text x="320" y="604" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">Acme</text>
+  <!-- edge 1 -->
+  <line x1="338" y1="600" x2="452" y2="600" stroke="#6366f1" stroke-width="2.6" marker-end="url(#p16-hop)"/>
+  <rect x="362" y="589" width="66" height="18" rx="6" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="395" y="602" font-size="9.5" fill="#4f46e5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">hop 1</text>
+  <!-- Globex node -->
+  <circle cx="490" cy="600" r="17" fill="#8b5cf6" stroke="#ffffff" stroke-width="2"/>
+  <text x="490" y="604" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">Globex</text>
+  <!-- edge 2 -->
+  <line x1="510" y1="600" x2="636" y2="600" stroke="#6366f1" stroke-width="2.6" marker-end="url(#p16-hop)"/>
+  <rect x="538" y="589" width="66" height="18" rx="6" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="571" y="602" font-size="9.5" fill="#4f46e5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace">hop 2</text>
+  <!-- warranty node -->
+  <rect x="654" y="586" width="120" height="28" rx="8" fill="#10b981"/>
+  <text x="714" y="604" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">2-year warranty</text>
+
+  <!-- legend (right of edge strip) -->
+  <g font-size="10.5" fill="#64748b">
+    <rect x="812" y="590" width="14" height="14" rx="4" fill="#ffffff" stroke="#06b6d4" stroke-width="2"/><text x="832" y="601">retrieved chunk</text>
+    <line x1="938" y1="597" x2="972" y2="597" stroke="#6366f1" stroke-width="2.6" marker-end="url(#p16-hop)"/><text x="980" y="601">hop edge</text>
+  </g>
+</svg>
