@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 600" font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p16rl-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="p16rl-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#14b8a6"/>
+    </marker>
+    <marker id="p16rl-arr-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#06b6d4"/>
+    </marker>
+    <marker id="p16rl-arr-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#10b981"/>
+    </marker>
+    <marker id="p16rl-arr-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="600" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="20" font-weight="700" fill="#0f172a">The ReAct loop: reason, act, observe</text>
+  <text x="40" y="64" font-size="13" fill="#64748b">At each step the agent thinks, picks one tool, reads the result, and loops &#8212; until it decides it's done.</text>
+
+  <!-- ===================================================================== -->
+  <!-- LEFT: query enters the loop                                           -->
+  <!-- ===================================================================== -->
+  <rect x="40" y="278" width="120" height="56" rx="14" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="100" y="302" font-size="12.5" font-weight="700" fill="#4f46e5" text-anchor="middle">Goal</text>
+  <text x="100" y="320" font-size="10" fill="#6366f1" text-anchor="middle">a user request</text>
+  <line x1="160" y1="306" x2="206" y2="306" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#p16rl-arr-slate)"/>
+
+  <!-- ===================================================================== -->
+  <!-- THE CYCLE: Thought -> Action -> Observation -> Thought                 -->
+  <!-- three nodes on a triangle, center ~ (400,300)                          -->
+  <!-- ===================================================================== -->
+
+  <!-- Thought (amber) - top -->
+  <rect x="330" y="138" width="156" height="62" rx="14" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8"/>
+  <text x="408" y="164" font-size="13" font-weight="700" fill="#b45309" text-anchor="middle">Thought</text>
+  <text x="408" y="184" font-size="10" fill="#b45309" text-anchor="middle">reason over the transcript</text>
+
+  <!-- Action (indigo) - bottom right -->
+  <rect x="470" y="402" width="156" height="62" rx="14" fill="#eef2ff" stroke="#6366f1" stroke-width="1.8"/>
+  <text x="548" y="428" font-size="13" font-weight="700" fill="#4f46e5" text-anchor="middle">Action</text>
+  <text x="548" y="448" font-size="10" fill="#6366f1" text-anchor="middle">call exactly one tool</text>
+
+  <!-- Observation (cyan) - bottom left -->
+  <rect x="190" y="402" width="156" height="62" rx="14" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.8"/>
+  <text x="268" y="428" font-size="13" font-weight="700" fill="#0e7490" text-anchor="middle">Observation</text>
+  <text x="268" y="448" font-size="10" fill="#0e7490" text-anchor="middle">read the tool's result</text>
+
+  <!-- Thought -> Action (amber) -->
+  <path d="M486,184 C566,232 580,320 564,398" fill="none" stroke="#f59e0b" stroke-width="2" marker-end="url(#p16rl-arr-amber)"/>
+  <!-- Action -> Observation (indigo-ish: use cyan-leaning? keep slate-neutral act edge as the tool result feeds observation) -->
+  <line x1="470" y1="433" x2="350" y2="433" stroke="#94a3b8" stroke-width="2" marker-end="url(#p16rl-arr-slate)"/>
+  <!-- Observation -> Thought (cyan) -->
+  <path d="M250,398 C234,320 248,232 330,186" fill="none" stroke="#06b6d4" stroke-width="2" marker-end="url(#p16rl-arr-cyan)"/>
+
+  <!-- loop center label -->
+  <text x="408" y="296" font-size="11" font-weight="700" letter-spacing="0.06em" fill="#64748b" text-anchor="middle">REACT</text>
+  <text x="408" y="312" font-size="11" font-weight="700" letter-spacing="0.06em" fill="#64748b" text-anchor="middle">CYCLE</text>
+  <text x="408" y="332" font-size="9.5" fill="#94a3b8" text-anchor="middle">repeat per step</text>
+
+  <!-- edge labels -->
+  <text x="566" y="300" font-size="9.5" fill="#b45309" text-anchor="middle" transform="rotate(78 566 300)">picks the tool</text>
+  <text x="408" y="424" font-size="9.5" fill="#64748b" text-anchor="middle">returns a result</text>
+  <text x="248" y="300" font-size="9.5" fill="#0e7490" text-anchor="middle" transform="rotate(-78 248 300)">feeds the next step</text>
+
+  <!-- finish exit from Thought (emerald) -->
+  <path d="M408,138 C408,96 408,96 408,90 H694" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#p16rl-arr-emerald)"/>
+  <text x="430" y="82" font-size="9.5" font-weight="700" fill="#047857">if it can answer &#8594; finish &amp; exit</text>
+
+  <!-- ===================================================================== -->
+  <!-- RIGHT: the 4-tool palette the Action step chooses from                 -->
+  <!-- ===================================================================== -->
+  <g transform="translate(700,138)">
+    <rect width="340" height="326" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="20" y="30" font-size="11.5" font-weight="700" letter-spacing="0.05em" fill="#64748b">TOOL PALETTE &#183; ACTION PICKS ONE</text>
+    <text x="20" y="48" font-size="10.5" fill="#64748b">The model chooses at run time, not at author time.</text>
+
+    <g font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace">
+      <!-- search_policy (teal) -->
+      <rect x="20" y="64" width="300" height="46" rx="8" fill="#f0fdfa" stroke="#14b8a6"/>
+      <text x="34" y="84" font-size="12" font-weight="700" fill="#0f766e">search_policy(query)</text>
+      <text x="34" y="101" font-size="9.5" font-family="'Inter', sans-serif" fill="#0f766e">refunds, errors, shipping, warranty index</text>
+
+      <!-- search_products (teal) -->
+      <rect x="20" y="118" width="300" height="46" rx="8" fill="#f0fdfa" stroke="#14b8a6"/>
+      <text x="34" y="138" font-size="12" font-weight="700" fill="#0f766e">search_products(query)</text>
+      <text x="34" y="155" font-size="9.5" font-family="'Inter', sans-serif" fill="#0f766e">acquisitions + product warranties index</text>
+
+      <!-- calculator (slate/neutral - arithmetic, no retrieval) -->
+      <rect x="20" y="172" width="300" height="46" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="34" y="192" font-size="12" font-weight="700" fill="#475569">calculator(expr)</text>
+      <text x="34" y="209" font-size="9.5" font-family="'Inter', sans-serif" fill="#64748b">arithmetic &#8212; not every step needs an index</text>
+
+      <!-- finish (emerald) -->
+      <rect x="20" y="226" width="300" height="46" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+      <text x="34" y="246" font-size="12" font-weight="700" fill="#047857">finish(answer)</text>
+      <text x="34" y="263" font-size="9.5" font-family="'Inter', sans-serif" fill="#047857">terminate the loop with the final answer</text>
+    </g>
+
+    <text x="20" y="298" font-size="9.5" fill="#64748b">A hard max-steps budget stops the loop if it never finishes.</text>
+  </g>
+
+  <!-- Action -> palette link -->
+  <line x1="626" y1="433" x2="690" y2="396" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#p16rl-arr-slate)"/>
+
+  <!-- ===================================================================== -->
+  <!-- bottom note                                                           -->
+  <!-- ===================================================================== -->
+  <rect x="40" y="512" width="1000" height="56" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <g transform="translate(72,540)">
+    <circle cx="0" cy="0" r="13" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.6"/>
+    <path d="M-6,0 L-2,5 L7,-6" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="100" y="535" font-size="12.5" font-weight="700" fill="#b45309">The route isn't fixed &#8212; it's decided one step at a time.</text>
+  <text x="100" y="554" font-size="11.5" fill="#334155">Multi-hop chains two retrievals; arithmetic skips the index; a policy question routes to one. Each loop ends on finish() or the step budget &#8212; never runs forever.</text>
+</svg>
