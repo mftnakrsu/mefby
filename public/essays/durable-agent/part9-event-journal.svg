@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="100%" style="height:auto" role="img" aria-label="The append-only event journal for run run-7f3a. A vertical sequence of events runs down the left column, each with a sequence number and a frozen timestamp: seq 0 run_started; seq 1 llm_decided for step 0 search_policy; seq 2 tool_result for step 0 with the policy text; seq 3 llm_decided for step 1 process_refund of 180 dollars to ORD-3300. After seq 3 a jagged break marks the crash: the process died after the refund posted but before its tool_result could be journaled, so there is no tool_result for step 1. On resume the tail re-runs and three more events are appended: seq 4 a second llm_decided for step 1 (the decision is re-made), seq 5 the tool_result for step 1, and seq 6 finished. A fold arrow on the right shows that state equals the fold over the log: replaying the events reconstructs which steps completed and their results, with step 0 memoized and step 1 re-attempted under the idempotency key so the refund is effectively once.">
+  <title>The event journal: state is the fold over an append-only log, with a crash after seq 3 and a resumed tail</title>
+
+  <defs>
+    <marker id="arrIndigo" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#6366f1"/>
+    </marker>
+    <marker id="arrSlate" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="720" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#94a3b8">Part 9, the durable agent</text>
+
+  <!-- Title -->
+  <text x="40" y="34" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="18" font-weight="700" fill="#0f172a">The event journal: state is the fold over an append-only log</text>
+  <text x="40" y="54" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#64748b">One run, run-7f3a, with frozen timestamps. The log is the source of truth; to know what happened you replay the events, never trust in-memory state.</text>
+
+  <!-- Column labels -->
+  <text x="40" y="92" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.04em">THE JOURNAL (APPEND-ONLY, JSONL)</text>
+  <text x="760" y="92" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.04em">STATE = FOLD OVER THE LOG</text>
+
+  <!-- The vertical spine connecting events -->
+  <line x1="84" y1="124" x2="84" y2="356" stroke="#cbd5e1" stroke-width="2.5"/>
+  <line x1="84" y1="470" x2="84" y2="650" stroke="#cbd5e1" stroke-width="2.5"/>
+
+  <!-- ============ EVENT 0: run_started (slate) ============ -->
+  <circle cx="84" cy="130" r="6" fill="#64748b"/>
+  <rect x="104" y="106" width="600" height="48" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.6"/>
+  <rect x="104" y="106" width="6" height="48" rx="3" fill="#64748b"/>
+  <rect x="120" y="118" width="58" height="18" rx="5" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="149" y="131" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#475569">seq 0</text>
+  <text x="190" y="124" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#475569">run_started</text>
+  <text x="190" y="142" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#64748b">run_id "run-7f3a"</text>
+  <text x="690" y="124" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#94a3b8">2026-07-05T10:00:00Z</text>
+
+  <!-- ============ EVENT 1: llm_decided idx 0 (indigo) ============ -->
+  <circle cx="84" cy="190" r="6" fill="#6366f1"/>
+  <rect x="104" y="166" width="600" height="48" rx="10" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.6"/>
+  <rect x="104" y="166" width="6" height="48" rx="3" fill="#6366f1"/>
+  <rect x="120" y="178" width="58" height="18" rx="5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+  <text x="149" y="191" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">seq 1</text>
+  <text x="190" y="184" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#4f46e5">llm_decided</text>
+  <text x="190" y="202" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#64748b">idx 0 &#183; search_policy("refund policy window")</text>
+  <text x="690" y="184" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#94a3b8">2026-07-05T10:00:01Z</text>
+
+  <!-- ============ EVENT 2: tool_result idx 0 (teal) ============ -->
+  <circle cx="84" cy="254" r="6" fill="#14b8a6"/>
+  <rect x="104" y="226" width="600" height="56" rx="10" fill="#ffffff" stroke="#99f6e4" stroke-width="1.6"/>
+  <rect x="104" y="226" width="6" height="56" rx="3" fill="#14b8a6"/>
+  <rect x="120" y="238" width="58" height="18" rx="5" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1"/>
+  <text x="149" y="251" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">seq 2</text>
+  <text x="190" y="244" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#0d9488">tool_result</text>
+  <text x="190" y="262" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#64748b">idx 0 &#183; result:</text>
+  <text x="190" y="277" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">"Refunds after the window are refundable minus a 10% restocking fee."</text>
+  <text x="690" y="244" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#94a3b8">2026-07-05T10:00:02Z</text>
+
+  <!-- ============ EVENT 3: llm_decided idx 1 (indigo) ============ -->
+  <circle cx="84" cy="324" r="6" fill="#6366f1"/>
+  <rect x="104" y="296" width="600" height="56" rx="10" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.6"/>
+  <rect x="104" y="296" width="6" height="56" rx="3" fill="#6366f1"/>
+  <rect x="120" y="308" width="58" height="18" rx="5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+  <text x="149" y="321" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">seq 3</text>
+  <text x="190" y="314" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#4f46e5">llm_decided</text>
+  <text x="190" y="332" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#64748b">idx 1 &#183; process_refund(ORD-3300, $180.00)</text>
+  <text x="190" y="347" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#b45309">the refund will POST after this decision is written</text>
+  <text x="690" y="314" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#94a3b8">2026-07-05T10:00:03Z</text>
+
+  <!-- ============ THE CRASH: jagged break ============ -->
+  <polyline points="60,372 120,382 180,372 240,384 300,372 360,384 420,372 480,384 540,372 600,384 660,372 704,380"
+    fill="none" stroke="#f43f5e" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="104" y="392" width="600" height="62" rx="10" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.8"/>
+  <rect x="120" y="404" width="118" height="20" rx="5" fill="#f43f5e"/>
+  <text x="179" y="418" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#ffffff">PROCESS KILLED</text>
+  <text x="250" y="412" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#9f1239">after the refund posted, before its result was journaled</text>
+  <text x="120" y="440" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#9f1239">No tool_result for step 1 exists. Memoization alone would re-run it; the idempotency key is what saves us.</text>
+
+  <!-- separator note: resumed tail -->
+  <text x="104" y="476" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#64748b" letter-spacing="0.03em">RESUME: REPLAY THE LOG, RE-RUN ONLY THE TAIL (seq 4 onward appended on resume)</text>
+
+  <!-- ============ EVENT 4: llm_decided idx 1 (re-decided, indigo dashed) ============ -->
+  <circle cx="84" cy="510" r="6" fill="#6366f1"/>
+  <rect x="104" y="486" width="600" height="50" rx="10" fill="#f5f6ff" stroke="#c7d2fe" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <rect x="104" y="486" width="6" height="50" rx="3" fill="#6366f1"/>
+  <rect x="120" y="498" width="58" height="18" rx="5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+  <text x="149" y="511" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">seq 4</text>
+  <text x="190" y="504" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#4f46e5">llm_decided</text>
+  <text x="190" y="522" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#64748b">idx 1 &#183; process_refund (re-decided on resume)</text>
+  <text x="690" y="504" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#94a3b8">2026-07-05T10:00:04Z</text>
+
+  <!-- ============ EVENT 5: tool_result idx 1 (teal) ============ -->
+  <circle cx="84" cy="570" r="6" fill="#14b8a6"/>
+  <rect x="104" y="546" width="600" height="50" rx="10" fill="#ffffff" stroke="#99f6e4" stroke-width="1.6"/>
+  <rect x="104" y="546" width="6" height="50" rx="3" fill="#14b8a6"/>
+  <rect x="120" y="558" width="58" height="18" rx="5" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1"/>
+  <text x="149" y="571" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">seq 5</text>
+  <text x="190" y="564" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#0d9488">tool_result</text>
+  <text x="190" y="582" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#64748b">idx 1 &#183; "refunded $180.00 to ORD-3300" (key honored, no second charge)</text>
+  <text x="690" y="564" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#94a3b8">2026-07-05T10:00:05Z</text>
+
+  <!-- ============ EVENT 6: finished (emerald) ============ -->
+  <circle cx="84" cy="630" r="6" fill="#10b981"/>
+  <rect x="104" y="606" width="600" height="50" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="1.8"/>
+  <rect x="104" y="606" width="6" height="50" rx="3" fill="#10b981"/>
+  <rect x="120" y="618" width="58" height="18" rx="5" fill="#d1fae5" stroke="#a7f3d0" stroke-width="1"/>
+  <text x="149" y="631" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#047857">seq 6</text>
+  <text x="190" y="624" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#047857">finished</text>
+  <text x="190" y="642" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#065f46">"Refund of $180.00 for ORD-3300 is complete (processed exactly once)."</text>
+  <text x="690" y="624" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#94a3b8">2026-07-05T10:00:06Z</text>
+
+  <!-- ============ FOLD COLUMN (right) ============ -->
+  <!-- bracket from the log into the fold -->
+  <path d="M 712 130 C 736 130, 736 380, 760 380" fill="none" stroke="#94a3b8" stroke-width="2"/>
+  <path d="M 712 630 C 736 630, 736 380, 760 380" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrSlate)"/>
+
+  <rect x="772" y="118" width="388" height="252" rx="13" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.6"/>
+  <text x="792" y="146" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#0f172a">replay(journal) folds events into state</text>
+  <text x="792" y="166" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#64748b">Walk the log once; collect completed step indices,</text>
+  <text x="792" y="181" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#64748b">their recorded results, and whether the run finished.</text>
+
+  <!-- completed set rows -->
+  <rect x="792" y="196" width="348" height="34" rx="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.2"/>
+  <circle cx="812" cy="213" r="7" fill="#14b8a6"/>
+  <path d="M 808.5 213 l 2.5 2.5 l 4.5 -5" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="828" y="210" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#0d9488">step 0: completed</text>
+  <text x="828" y="223" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#475569">MEMOIZED: result returned from seq 2, not re-run</text>
+
+  <rect x="792" y="236" width="348" height="34" rx="8" fill="#fffbeb" stroke="#fde68a" stroke-width="1.2"/>
+  <circle cx="812" cy="253" r="7" fill="#f59e0b"/>
+  <text x="812" y="257" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#ffffff">!</text>
+  <text x="828" y="250" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#b45309">step 1: NOT in completed (no tool_result)</text>
+  <text x="828" y="263" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#92400e">RE-ATTEMPTED, but the idempotency key already honored</text>
+
+  <rect x="792" y="276" width="348" height="34" rx="8" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.2"/>
+  <circle cx="812" cy="293" r="7" fill="#10b981"/>
+  <path d="M 808.5 293 l 2.5 2.5 l 4.5 -5" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="828" y="290" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#047857">finished: true (after seq 6)</text>
+  <text x="828" y="303" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#065f46">a later resume sees this and does nothing</text>
+
+  <rect x="792" y="322" width="348" height="34" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="806" y="336" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" font-weight="700" fill="#475569">The crash leaves a hole at step 1.</text>
+  <text x="806" y="349" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#64748b">Replay never trusts variables that died with the process.</text>
+
+  <!-- arrow: fold -> resume box -->
+  <line x1="966" y1="370" x2="966" y2="406" stroke="#10b981" stroke-width="2.4" marker-end="url(#arrEmerald)"/>
+
+  <!-- ============ RESUME EXPLAINER (right, lower) ============ -->
+  <rect x="772" y="412" width="388" height="116" rx="13" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.6"/>
+  <text x="792" y="438" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#4f46e5">Only the tail re-runs</text>
+  <text x="792" y="458" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#3730a3">Step 0 is memoized from the log. Step 1 is re-decided</text>
+  <text x="792" y="473" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#3730a3">(seq 4) and re-attempted (seq 5), then finished (seq 6).</text>
+  <text x="792" y="492" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#3730a3">The decision is re-made, but the EFFECT is not: the key</text>
+  <text x="792" y="507" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#3730a3">returns the original result. Ledger stays $180.00.</text>
+  <rect x="792" y="514" width="348" height="0" fill="none"/>
+
+  <!-- footer note -->
+  <rect x="772" y="540" width="388" height="120" rx="13" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.3"/>
+  <text x="792" y="566" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#334155">Append-only, never overwritten</text>
+  <text x="792" y="586" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">Resume APPENDS seq 4 to 6; it does not rewrite seq 0 to 3.</text>
+  <text x="792" y="601" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">Two llm_decided lines for idx 1 is honest, not a bug: the</text>
+  <text x="792" y="616" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">decision was re-made on resume, the refund was not.</text>
+  <text x="792" y="636" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">Kept in a list here, printed as JSONL; a real system appends</text>
+  <text x="792" y="650" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">to a file or SQLite so the log outlives the process.</text>
+
+  <!-- bottom-left reuse note -->
+  <rect x="40" y="676" width="664" height="30" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.1"/>
+  <text x="56" y="695" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#4f46e5">Owned here, reused later: this journal is the spine for pause and resume in Part 10 and for trace spans in Part 11.</text>
+
+</svg>
