@@ -1,0 +1,132 @@
+---
+title: "Learning from Failure"
+description: "Replanning recovers within a run, but the agent repeats the same mistake across runs. In-loop self-critique fixes what it can see; Reflexion writes a verbal lesson to a buffer the next trial reads."
+date: 2026-07-01
+tags: ["Agents","Reflection","Reflexion","Self-Critique","Memory","AI"]
+seriesOrder: 5
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-05-reflection-and-reflexion"
+lang: "en"
+translationSlug: "reflection-and-reflexion-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 4 taught the agent to revise a committed plan when the world disagrees mid-run. That fixes failure inside a single attempt: a SKU goes dead, the replanner rewrites the remaining tail, the run finishes. But run the same agent twice on the same task and it makes the same mistake the same way both times. Replanning recovers within a run; nothing carries what it learned from one run to the next. The agent is an amnesiac that re-earns every lesson. This part gives it two ways to learn from a failure. First, **in-loop self-critique**: before it finishes, the agent re-reads its own draft against a checklist and fixes what it can see, a missing amount, an uncited policy. Cheap, single-trial, and it has a hard ceiling, because it cannot catch a wrong number it has no ground truth for. Second, **Reflexion** (Shinn et al., 2023): an external **checker** (a reward signal) catches the mistake self-critique cannot, a **reflector** turns that verdict into a verbal post-mortem written to an **episodic buffer**, and the next trial reads the buffer before it acts. The honest claim this part is built to defend: convergence is genuinely caused by the buffer, not by a script. The actor's computation mechanically reads the buffer, so we prove causation with a buffer-OFF control, same actor, same task, lesson discarded each trial, and the identical mistake repeats forever.
+
+## Prerequisites
+
+You need basic Python: functions, a list, a small loop, and a string check. That is all. Finishing [Part 1](/essays/augmented-llm-loop) through [Part 4](/essays/replanning-and-critic) helps, because we lean on the same refund world and reference the ReAct loop, the tool contract, retries, and replanning without re-deriving them. But this part is self-contained: where it leans on an earlier idea, it restates it in a sentence. The companion code, [reflexion.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-05-reflection-and-reflexion), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every trace in this essay yourself. A deterministic rule actor, checker, and reflector is the source of truth by default, with the real LLM path (`generate()`) one environment flag away, exactly as in Parts 1 through 4.
+
+## What is new since Part 4
+
+I want to be precise about what is new, because a lot is not. For twenty parts the RAG series had no notion of an agent learning from its own past attempts: RAG Part 19's agent ran a single flat loop and RAG Part 20's conversational agent carried dialogue state, but neither did self-critique, neither wrote a verbal lesson, and neither let one attempt teach the next. None of Parts 1 through 4 here did either: Part 1 owns the loop and the tool contract, Part 2 owns the retry ladder, Part 3 owns the plan DAG, and Part 4 owns replanning. I am not re-teaching any of those, and where I use them I reference them. The one RAG touchpoint is real and worth naming exactly: the **checker** here is RAG Part 11's LLM-as-judge, repurposed. There it scored answer quality on a scale; here it is an offline reward signal that returns pass or fail against a policy, a different job for the same machine. Everything else is net-new: in-loop self-critique, the Reflexion loop, the episodic reflection buffer, verbal reinforcement, and the buffer-causes-convergence demonstration.
+
+## In-loop self-critique, and its ceiling
+
+The cheapest way to catch a mistake is to re-read your own work before you hand it in. So within a single trial, after the actor drafts an answer, a self-critique step checks the draft against a small checklist: does it state the refund amount, does it cite the policy basis? If something is missing, it revises. Here is the task. A return for order `ORD-3300`, a `$200.00` order, comes in after the 30-day window. Policy says a return after the window is still refundable, but a 10% restocking fee applies, so the policy-correct refund is `$180.00`, and the decision must state the amount and the policy basis. The naive actor forgets the fee. Watch self-critique do its job, from the artifact's real output:
+
+```text
+  draft:  'Your return is approved.'
+  critique: state the refund amount; cite the policy basis
+  revised: 'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'
+  ...but the external checker still says: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+  -> self-critique made the text complete; it could NOT catch a wrong number
+     it has no ground truth for. That gap is what Reflexion fills.
+```
+
+Read what self-critique did and what it could not do. The draft, `'Your return is approved.'`, is a bare approval: no amount, no policy. The critique flags exactly those two gaps, and the revised draft now states an amount and cites the policy, `'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'`. The text is complete and well-formed. And it is wrong, because the amount is `$200.00` and the policy-correct refund is `$180.00`. Self-critique cannot see that. It checks the draft against a checklist of presentation, and a polished `$200.00` passes every presentation check while quietly carrying the wrong number. The agent has no ground truth for the refund inside its own head, so it confidently polishes an incorrect answer. The external checker, which does know the policy-correct figure, is the only thing that catches it. That gap, between what the agent can see in its own draft and what is actually true, is exactly what Reflexion fills, and it is why the reward signal has to come from outside the actor.
+
+## The Reflexion loop
+
+Reflexion (Shinn et al., 2023) closes that gap with a cycle. The **actor** acts. An external **checker** grades the attempt and returns a reward signal, here a plain pass or fail against the policy. On a failure, a **reflector** turns the checker's verdict into a concrete verbal lesson, and that lesson is appended to an **episodic buffer**. The next trial reads the buffer before it acts. The loop is `actor -> checker (reward) -> self-reflection (verbal) -> buffer -> actor`, and it runs until the checker passes or a trial budget runs out. The crucial word is **verbal**. Nothing is retrained: no weights move, no gradient is computed. The lesson is just text, sitting in a buffer, that the next trial reads and conditions on. This is why Shinn et al. call it verbal reinforcement, reinforcement learning where the policy update is a sentence in a prompt instead of a step of gradient descent. It is cheap, it is legible (you can read the lesson the agent wrote itself), and it requires nothing but a place to store text and an actor that reads it. Diagram 1 draws the cycle.
+
+<Diagram number={1} caption="The Reflexion loop as verbal reinforcement. The actor acts on the task, reading any reflections already in the episodic buffer. An external checker (a reward signal, RAG Part 11's judge repurposed as a pass/fail oracle against the policy) grades the attempt. On a pass the loop converges. On a fail, the reflector turns the checker's verdict into a concrete verbal lesson, and that lesson is appended to the episodic buffer; the next trial reads it before acting. The cycle is actor to checker to self-reflection to buffer to actor. The lesson is plain text, no weights are updated, which is why this is called verbal reinforcement.">
+  <img src="/essays/reflection-and-reflexion/part5-verbal-reinforcement.svg" alt="A diagram of the Reflexion loop drawn as a cycle of four boxes. At the top left, an actor box labelled acts on the task, reads the buffer first. An arrow leads right to a checker box labelled external reward signal, pass or fail against the policy, with a note that it is RAG Part 11's judge repurposed as a pass/fail oracle. From the checker, a green arrow labelled PASS leads down to a converged endpoint. A red arrow labelled FAIL leads to a reflector box at the bottom, labelled turn the verdict into a concrete verbal lesson. From the reflector an arrow leads left into an episodic buffer box, drawn as a stack of text notes, labelled append the lesson. From the buffer an arrow leads back up to the actor, labelled next trial reads it. A caption strip reads: the lesson is plain text, no weights are updated, this is verbal reinforcement." class="w-full rounded-lg" />
+</Diagram>
+
+## Watching the buffer carry the lesson
+
+Now run the loop with the buffer turned on and watch the lesson move from one trial to the next. The actor's computation reads the buffer: if any reflection in it mentions the restocking fee, the actor multiplies the order total by 0.9; otherwise it quotes the full total. That single mechanical link is what makes the buffer matter. Here is the run, from the artifact's real output:
+
+```text
+  Trial 1 (reflections in buffer: 0)
+    actor: full refund (no restocking fee considered) -> $200.00
+    self-critique: revise (state the refund amount; cite the policy basis)
+      -> 'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'
+    checker: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+    reflection appended: 'Returns after the 30-day window incur a 10% restocking fee; multiply the order total by 0.9 before quoting the refund.'
+  Trial 2 (reflections in buffer: 1)
+    actor: applied the 10% restocking fee (learned from a reflection) -> $180.00
+    self-critique: revise (state the refund amount; cite the policy basis)
+      -> 'Refund decision for ORD-3300: $180.00 approved, per the returns policy (item returned after the 30-day window).'
+    checker: PASS -- refund $180.00 matches the policy-correct $180.00
+  -> converged on trial 2 (the buffer carried the lesson forward)
+```
+
+Read the buffer count, because it tells the whole story. Trial 1 starts with `reflections in buffer: 0`, so the actor knows nothing about the fee and quotes the full `$200.00`. Self-critique polishes the draft, the checker fails it (`refund $200.00 != policy-correct $180.00`), and the reflector writes a concrete, actionable lesson: `'Returns after the 30-day window incur a 10% restocking fee; multiply the order total by 0.9 before quoting the refund.'`. That sentence is appended. Trial 2 now starts with `reflections in buffer: 1`, the actor reads it, applies the 10% fee, and computes `$180.00`, and the checker passes. Converged on trial 2. Nothing about the actor's code changed between the two trials. The only thing that changed is what was sitting in the buffer when the trial began, and that is what flipped the answer from `$200.00` to `$180.00`. The interactive figure below lets you step through both trials and watch the buffer fill.
+
+<Diagram number={2} caption="The Reflexion trials, interactive. Step through the buffer-ON run trial by trial. Trial 1 starts with an empty buffer, so the actor quotes the full 200.00 dollars, self-critique polishes the draft, the checker fails it against the policy-correct 180.00 dollars, and the reflector appends the verbal lesson about the 10% restocking fee. Trial 2 starts with one reflection in the buffer, the actor reads it and applies the fee to compute 180.00 dollars, and the checker passes, so the run converges on trial 2. The figure also shows the buffer-OFF control, where the same lesson is generated each trial but discarded, so trials 1, 2, and 3 all repeat 200.00 dollars and the run never converges. The actor's code is identical in both; the only difference is whether the buffer persists the lesson.">
+  <IframeFigure src="/essays/reflection-and-reflexion/part5-reflexion-trials.html" title="Interactive Reflexion trials player. A toggle switches between the buffer-ON run and the buffer-OFF control, both running the same refund task for ORD-3300, a 200.00 dollar order returned after the 30-day window with a policy-correct refund of 180.00 dollars after a 10% restocking fee. In the buffer-ON run, Trial 1 shows reflections in buffer 0, the actor computes a full refund of 200.00 dollars, self-critique revises the draft to state the amount and cite the policy, the checker fails because 200.00 does not equal 180.00, and the reflector appends the lesson that returns after the window incur a 10% restocking fee so the actor should multiply the total by 0.9. Trial 2 shows reflections in buffer 1, the actor applies the fee learned from the reflection to compute 180.00 dollars, and the checker passes, so the run converges on trial 2. In the buffer-OFF control, Trials 1, 2, and 3 each show reflections in buffer 0, the actor computes 200.00 dollars every time, the checker fails every time, and the reflection is discarded each trial, so the run never converges in three trials. A note states the actor's code is identical in both runs and the only difference is whether the buffer persists the lesson." height={840} />
+</Diagram>
+
+## Proving the buffer caused it
+
+A convergence-on-trial-2 trace is only convincing if I can show the buffer caused it and not some script that quietly flips trial 2 to the right answer. So run the exact same loop, the same actor and the same task, with one change: turn the buffer off. The reflector still writes its lesson on every failure, but the lesson is discarded instead of appended, so each trial starts amnesiac. Here is the control, from the artifact's real output:
+
+```text
+  Trial 1 (reflections in buffer: 0)
+    actor: full refund (no restocking fee considered) -> $200.00
+    self-critique: revise (state the refund amount; cite the policy basis)
+      -> 'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'
+    checker: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+    buffer OFF: reflection discarded; next trial starts amnesiac
+  Trial 2 (reflections in buffer: 0)
+    actor: full refund (no restocking fee considered) -> $200.00
+    ...
+    checker: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+    buffer OFF: reflection discarded; next trial starts amnesiac
+  Trial 3 (reflections in buffer: 0)
+    actor: full refund (no restocking fee considered) -> $200.00
+    ...
+    checker: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+    buffer OFF: reflection discarded; next trial starts amnesiac
+  -> did NOT converge in 3 trials
+```
+
+Every trial is a carbon copy of the last. `reflections in buffer: 0` at the top of all three, the actor quotes `$200.00` every time, the checker fails every time with the identical reason, and the reflection is discarded every time. It did not converge in 3 trials, and it never would, because nothing accumulates. Put the two runs side by side: buffer ON converges on trial 2; buffer OFF never converges. Same actor, same task, same checker, same reflector. The single variable that differs is whether the lesson persists, so the buffer, not a script, is what caused convergence. This is the load-bearing honesty of the part. It would be easy to write a demo that "converges" because the second trial is hardcoded to be correct, and it would teach nothing. The control is what separates a real mechanism from a stage trick: kill the buffer and the convergence dies with it.
+
+## When reflection misleads
+
+One sober note, because it matters. Reflection is not monotonic. A reflection is only as good as the lesson it writes, and a wrong lesson is worse than no lesson, because the next trial reads it and acts on it. If the reflector misdiagnoses a failure, say it concludes "the amount was too low" when the real problem was the missing fee, it can push the next trial further from the answer rather than closer. More trials do not guarantee a better outcome; they guarantee more attempts. Verbal reinforcement is a heuristic, not a proof of improvement, and in practice you bound it: cap the trial budget, and treat a reflection that keeps failing as a signal to stop and escalate, not to reflect harder. The buffer is a powerful primitive precisely because the next trial trusts what is in it, which is also exactly why a bad entry does damage.
+
+> 💡 **From experience.** The first time I leaned on a reflection buffer it was to fix an agent that kept failing the same eval the same way, run after run, no matter how I reworded the system prompt. The mistake was always the same: it would skip a validation step that our schema required. I added a tiny buffer that, on a failed eval, wrote one sentence about what it had skipped, and fed that sentence into the next run. Within two runs it stopped skipping the step, and watching the buffer fill was oddly satisfying, the lesson was right there in plain English. But the same machinery bit me later. A reflection once concluded the wrong root cause for a flaky failure and wrote a confident, wrong instruction, and the next several runs dutifully followed it straight into a worse place than where they started. The fix was not to trust reflection more; it was to bound it: cap the trials, and have the loop give up and surface the failure instead of reflecting itself into a corner. Reflection is a heuristic that usually helps, and a buffer with a bad entry in it is just a faster way to be wrong.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- Part 4's replanning recovers within a run, but it forgets: run the same task again and the agent repeats the same mistake, because nothing persists what it learned across runs.
+- **In-loop self-critique** re-reads the draft against a checklist within one trial and fixes what is visible (state the amount, cite the policy), turning `'Your return is approved.'` into a complete decision. It is cheap and it has a ceiling.
+- That ceiling is real: self-critique cannot catch a wrong number it has no ground truth for. The polished draft still quotes `$200.00`, and only the external checker catches that it should be `$180.00`.
+- **Reflexion** (Shinn et al., 2023) closes the gap with the loop `actor -> checker (reward) -> self-reflection (verbal) -> buffer -> actor`. The checker is RAG Part 11's judge repurposed as a pass/fail reward signal, not a quality score.
+- **Verbal reinforcement**: nothing is retrained. The reflector writes a plain-text lesson (`multiply the order total by 0.9 before quoting the refund`), the buffer holds it, and the next trial reads it and converges on `$180.00` on trial 2.
+- The **buffer-OFF control** is the proof: same actor, same task, lesson discarded each trial, and it repeats `$200.00` for all 3 trials and never converges. The buffer, not a script, caused convergence. And reflection is not monotonic: a wrong lesson can make the next trial worse, so bound it.
+
+## Glossary
+
+- **In-loop self-critique**: a step within a single trial where the agent re-reads its own draft against a checklist and revises what it can see (a missing amount, an uncited policy); it catches presentation mistakes but cannot catch a wrong value it has no ground truth for.
+- **External checker / reward signal**: an oracle outside the actor that grades an attempt as pass or fail against the environment's ground truth (here the policy-correct refund); it catches the wrong number self-critique cannot. It is RAG Part 11's LLM-as-judge repurposed from quality scoring to a pass/fail reward.
+- **Reflexion** (Shinn et al., 2023): a pattern in which the checker's verdict on a failed attempt is turned into a verbal lesson and stored, so a later attempt reads it and does better, without any retraining.
+- **Verbal reinforcement**: improving behavior by feeding the agent a natural-language lesson it reads on the next attempt, rather than by updating weights; the policy update is a sentence in a prompt, not a gradient step.
+- **Episodic (reflection) buffer**: the store that holds the verbal lessons written after failed trials, which the actor reads before acting; here a flat list of sentences. It is the seed of Part 6's typed episodic memory store.
+- **The actor -> checker -> reflect -> buffer loop**: the Reflexion cycle, run until the checker passes or a trial budget runs out; the actor acts (reading the buffer), the checker grades, the reflector writes a lesson on failure, the buffer holds it for the next trial.
+- **Monotonicity caveat**: reflection is not guaranteed to improve things; a wrong lesson written to the buffer can mislead the next trial and make it worse, so verbal reinforcement is a heuristic that must be bounded, not a guarantee of convergence.
+
+---
+
+The rule from this part: an agent that only recovers within a run is an amnesiac, and the cure is to write down what failed and let the next attempt read it, but the lesson must come from a reward signal the agent cannot fake to itself, and the buffer that carries it is what does the work. Notice what the buffer here cannot do, though. It is a flat list of sentences, and it cannot tell apart what happened (this trial quoted the wrong amount) from what is true (returns after the window carry a 10% fee) from how to do a task (multiply the total by 0.9). All three end up jumbled in the same list, and as the list grows that jumble gets harder to read and harder to trust. **Part 6, The Four Memories**, is about giving the agent typed memory stores it edits itself, separating episodic, semantic, and procedural memory so the right kind of knowledge lives in the right place, with the flat reflection buffer as the first thing that gets properly typed.

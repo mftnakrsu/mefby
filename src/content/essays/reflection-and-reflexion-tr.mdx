@@ -1,0 +1,131 @@
+---
+title: "Başarısızlıktan Öğrenmek"
+description: "Replanning bir koşu içinde toparlanır, ama agent aynı hatayı koşular arasında tekrarlar. In-loop self-critique gördüğünü düzeltir; Reflexion ise bir sonraki trial'ın okuyacağı bir buffer'a sözel bir ders yazar."
+date: 2026-07-01
+tags: ["Agents","Reflection","Reflexion","Self-Critique","Memory","AI"]
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-05-reflection-and-reflexion"
+lang: "tr"
+translationSlug: "reflection-and-reflexion"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Part 4, dünya koşu ortasında katılmadığında agent'a committed bir planı revize etmeyi öğretti. Bu, tek bir denemenin içindeki failure'ı düzeltir: bir SKU ölür, replanner kalan tail'i yeniden yazar, koşu biter. Ama aynı agent'ı aynı görevde iki kez çalıştırın; iki seferinde de aynı hatayı aynı biçimde yapar. Replanning bir koşu içinde toparlanır; hiçbir şey bir koşudan öğrendiğini bir sonrakine taşımaz. Agent, her dersi yeniden hak etmek zorunda kalan amnezik bir varlıktır. Bu parça ona bir failure'dan öğrenmenin iki yolunu veriyor. Önce **in-loop self-critique**: agent bitirmeden önce kendi draft'ını bir kontrol listesine karşı yeniden okur ve görebildiğini düzeltir, eksik bir tutar, alıntılanmamış bir policy. Ucuz, tek trial'lık, ve sert bir tavanı var, çünkü hakkında hiçbir ground truth'a sahip olmadığı yanlış bir sayıyı yakalayamaz. Sonra **Reflexion** (Shinn et al., 2023): harici bir **checker** (bir reward sinyali) self-critique'in yakalayamadığı hatayı yakalar, bir **reflector** o verdict'i bir **episodic buffer**'a yazılan sözel bir post-mortem'e çevirir, ve bir sonraki trial harekete geçmeden önce buffer'ı okur. Bu parçanın savunmak için kurulduğu dürüst iddia şu: convergence gerçekten buffer tarafından oluşturulur, bir script tarafından değil. Actor'ın hesabı buffer'ı mekanik olarak okur, dolayısıyla causation'ı bir buffer-OFF kontrolüyle kanıtlarız, aynı actor, aynı görev, her trial'da atılan ders, ve aynı hata sonsuza dek tekrarlanır.
+
+## Ön koşullar
+
+Temel Python yeterli: fonksiyonlar, bir liste, küçük bir döngü ve bir string check. Hepsi bu. [Part 1](/essays/augmented-llm-loop)'den [Part 4](/essays/replanning-and-critic)'e kadarını bitirmek yardımcı olur, çünkü aynı refund dünyasına yaslanıyoruz ve ReAct loop'una, tool sözleşmesine, retry'lara ve replanning'e onları yeniden türetmeden referans veriyoruz. Ama bu parça kendi içinde bütünlüklü: daha önceki bir fikre dayandığı yerde, onu tek bir cümleyle yeniden ifade ediyor. Eşlik eden kod, [reflexion.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-05-reflection-and-reflexion), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz. Deterministik bir kural actor'ı, checker ve reflector varsayılan olarak source of truth'tur, gerçek LLM yolu (`generate()`) tek bir ortam bayrağı uzaklıkta, tam olarak Part 1'den 4'e kadarki gibi.
+
+## Part 4'ten bu yana yeni olan ne
+
+Neyin yeni olduğu konusunda kesin olmak istiyorum, çünkü çoğu şey değil. Yirmi parça boyunca RAG serisinde bir agent'ın kendi geçmiş denemelerinden öğrenmesi diye bir kavram yoktu: RAG Part 19'un agent'ı tek bir düz loop çalıştırdı ve RAG Part 20'nin konuşma-temelli agent'ı dialogue state taşıdı, ama hiçbiri self-critique yapmadı, hiçbiri sözel bir ders yazmadı, ve hiçbiri bir denemenin bir sonrakine öğretmesine izin vermedi. Buradaki Part 1'den 4'e kadarın hiçbiri de yapmadı: Part 1 loop'a ve tool sözleşmesine sahip, Part 2 retry merdivenine sahip, Part 3 plan DAG'ına sahip, ve Part 4 replanning'e sahip. Bunların hiçbirini yeniden öğretmiyorum, ve onları kullandığım yerde referans veriyorum. Tek RAG dokunuş noktası gerçek ve tam olarak adlandırmaya değer: buradaki **checker**, RAG Part 11'in LLM-as-judge'unun yeniden amaçlanmış halidir. Orada cevap kalitesini bir ölçek üzerinde puanlıyordu; burada bir offline reward sinyalidir ve bir policy'ye karşı pass ya da fail döndürür, aynı makineye verilen farklı bir iş. Geri kalan her şey net-new: in-loop self-critique, Reflexion loop'u, episodic reflection buffer'ı, verbal reinforcement, ve buffer-convergence'a-neden-olur gösterimi.
+
+## In-loop self-critique, ve onun tavanı
+
+Bir hatayı yakalamanın en ucuz yolu, teslim etmeden önce kendi işinizi yeniden okumaktır. Dolayısıyla tek bir trial'ın içinde, actor bir cevap draft ettikten sonra, bir self-critique adımı draft'ı küçük bir kontrol listesine karşı kontrol eder: refund tutarını belirtiyor mu, policy basis'i alıntılıyor mu? Bir şey eksikse, revize eder. İşte görev. `ORD-3300` numaralı bir sipariş, bir `$200.00`'lık sipariş için bir return 30 günlük pencereden sonra geliyor. Policy, pencereden sonraki bir return'ün hâlâ refundable olduğunu, ama %10'luk bir restocking fee uygulandığını söylüyor, dolayısıyla policy-doğru refund `$180.00`, ve karar tutarı ve policy basis'i belirtmek zorunda. Naif actor fee'yi unutuyor. Self-critique'in işini yapışını izleyin, artefaktın gerçek çıktısından:
+
+```text
+  draft:  'Your return is approved.'
+  critique: state the refund amount; cite the policy basis
+  revised: 'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'
+  ...but the external checker still says: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+  -> self-critique made the text complete; it could NOT catch a wrong number
+     it has no ground truth for. That gap is what Reflexion fills.
+```
+
+Self-critique'in ne yaptığını ve ne yapamadığını okuyun. Draft, `'Your return is approved.'`, çıplak bir onaydır: tutar yok, policy yok. Critique tam olarak o iki boşluğu işaretler, ve revize edilmiş draft artık bir tutar belirtir ve policy'yi alıntılar, `'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'`. Metin tam ve iyi biçimli. Ve yanlış, çünkü tutar `$200.00` ve policy-doğru refund `$180.00`. Self-critique bunu göremez. Draft'ı bir sunum kontrol listesine karşı kontrol eder, ve cilalı bir `$200.00` her sunum check'inden geçer, sessizce yanlış sayıyı taşırken. Agent'ın kendi kafasının içinde refund için bir ground truth'u yoktur, dolayısıyla yanlış bir cevabı kendinden emin biçimde cilalar. Policy-doğru rakamı gerçekten bilen harici checker, onu yakalayan tek şeydir. Agent'ın kendi draft'ında görebildiği ile gerçekte doğru olan arasındaki o boşluk, tam olarak Reflexion'ın doldurduğu şeydir, ve bu yüzden reward sinyalinin actor'ın dışından gelmesi gerekir.
+
+## Reflexion loop'u
+
+Reflexion (Shinn et al., 2023) o boşluğu bir döngüyle kapatır. **Actor** harekete geçer. Harici bir **checker** denemeyi notlar ve bir reward sinyali döndürür, burada bir policy'ye karşı düz bir pass ya da fail. Bir failure'da, bir **reflector** checker'ın verdict'ini somut bir sözel derse çevirir, ve o ders bir **episodic buffer**'a eklenir. Bir sonraki trial harekete geçmeden önce buffer'ı okur. Loop `actor -> checker (reward) -> self-reflection (verbal) -> buffer -> actor`'dur, ve checker pass edene ya da bir trial budget'ı tükenene kadar çalışır. Kritik kelime **verbal**'dır. Hiçbir şey yeniden eğitilmez: hiçbir ağırlık kımıldamaz, hiçbir gradient hesaplanmaz. Ders sadece metindir, bir buffer'da oturur, bir sonraki trial onu okur ve ona koşullanır. Bu yüzden Shinn et al. buna verbal reinforcement der, policy update'in bir gradient descent adımı yerine bir prompt'taki bir cümle olduğu reinforcement learning. Ucuzdur, okunabilirdir (agent'ın kendi kendine yazdığı dersi okuyabilirsiniz), ve metin saklayacak bir yer ile onu okuyan bir actor'dan başka hiçbir şey gerektirmez. Diagram 1 döngüyü çizer.
+
+<Diagram number={1} caption="The Reflexion loop as verbal reinforcement. The actor acts on the task, reading any reflections already in the episodic buffer. An external checker (a reward signal, RAG Part 11's judge repurposed as a pass/fail oracle against the policy) grades the attempt. On a pass the loop converges. On a fail, the reflector turns the checker's verdict into a concrete verbal lesson, and that lesson is appended to the episodic buffer; the next trial reads it before acting. The cycle is actor to checker to self-reflection to buffer to actor. The lesson is plain text, no weights are updated, which is why this is called verbal reinforcement.">
+  <img src="/essays/reflection-and-reflexion/part5-verbal-reinforcement.svg" alt="A diagram of the Reflexion loop drawn as a cycle of four boxes. At the top left, an actor box labelled acts on the task, reads the buffer first. An arrow leads right to a checker box labelled external reward signal, pass or fail against the policy, with a note that it is RAG Part 11's judge repurposed as a pass/fail oracle. From the checker, a green arrow labelled PASS leads down to a converged endpoint. A red arrow labelled FAIL leads to a reflector box at the bottom, labelled turn the verdict into a concrete verbal lesson. From the reflector an arrow leads left into an episodic buffer box, drawn as a stack of text notes, labelled append the lesson. From the buffer an arrow leads back up to the actor, labelled next trial reads it. A caption strip reads: the lesson is plain text, no weights are updated, this is verbal reinforcement." class="w-full rounded-lg" />
+</Diagram>
+
+## Buffer'ın dersi taşıyışını izlemek
+
+Şimdi loop'u buffer açıkken çalıştırın ve dersin bir trial'dan bir sonrakine taşınmasını izleyin. Actor'ın hesabı buffer'ı okur: içindeki herhangi bir reflection restocking fee'den bahsediyorsa, actor sipariş toplamını 0.9 ile çarpar; aksi halde tam toplamı quote eder. O tek mekanik bağ, buffer'ı önemli kılan şeydir. İşte koşu, artefaktın gerçek çıktısından:
+
+```text
+  Trial 1 (reflections in buffer: 0)
+    actor: full refund (no restocking fee considered) -> $200.00
+    self-critique: revise (state the refund amount; cite the policy basis)
+      -> 'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'
+    checker: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+    reflection appended: 'Returns after the 30-day window incur a 10% restocking fee; multiply the order total by 0.9 before quoting the refund.'
+  Trial 2 (reflections in buffer: 1)
+    actor: applied the 10% restocking fee (learned from a reflection) -> $180.00
+    self-critique: revise (state the refund amount; cite the policy basis)
+      -> 'Refund decision for ORD-3300: $180.00 approved, per the returns policy (item returned after the 30-day window).'
+    checker: PASS -- refund $180.00 matches the policy-correct $180.00
+  -> converged on trial 2 (the buffer carried the lesson forward)
+```
+
+Buffer sayısını okuyun, çünkü bütün hikâyeyi o anlatır. Trial 1, `reflections in buffer: 0` ile başlar, dolayısıyla actor fee hakkında hiçbir şey bilmez ve tam `$200.00`'ı quote eder. Self-critique draft'ı cilalar, checker onu fail eder (`refund $200.00 != policy-correct $180.00`), ve reflector somut, eyleme dökülebilir bir ders yazar: `'Returns after the 30-day window incur a 10% restocking fee; multiply the order total by 0.9 before quoting the refund.'`. O cümle eklenir. Trial 2 artık `reflections in buffer: 1` ile başlar, actor onu okur, %10'luk fee'yi uygular, ve `$180.00` hesaplar, ve checker pass eder. Trial 2'de converge etti. İki trial arasında actor'ın kodunda hiçbir şey değişmedi. Değişen tek şey, trial başladığında buffer'da ne oturduğuydu, ve cevabı `$200.00`'dan `$180.00`'a çeviren şey budur. Aşağıdaki interaktif figür, her iki trial'da adım adım ilerlemenizi ve buffer'ın dolmasını izlemenizi sağlar.
+
+<Diagram number={2} caption="The Reflexion trials, interactive. Step through the buffer-ON run trial by trial. Trial 1 starts with an empty buffer, so the actor quotes the full 200.00 dollars, self-critique polishes the draft, the checker fails it against the policy-correct 180.00 dollars, and the reflector appends the verbal lesson about the 10% restocking fee. Trial 2 starts with one reflection in the buffer, the actor reads it and applies the fee to compute 180.00 dollars, and the checker passes, so the run converges on trial 2. The figure also shows the buffer-OFF control, where the same lesson is generated each trial but discarded, so trials 1, 2, and 3 all repeat 200.00 dollars and the run never converges. The actor's code is identical in both; the only difference is whether the buffer persists the lesson.">
+  <IframeFigure src="/essays/reflection-and-reflexion/part5-reflexion-trials.html" title="Interactive Reflexion trials player. A toggle switches between the buffer-ON run and the buffer-OFF control, both running the same refund task for ORD-3300, a 200.00 dollar order returned after the 30-day window with a policy-correct refund of 180.00 dollars after a 10% restocking fee. In the buffer-ON run, Trial 1 shows reflections in buffer 0, the actor computes a full refund of 200.00 dollars, self-critique revises the draft to state the amount and cite the policy, the checker fails because 200.00 does not equal 180.00, and the reflector appends the lesson that returns after the window incur a 10% restocking fee so the actor should multiply the total by 0.9. Trial 2 shows reflections in buffer 1, the actor applies the fee learned from the reflection to compute 180.00 dollars, and the checker passes, so the run converges on trial 2. In the buffer-OFF control, Trials 1, 2, and 3 each show reflections in buffer 0, the actor computes 200.00 dollars every time, the checker fails every time, and the reflection is discarded each trial, so the run never converges in three trials. A note states the actor's code is identical in both runs and the only difference is whether the buffer persists the lesson." height={840} />
+</Diagram>
+
+## Buffer'ın buna neden olduğunu kanıtlamak
+
+Trial-2'de-convergence bir trace'i ancak, buffer'ın buna neden olduğunu ve trial 2'yi sessizce doğru cevaba çeviren bir script'in olmadığını gösterebilirsem ikna edicidir. Dolayısıyla tam olarak aynı loop'u, aynı actor ve aynı görevi, tek bir değişiklikle çalıştırın: buffer'ı kapatın. Reflector her failure'da hâlâ dersini yazar, ama ders eklenmek yerine atılır, dolayısıyla her trial amnezik başlar. İşte kontrol, artefaktın gerçek çıktısından:
+
+```text
+  Trial 1 (reflections in buffer: 0)
+    actor: full refund (no restocking fee considered) -> $200.00
+    self-critique: revise (state the refund amount; cite the policy basis)
+      -> 'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'
+    checker: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+    buffer OFF: reflection discarded; next trial starts amnesiac
+  Trial 2 (reflections in buffer: 0)
+    actor: full refund (no restocking fee considered) -> $200.00
+    ...
+    checker: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+    buffer OFF: reflection discarded; next trial starts amnesiac
+  Trial 3 (reflections in buffer: 0)
+    actor: full refund (no restocking fee considered) -> $200.00
+    ...
+    checker: FAIL -- refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied
+    buffer OFF: reflection discarded; next trial starts amnesiac
+  -> did NOT converge in 3 trials
+```
+
+Her trial bir öncekinin karbon kopyası. Üçünün de tepesinde `reflections in buffer: 0`, actor her seferinde `$200.00` quote eder, checker her seferinde aynı gerekçeyle fail eder, ve reflection her seferinde atılır. 3 trial'da converge etmedi, ve asla etmezdi, çünkü hiçbir şey birikmiyor. İki koşuyu yan yana koyun: buffer açıkken trial 2'de converge eder; buffer kapalıyken asla converge etmez. Aynı actor, aynı görev, aynı checker, aynı reflector. Farklı olan tek değişken, dersin kalıcı olup olmadığı, dolayısıyla convergence'a neden olan bir script değil, buffer'dır. Bu, parçanın yük taşıyan dürüstlüğüdür. İkinci trial'ı doğru olmaya hardcode edildiği için "converge eden" bir demo yazmak kolay olurdu, ve hiçbir şey öğretmezdi. Kontrol, gerçek bir mekanizmayı bir sahne hilesinden ayıran şeydir: buffer'ı öldürün, convergence onunla birlikte ölür.
+
+## Reflection yanılttığında
+
+Önemli olduğu için bir ayık not. Reflection monoton değildir. Bir reflection, yazdığı ders kadar iyidir, ve yanlış bir ders hiç ders olmamasından daha kötüdür, çünkü bir sonraki trial onu okur ve ona göre hareket eder. Reflector bir failure'ı yanlış teşhis ederse, diyelim gerçek sorun eksik fee iken "tutar çok düşüktü" sonucuna varırsa, bir sonraki trial'ı cevaba yaklaştırmak yerine ondan daha da uzaklaştırabilir. Daha fazla trial daha iyi bir sonuç garanti etmez; daha fazla deneme garanti eder. Verbal reinforcement bir iyileşme ispatı değil, bir heuristik'tir, ve pratikte onu sınırlarsınız: trial budget'ı kısın, ve sürekli fail eden bir reflection'ı daha fazla reflect etmek için değil, durup escalate etmek için bir sinyal olarak ele alın. Buffer güçlü bir primitif'tir tam da bir sonraki trial içindekine güvendiği için, ki bu da kötü bir girdinin neden zarar verdiğinin de tam sebebidir.
+
+> 💡 **Deneyimden.** Bir reflection buffer'ına ilk yaslandığımda, sistem prompt'unu nasıl yeniden ifade edersem edeyim koşu üstüne koşu aynı eval'ı aynı biçimde fail etmeye devam eden bir agent'ı düzeltmek içindi. Hata hep aynıydı: şemamızın gerektirdiği bir validation adımını atlardı. Failed bir eval'da neyi atladığı hakkında tek bir cümle yazan minik bir buffer ekledim, ve o cümleyi bir sonraki koşuya beslettim. İki koşu içinde adımı atlamayı bıraktı, ve buffer'ın dolmasını izlemek tuhaf biçimde tatmin ediciydi, ders apaçık İngilizce olarak oracıktaydı. Ama aynı makine beni sonra ısırdı. Bir reflection bir keresinde flaky bir failure için yanlış kök nedene vardı ve kendinden emin, yanlış bir talimat yazdı, ve sonraki birkaç koşu onu sadakatle takip edip başladıkları yerden daha kötü bir yere doğru ilerlediler. Çözüm reflection'a daha çok güvenmek değildi; onu sınırlamaktı: trial'ları kısmak, ve loop'un kendini bir köşeye reflect etmesi yerine pes edip failure'ı yüzeye çıkarmasını sağlamak. Reflection genellikle yardımcı olan bir heuristik'tir, ve içinde kötü bir girdi olan bir buffer, yanlış olmanın sadece daha hızlı bir yoludur.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Özet / Çıkarımlar
+
+- Part 4'ün replanning'i bir koşu içinde toparlanır, ama unutur: aynı görevi tekrar çalıştırın, agent aynı hatayı tekrarlar, çünkü hiçbir şey koşular arasında öğrendiğini kalıcı kılmaz.
+- **In-loop self-critique**, tek bir trial içinde draft'ı bir kontrol listesine karşı yeniden okur ve görüneni düzeltir (tutarı belirt, policy'yi alıntıla), `'Your return is approved.'`'ı tam bir karara çevirerek. Ucuzdur ve bir tavanı vardır.
+- O tavan gerçek: self-critique hakkında hiçbir ground truth'a sahip olmadığı yanlış bir sayıyı yakalayamaz. Cilalı draft hâlâ `$200.00` quote eder, ve onun `$180.00` olması gerektiğini yalnızca harici checker yakalar.
+- **Reflexion** (Shinn et al., 2023) boşluğu `actor -> checker (reward) -> self-reflection (verbal) -> buffer -> actor` loop'uyla kapatır. Checker, bir kalite skoru değil, bir pass/fail reward sinyali olarak yeniden amaçlanmış RAG Part 11'in judge'udur.
+- **Verbal reinforcement**: hiçbir şey yeniden eğitilmez. Reflector düz-metin bir ders yazar (`multiply the order total by 0.9 before quoting the refund`), buffer onu tutar, ve bir sonraki trial onu okur ve trial 2'de `$180.00`'a converge eder.
+- **Buffer-OFF kontrolü** ispattır: aynı actor, aynı görev, her trial'da atılan ders, ve 3 trial boyunca `$200.00`'ı tekrarlar ve asla converge etmez. Convergence'a bir script değil, buffer neden oldu. Ve reflection monoton değildir: yanlış bir ders bir sonraki trial'ı daha kötü yapabilir, dolayısıyla onu sınırlayın.
+
+## Sözlük
+
+- **In-loop self-critique**: agent'ın kendi draft'ını bir kontrol listesine karşı yeniden okuyup görebildiğini revize ettiği, tek bir trial içindeki bir adım (eksik bir tutar, alıntılanmamış bir policy); sunum hatalarını yakalar ama hakkında hiçbir ground truth'a sahip olmadığı yanlış bir değeri yakalayamaz.
+- **External checker / reward sinyali**: actor'ın dışında, bir denemeyi environment'ın ground truth'una (burada policy-doğru refund) karşı pass ya da fail olarak notlayan bir oracle; self-critique'in yakalayamadığı yanlış sayıyı yakalar. Kalite puanlamasından bir pass/fail reward'a yeniden amaçlanmış RAG Part 11'in LLM-as-judge'udur.
+- **Reflexion** (Shinn et al., 2023): failed bir denemeye dair checker'ın verdict'inin sözel bir derse çevrilip saklandığı, böylece sonraki bir denemenin onu okuyup, herhangi bir yeniden eğitim olmadan daha iyisini yaptığı bir pattern.
+- **Verbal reinforcement**: davranışı, ağırlıkları güncelleyerek değil, agent'a bir sonraki denemede okuyacağı doğal-dil bir ders besleyerek iyileştirmek; policy update, bir gradient adımı değil, bir prompt'taki bir cümledir.
+- **Episodic (reflection) buffer**: failed trial'lardan sonra yazılan ve actor'ın harekete geçmeden önce okuduğu sözel dersleri tutan store; burada düz bir cümleler listesi. Part 6'nın typed episodic memory store'unun tohumudur.
+- **actor -> checker -> reflect -> buffer loop'u**: checker pass edene ya da bir trial budget'ı tükenene kadar çalışan Reflexion döngüsü; actor harekete geçer (buffer'ı okuyarak), checker notlar, reflector failure'da bir ders yazar, buffer onu bir sonraki trial için tutar.
+- **Monotonluk uyarısı**: reflection işleri iyileştirmeyi garanti etmez; buffer'a yazılan yanlış bir ders bir sonraki trial'ı yanıltıp daha kötü yapabilir, dolayısıyla verbal reinforcement bir convergence garantisi değil, sınırlanması gereken bir heuristik'tir.
+
+---
+
+Bu parçanın kuralı: yalnızca bir koşu içinde toparlanan bir agent amneziktir, ve çare neyin fail ettiğini yazıp bir sonraki denemenin onu okumasına izin vermektir, ama ders agent'ın kendine yalan söyleyemeyeceği bir reward sinyalinden gelmek zorundadır, ve onu taşıyan buffer işi yapan şeydir. Yine de buradaki buffer'ın yapamadığına dikkat edin. Düz bir cümleler listesidir, ve ne olduğunu (bu trial yanlış tutarı quote etti) neyin doğru olduğundan (pencereden sonraki return'ler %10'luk bir fee taşır) bir görevin nasıl yapılacağından (toplamı 0.9 ile çarp) ayırt edemez. Üçü de aynı listede karmakarışık biter, ve liste büyüdükçe o karmaşa okunması daha zor ve güvenilmesi daha zor hale gelir. **Part 6, The Four Memories**, agent'a kendisinin düzenlediği typed memory store'lar vermekle ilgili, episodic, semantic ve procedural memory'yi ayırarak doğru tür bilginin doğru yerde yaşamasını sağlamak, düz reflection buffer'ı düzgünce typed hale getirilen ilk şey olarak.
