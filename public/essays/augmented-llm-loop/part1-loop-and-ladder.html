@@ -606,7 +606,7 @@ h2 {
       steps: [
         {
           header: "Step 1 of 3, Think → Act",
-          thought: "I don't yet know who acquired Acme; look it up.",
+          thought: "I don't yet know who acquired Acme; look it up in products.",
           action: { fn: "search_products", args: { query: "who acquired Acme" } },
           result: "Acme Corp was acquired by Globex in 2024.",
         },
@@ -618,8 +618,8 @@ h2 {
         },
         {
           header: "Step 3 of 3, Think → Finish",
-          thought: "I have the warranty; finish.",
-          action: { fn: "finish", args: { answer: "The earbuds are made by Globex (which acquired Acme); they carry a 2-year limited warranty." } },
+          thought: "I have the warranty term for the earbuds; finish.",
+          action: { fn: "finish", args: { answer: "The earbuds are made by Globex (which acquired Acme), and they carry a 2-year limited warranty." } },
           result: null,
           outcome: {
             type: "correct",
