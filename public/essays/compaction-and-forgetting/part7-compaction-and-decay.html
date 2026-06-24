@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Compaction and Forgetting, Part 7</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --slate: #64748b;
+  --slate-dark: #475569;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 820px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner span.lead { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+.goal-banner .amt { font-family: var(--font-mono); font-weight: 700; color: var(--text-heading); }
+
+.strategy-blurb {
+  font-size: 12px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.strategy-blurb strong { color: var(--indigo-dark); }
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 16px 0 9px;
+}
+
+/* ===== STEP CONTROLS ===== */
+.step-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+}
+.step-btn:hover:not(:disabled) { background: #eef2ff; border-color: #c7d2fe; }
+.step-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.step-btn:disabled { opacity: 0.45; cursor: not-allowed; color: var(--text-muted); }
+.step-btn.primary { background: var(--indigo); color: #ffffff; border-color: var(--indigo); }
+.step-btn.primary:hover:not(:disabled) { background: var(--indigo-dark); }
+.step-progress {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-left: auto;
+}
+.step-progress .stepnum { font-family: var(--font-mono); color: var(--indigo-dark); }
+
+/* ===== TOKEN METER ===== */
+.meter-wrap {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 13px 14px 14px;
+  margin-bottom: 14px;
+}
+.meter-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.meter-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.meter-count {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+.meter-count .budget { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+.meter-state {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+.meter-state.under { background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0; }
+.meter-state.over { background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3; }
+.meter-track {
+  position: relative;
+  height: 26px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.meter-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  border-radius: 6px 0 0 6px;
+  transition: width 0.45s cubic-bezier(.4,0,.2,1), background 0.3s;
+  background: var(--emerald);
+}
+.meter-fill.over { background: var(--rose); }
+@media (prefers-reduced-motion: reduce) { .meter-fill { transition: none; } .tier-card, .fact-row { animation: none; } }
+.meter-budget-line {
+  position: absolute;
+  top: -2px; bottom: -2px;
+  width: 2px;
+  background: var(--slate-dark);
+}
+.meter-budget-tag {
+  position: absolute;
+  top: 4px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--slate-dark);
+  transform: translateX(4px);
+  white-space: nowrap;
+}
+.compact-note {
+  font-size: 11px;
+  margin-top: 9px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  line-height: 1.45;
+  display: none;
+}
+.compact-note.show { display: block; }
+.compact-note.fired {
+  background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0;
+}
+.compact-note .ctag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--emerald);
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 6px;
+}
+
+/* incoming turn line */
+.turn-incoming {
+  font-size: 11.5px;
+  margin-bottom: 12px;
+  padding: 8px 11px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  line-height: 1.45;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.turn-incoming .ti-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 7px;
+}
+.turn-incoming .ti-tag.user { background: #eef2ff; color: var(--indigo-dark); border: 1px solid #c7d2fe; }
+.turn-incoming .ti-tag.tool { background: #f0fdfa; color: var(--teal-dark); border: 1px solid #99f6e4; }
+.turn-incoming .ti-quote { font-family: var(--font-mono); font-size: 11px; color: var(--text-heading); }
+.turn-incoming .ti-sal {
+  font-size: 9.5px; font-weight: 700; margin-left: 6px;
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.turn-incoming .ti-sal.keep { color: var(--amber-dark); }
+.turn-incoming .ti-sal.drop { color: var(--rose-dark); }
+
+/* ===== THE THREE TIERS ===== */
+.tiers-stack { display: flex; flex-direction: column; gap: 10px; }
+.tier-card {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+  animation: fadeIn 0.22s ease;
+}
+.tier-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.tier-head .th-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.tier-head .th-name {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.tier-head .th-desc { font-size: 10px; color: var(--text-muted); margin-left: auto; font-weight: 600; }
+.tier-body {
+  padding: 8px 11px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 36px;
+}
+.tier-line {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.45;
+  border-radius: 7px;
+  padding: 6px 9px;
+  word-break: break-word;
+}
+.tier-empty { font-size: 10.5px; color: var(--text-muted); font-style: italic; padding: 3px 2px; }
+
+.tier-card.hot { border-color: #c7d2fe; }
+.tier-card.hot .tier-head { background: #eef2ff; border-bottom-color: #c7d2fe; }
+.tier-card.hot .th-dot { background: var(--indigo); }
+.tier-card.hot .th-name { color: var(--indigo-dark); }
+.tier-card.hot .tier-line { background: #eef2ff; color: #312e81; border: 1px solid #c7d2fe; }
+
+.tier-card.warm { border-color: #fde68a; }
+.tier-card.warm .tier-head { background: #fffbeb; border-bottom-color: #fde68a; }
+.tier-card.warm .th-dot { background: var(--amber); }
+.tier-card.warm .th-name { color: var(--amber-dark); }
+.tier-card.warm .tier-line { background: #fffbeb; color: #78350f; border: 1px solid #fde68a; }
+
+.tier-card.cold { border-color: #cbd5e1; }
+.tier-card.cold .tier-head { background: #f1f5f9; border-bottom-color: #cbd5e1; }
+.tier-card.cold .th-dot { background: var(--slate); }
+.tier-card.cold .th-name { color: var(--slate-dark); }
+.tier-card.cold .tier-line { background: #f1f5f9; color: var(--slate-dark); border: 1px solid #cbd5e1; font-style: italic; }
+
+/* dropped-chatter strip */
+.dropped-strip {
+  font-size: 10.5px;
+  color: var(--rose-dark);
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-top: 10px;
+  line-height: 1.45;
+}
+.dropped-strip .ds-tag {
+  font-family: var(--font-mono);
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  background: var(--rose); color: #ffffff;
+  border-radius: 4px; padding: 1px 6px; margin-right: 6px;
+}
+.dropped-strip s { color: var(--rose); opacity: 0.8; }
+
+/* ===== FORGETTING: facts with score bars ===== */
+.time-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.time-control label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-heading);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.time-control .tnow {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal-dark);
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-radius: 5px;
+  padding: 1px 8px;
+}
+.time-control input[type="range"] {
+  flex: 1;
+  min-width: 160px;
+  accent-color: var(--teal);
+  height: 22px;
+  cursor: pointer;
+}
+.time-control input[type="range"]:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-radius: 4px; }
+.time-hint { font-size: 10.5px; color: var(--text-muted); flex-basis: 100%; line-height: 1.4; }
+
+.forget-actions { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+
+.fact-list { display: flex; flex-direction: column; gap: 8px; }
+.fact-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 9px 11px;
+  animation: fadeIn 0.2s ease;
+  transition: opacity 0.3s;
+}
+.fact-row.retired, .fact-row.evicted { opacity: 0.55; border-style: dashed; background: var(--chip-bg); }
+.fact-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 7px;
+}
+.fact-score {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal-dark);
+  min-width: 42px;
+}
+.fact-row.retired .fact-score, .fact-row.evicted .fact-score { color: var(--text-muted); }
+.fact-text { font-size: 12px; color: var(--text-body); flex: 1; min-width: 0; }
+.fact-text s { color: var(--text-muted); }
+.fact-badge {
+  font-family: var(--font-mono);
+  font-size: 8.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  border-radius: 4px; padding: 1px 6px;
+  flex-shrink: 0;
+}
+.fact-badge.active { background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0; }
+.fact-badge.retired { background: var(--chip-bg); color: var(--text-muted); border: 1px solid var(--border); }
+.fact-badge.evicted { background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3; }
+.fact-bar-track {
+  height: 9px;
+  background: var(--chip-bg);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.fact-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: var(--teal);
+  transition: width 0.4s cubic-bezier(.4,0,.2,1), background 0.3s;
+}
+.fact-row.retired .fact-bar-fill, .fact-row.evicted .fact-bar-fill { background: var(--text-muted); }
+.fact-meta { font-size: 9.5px; color: var(--text-muted); margin-top: 5px; font-family: var(--font-mono); }
+
+.forget-event {
+  font-size: 11px;
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin: 12px 0 4px;
+  line-height: 1.45;
+  display: none;
+}
+.forget-event.show { display: block; }
+.forget-event.supersede { background: #fffbeb; color: var(--amber-dark); border: 1px solid #fde68a; }
+.forget-event.evict { background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3; }
+.forget-event .fe-tag {
+  font-family: var(--font-mono);
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  border-radius: 4px; padding: 1px 6px; margin-right: 6px; color: #ffffff;
+}
+.forget-event.supersede .fe-tag { background: var(--amber); }
+.forget-event.evict .fe-tag { background: var(--rose); }
+
+/* CAPTION / LEGEND */
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption .swatch {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+/* CONTRAST CALLOUT (vs P20 condensation) */
+.contrast {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-left: 3px solid var(--teal);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-top: 14px;
+  line-height: 1.55;
+}
+.contrast strong { color: var(--teal-dark); }
+.contrast code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #99f6e4;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  color: var(--teal-dark);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== PANEL A: COMPACTION ===================== -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <h2 id="panel-a-heading">Compaction: keep the window bounded as the run grows</h2>
+  <p class="panel-subtitle">Run a support session turn by turn. Every turn is re-sent, so the live window keeps growing. When it crosses the token budget the meter turns red, then a COMPACT step keeps the last 2 turns HOT, folds older decisions into a WARM summary, drops chatter, and pushes the oldest WARM into a one-line COLD gist. The bar drops back under budget and the run continues.</p>
+
+  <div class="goal-banner">
+    <span class="lead">The world:</span> the same refund desk. User <code>Dana</code>, order <code>ORD-3300</code>, a <span class="amt">$200.00</span> order returned after the 30-day window, a 10% restocking fee, so the refund is <span class="amt">$180.00</span>, then a question about the Globex earbuds warranty.
+    <br />Budget <code>BUDGET = 40</code>, hot tail <code>HOT_N = 2</code>. Tokens are estimated by word count, so the run is reproducible.
+  </div>
+
+  <div class="step-controls">
+    <button class="step-btn" id="cm-prev" type="button">&#8592; Back</button>
+    <button class="step-btn primary" id="cm-next" type="button">Add next turn &#8594;</button>
+    <button class="step-btn" id="cm-reset" type="button">Reset</button>
+    <span class="step-progress" id="cm-progress"></span>
+  </div>
+
+  <div class="strategy-blurb" id="cm-blurb">Press <strong>Add next turn</strong>. Each turn adds to the window; watch the meter climb. It crosses budget on turns 4, 6, 8, 9, and 10, and each crossing triggers a compaction that brings it back under.</div>
+
+  <!-- the incoming turn just added -->
+  <div id="cm-incoming"></div>
+
+  <!-- token meter -->
+  <div class="meter-wrap">
+    <div class="meter-top">
+      <span class="meter-label">live window</span>
+      <span class="meter-count"><span id="cm-tokens">0</span><span class="budget"> / 40 tokens</span></span>
+      <span class="meter-state under" id="cm-state">under budget</span>
+    </div>
+    <div class="meter-track">
+      <div class="meter-fill" id="cm-fill" style="width:0%"></div>
+      <div class="meter-budget-line" style="left:100%"></div>
+    </div>
+    <div class="compact-note" id="cm-note"></div>
+  </div>
+
+  <div class="section-label">The window the model actually sees</div>
+  <div class="tiers-stack">
+    <div class="tier-card hot">
+      <div class="tier-head"><span class="th-dot"></span><span class="th-name">hot</span><span class="th-desc">last 2 turns, verbatim</span></div>
+      <div class="tier-body" id="cm-hot"></div>
+    </div>
+    <div class="tier-card warm">
+      <div class="tier-head"><span class="th-dot"></span><span class="th-name">warm</span><span class="th-desc">rolling summary of decisions and tool outputs</span></div>
+      <div class="tier-body" id="cm-warm"></div>
+    </div>
+    <div class="tier-card cold">
+      <div class="tier-head"><span class="th-dot"></span><span class="th-name">cold</span><span class="th-desc">one lossy line</span></div>
+      <div class="tier-body" id="cm-cold"></div>
+    </div>
+  </div>
+
+  <div class="dropped-strip" id="cm-dropped" style="display:none;"></div>
+
+  <div class="contrast">
+    <strong>Not RAG Part 20 condensation.</strong> P20 rewrote the latest <em>question</em> into a standalone one so retrieval works (<code>"what about its battery?"</code> &#8594; <code>"what is the battery life of the earbuds?"</code>). Compaction compresses the <em>history</em> so the run fits the window. Different input, different output, different purpose.
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="cm-announce"></div>
+</section>
+
+<!-- ===================== PANEL B: FORGETTING ===================== -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <h2 id="panel-b-heading">Forgetting: score by importance x recency x access; decay, supersede, evict</h2>
+  <p class="panel-subtitle">A store that only grows fills with stale and duplicate facts. Each fact carries an importance and a last-touch time. Reads rank by a score; writes decay importance with age, retire a fact when a newer one supersedes it, and evict the weakest when the store is over capacity. Drag the time slider, then fire the two write events.</p>
+
+  <div class="goal-banner">
+    <span class="lead">The score:</span> <code>importance x recency x access</code>, where recency halves every <code>HALF_LIFE = 4</code> time units and each read nudges access up. Capacity is <code>CAPACITY = 4</code> active facts.
+  </div>
+
+  <div class="time-control">
+    <label for="ft-slider">logical time <span class="tnow" id="ft-now">t = 0</span></label>
+    <input type="range" id="ft-slider" min="0" max="6" step="1" value="0"
+           aria-valuemin="0" aria-valuemax="6" aria-valuenow="0" aria-label="logical time, 0 to 6" />
+    <span class="time-hint" id="ft-hint">At t = 0 every fact is fresh. Slide to t = 6: recency has decayed every score, and 'the user is Dana' was read twice, so its access count lifts it.</span>
+  </div>
+
+  <div class="forget-actions">
+    <button class="step-btn" id="ft-supersede" type="button">Supersede: switch to phone &#8594;</button>
+    <button class="step-btn" id="ft-evict" type="button">Add a 5th fact (evict weakest) &#8594;</button>
+    <button class="step-btn" id="ft-reset" type="button">Reset store</button>
+  </div>
+
+  <div class="forget-event supersede" id="ft-ev-supersede"></div>
+  <div class="forget-event evict" id="ft-ev-evict"></div>
+
+  <div class="section-label">The store, ranked by score</div>
+  <div class="fact-list" id="ft-list"></div>
+
+  <div class="sr-only" aria-live="polite" id="ft-announce"></div>
+
+  <div class="caption">
+    <strong>Why an agent must forget:</strong> growth without forgetting is just slower failure. Compaction keeps the live window bounded (the hot / warm / cold tiers above); forgetting keeps the store sharp (decay fades old facts, supersession retires what a newer fact replaces, eviction drops the weakest over capacity). A sleep-time consolidation pass then distills raw episodes into durable semantic facts and procedural rules.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>hot / working &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>warm &nbsp;
+    <span class="swatch" style="background:var(--slate)"></span>cold &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>score &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>over budget / evicted &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>under budget / active
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* ============================================================
+     PANEL A: COMPACTION.
+     The 10 verified turns from the source SESSION (role, text,
+     salient). For each turn we hold the EXACT window total before
+     any compaction and, when over budget, the EXACT total after,
+     plus how many chatter turns were dropped. These are taken
+     verbatim from the source's Expected output.
+     ============================================================ */
+  var SESSION = [
+    { role: "user", text: "Hi, I'm Dana, I'd like to ask about order ORD-3300.", salient: false },
+    { role: "tool", text: "search_policy -> refunds within 30 days of purchase.", salient: true },
+    { role: "user", text: "Oh interesting, thanks for checking that for me.", salient: false },
+    { role: "user", text: "It has actually been about 40 days since I bought it.", salient: false },
+    { role: "tool", text: "search_policy -> after the window, a 10% restocking fee applies.", salient: true },
+    { role: "user", text: "Got it, that seems fair enough I suppose.", salient: false },
+    { role: "user", text: "So what would my refund be on the $200 order?", salient: false },
+    { role: "tool", text: "calculator -> $180.00 (200 * 0.9 after the fee).", salient: true },
+    { role: "user", text: "Perfect. Could you also check the earbuds warranty?", salient: false },
+    { role: "tool", text: "search_products -> Globex earbuds carry a 2-year limited warranty.", salient: true }
+  ];
+
+  /* Per-turn verified state (1-indexed into a 0-indexed array). before = window
+     total when the turn is added; over = crossed budget; after = window after
+     compaction; dropped = chatter turns dropped. Numbers verbatim from source. */
+  var TURN_INFO = [
+    { before: 11, over: false },
+    { before: 20, over: false },
+    { before: 29, over: false },
+    { before: 41, over: true, after: 29, dropped: 1 },
+    { before: 40, over: false },
+    { before: 49, over: true, after: 28, dropped: 2 },
+    { before: 39, over: false },
+    { before: 49, over: true, after: 39, dropped: 1 },
+    { before: 48, over: true, after: 37, dropped: 1 },
+    { before: 47, over: true, after: 32, dropped: 0 }
+  ];
+
+  var BUDGET = 40;
+
+  /* The verified FINAL window state, reached after turn 10's compaction. The
+     widget walks the real mechanism to reproduce intermediate states, but the
+     final tiers are anchored to these exact strings from the source. */
+  var FINAL = {
+    cold: "[2 earlier turns summarized]",
+    warm: ["calculator -> $180.00 (200 * 0.9 after the fee)."],
+    hot: [
+      "user: Perfect. Could you also check the earbuds warranty?",
+      "tool: search_products -> Globex earbuds carry a 2-year limited warranty."
+    ]
+  };
+
+  var HOT_N = 2;
+
+  function render(role, text) { return role + ": " + text; }
+  function coldGist(n) { return n ? "[" + n + " earlier turns summarized]" : ""; }
+  function estTokens(t) { return t.split(/\s+/).filter(Boolean).length; }
+
+  /* Compute the window state (hot, warm, coldN) after `n` turns have been
+     added AND any triggered compactions applied, by replaying the real rule.
+     This mirrors the source compact() exactly, so intermediate tiers are honest. */
+  function windowTokens(hot, warm, coldN) {
+    var t = estTokens(coldGist(coldN));
+    warm.forEach(function (w) { t += estTokens(w); });
+    hot.forEach(function (h) { t += estTokens(render(h.role, h.text)); });
+    return t;
+  }
+
+  function compact(hot, warm, coldN) {
+    var keep = hot.slice(hot.length - HOT_N);
+    var older = hot.slice(0, hot.length - HOT_N);
+    var dropped = 0;
+    older.forEach(function (h) {
+      if (h.salient) warm.push(h.text); else dropped++;
+    });
+    while (windowTokens(keep, warm, coldN) > BUDGET && warm.length) {
+      warm.shift();
+      coldN++;
+    }
+    return { hot: keep, warm: warm, coldN: coldN, dropped: dropped };
+  }
+
+  /* Replay through n turns; returns the live state plus the most-recent
+     compaction info (or null). */
+  function stateAfter(n) {
+    var hot = [], warm = [], coldN = 0;
+    var lastCompact = null;
+    for (var i = 0; i < n && i < SESSION.length; i++) {
+      hot.push(SESSION[i]);
+      var tokens = windowTokens(hot, warm, coldN);
+      if (tokens > BUDGET) {
+        var r = compact(hot, warm, coldN);
+        hot = r.hot; warm = r.warm; coldN = r.coldN;
+        lastCompact = { dropped: r.dropped, after: windowTokens(hot, warm, coldN) };
+      } else {
+        lastCompact = null;
+      }
+    }
+    return { hot: hot, warm: warm, coldN: coldN, lastCompact: lastCompact };
+  }
+
+  var cmIndex = 0;   // how many turns have been added (0 = none)
+
+  function renderCompaction() {
+    var info = cmIndex > 0 ? TURN_INFO[cmIndex - 1] : null;
+    var st = stateAfter(cmIndex);
+
+    // incoming turn line
+    var inc = document.getElementById("cm-incoming");
+    if (cmIndex === 0) {
+      inc.innerHTML = "";
+    } else {
+      var turn = SESSION[cmIndex - 1];
+      var sal = turn.salient
+        ? '<span class="ti-sal keep">salient, kept on compaction</span>'
+        : '<span class="ti-sal drop">chatter, dropped on compaction</span>';
+      inc.innerHTML = '<div class="turn-incoming">'
+        + '<span class="ti-tag ' + turn.role + '">turn ' + cmIndex + ' &middot; ' + turn.role + '</span>'
+        + '<span class="ti-quote">' + escHtml(turn.text) + '</span> ' + sal + '</div>';
+    }
+
+    // meter: show the BEFORE total for this turn (the over-budget moment), or 0
+    var shown = info ? info.before : 0;
+    var over = info ? info.over : false;
+    var pct = Math.min(100, Math.round((shown / BUDGET) * 100));
+    var fill = document.getElementById("cm-fill");
+    fill.style.width = pct + "%";
+    fill.classList.toggle("over", over);
+    document.getElementById("cm-tokens").textContent = shown;
+    var stateEl = document.getElementById("cm-state");
+    if (over) {
+      stateEl.className = "meter-state over";
+      stateEl.textContent = "over budget";
+    } else {
+      stateEl.className = "meter-state under";
+      stateEl.textContent = "under budget";
+    }
+
+    // compaction note
+    var note = document.getElementById("cm-note");
+    if (info && info.over) {
+      note.className = "compact-note show fired";
+      note.innerHTML = '<span class="ctag">compact</span>dropped ' + info.dropped
+        + ' chatter turn(s), folded older decisions warm / cold; window now '
+        + info.after + ' / ' + BUDGET + ' (under budget, run continues).';
+    } else {
+      note.className = "compact-note";
+      note.innerHTML = "";
+    }
+
+    // tiers (live state after compaction if any)
+    var hotEl = document.getElementById("cm-hot");
+    var warmEl = document.getElementById("cm-warm");
+    var coldEl = document.getElementById("cm-cold");
+
+    if (st.hot.length === 0) {
+      hotEl.innerHTML = '<div class="tier-empty">(empty)</div>';
+    } else {
+      hotEl.innerHTML = st.hot.map(function (h) {
+        return '<div class="tier-line">' + escHtml(render(h.role, h.text)) + '</div>';
+      }).join("");
+    }
+    if (st.warm.length === 0) {
+      warmEl.innerHTML = '<div class="tier-empty">(empty)</div>';
+    } else {
+      warmEl.innerHTML = st.warm.map(function (w) {
+        return '<div class="tier-line">' + escHtml(w) + '</div>';
+      }).join("");
+    }
+    if (st.coldN === 0) {
+      coldEl.innerHTML = '<div class="tier-empty">(empty)</div>';
+    } else {
+      coldEl.innerHTML = '<div class="tier-line">' + escHtml(coldGist(st.coldN)) + '</div>';
+    }
+
+    // dropped chatter strip (cumulative, only when something was dropped)
+    var droppedTexts = [];
+    var hotSet = {};
+    st.hot.forEach(function (h) { hotSet[h.text] = true; });
+    var warmSet = {};
+    st.warm.forEach(function (w) { warmSet[w] = true; });
+    for (var i = 0; i < cmIndex; i++) {
+      var t = SESSION[i];
+      if (!t.salient && !hotSet[t.text]) droppedTexts.push(t.text);
+    }
+    var ds = document.getElementById("cm-dropped");
+    if (droppedTexts.length) {
+      ds.style.display = "block";
+      ds.innerHTML = '<span class="ds-tag">dropped</span>'
+        + droppedTexts.map(function (d) { return '<s>' + escHtml(d) + '</s>'; }).join('  &middot;  ');
+    } else {
+      ds.style.display = "none";
+    }
+
+    // progress + buttons
+    document.getElementById("cm-progress").innerHTML =
+      'turn <span class="stepnum">' + cmIndex + '</span> of <span class="stepnum">' + SESSION.length + '</span>';
+    document.getElementById("cm-prev").disabled = cmIndex <= 0;
+    document.getElementById("cm-next").disabled = cmIndex >= SESSION.length;
+
+    // announce
+    var ann = document.getElementById("cm-announce");
+    if (cmIndex === 0) {
+      ann.textContent = "No turns added. Window empty.";
+    } else if (info && info.over) {
+      ann.textContent = "Turn " + cmIndex + " pushed the window to " + info.before
+        + " of " + BUDGET + ", over budget. Compaction dropped " + info.dropped
+        + " chatter turns and brought it back to " + info.after + " of " + BUDGET + ".";
+    } else {
+      ann.textContent = "Turn " + cmIndex + " added. Window " + info.before
+        + " of " + BUDGET + ", under budget.";
+    }
+  }
+
+  function cmFwd() { if (cmIndex < SESSION.length) { cmIndex++; renderCompaction(); } }
+  function cmBack() { if (cmIndex > 0) { cmIndex--; renderCompaction(); } }
+  function cmReset() { cmIndex = 0; renderCompaction(); }
+
+  document.getElementById("cm-next").addEventListener("click", cmFwd);
+  document.getElementById("cm-prev").addEventListener("click", cmBack);
+  document.getElementById("cm-reset").addEventListener("click", cmReset);
+  document.getElementById("cm-next").closest(".panel").querySelector(".step-controls")
+    .addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight") { cmFwd(); e.preventDefault(); }
+      else if (e.key === "ArrowLeft") { cmBack(); e.preventDefault(); }
+    });
+
+  /* ============================================================
+     PANEL B: FORGETTING.
+     The verified facts and their scores at t=0 and t=6 (after the
+     'name' fact is read twice). Scores are taken verbatim from the
+     source Expected output. The score bars are scaled to 1.0.
+     ============================================================ */
+
+  // base store: 4 facts, scores at t=0 and t=6 (exact).
+  // bar widths use the score directly (scores are already <= 0.90).
+  var BASE = [
+    { key: "name",     text: "the user is Dana",                   s0: 0.90, s6: 0.38, importance: 0.9, accessNote: "read twice by t=6" },
+    { key: "order",    text: "Dana's order is ORD-3300 ($200)",    s0: 0.70, s6: 0.25, importance: 0.7 },
+    { key: "contact",  text: "Dana prefers email contact",         s0: 0.60, s6: 0.21, importance: 0.6 },
+    { key: "chitchat", text: "Dana mentioned it is raining today", s0: 0.20, s6: 0.07, importance: 0.2 }
+  ];
+
+  // post-supersede / post-evict active store at t=6 (exact, from source):
+  //   0.60 Dana prefers phone contact
+  //   0.38 the user is Dana
+  //   0.25 Dana's order is ORD-3300 ($200)
+  //   0.15 Dana clicked a promo email once
+  var PHONE = { key: "contact", text: "Dana prefers phone contact", s: 0.60, importance: 0.6 };
+  var PROMO = { key: "promo", text: "Dana clicked a promo email once", s: 0.15, importance: 0.15 };
+
+  var ftTime = 0;          // 0 or 6 (slider snaps to these; intermediate interpolates display)
+  var superseded = false;  // email retired for phone
+  var evicted = false;     // 5th fact added, raining evicted
+
+  function scoreAt(s0, s6, t) {
+    // linear-ish interpolation for the slider's intermediate stops (display only);
+    // anchored EXACTLY at t=0 and t=6.
+    if (t <= 0) return s0;
+    if (t >= 6) return s6;
+    return s0 + (s6 - s0) * (t / 6);
+  }
+
+  function renderForgetting() {
+    var t = ftTime;
+    document.getElementById("ft-now").textContent = "t = " + t;
+    var slider = document.getElementById("ft-slider");
+    slider.setAttribute("aria-valuenow", String(t));
+
+    // build the active fact set in ranked order
+    var rows = [];
+
+    // name
+    rows.push({
+      text: BASE[0].text,
+      score: scoreAt(BASE[0].s0, BASE[0].s6, t),
+      badge: "active",
+      meta: "importance " + BASE[0].importance + " x recency x access (read twice)"
+    });
+    // order
+    rows.push({
+      text: BASE[1].text,
+      score: scoreAt(BASE[1].s0, BASE[1].s6, t),
+      badge: "active",
+      meta: "importance " + BASE[1].importance + " x recency"
+    });
+    // contact: email (active until superseded) OR phone
+    if (superseded) {
+      rows.push({
+        text: PHONE.text,
+        score: PHONE.s,
+        badge: "active",
+        meta: "fresh write at t=6: importance " + PHONE.importance + ", recency 1.0"
+      });
+      rows.push({
+        text: BASE[2].text,
+        score: scoreAt(BASE[2].s0, BASE[2].s6, t),
+        badge: "retired",
+        meta: "superseded by 'prefers phone contact'",
+        cls: "retired"
+      });
+    } else {
+      rows.push({
+        text: BASE[2].text,
+        score: scoreAt(BASE[2].s0, BASE[2].s6, t),
+        badge: "active",
+        meta: "importance " + BASE[2].importance + " x recency"
+      });
+    }
+    // chitchat: active until evicted
+    rows.push({
+      text: BASE[3].text,
+      score: scoreAt(BASE[3].s0, BASE[3].s6, t),
+      badge: evicted ? "evicted" : "active",
+      meta: evicted ? "evicted: lowest score over capacity 4" : "importance " + BASE[3].importance + " x recency",
+      cls: evicted ? "evicted" : null
+    });
+    // promo (only after evict)
+    if (evicted) {
+      rows.push({
+        text: PROMO.text,
+        score: PROMO.s,
+        badge: "active",
+        meta: "5th write at t=6: importance " + PROMO.importance
+      });
+    }
+
+    // sort active rows by score desc for the "ranked" view; keep retired/evicted
+    // pinned just after their active sibling is not necessary, so we sort all
+    // active to the top by score, then retired/evicted at the bottom.
+    var active = rows.filter(function (r) { return r.badge === "active"; });
+    var inactive = rows.filter(function (r) { return r.badge !== "active"; });
+    active.sort(function (a, b) { return b.score - a.score; });
+    var ordered = active.concat(inactive);
+
+    var list = document.getElementById("ft-list");
+    list.innerHTML = ordered.map(function (r) {
+      var rowCls = "fact-row" + (r.cls ? " " + r.cls : "");
+      var w = Math.max(0, Math.min(100, r.score * 100));
+      var txt = (r.badge === "active") ? escHtml(r.text) : '<s>' + escHtml(r.text) + '</s>';
+      return '<div class="' + rowCls + '">'
+        + '<div class="fact-top">'
+        + '<span class="fact-score">' + r.score.toFixed(2) + '</span>'
+        + '<span class="fact-text">' + txt + '</span>'
+        + '<span class="fact-badge ' + r.badge + '">' + r.badge + '</span>'
+        + '</div>'
+        + '<div class="fact-bar-track"><div class="fact-bar-fill" style="width:' + w + '%"></div></div>'
+        + '<div class="fact-meta">' + escHtml(r.meta) + '</div>'
+        + '</div>';
+    }).join("");
+
+    // hint
+    var hint = document.getElementById("ft-hint");
+    if (t === 0) {
+      hint.textContent = "At t = 0 every fact is fresh. Slide to t = 6: recency has decayed every score, and 'the user is Dana' was read twice, so its access count lifts it.";
+    } else if (t === 6) {
+      hint.textContent = "At t = 6 the scores match the source exactly: 0.38 / 0.25 / 0.21 / 0.07. Now fire a supersede and an eviction below.";
+    } else {
+      hint.textContent = "Decaying: recency halves every 4 time units. The exact anchors are t = 0 and t = 6.";
+    }
+
+    // event banners
+    var sup = document.getElementById("ft-ev-supersede");
+    if (superseded) {
+      sup.className = "forget-event supersede show";
+      sup.innerHTML = '<span class="fe-tag">supersede</span>Dana says to use the phone instead of email. The old fact is retired (not deleted); the new one is active.';
+    } else {
+      sup.className = "forget-event supersede";
+    }
+    var ev = document.getElementById("ft-ev-evict");
+    if (evicted) {
+      ev.className = "forget-event evict show";
+      ev.innerHTML = '<span class="fe-tag">evict</span>A 5th fact arrives but capacity is 4. The weakest active fact, "Dana mentioned it is raining today" (score 0.07), is evicted.';
+    } else {
+      ev.className = "forget-event evict";
+    }
+
+    // buttons enable/disable
+    document.getElementById("ft-supersede").disabled = superseded || t !== 6;
+    document.getElementById("ft-evict").disabled = evicted || !superseded || t !== 6;
+
+    // announce
+    var ann = document.getElementById("ft-announce");
+    var parts = ["Time t equals " + t + "."];
+    if (superseded) parts.push("Email contact retired for phone contact.");
+    if (evicted) parts.push("Raining-today fact evicted as the weakest over capacity.");
+    ann.textContent = parts.join(" ");
+  }
+
+  document.getElementById("ft-slider").addEventListener("input", function () {
+    ftTime = parseInt(this.value, 10);
+    // supersede/evict are only valid at t=6; if user slides away, they remain
+    // applied but buttons re-disable. Keep state but re-render.
+    renderForgetting();
+  });
+  document.getElementById("ft-supersede").addEventListener("click", function () {
+    if (ftTime === 6 && !superseded) { superseded = true; renderForgetting(); }
+  });
+  document.getElementById("ft-evict").addEventListener("click", function () {
+    if (ftTime === 6 && superseded && !evicted) { evicted = true; renderForgetting(); }
+  });
+  document.getElementById("ft-reset").addEventListener("click", function () {
+    ftTime = 0; superseded = false; evicted = false;
+    document.getElementById("ft-slider").value = "0";
+    renderForgetting();
+  });
+
+  renderCompaction();
+  renderForgetting();
+})();
+</script>
+</body>
+</html>

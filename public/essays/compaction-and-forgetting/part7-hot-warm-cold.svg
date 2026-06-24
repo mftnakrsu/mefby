@@ -1,0 +1,293 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="100%" style="height:auto" role="img" aria-label="Compaction in three tiers, hot, warm, and cold, keeping the live window bounded as a run grows. The hot tier holds the last two turns verbatim, an indigo card showing the user question about the earbuds warranty and the tool result that Globex earbuds carry a 2-year limited warranty. The warm tier is an amber rolling summary of decisions and tool outputs, showing the calculator result of 180 dollars, 200 times 0.9 after the fee. The cold tier is a single grey lossy line reading 2 earlier turns summarized. A token budget bar at the bottom shows the window staying at or under the budget of 40 tokens as the run grows from turn 1 to turn 10. A side panel contrasts compaction with RAG Part 20 condensation, which rewrites the user question into a standalone one, for example what about its battery becomes what is the battery life of the earbuds, marking the two as different operations.">
+  <title>Compaction in hot, warm, and cold tiers, contrasted with RAG Part 20 condensation</title>
+
+  <defs>
+    <marker id="arrSlate" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#64748b"/>
+    </marker>
+    <marker id="arrAmber" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#14b8a6"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="760" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 7, compaction keeps the window bounded</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">Compaction: keep the last turns HOT, fold the middle WARM, gist the rest COLD</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">Re-sending the whole transcript each step overflows the window. Three tiers compress the history so the live window stays bounded as the run grows.</text>
+
+  <!-- ================= THREE TIER CARDS ================= -->
+
+  <!-- HOT (indigo) -->
+  <rect x="40" y="88" width="360" height="246" rx="13" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <rect x="40" y="88" width="360" height="32" rx="13" fill="#6366f1"/>
+  <rect x="40" y="104" width="360" height="16" fill="#6366f1"/>
+  <text x="58" y="110"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.03em">HOT</text>
+  <text x="382" y="110" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">last 2 turns, verbatim</text>
+  <text x="58" y="144"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#0f172a">recent turns, kept exactly</text>
+  <text x="58" y="162"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#4f46e5">the model needs the immediate context word for word</text>
+  <!-- hot item 1 -->
+  <rect x="58" y="176" width="324" height="64" rx="8" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.3"/>
+  <text x="72" y="196"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" font-weight="700" fill="#4f46e5">user:</text>
+  <text x="72" y="212"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#312e81">Perfect. Could you also check the</text>
+  <text x="72" y="226"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#312e81">earbuds warranty?</text>
+  <!-- hot item 2 -->
+  <rect x="58" y="248" width="324" height="70" rx="8" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.3"/>
+  <text x="72" y="268"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" font-weight="700" fill="#0d9488">tool:</text>
+  <text x="72" y="284"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#312e81">search_products -> Globex earbuds</text>
+  <text x="72" y="298"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#312e81">carry a 2-year limited warranty.</text>
+
+  <!-- arrow HOT -> WARM (downward in time: older folds left) -->
+  <line x1="400" y1="200" x2="430" y2="200" stroke="#64748b" stroke-width="2.2" marker-end="url(#arrSlate)"/>
+  <text x="415" y="190" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="8.5" fill="#64748b">ages</text>
+
+  <!-- WARM (amber) -->
+  <rect x="438" y="88" width="360" height="246" rx="13" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <rect x="438" y="88" width="360" height="32" rx="13" fill="#f59e0b"/>
+  <rect x="438" y="104" width="360" height="16" fill="#f59e0b"/>
+  <text x="456" y="110"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.03em">WARM</text>
+  <text x="780" y="110" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">rolling summary</text>
+  <text x="456" y="144"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#0f172a">decisions and tool outputs, kept</text>
+  <text x="456" y="162"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#b45309">salient turns survive; chatter is dropped</text>
+  <!-- warm item -->
+  <rect x="456" y="176" width="324" height="58" rx="8" fill="#ffffff" stroke="#fde68a" stroke-width="1.3"/>
+  <text x="470" y="196"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" font-weight="700" fill="#b45309">kept decision:</text>
+  <text x="470" y="212"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#78350f">calculator -> $180.00</text>
+  <text x="470" y="226"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#78350f">(200 * 0.9 after the fee).</text>
+  <!-- dropped chatter note -->
+  <rect x="456" y="244" width="324" height="74" rx="8" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.2"/>
+  <text x="470" y="263"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" font-weight="700" fill="#9f1239">dropped chatter:</text>
+  <text x="470" y="279"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#9f1239" text-decoration="line-through">"Oh interesting, thanks for checking."</text>
+  <text x="470" y="295"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#9f1239" text-decoration="line-through">"Got it, that seems fair enough."</text>
+  <text x="470" y="311"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="8.5" fill="#9f1239">no decision, no tool output, no signal</text>
+
+  <!-- arrow WARM -> COLD -->
+  <line x1="798" y1="200" x2="828" y2="200" stroke="#64748b" stroke-width="2.2" marker-end="url(#arrSlate)"/>
+  <text x="813" y="190" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="8.5" fill="#64748b">ages</text>
+
+  <!-- COLD (slate / grey) -->
+  <rect x="836" y="88" width="324" height="246" rx="13" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+  <rect x="836" y="88" width="324" height="32" rx="13" fill="#64748b"/>
+  <rect x="836" y="104" width="324" height="16" fill="#64748b"/>
+  <text x="854" y="110"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.03em">COLD</text>
+  <text x="1142" y="110" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">one lossy line</text>
+  <text x="854" y="144"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#0f172a">the far past, near-free to carry</text>
+  <text x="854" y="162"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#475569">a single gist; the oldest warm folds into it</text>
+  <!-- cold item -->
+  <rect x="854" y="186" width="288" height="48" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.3"/>
+  <text x="868" y="215"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-style="italic" fill="#475569">[2 earlier turns summarized]</text>
+  <text x="854" y="262"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#64748b">A real system keeps a short paraphrase here.</text>
+  <text x="854" y="278"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#64748b">The point: distant context costs almost nothing</text>
+  <text x="854" y="294"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#64748b">to keep, so the run can carry on indefinitely.</text>
+
+  <!-- ================= TOKEN BUDGET BAR ================= -->
+  <text x="40" y="378"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#0f172a">The token budget stays bounded as the run grows (BUDGET = 40, HOT_N = 2)</text>
+  <text x="40" y="397"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#64748b">Each turn pushes the window up; when it crosses budget a compaction folds older turns warm and cold, dropping it back under.</text>
+
+  <!-- budget reference line label -->
+  <rect x="40" y="414" width="1120" height="120" rx="11" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.3"/>
+
+  <!-- budget marker line across the chart -->
+  <line x1="90" y1="432" x2="1120" y2="432" stroke="#475569" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="1120" y="428" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" font-weight="700" fill="#475569">budget = 40</text>
+
+  <!-- bars: 10 turns. value = window BEFORE compaction (over) then AFTER (under).
+       heights scale to a 50-token range over 84px (from y=516 baseline up). -->
+  <!-- baseline at y=516; budget(40) sits at y=432 (84px up). scale: 84/40 = 2.1px per token -->
+
+  <!-- turn 1: 11 -->
+  <rect x="96" y="493" width="38" height="23" rx="3" fill="#10b981"/>
+  <text x="115" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">1</text>
+  <text x="115" y="488" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#047857">11</text>
+  <!-- turn 2: 20 -->
+  <rect x="200" y="474" width="38" height="42" rx="3" fill="#10b981"/>
+  <text x="219" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">2</text>
+  <text x="219" y="469" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#047857">20</text>
+  <!-- turn 3: 29 -->
+  <rect x="304" y="455" width="38" height="61" rx="3" fill="#10b981"/>
+  <text x="323" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">3</text>
+  <text x="323" y="450" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#047857">29</text>
+  <!-- turn 4: 41 over -> 29 under (two stacked: rose over part, emerald under) -->
+  <rect x="408" y="430" width="38" height="86" rx="3" fill="#f43f5e"/>
+  <rect x="408" y="455" width="38" height="61" rx="3" fill="#10b981"/>
+  <text x="427" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">4</text>
+  <text x="427" y="425" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#9f1239">41</text>
+  <!-- turn 5: 40 -->
+  <rect x="512" y="432" width="38" height="84" rx="3" fill="#10b981"/>
+  <text x="531" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">5</text>
+  <text x="531" y="427" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#047857">40</text>
+  <!-- turn 6: 49 over -> 28 under -->
+  <rect x="616" y="413" width="38" height="103" rx="3" fill="#f43f5e"/>
+  <rect x="616" y="457" width="38" height="59" rx="3" fill="#10b981"/>
+  <text x="635" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">6</text>
+  <text x="635" y="408" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#9f1239">49</text>
+  <!-- turn 7: 39 -->
+  <rect x="720" y="434" width="38" height="82" rx="3" fill="#10b981"/>
+  <text x="739" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">7</text>
+  <text x="739" y="429" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#047857">39</text>
+  <!-- turn 8: 49 over -> 39 under -->
+  <rect x="824" y="413" width="38" height="103" rx="3" fill="#f43f5e"/>
+  <rect x="824" y="434" width="38" height="82" rx="3" fill="#10b981"/>
+  <text x="843" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">8</text>
+  <text x="843" y="408" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#9f1239">49</text>
+  <!-- turn 9: 48 over -> 37 under -->
+  <rect x="928" y="415" width="38" height="101" rx="3" fill="#f43f5e"/>
+  <rect x="928" y="438" width="38" height="78" rx="3" fill="#10b981"/>
+  <text x="947" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">9</text>
+  <text x="947" y="410" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#9f1239">48</text>
+  <!-- turn 10: 47 over -> 32 under -->
+  <rect x="1032" y="417" width="38" height="99" rx="3" fill="#f43f5e"/>
+  <rect x="1032" y="449" width="38" height="67" rx="3" fill="#10b981"/>
+  <text x="1051" y="528" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">10</text>
+  <text x="1051" y="412" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#9f1239">47</text>
+
+  <!-- legend for the bars -->
+  <rect x="1092" y="446" width="11" height="11" rx="2" fill="#f43f5e"/>
+  <text x="1108" y="455" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="8.5" fill="#9f1239">over</text>
+  <rect x="1092" y="462" width="11" height="11" rx="2" fill="#10b981"/>
+  <text x="1108" y="471" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="8.5" fill="#047857">after</text>
+
+  <!-- ================= CONTRAST PANEL vs P20 CONDENSATION ================= -->
+  <text x="40" y="578"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#0f172a">Different operation from RAG Part 20 CONDENSATION (do not conflate them)</text>
+
+  <!-- COMPACTION side -->
+  <rect x="40" y="592" width="555" height="118" rx="11" fill="#eef2ff" stroke="#6366f1" stroke-width="1.6"/>
+  <rect x="40" y="592" width="555" height="26" rx="11" fill="#6366f1"/>
+  <rect x="40" y="605" width="555" height="13" fill="#6366f1"/>
+  <text x="58" y="610"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="700" fill="#ffffff" letter-spacing="0.02em">COMPACTION (this part)</text>
+  <text x="577" y="610" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">compress the HISTORY</text>
+  <text x="58" y="638"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#334155">Input: the whole transcript.  Output: hot + warm + cold tiers.</text>
+  <rect x="58" y="650" width="519" height="26" rx="6" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.1"/>
+  <text x="70" y="667"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#312e81">10 turns  ->  [2 summarized] + warm($180 calc) + last 2 verbatim</text>
+  <text x="58" y="696"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#4f46e5">Purpose: keep the live window under budget so the run fits.</text>
+
+  <!-- vs divider -->
+  <circle cx="615" cy="651" r="15" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4"/>
+  <text x="615" y="655" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="10" font-weight="700" fill="#64748b">vs</text>
+
+  <!-- CONDENSATION side -->
+  <rect x="635" y="592" width="525" height="118" rx="11" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+  <rect x="635" y="592" width="525" height="26" rx="11" fill="#14b8a6"/>
+  <rect x="635" y="605" width="525" height="13" fill="#14b8a6"/>
+  <text x="653" y="610"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="700" fill="#ffffff" letter-spacing="0.02em">CONDENSATION (RAG Part 20)</text>
+  <text x="1142" y="610" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">rewrite the QUESTION</text>
+  <text x="653" y="638"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#334155">Input: the latest follow-up.  Output: one standalone query.</text>
+  <rect x="653" y="650" width="489" height="26" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="665" y="667"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#134e4a">"what about its battery?"  ->  "battery life of the earbuds?"</text>
+  <text x="653" y="696"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#0d9488">Purpose: make retrieval work on a context-free question.</text>
+
+  <!-- bottom caption -->
+  <rect x="40" y="722" width="1120" height="22" rx="6" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="600" y="737" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#475569">Same world, two distinct tools: compaction compresses the past to fit the window; condensation rewrites the present question to fit retrieval.</text>
+
+</svg>
