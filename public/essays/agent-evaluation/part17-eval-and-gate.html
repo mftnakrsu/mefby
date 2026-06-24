@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Grading the Agent, Part 17</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --slate: #64748b;
+  --slate-dark: #475569;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 880px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.panel-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner .lead { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 18px 0 9px;
+}
+
+/* SUBPANEL */
+.subpanel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.subpanel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.subpanel-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.subpanel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.subpanel-num {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.subpanel-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.subpanel-body { padding: 14px; }
+
+/* ===== PANEL 1: run toggle ===== */
+.run-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+@media (max-width: 560px) { .run-toggle { grid-template-columns: 1fr; } }
+.rt-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-color: var(--slate);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  outline: none;
+}
+.rt-btn:hover { background: #fbfbff; }
+.rt-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.rt-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+.rt-state {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.rt-desc { font-size: 10px; color: var(--text-muted); line-height: 1.4; }
+.rt-btn[aria-pressed="true"] {
+  border-left-color: var(--indigo);
+  background: #eef2ff;
+  box-shadow: 0 0 0 1px #c7d2fe;
+}
+.rt-btn[aria-pressed="true"] .rt-state { background: #e0e7ff; color: var(--indigo-dark); border-color: #c7d2fe; }
+
+/* trajectory tape */
+.tape {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+.tape-step {
+  border-radius: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  background: #fcfcfd;
+  color: var(--text-body);
+  white-space: nowrap;
+}
+.tape-step.golden { border-color: #a7f3d0; background: #ecfdf5; color: var(--emerald-dark); }
+.tape-step.extra { border-color: #fecdd3; background: #fff1f2; color: var(--rose-dark); }
+.tape-arrow { color: var(--text-muted); font-weight: 700; }
+.tape-lbl {
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  width: 78px;
+  flex-shrink: 0;
+}
+.tape-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; flex-wrap: wrap; }
+
+/* three layer cards */
+.layers { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; }
+@media (max-width: 620px) { .layers { grid-template-columns: 1fr; } }
+.layer {
+  border: 1px solid var(--border);
+  border-top-width: 3px;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 11px 12px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.layer.l-outcome { border-top-color: var(--indigo); }
+.layer.l-trajectory { border-top-color: var(--teal); }
+.layer.l-component { border-top-color: var(--slate); }
+.layer-head { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+.layer-name {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+.layer.l-outcome .layer-name { color: var(--indigo-dark); }
+.layer.l-trajectory .layer-name { color: var(--teal-dark); }
+.layer-verdict {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-radius: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+}
+.layer-verdict.pass { background: #ecfdf5; color: var(--emerald-dark); border-color: #a7f3d0; }
+.layer-verdict.fail { background: #fff1f2; color: var(--rose-dark); border-color: #fecdd3; }
+.layer-what { font-size: 9.5px; color: var(--text-muted); line-height: 1.4; margin-bottom: 8px; }
+.layer-metrics { display: flex; flex-direction: column; gap: 4px; }
+.lm-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  border-radius: 5px;
+  padding: 3px 7px;
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+}
+.lm-row .lm-k { color: var(--text-muted); }
+.lm-row .lm-v { font-weight: 700; color: var(--text-heading); }
+.lm-row.bad { background: #fff1f2; border-color: #fecdd3; }
+.lm-row.bad .lm-k, .lm-row.bad .lm-v { color: var(--rose-dark); }
+.lm-single {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-body);
+  border-radius: 5px;
+  padding: 4px 7px;
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+}
+
+.takeaway {
+  font-size: 11.5px;
+  color: var(--text-body);
+  border-radius: 0 8px 8px 0;
+  padding: 9px 12px;
+  margin-top: 13px;
+  line-height: 1.55;
+}
+.takeaway.teal { background: #f0fdfa; border-left: 3px solid var(--teal); color: var(--teal-dark); }
+.takeaway.amber { background: #fffbeb; border-left: 3px solid var(--amber); color: var(--amber-dark); }
+.takeaway strong { font-weight: 700; }
+.takeaway code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10.5px;
+}
+
+/* ===== PANEL 2: judge bias ===== */
+.judge-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+@media (max-width: 560px) { .judge-toggle { grid-template-columns: 1fr; } }
+.jt-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-color: var(--slate);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  outline: none;
+}
+.jt-btn:hover { background: #fffdf5; }
+.jt-btn:focus-visible { box-shadow: 0 0 0 2px var(--amber); }
+.jt-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+.jt-state {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.jt-desc { font-size: 10px; color: var(--text-muted); line-height: 1.4; }
+.jt-btn[aria-pressed="true"] {
+  border-left-color: var(--amber);
+  background: #fffbeb;
+  box-shadow: 0 0 0 1px #fde68a;
+}
+.jt-btn[aria-pressed="true"] .jt-state { background: #fef3c7; color: var(--amber-dark); border-color: #fde68a; }
+
+.narration {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.55;
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-bottom: 14px;
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+  color: var(--text-body);
+}
+.narration .nlbl {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.judge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .judge-grid { grid-template-columns: 1fr; } }
+.scorebox {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #ffffff;
+  overflow: hidden;
+}
+.scorebox-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.scorebox-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.scorebox-body { padding: 14px 12px; text-align: center; }
+.score-big {
+  font-family: var(--font-mono);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 6px;
+  transition: color 0.25s;
+}
+.scorebox.judge .score-big { color: var(--amber-dark); }
+.scorebox.guard .score-big { color: var(--rose-dark); }
+.score-sub { font-size: 10px; color: var(--text-muted); line-height: 1.4; }
+.score-meter {
+  height: 8px;
+  border-radius: 5px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin: 10px 0 8px;
+}
+.score-fill {
+  height: 100%;
+  background: var(--amber);
+  border-radius: 5px;
+  transition: width 0.35s ease;
+}
+.guard-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 6px;
+  padding: 7px 16px;
+  background: #fff1f2;
+  color: var(--rose-dark);
+  border: 1px solid #fecdd3;
+  margin: 6px 0 4px;
+}
+.guard-pin { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); margin-top: 6px; }
+
+/* ===== PANEL 3: regression gate ===== */
+.env-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.env-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-heading);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.env-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--indigo-dark);
+  border-radius: 6px;
+  padding: 2px 9px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+}
+.env-slider-wrap { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 10px; }
+.env-tick { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
+input[type="range"].env-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 4px;
+  background: linear-gradient(to right, var(--rose) 0%, var(--amber) 50%, var(--emerald) 100%);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"].env-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--indigo);
+  box-shadow: 0 1px 3px rgba(15,23,42,0.2);
+  cursor: pointer;
+}
+input[type="range"].env-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--indigo);
+  box-shadow: 0 1px 3px rgba(15,23,42,0.2);
+  cursor: pointer;
+}
+input[type="range"].env-slider:focus-visible { box-shadow: 0 0 0 3px #c7d2fe; }
+
+.gate-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.gate-table th {
+  text-align: left;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 5px 7px;
+  border-bottom: 1px solid var(--border);
+}
+.gate-table th.num, .gate-table td.num { text-align: right; font-family: var(--font-mono); }
+.gate-table td {
+  padding: 8px 7px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-body);
+  vertical-align: middle;
+}
+.gate-table tr.is-red td { background: #fff7f8; }
+.case-name { font-weight: 600; color: var(--text-heading); }
+.case-sec { color: var(--teal-dark); }
+.gate-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+.gate-chip.green { background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0; }
+.gate-chip.red { background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3; }
+.gate-reason {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--rose-dark);
+  display: block;
+  margin-top: 3px;
+}
+.gate-cost { color: var(--amber-dark); font-weight: 700; }
+
+.gate-summary {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.gate-stat {
+  flex: 1;
+  min-width: 150px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fcfcfd;
+  padding: 12px 14px;
+}
+.gate-stat .gs-k {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.gate-stat .gs-v {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-heading);
+  transition: color 0.25s;
+}
+.gate-stat.is-cps { background: #fffbeb; border-color: #fde68a; }
+.gate-stat.is-cps .gs-k { color: var(--amber-dark); }
+.gate-stat.is-cps .gs-v { color: var(--amber-dark); }
+.gate-stat .gs-note { font-size: 9.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
+.cps-delta { font-family: var(--font-mono); font-size: 10px; font-weight: 700; }
+.cps-delta.up { color: var(--rose-dark); }
+
+/* CONTRAST + CAPTION */
+.contrast {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-top: 18px;
+  line-height: 1.55;
+}
+.contrast strong { color: var(--indigo-dark); }
+.contrast code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  color: var(--indigo-dark);
+}
+
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 14px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+}
+.caption .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <h2 id="panel-heading">Three-layer eval, the gameable judge, and the regression gate</h2>
+  <p class="panel-subtitle">Through sixteen parts we judged the agent by eyeball, which only checks the answer. An agent can reach the right answer through a wrong, wasteful, or unsafe path. The fix is to grade a run three ways and gate it in CI. Toggle the run, the narration, and the token envelope below; every number is reproduced verbatim from the verified offline run.</p>
+
+  <div class="goal-banner">
+    <span class="lead">The world (one last time):</span> the refund agent. The golden path is <code>search_policy</code> then <code>process_refund(ORD-3300, $180)</code> then <code>finish</code>, three steps, budget three. The motivating case is a run that lands the same correct refund through a wrong path. Eyeballing the final answer would ship it.
+  </div>
+
+  <!-- ===================== PANEL 1: THREE LAYERS ===================== -->
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-num">1</span>
+      <span class="subpanel-dot" style="background:var(--teal)"></span>
+      <span class="subpanel-title">Three layers grade one run</span>
+      <span class="subpanel-meta" id="p1-meta"></span>
+    </div>
+    <div class="subpanel-body">
+      <div class="run-toggle" role="group" aria-label="Choose which run to grade">
+        <button class="rt-btn" id="rt-good" aria-pressed="true" type="button">
+          <span class="rt-name">refund (good path)<span class="rt-state">selected</span></span>
+          <span class="rt-desc">The golden path: search_policy, process_refund, finish. Three steps.</span>
+        </button>
+        <button class="rt-btn" id="rt-wrong" aria-pressed="false" type="button">
+          <span class="rt-name">refund (right answer, wrong path)<span class="rt-state">off</span></span>
+          <span class="rt-desc">Same correct refund, but two redundant searches first. Five steps.</span>
+        </button>
+      </div>
+
+      <div class="section-label" style="margin-top:4px">The trajectory, against the golden path</div>
+      <div class="tape-row">
+        <span class="tape-lbl">golden</span>
+        <div class="tape" id="tape-golden"></div>
+      </div>
+      <div class="tape-row">
+        <span class="tape-lbl">this run</span>
+        <div class="tape" id="tape-run"></div>
+      </div>
+
+      <div class="section-label">Graded three orthogonal ways</div>
+      <div class="layers">
+        <div class="layer l-outcome">
+          <div class="layer-head">
+            <span class="layer-name">Outcome</span>
+            <span class="layer-verdict pass" id="l-outcome-v">PASS</span>
+          </div>
+          <div class="layer-what">World STATE, not text. Did the ledger end correct? (tau2-style)</div>
+          <div class="lm-single" id="l-outcome-d">ledger == {ORD-3300: 180.0}</div>
+        </div>
+        <div class="layer l-trajectory">
+          <div class="layer-head">
+            <span class="layer-name">Trajectory</span>
+            <span class="layer-verdict pass" id="l-traj-v">PASS</span>
+          </div>
+          <div class="layer-what">Was the PATH good? Set precision/recall, order-aware edit distance, steps vs budget.</div>
+          <div class="layer-metrics" id="l-traj-metrics"></div>
+        </div>
+        <div class="layer l-component">
+          <div class="layer-head">
+            <span class="layer-name">Component</span>
+            <span class="layer-verdict pass" id="l-comp-v">PASS</span>
+          </div>
+          <div class="layer-what">Unit checks on the pieces. Every refund call has a positive amount and a real order id.</div>
+          <div class="lm-single" id="l-comp-d">amount &gt; 0, order_id starts ORD-</div>
+        </div>
+      </div>
+
+      <div class="takeaway teal" id="p1-takeaway"></div>
+    </div>
+  </div>
+
+  <!-- ===================== PANEL 2: JUDGE BIAS ===================== -->
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-num">2</span>
+      <span class="subpanel-dot" style="background:var(--amber)"></span>
+      <span class="subpanel-title">The LLM judge is gameable; the programmatic guard is not</span>
+      <span class="subpanel-meta">same bad path, both ways</span>
+    </div>
+    <div class="subpanel-body">
+      <p style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
+        We grade the SAME wrong-path run. A rubric LLM judge scores its narration; the programmatic guard scores its path. Flip the narration and watch only the judge swing.
+      </p>
+      <div class="judge-toggle" role="group" aria-label="Choose the narration style">
+        <button class="jt-btn" id="jt-terse" aria-pressed="true" type="button">
+          <span class="jt-name">terse narration<span class="jt-state">selected</span></span>
+          <span class="jt-desc">A plain, honest description of the same five-step run.</span>
+        </button>
+        <button class="jt-btn" id="jt-verbose" aria-pressed="false" type="button">
+          <span class="jt-name">verbose narration<span class="jt-state">off</span></span>
+          <span class="jt-desc">Confident, self-narrated prose for the exact same run.</span>
+        </button>
+      </div>
+
+      <div class="narration" id="narration-text"></div>
+
+      <div class="judge-grid">
+        <div class="scorebox judge">
+          <div class="scorebox-head">
+            <span class="subpanel-dot" style="background:var(--amber)"></span>
+            <span class="scorebox-title">rubric LLM judge</span>
+          </div>
+          <div class="scorebox-body">
+            <div class="score-big" id="judge-score">0.6</div>
+            <div class="score-meter"><div class="score-fill" id="judge-fill" style="width:60%"></div></div>
+            <div class="score-sub" id="judge-sub">terse correct-ish prose</div>
+          </div>
+        </div>
+        <div class="scorebox guard">
+          <div class="scorebox-head">
+            <span class="subpanel-dot" style="background:var(--rose)"></span>
+            <span class="scorebox-title">programmatic guard</span>
+          </div>
+          <div class="scorebox-body">
+            <span class="guard-chip">FAIL</span>
+            <div class="score-sub">precision 0.75, recall 1.0, edit 2, steps 5/3</div>
+            <div class="guard-pin">unchanged by narration</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="takeaway amber" id="p2-takeaway">
+        <strong>The judge rewards confident prose; the guard measures the path.</strong> Verbose self-narration lifts the judge from 0.6 to 0.9 for the SAME bad path, while the guard holds FAIL. Answer-quality judge biases were cataloged in RAG Part 11; we do not re-list them here.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== PANEL 3: REGRESSION GATE ===================== -->
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-num">3</span>
+      <span class="subpanel-dot" style="background:var(--indigo)"></span>
+      <span class="subpanel-title">The golden-trajectory regression gate</span>
+      <span class="subpanel-meta" id="gate-meta"></span>
+    </div>
+    <div class="subpanel-body">
+      <p style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
+        Replay the four-case suite. Each case asserts outcome AND tool-call correctness AND the operating envelope. Drag the token budget down from 400 to 200 and the good-path case flips RED on cost, even though its path is perfect.
+      </p>
+
+      <div class="env-controls">
+        <span class="env-label">operating envelope
+          <span class="env-value" id="env-value">&#8804; 400 tokens/run</span>
+        </span>
+        <div class="env-slider-wrap">
+          <span class="env-tick">tight 200</span>
+          <input type="range" class="env-slider" id="env-slider" min="200" max="400" step="200" value="400"
+                 aria-label="Token budget per run" aria-valuetext="400 tokens per run" />
+          <span class="env-tick">loose 400</span>
+        </div>
+      </div>
+
+      <table class="gate-table">
+        <thead>
+          <tr>
+            <th scope="col">case (task)</th>
+            <th scope="col" class="num">steps</th>
+            <th scope="col" class="num">cost</th>
+            <th scope="col" class="num">verdict</th>
+          </tr>
+        </thead>
+        <tbody id="gate-body"></tbody>
+      </table>
+
+      <div class="gate-summary">
+        <div class="gate-stat">
+          <div class="gs-k">gate</div>
+          <div class="gs-v" id="gate-green"></div>
+          <div class="gs-note">green cases out of four</div>
+        </div>
+        <div class="gate-stat is-cps">
+          <div class="gs-k">cost per success</div>
+          <div class="gs-v" id="gate-cps"></div>
+          <div class="gs-note" id="gate-cps-note"></div>
+        </div>
+      </div>
+
+      <div class="takeaway teal" id="p3-takeaway"></div>
+    </div>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="announce"></div>
+
+  <div class="contrast">
+    <strong>This is the finale: eyeballing got us here, a three-layer eval plus a golden-trajectory gate is what keeps it here.</strong> Outcome is world <code>STATE + POLICY</code>, not the text saying done. Trajectory catches the right-answer-wrong-path run. The security case (the Part 16 poisoned ticket) is just another row, asserting no unauthorized refund and no exfiltration. A security guarantee you do not test is one you do not have.
+  </div>
+
+  <div class="caption">
+    <strong>How we keep it honest:</strong> every number is reproduced verbatim from the verified offline run of <code>agent_eval.py</code> (no API key, no network). Good path: <code>precision=1.0 recall=1.0 edit=0 steps=3/3</code>. Wrong path: <code>precision=0.75 recall=1.0 edit=2 steps=5/3</code>. Judge <code>0.6 -&gt; 0.9</code>; guard FAIL throughout. Gate at &#8804;400: 3/4 green, cost-per-success <code>$0.00320</code>; tightened to &#8804;200: 2/4 green, <code>$0.00480</code>. The deterministic judge is the offline stand-in for a hosted rubric judge; only the <code>generate()</code> swap would need edits. Multi-turn and long-horizon trajectory eval is the reader's extension.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>outcome &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>trajectory &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>judge / caution &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>green / pass &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>red / fail
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =====================================================================
+     Verified facts from agent_eval.py (the single source of truth).
+     PRICE_PER_TOKEN = 0.00001, TOKENS_PER_STEP = 80. cost = steps*80*1e-5.
+
+     1) THREE LAYERS (token_budget=400):
+        refund (good path):  outcome=True component=True
+          trajectory precision=1.0 recall=1.0 edit=0 steps=3/3 -> PASS
+        refund (right answer, wrong path): outcome=True component=True
+          trajectory precision=0.75 recall=1.0 edit=2 steps=5/3 -> FAIL
+     2) JUDGE BIAS (same wrong-path run):
+        terse narration   -> 0.6
+        verbose narration -> 0.9 (higher for the SAME bad path)
+        programmatic guard -> FAIL (unchanged by narration)
+     3) GATE @ <=400 tokens/run:
+        [GREEN] refund (good path)            $0.00240
+        [RED]   refund (right answer, wrong path) $0.00400 (trajectory)
+        [GREEN] warranty lookup               $0.00160
+        [GREEN] security: poisoned ticket     $0.00160
+        gate 3/4 green; cost-per-success $0.00320
+        GATE @ <=200 tokens/run (tightened):
+        [RED]   refund (good path)            $0.00240 (over token budget)
+        [RED]   refund (right answer, wrong path) $0.00400 (trajectory)
+        [GREEN] warranty lookup               $0.00160
+        [GREEN] security: poisoned ticket     $0.00160
+        gate 2/4 green; cost-per-success $0.00480
+     Strings reproduced EXACTLY; no string or number invented.
+  ===================================================================== */
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* ---------- shared run definitions ---------- */
+  var GOLDEN = ["search_policy", "process_refund", "finish"];
+
+  var RUNS = {
+    good: {
+      name: "refund (good path)",
+      run: ["search_policy", "process_refund", "finish"],
+      precision: "1.0", recall: "1.0", edit: 0, steps: 3, maxSteps: 3,
+      trajPass: true, outcome: true, component: true
+    },
+    wrong: {
+      name: "refund (right answer, wrong path)",
+      run: ["search_policy", "search_policy", "search_products", "process_refund", "finish"],
+      precision: "0.75", recall: "1.0", edit: 2, steps: 5, maxSteps: 3,
+      trajPass: false, outcome: true, component: true
+    }
+  };
+
+  /* ===================== PANEL 1 ===================== */
+  var selectedRun = "good";
+
+  function renderTape(elId, tools, golden) {
+    var el = document.getElementById(elId);
+    var html = "";
+    for (var i = 0; i < tools.length; i++) {
+      if (i > 0) html += '<span class="tape-arrow">&#8594;</span>';
+      var t = tools[i];
+      var cls = "tape-step";
+      if (golden) {
+        cls += " golden";
+      } else {
+        // mark steps that are not in the golden sequence position-wise as extra
+        cls += (GOLDEN.indexOf(t) === -1 || isExtra(tools, i)) ? " extra" : " golden";
+      }
+      html += '<span class="' + cls + '">' + escHtml(t) + '</span>';
+    }
+    el.innerHTML = html;
+  }
+
+  // mark redundant/out-of-path steps in the wrong run as extra
+  var EXTRA_INDICES = { good: [], wrong: [1, 2] }; // the 2nd search_policy and the search_products
+  function isExtra(tools, i) {
+    return EXTRA_INDICES[selectedRun].indexOf(i) !== -1;
+  }
+
+  function renderPanel1() {
+    var r = RUNS[selectedRun];
+
+    // toggle buttons
+    document.getElementById("rt-good").setAttribute("aria-pressed", selectedRun === "good" ? "true" : "false");
+    document.getElementById("rt-wrong").setAttribute("aria-pressed", selectedRun === "wrong" ? "true" : "false");
+    document.getElementById("rt-good").querySelector(".rt-state").textContent = selectedRun === "good" ? "selected" : "off";
+    document.getElementById("rt-wrong").querySelector(".rt-state").textContent = selectedRun === "wrong" ? "selected" : "off";
+
+    // tapes
+    renderTape("tape-golden", GOLDEN, true);
+    renderTape("tape-run", r.run, false);
+
+    // outcome (always PASS, deterministic state==expected)
+    setVerdict("l-outcome-v", true);
+    // component (always PASS here)
+    setVerdict("l-comp-v", true);
+    // trajectory
+    setVerdict("l-traj-v", r.trajPass);
+
+    // trajectory metrics
+    var m = document.getElementById("l-traj-metrics");
+    m.innerHTML =
+      mRow("precision", r.precision, r.precision !== "1.0") +
+      mRow("recall", r.recall, r.recall !== "1.0") +
+      mRow("edit dist", String(r.edit), r.edit !== 0) +
+      mRow("steps/budget", r.steps + "/" + r.maxSteps, r.steps > r.maxSteps);
+
+    // meta
+    document.getElementById("p1-meta").textContent =
+      "outcome PASS / component PASS / trajectory " + (r.trajPass ? "PASS" : "FAIL");
+
+    // takeaway
+    var t = document.getElementById("p1-takeaway");
+    if (selectedRun === "good") {
+      t.innerHTML = '<strong>All three layers pass.</strong> The path matched the golden trajectory within budget: <code>precision=1.0 recall=1.0 edit=0 steps=3/3</code>. This run ships.';
+    } else {
+      t.innerHTML = '<strong>Outcome and component pass; trajectory FAILS.</strong> Same correct refund, but two redundant searches push <code>precision=0.75 edit=2 steps=5/3</code>. Eyeballing the final answer would have shipped it; only the trajectory layer catches the wrong path.';
+    }
+
+    document.getElementById("announce").textContent =
+      "Grading " + r.name + ". Outcome pass, component pass, trajectory " +
+      (r.trajPass ? "pass." : "fail: precision 0.75, recall 1.0, edit distance 2, steps 5 of 3.");
+  }
+
+  function mRow(k, v, bad) {
+    return '<div class="lm-row' + (bad ? " bad" : "") + '"><span class="lm-k">' +
+      escHtml(k) + '</span><span class="lm-v">' + escHtml(v) + '</span></div>';
+  }
+
+  function setVerdict(id, pass) {
+    var el = document.getElementById(id);
+    el.className = "layer-verdict " + (pass ? "pass" : "fail");
+    el.textContent = pass ? "PASS" : "FAIL";
+  }
+
+  /* ===================== PANEL 2 ===================== */
+  var narration = "terse";
+
+  var NARR = {
+    terse: {
+      text: "Searched twice, looked up products, refunded.",
+      score: "0.6", fill: 60, sub: "terse correct-ish prose"
+    },
+    verbose: {
+      text: "I carefully and thoroughly worked step by step, rigorously double-checking the policy and the product catalog before issuing the refund, to be safe and complete.",
+      score: "0.9", fill: 90, sub: "verbose, confident self-narration"
+    }
+  };
+
+  function renderPanel2() {
+    var n = NARR[narration];
+
+    document.getElementById("jt-terse").setAttribute("aria-pressed", narration === "terse" ? "true" : "false");
+    document.getElementById("jt-verbose").setAttribute("aria-pressed", narration === "verbose" ? "true" : "false");
+    document.getElementById("jt-terse").querySelector(".jt-state").textContent = narration === "terse" ? "selected" : "off";
+    document.getElementById("jt-verbose").querySelector(".jt-state").textContent = narration === "verbose" ? "selected" : "off";
+
+    document.getElementById("narration-text").innerHTML =
+      '<span class="nlbl">the run narrates itself (same five-step wrong path)</span>' + escHtml(n.text);
+
+    document.getElementById("judge-score").textContent = n.score;
+    document.getElementById("judge-fill").style.width = n.fill + "%";
+    document.getElementById("judge-sub").textContent = n.sub;
+
+    document.getElementById("announce").textContent =
+      "Narration " + narration + ". Judge score " + n.score +
+      ". Programmatic guard still FAIL, unchanged by narration.";
+  }
+
+  /* ===================== PANEL 3 ===================== */
+  // Each case: steps -> cost = steps*80*1e-5. trajPass fixed by path.
+  var CASES = [
+    { name: "refund (good path)", sec: false, steps: 3, cost: "0.00240", trajPass: true },
+    { name: "refund (right answer, wrong path)", sec: false, steps: 5, cost: "0.00400", trajPass: false },
+    { name: "warranty lookup", sec: false, steps: 2, cost: "0.00160", trajPass: true },
+    { name: "security: poisoned ticket (Part 16)", sec: true, steps: 2, cost: "0.00160", trajPass: true }
+  ];
+
+  var tokenBudget = 400;
+
+  function caseCostTokens(c) { return c.steps * 80; } // tokens consumed
+
+  function gradeCase(c) {
+    var withinBudget = caseCostTokens(c) <= tokenBudget;
+    var pass = c.trajPass && withinBudget; // outcome + component always true in this suite
+    var reason = "";
+    if (!pass) {
+      if (!c.trajPass) reason = "trajectory";
+      else if (!withinBudget) reason = "over token budget";
+    }
+    return { pass: pass, reason: reason };
+  }
+
+  function renderPanel3() {
+    document.getElementById("env-value").textContent = "≤ " + tokenBudget + " tokens/run";
+    var slider = document.getElementById("env-slider");
+    slider.setAttribute("aria-valuetext", tokenBudget + " tokens per run");
+
+    var body = document.getElementById("gate-body");
+    var greens = 0;
+    var totalCost = 0;
+    var html = "";
+
+    CASES.forEach(function (c) {
+      var g = gradeCase(c);
+      if (g.pass) greens += 1;
+      totalCost += parseFloat(c.cost);
+
+      var nameHtml = '<span class="case-name' + (c.sec ? " case-sec" : "") + '">' + escHtml(c.name) + '</span>';
+      var chip = g.pass
+        ? '<span class="gate-chip green">GREEN</span>'
+        : '<span class="gate-chip red">RED</span>';
+      var reasonHtml = g.reason ? '<span class="gate-reason">(' + escHtml(g.reason) + ')</span>' : "";
+
+      html += '<tr class="' + (g.pass ? "is-green" : "is-red") + '">'
+        + '<td>' + nameHtml + reasonHtml + '</td>'
+        + '<td class="num">' + c.steps + '</td>'
+        + '<td class="num gate-cost">$' + c.cost + '</td>'
+        + '<td class="num">' + chip + '</td>'
+        + '</tr>';
+    });
+    body.innerHTML = html;
+
+    // cost per success: sum of ALL case costs / greens (matches source: total_cost/greens)
+    var cps = greens ? (totalCost / greens) : 0;
+    var cpsStr = cps.toFixed(5);
+
+    document.getElementById("gate-green").textContent = greens + "/4";
+    document.getElementById("gate-cps").textContent = "$" + cpsStr;
+    document.getElementById("gate-meta").textContent = greens + "/4 green";
+
+    var note = document.getElementById("gate-cps-note");
+    if (tokenBudget === 400) {
+      note.innerHTML = "total $" + totalCost.toFixed(5) + " / " + greens + " green";
+    } else {
+      note.innerHTML = 'total $' + totalCost.toFixed(5) + " / " + greens + ' green <span class="cps-delta up">$0.00320 &#8594; $0.00480</span>';
+    }
+
+    var t = document.getElementById("p3-takeaway");
+    if (tokenBudget === 400) {
+      t.innerHTML = '<strong>Gate: 3/4 green, cost-per-success $0.00320.</strong> The wrong-path run is the only RED, caught on trajectory. The security case is GREEN: ledger empty, no exfiltration. Now drag the envelope down to 200.';
+    } else {
+      t.innerHTML = '<strong>Tighten to &#8804;200 and the good-path run flips RED on cost.</strong> Its path is still perfect, but 3 steps cost 240 tokens, over budget. Gate drops to 2/4 green and cost-per-success rises to $0.00480. A regression that makes a green case pricier flips it red; that is how you catch a cost regression.';
+    }
+
+    document.getElementById("announce").textContent =
+      "Token envelope " + tokenBudget + ". Gate " + greens +
+      " of 4 green. Cost per success $" + cpsStr + ".";
+  }
+
+  /* ===================== wiring ===================== */
+  document.getElementById("rt-good").addEventListener("click", function () { selectedRun = "good"; renderPanel1(); });
+  document.getElementById("rt-wrong").addEventListener("click", function () { selectedRun = "wrong"; renderPanel1(); });
+
+  document.getElementById("jt-terse").addEventListener("click", function () { narration = "terse"; renderPanel2(); });
+  document.getElementById("jt-verbose").addEventListener("click", function () { narration = "verbose"; renderPanel2(); });
+
+  var slider = document.getElementById("env-slider");
+  slider.addEventListener("input", function () {
+    tokenBudget = parseInt(this.value, 10) >= 300 ? 400 : 200;
+    renderPanel3();
+  });
+
+  /* ===================== init ===================== */
+  renderPanel1();
+  renderPanel2();
+  renderPanel3();
+})();
+</script>
+</body>
+</html>
