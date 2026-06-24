@@ -1,0 +1,127 @@
+---
+title: "Bozulmuş Bir Plandan Sağ Çıkmak"
+description: "Önden yazılmış bir plan, dünyanın değişmeyeceğine dair bir bahistir. Koşu ortasında bir SKU üretimden kalktığında, prospective bir critic ve yalnızca kalan adımları revize eden hata-tetikli bir replanner koşuyu kurtarır."
+date: 2026-06-30
+tags: ["Agents","Planning","Replanning","Critic","Reliability","AI"]
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-04-replanning-and-critic"
+lang: "tr"
+translationSlug: "replanning-and-critic"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Part 3 plan'ı first-class bir artefakta dönüştürdü: bütün DAG'ı bir kere yazıp sonra onu ucuza yürütmek, rotayı her hop'ta modelin kafasında yeniden türetmek yerine. Bu gerçek bir kazanç, ve yeni bir failure satın alıyor. Önden yazılmış bir plan, siz planlarken dünyanın hâlâ o haliyle görüneceğine dair bir bahistir. Dünya katılmadığı anda, committed plan bir yükümlülüğe dönüşür, ve Part 3'ün DAG executor'ı yine de körlemesine ilerleyip onu çalıştırır. Bu parça gerçekçi kırılmayı enjekte ediyor: koşu ortasında bir SKU **üretimden kalkıyor (discontinued)**. Plan `SKU-ACME-EB` için bir fiyat, bir warranty ve vergi-dahil bir total quote etmek üzere kurulmuştu, ama o ürünün üretimden kalkıp `SKU-GLX-EB` ile değiştirildiği ortaya çıkıyor. Bunu düzelten, biri execution'dan önce biri sırasında olmak üzere iki mekanizma inşa edeceksin. Önce, tek bir tool ateşlenmeden planı inceleyen ve bir planner'ın yaptığı yapısal hataları reddeden bir **prospective critic**: registry'de olmayan bir tool, karşılanamayan bir dependency, bir dependency cycle ve redundant bir adım. Sonra, plan-geçersiz kılan bir failure'da yalnızca **kalan subgraph**'ı revize eden, tamamlanmış her adımı **memoize** ederek bir daha hiç çalıştırmayan ve sürekli kırılan bir planın sonsuza dek dönmek yerine devre dışı kalması için bir **replan budget** altında devam eden bir **hata-tetikli replanner**. Tez şu: bir hatayı geri beslemek (Part 2) agent'a adımın başarısız olduğunu söyler; replanning, committed bir planın bu konuda bir şey yapma biçimidir.
+
+## Ön koşullar
+
+Temel Python yeterli: fonksiyonlar, sözlükler (dictionary), küçük bir döngü ve bir liste okuyabilmek. Hepsi bu. [Part 2](/essays/robust-tool-execution) ve [Part 3](/essays/planning-and-the-tool-dag)'ü bitirmek yardımcı olur, çünkü Part 3'ün `TaskNode`'unu, dependency DAG'ını ve topological execution'ını yeniden kullanıyoruz, ve Part 2'nin failure taksonomisine yaslanıyoruz (üretimden kalkmış bir SKU bir permanent error'dur). Ama bu parça kendi içinde bütünlüklü: daha önceki bir fikre dayandığı yerde, onu tek bir cümleyle yeniden ifade ediyor. Eşlik eden kod, [replanning_critic.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-04-replanning-and-critic), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz. Deterministik bir kural planner'ı ve critic varsayılan olarak source of truth'tur, gerçek LLM yolu (`generate()`) tek bir ortam bayrağı uzaklıkta, tam olarak Part 1'den 3'e kadarki gibi.
+
+## Part 3'ten bu yana yeni olan ne
+
+Neyin yeni olduğu konusunda kesin olmak istiyorum, çünkü çoğu şey değil. Yirmi parça boyunca RAG serisinin revize edilecek hiç bir plan nesnesi yoktu, ve RAG Part 19'un agent'ının bile yalnızca tek bir düz step budget'ı vardı, critique ya da rewrite edilecek hiçbir şey yazılı değildi. Buradaki Part 3, planner-executor ailesine sahip: `TaskNode`, dependency DAG, evidence-variable binding ve topological-level execution. Bunların hiçbirini yeniden inşa etmiyorum, ve ReAct loop'unu, tool sözleşmesini ya da retry merdivenini yeniden öğretmiyorum; bunlar Part 1 ve 2, ve bu parçanın üstünde durduğu baseline. Gerçekten yeni olan, mevcut DAG'ı saran mekanizma çifti: execution'dan önce çalışan bir **prospective critic**, ve sırasında çalışan bir **hata-tetikli replanner**. Onlarla birlikte replanner'ın ihtiyaç duyduğu üç fikir de yeni: **partial replanning** (yalnızca henüz-çalışmamış tail'i yeniden yazmak), **step memoization** (tamamlanmış node'lar bir replan boyunca asla yeniden çalıştırılmaz) ve dürüst bir **replan budget**. DAG, zaten inşa ettiğimiz DAG; değişen şey, planın artık tek atımlık bir bahis olmayı bırakıp agent'ın önden vet edebileceği ve uçuşta revize edebileceği bir şeye dönüşmesi.
+
+## Prospective critic
+
+İlk mekanizma herhangi bir tool ateşlenmeden önce çalışır. Bir planner, ister deterministik bir kural ister gerçek bir LLM olsun, kâğıt üstünde bozuk bir plan yazabilir, ve onu çalıştırmak sadece bunu keşfederek call harcamaktır. Dolayısıyla critic, planı veri olarak inceler ve dört yapısal hataya bakar. Bir **unknown tool**, registry'de olmayan bir tool'u adlandıran ve bu yüzden hiç çalışamayan bir adımdır. Bir **unsatisfiable dependency**, planda var olmayan bir node'a ihtiyaç duyduğunu beyan eden bir adımdır. Bir **dependency cycle**, kendine geçişli olarak (transitively) ihtiyaç duyan bir adımdır, dolayısıyla topological order onu hiç zamanlayamaz. Ve bir **redundant step**, aynı tool ve argümana sahip iki node'dur, ki ikincisi saf israftır. Bu, Part 1'in pre-flight argüman validator'ının plan-zamanındaki analoğudur: Part 1 kâğıt üstünde yanlış olan bir call'ı ateşlenmeden reddediyordu; critic, kâğıt üstünde yanlış olan bir planı, hiçbir kısmı ateşlenmeden reddeder. İşte critic, bir planner'ın kasıtlı olarak bozuk ilk taslağı üzerinde, artefaktın gerçek çıktısından:
+
+```text
+  Critiquing a planner's first draft (it has four kinds of mistake):
+      - B2: redundant, identical to B1 (get_price('SKU-GLX-EB'))
+      - B3: unknown tool 'search_web' (not in the registry)
+      - B4: depends on 'B9', which is not in the plan
+      - dependency cycle detected (a step transitively depends on itself)
+  -> rejected; the planner is asked to try again before anything runs.
+```
+
+Dört problem, dört check, ve bunları bulmak için harcanan tek bir tool call yok. `B2`, `B1`'i tam olarak tekrarlar, dolayısıyla redundant işaretlenir. `B3`, registry'de olmayan `search_web`'i adlandırır, dolayısıyla bir unknown tool'dur. `B4`, planın hiçbir yerinde olmayan bir node olan `B9`'a bir dependency beyan eder, dolayısıyla o dependency unsatisfiable'dır. Ve taslak `B5` ile `B6`'yı birbirine bağımlı olacak şekilde bağlar, dolayısıyla critic bir dependency cycle raporlar. Critic boş olmayan bir problem listesi döndürdüğü için, plan reddedilir ve planner'dan, executor bir tool'a dokunmadan önce, yeniden denemesi istenir. Şimdi aynı critic gerçek quote planı üzerinde:
+
+```text
+  The same critic on the real quote plan:
+  plan:  E1=lookup_status('SKU-ACME-EB') | E2=get_price('SKU-ACME-EB') | E3=get_warranty('SKU-ACME-EB') | E4=calculator('#E2 * 1.18')
+  levels: E1@L1, E2@L1, E3@L1, E4@L2
+  critic: no problems found; cleared for execution.
+```
+
+Bu plan iyi biçimli: dört bilinen tool, var olan her dependency, cycle yok, duplicate yok. Level satırı `E1@L1, E2@L1, E3@L1, E4@L2` der, ki bu Part 3'ün topological katmanlamasının iş başında olması: üç lookup level 1'de oturur ve `E4` (vergi-dahil total) level 2'de bekler, çünkü argümanı `'#E2 * 1.18'`, `E2`'nin sonucunu adlandırır. Critic hiç problem bulmaz ve planı execution için temize çıkarır. Temiz bir yapı, gene de, dünyayla temasta sağ çıkacak bir planla aynı şey değildir, ki bir sonraki failure budur.
+
+<Diagram number={1} caption="The prospective critic as a gate before execution. A planner emits a plan, and the critic inspects it as data for four structural mistakes before a single tool fires: an unknown tool not in the registry, an unsatisfiable dependency on a node not in the plan, a dependency cycle where a step transitively needs itself, and a redundant step identical to an earlier one. A bad draft (B2 redundant with B1, B3 the unknown tool search_web, B4 depending on the missing B9, and a B5/B6 cycle) is rejected and sent back to the planner before any call is spent. The real quote plan (E1 lookup_status, E2 get_price, E3 get_warranty, E4 calculator) passes all four checks and is cleared for execution. This is the plan-time analog of Part 1's pre-flight argument validator.">
+  <img src="/essays/replanning-and-critic/part4-critic-gate.svg" alt="A diagram of a planner box on the left emitting a plan into a critic gate in the centre. The critic gate lists four checks stacked vertically: unknown tool (not in the registry), unsatisfiable dependency (needs a node not in the plan), dependency cycle (a step transitively needs itself), and redundant step (identical tool and argument). A broken draft enters first, shown as six nodes B1 through B6, and the gate emits four red problem labels: B2 redundant identical to B1, B3 unknown tool search_web, B4 depends on B9 not in the plan, and a dependency cycle between B5 and B6; an arrow loops the rejected draft back to the planner labelled try again before anything runs. Below, the real quote plan enters as four nodes E1 lookup_status, E2 get_price, E3 get_warranty at level 1 and E4 calculator at level 2, and the gate emits a single green label no problems found, cleared for execution. A caption strip reads: catch a bad plan before it wastes a single tool call, the plan-time analog of Part 1's argument validator." class="w-full rounded-lg" />
+</Diagram>
+
+## Dünya katılmadığında
+
+Temize çıkan plan `SKU-ACME-EB`'yi üç yerde adlandırır. Ama o SKU üretimden kalkmış, `SKU-GLX-EB` ile değiştirilmiş: Acme'den Globex'e satın alma somutlaştırılmış halde, satın almanın Acme earbuds'larını Globex hattı lehine emekliye ayırması. Part 2 bu failure'ı nasıl sınıflandıracağımızı zaten öğretti. Üretimden kalkmış bir SKU bir **permanent error** raptır, ki bu aynı call'ı retry etmenin yardımcı olamayacağı kategoridir, çünkü SKU ikinci denemede de tıpkı bu kadar ölü olacaktır. Part 2'nin bir permanent error için reçetesi, onu retry etmek yerine modele bir observation olarak geri beslemekti. Bu burada gereklidir, ve yeterli değildir, çünkü agent artık üç adımda ölü bir SKU'yu adlandıran bir plana committed durumdadır. Blind executor'ın, yani critic'siz ve replanner'sız Part 3 DAG'ının, üretimden kalkmış SKU'ya çarpıp hatayı sadakatle geri beslemesini izleyin, artefaktın gerçek trace'inden:
+
+```text
+    E1: lookup_status('SKU-ACME-EB') -> SKU-ACME-EB: discontinued, replaced by SKU-GLX-EB
+    E2: get_price('SKU-ACME-EB') -> PermanentError: SKU-ACME-EB is discontinued (replaced by SKU-GLX-EB)
+         fed back as an observation (Part 2), but the plan still names a dead SKU
+    E3: get_warranty('SKU-ACME-EB') -> PermanentError: SKU-ACME-EB is discontinued (replaced by SKU-GLX-EB)
+         fed back as an observation (Part 2), but the plan still names a dead SKU
+    E4: calculator('#E2 * 1.18') -> calculator error: cannot evaluate (missing input?)
+    QUOTE: INCOMPLETE -- price=unavailable, warranty=unavailable, total=uncomputable.
+    -> The executor knew the SKU was dead and still could not revise the committed plan.
+```
+
+Şelaleyi okuyun. `E1`, SKU'nun üretimden kalktığını raporlar ve hatta bize replacement'ı söyler. `E2` ve `E3` sonra permanent error'ı raise eder ve onu tam Part 2'nin reçetelediği gibi geri besler, ama geri beslemek planla ilgili hiçbir şeyi değiştirmez: bir sonraki adım hâlâ aynı ölü SKU'yu adlandırır. `E4`'ün hesaplayacak hiçbir şeyi yoktur, çünkü `E2` hiç fiyat üretmedi, dolayısıyla calculator bir error döndürür. Final quote `INCOMPLETE`'tir: fiyat unavailable, warranty unavailable, total uncomputable. Executor SKU'nun ölü olduğunu kelimenin tam anlamıyla biliyordu, yanıt tam orada `E1`'in sonucundaydı, ve hâlâ geçerli bir quote üretemedi, çünkü bir adımın başarısız olduğunu bilmek, committed bir planı revize edebilmekle aynı şey değildir. Part 2 koşunun çökmesi kapısını kapattı; koşunun hiçbir şeyle bitmesini ardına kadar açık bıraktı.
+
+## Hata-tetikli replanning
+
+Çözüm ikinci mekanizmadır. Bir adım, planın geri kalanını geçersiz kılan bir biçimde başarısız olduğunda, koşuyu terk etmeyin ve baştan başlamayın. Yalnızca **kalan subgraph**'ı revize edin: henüz-çalışmamış adımları replacement SKU'yu hedefleyecek şekilde yeniden yazın, tamamlanmış her adımı **memoize** ederek bir daha hiç çalıştırmayın, ve devam edin. İşte critic-artı-replanner executor'ı aynı görevde, aynı dünyada, aynı failure'da, artefaktın gerçek trace'inden:
+
+```text
+    critic: no problems found; plan cleared for execution.
+    E1: lookup_status('SKU-ACME-EB') -> SKU-ACME-EB: discontinued, replaced by SKU-GLX-EB
+    E2: get_price('SKU-ACME-EB') -> PermanentError: SKU-ACME-EB is discontinued (replaced by SKU-GLX-EB)
+         REPLAN #1: rewrite remaining ['E2', 'E3'] to SKU-GLX-EB; memoized ['E1'] stay (not re-run).
+    E2: get_price('SKU-GLX-EB') -> $79.00
+    E3: get_warranty('SKU-GLX-EB') -> 2-year limited warranty
+    E4: calculator('79.0 * 1.18') -> $93.22
+    QUOTE: SKU-GLX-EB (replaces discontinued SKU-ACME-EB): price $79.00, 2-year limited warranty, total with tax $93.22.
+    -> Completed with 1 replan(s); the dead tail was rewritten, the lookup reused.
+```
+
+Critic planı temize çıkarır, ve execution blind run ile aynı şekilde başlar: `E1`, SKU'nun üretimden kalktığını raporlar, `E2` permanent error'ı raise eder. Burada iki koşu yollarını ayırır. Hatayı geri besleyip yürümeye devam etmek yerine, replanner ateşlenir: `REPLAN #1: rewrite remaining ['E2', 'E3'] to SKU-GLX-EB; memoized ['E1'] stay (not re-run).` O tek satırda okunacak üç şey var. Kalan tail `['E2', 'E3']`'tür, yani argümanı ölü SKU'yu adlandıran henüz-tamamlanmamış adımlar, ve yalnızca onlar replacement'a yeniden yazılır. Tamamlanmış adım `['E1']` memoize edilmiştir ve yerinde kalır, asla yeniden çalıştırılmaz, çünkü sonucu zaten elde edilmiştir ve onu yeniden çalıştırmak israf olurdu. Ve replan bir budget'a karşı sayılır, `#1`. Yeniden yazımdan sonra `E2`, canlı SKU ile retry edilir ve `$79.00` döndürür, `E3`, `2-year limited warranty` döndürür, ve `E4`, `'79.0 * 1.18'`'i `$93.22`'ye hesaplar. Final quote geçerlidir. `E4`'ün yeniden yazılan tail'de olmadığına dikkat edin: argümanı `'#E2 * 1.18'`, ki bu hiç SKU taşımaz, dolayısıyla içinde yeniden yazılacak bir şey yoktur, ve replanner onu doğru biçimde dokunmadan bırakır. Koşu tam olarak bir replan ile tamamlanır, ölü tail yeniden yazılmış ve lookup yeniden kullanılmıştır. Aşağıdaki interaktif figür, aynı üretimden kalkmış SKU üzerinde her iki executor'da, blind ve replanning, adım adım ilerlemenizi sağlar.
+
+<Diagram number={2} caption="Error-triggered partial replanning, interactive. Step through both executors on the same discontinued SKU. The blind executor (Part 3 DAG, no critic, no replanner) runs E1 lookup_status (reporting the SKU is discontinued), then E2 and E3 raise the permanent error and are fed back as observations (Part 2), then E4's calculator fails with no price, ending in an INCOMPLETE quote. The critic-plus-replanner executor clears the plan, hits the same E2 failure, and fires REPLAN #1: it rewrites only the remaining tail E2 and E3 to the replacement SKU-GLX-EB, keeps the memoized E1 (never re-run), and continues, so E2 returns 79.00 dollars, E3 the 2-year limited warranty, and E4 computes 79.0 times 1.18 to 93.22 dollars, ending in a valid quote with one replan. E4's argument carries no SKU, so it is left untouched.">
+  <IframeFigure src="/essays/replanning-and-critic/part4-replan.html" title="Interactive replanning player comparing two executors on a discontinued SKU. A toggle switches between the blind executor and the critic-plus-replanner executor running the same four-step quote plan for SKU-ACME-EB: E1 lookup_status, E2 get_price, E3 get_warranty, and E4 calculator of hash-E2 times 1.18. The blind executor runs E1 which reports SKU-ACME-EB is discontinued and replaced by SKU-GLX-EB, then E2 and E3 raise PermanentError and are fed back as observations per Part 2 but the plan still names the dead SKU, then E4 fails with a calculator error because no price exists, ending in an INCOMPLETE quote with price unavailable, warranty unavailable, and total uncomputable. The replanner executor first shows the critic clearing the plan, then runs E1, then E2 raises the permanent error and triggers REPLAN number 1: it rewrites only the remaining steps E2 and E3 to SKU-GLX-EB while the memoized E1 stays and is not re-run, after which E2 returns 79.00 dollars, E3 returns the 2-year limited warranty, and E4 computes 79.0 times 1.18 to 93.22 dollars, ending in a valid quote that completes with one replan. A note states E4's argument names hash-E2 and carries no SKU, so the replanner leaves it untouched, and a replan budget caps the number of rewrites." height={840} />
+</Diagram>
+
+## Ne zaman duracağını bilmek
+
+Replanning yalnızca bounded ise güvenlidir. Sürekli kırılan bir plan, her yeniden yazımın bir başka çıkmaza çarptığı bir plan, sonsuza dek yeniden yazıp retry ederek döner, ki bu da resilience kılığına sokulmuş yavaş bir takılmadan başka bir şey değildir. Dolayısıyla replanner dürüst bir **replan budget** altında çalışır, burada `max_replans=2` ile sınırlı. Her hata-tetikli yeniden yazım ona karşı sayılır, ve budget tükendiğinde executor yeniden denemek yerine durur, sessizce dönmek yerine pes ettiğini yüzeye çıkarır. Buradaki mutlu durumda bir replan yeterliydi ve budget tükenmeye hiç yaklaşmadı. Budget, Part 2'nin bounded retry'ı ile aynı içgüdüdür, plan seviyesine yükseltilmiş: loop'u sınırla ki kurtarılabilir bir durum kurtulsun ve kurtarılamaz biri hızlı ve görünür biçimde başarısız olsun. Bu kasıtlı olarak basit bir sınır, bir sayaç ve bir karşılaştırma; tam ele alış, denemeler arası state ve gerçek bir trip-and-cool-down policy ile, Part 8'deki **circuit breaker**. Bu parça için ders dar ve önemli: planını yeniden yazabilen bir agent, yeterince yeniden yazdığına da karar verebilmek zorundadır.
+
+> 💡 **Deneyimden.** Yayına aldığım ilk replanning agent'ının memoization'ı yoktu, ve bu bize en sessiz kötü biçimde pahalıya patladı. Erken adımlarından biri pahalı bir enrichment call'ıydı, istek başına ödediğimiz bir üçüncü-taraf lookup'ı, ve uzun bir planın ön tarafına yakın oturuyordu. Sonraki bir adım her başarısız olup agent replan ettiğinde, planı goal'den yeniden inşa ediyor ve her şeyi yeniden çalıştırıyordu, zaten başarılı olmuş ve sonucu değişmemiş olan o enrichment call'ı da dahil. Temiz bir koşuda bir kere ateşleniyordu. Üç kere replan eden bir koşuda dört kere ateşleniyordu, ve üçü için boşuna ödüyorduk. Daha kötüsü, duplicate call'lar zaman zaman vendor'ın kendi rate limit'ini tetikliyordu, ki bu da transient bir error olarak yüzeye çıkıyordu, ki agent bunu yeniden replan etmek için bir neden olarak ele alıyordu, ki bu da enrichment'ı bir kez daha yeniden çalıştırıyordu. Çözüm sıkıcı, doğru olanıydı: tamamlanmış adımları memoize et ve yalnızca kalan tail'i yeniden yaz, böylece bir replan planın gerçekten yanlış olan kısmına dokunur ve zaten çalışmış olan kısmı kendi haline bırakır. Memoization'ı eklediğimiz gün faturadaki duplicate-enrichment satırı düzleşti, ve kazara-rate-limit-yüzünden-replan loop'u onunla birlikte yok oldu.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Özet / Çıkarımlar
+
+- Part 3 plan'ı first-class bir artefakta dönüştürdü, ki bu yeni bir failure satın alır: önden bir plan, dünyanın değişmeyeceğine dair bir bahistir, ve değiştiği anda (koşu ortasında bir SKU'nun üretimden kalkması) committed plan, Part 3 executor'ının yine de körlemesine geçip gittiği bir yükümlülüğe dönüşür.
+- Bir **prospective critic** planı herhangi bir tool ateşlenmeden inceler ve dört yapısal hatayı reddeder: bir **unknown tool** (registry'de değil), bir **unsatisfiable dependency** (planda olmayan bir node'a ihtiyaç duyar), bir **dependency cycle** (bir adım kendine geçişli olarak ihtiyaç duyar) ve bir **redundant step** (aynı tool ve argüman). Bu, Part 1'in argüman validator'ının plan-zamanındaki analoğudur.
+- Üretimden kalkmış bir SKU, Part 2'nin taksonomisinde bir **permanent error**'dur. Blind executor onu tam Part 2'nin reçetelediği gibi bir observation olarak geri besler, ve hâlâ `INCOMPLETE` biter, çünkü bir hatayı geri beslemek agent'a adımın başarısız olduğunu söyler ama committed planı revize etmez.
+- Bir **hata-tetikli replanner**, plan-geçersiz kılan bir failure'da yalnızca **kalan subgraph**'ı revize eder: `REPLAN #1`, henüz-çalışmamış tail `['E2', 'E3']`'ü replacement SKU'ya yeniden yazar ve geçerli bir quote'a kadar devam eder (`$79.00`, bir `2-year limited warranty`, total `$93.22`).
+- Tamamlanmış adımlar **memoize** edilir: yeniden yazım `['E1']`'i yerinde tutar ve onu asla yeniden çalıştırmaz. Replanner ayrıca ölü referansı olmayan adımları dokunmadan bırakır, dolayısıyla `E4`'ün `'#E2 * 1.18'`'i (hiç SKU yok) yeniden yazılan tail'de değildir.
+- Bir **replan budget** (burada max 2) loop'u sınırlar, böylece sürekli kırılan bir plan sonsuza dek dönmek yerine devre dışı kalır. Bu, Part 2'nin bounded retry'ının plan seviyesine yükseltilmiş halidir; tam circuit breaker Part 8.
+
+## Sözlük
+
+- **Prospective critic**: bir planı, herhangi bir tool ateşlenmeden veri olarak inceleyen ve yapısal hataları reddeden bir check, böylece bozuk bir plan call harcamak yerine planner'a geri gönderilir; Part 1'in pre-flight argüman validator'ının plan-zamanındaki analoğu.
+- **Unknown tool (critic check)**: registry'de bulunmayan bir tool'u adlandıran, dolayısıyla hiç çalışamayan bir adım; execution'dan önce işaretlenir.
+- **Unsatisfiable dependency (critic check)**: planda var olmayan bir node'a bir dependency beyan eden bir adım, dolayısıyla ön koşulu hiç üretilemez.
+- **Dependency cycle (critic check)**: kendine geçişli olarak bağımlı olan bir adım, dolayısıyla bir topological order onu hiç zamanlayamaz; execution'dan önce tespit edilir.
+- **Redundant step (critic check)**: aynı tool ve argümana sahip iki node, ki ikincisi saf israftır; critic duplicate'i işaretler.
+- **Hata-tetikli replanning (error-triggered replanning)**: committed bir planı, koşuyu terk etmek ya da baştan başlamak yerine, run time'da plan-geçersiz kılan bir failure'a yanıt olarak revize etmek; replanning, committed bir planın bir hata üzerine eyleme geçme biçimidir, Part 2'nin geri-beslemesi ise yalnızca onu raporlar.
+- **Partial replanning (kalan subgraph)**: yalnızca, başarısız olan input'a başvuran henüz-çalışmamış adımları (topological order'ın tail'i) yeniden yazmak, zaten tamamlanmış ve etkilenmemiş adımları kendi haline bırakmak.
+- **Step memoization**: tamamlanmış adımların sonuçlarını saklamak, böylece bir replan boyunca asla yeniden çalıştırılmazlar, ki bu yeniden yazımın geçersiz kılmadığı pahalı ya da yan-etkili işin tekrarlanmasını önler.
+- **Replan budget**: agent'ın bir koşuda kaç kere replan edebileceğine dair dürüst bir sınır (burada max 2), böylece sürekli kırılan bir plan sonsuza dek dönmek yerine devre dışı kalır; Part 2'nin bounded retry'ının plan seviyesine yükseltilmiş hali, tam circuit breaker Part 8'de.
+- **Permanent error** ([Part 2](/essays/robust-tool-execution)'den): aynı call'ı retry etmenin düzeltemeyeceği bir failure (burada üretimden kalkmış bir SKU); Part 2 onu bir observation olarak geri besler, ve bu parça onun etrafından replan eder.
+
+---
+
+Bu parçanın kuralı: committed bir planın, çalışmadan önce vet edilmenin ve dünya katılmadığında revize edilmenin bir yoluna ihtiyacı vardır, ve ikisi de bounded olmalıdır. Ama replanning'in yapmadığı şeye dikkat edin. Kendisine söylenen bir failure'ın etrafından, o anda, rotayı yeniden yazar, ve sonra unutur. Aynı bozuk görevi tekrar çalıştırın, ya da aynı koşuda daha sonra aynı sınıftan bir hataya çarpın, ve agent onu tekrarlar, çünkü hiçbir şey öğrendiğini kalıcı kılmaz, replan yerel bir yamaydı, bir ders değil. **Part 5, Learning from Failure**, o açığı kapatmakla ilgili: in-loop reflection ve Reflexion pattern'i, ki orada agent neyin yanlış gittiğini yazar ve onu bir sonraki denemesine geri besler, böylece aynı tür hatayı iki kez yapmayı bırakır.
