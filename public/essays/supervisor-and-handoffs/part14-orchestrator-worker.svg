@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="100%" style="height:auto" role="img" aria-label="The orchestrator-worker pattern, also called the supervisor. A LEAD agent at the top decomposes one task, Prepare a customer briefing on refunds, the earbuds warranty, and shipping, into three typed briefs. Each typed brief carries an objective, an output format, tool guidance, and boundaries. The lead fans out to three WORKERS. Each worker is the Part 1 agent reused as a black box and runs in its OWN isolated context of 14 tokens, seeing only its brief. Worker w1 summarizes the refund policy and returns Refunds within 30 days, a 10 percent restocking fee applies after the window. Worker w2 states the earbuds warranty and returns The Globex earbuds carry a 2-year limited warranty. Worker w3 lists the shipping options and returns Standard shipping is 3 to 5 business days, express is next business day. All three post their result to a shared append-only BLACKBOARD. The lead then reads the blackboard and SYNTHESIZES the three entries into one briefing. The contexts are isolated, and with real concurrency the independent workers run in one round.">
+  <title>The orchestrator-worker (supervisor) pattern: decompose into typed briefs, fan out to isolated workers, post to a blackboard, synthesize</title>
+
+  <defs>
+    <marker id="arrTeal" markerWidth="12" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <polygon points="0 0, 12 5.5, 0 11" fill="#0d9488"/>
+    </marker>
+    <marker id="arrIndigo" markerWidth="12" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <polygon points="0 0, 12 5.5, 0 11" fill="#4f46e5"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="12" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <polygon points="0 0, 12 5.5, 0 11" fill="#047857"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="760" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#94a3b8">Part 14, the supervisor and the handoff</text>
+
+  <!-- Title -->
+  <text x="40" y="34" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="18" font-weight="700" fill="#0f172a">The orchestrator-worker pattern: decompose, fan out, synthesize</text>
+  <text x="40" y="54" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#64748b">A lead splits one task into typed briefs, spawns isolated workers, collects their results on a blackboard, and composes the answer.</text>
+
+  <!-- ====================== LEAD (decompose) ====================== -->
+  <rect x="300" y="80" width="600" height="92" rx="13" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.8"/>
+  <rect x="300" y="80" width="600" height="6" rx="3" fill="#6366f1"/>
+  <text x="324" y="110" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="700" fill="#4f46e5">LEAD (supervisor) &#183; decomposes the task</text>
+  <text x="324" y="132" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#334155">goal: "Prepare a customer briefing on refunds, the earbuds warranty,</text>
+  <text x="324" y="147" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#334155">       and shipping."</text>
+  <text x="324" y="164" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#64748b">one task &#8594; 3 typed briefs (objective, output format, tool guidance, boundaries)</text>
+
+  <!-- Fan-out arrows from lead to each worker -->
+  <line x1="450" y1="172" x2="222" y2="232" stroke="#4f46e5" stroke-width="2.2" marker-end="url(#arrIndigo)"/>
+  <line x1="600" y1="172" x2="600" y2="232" stroke="#4f46e5" stroke-width="2.2" marker-end="url(#arrIndigo)"/>
+  <line x1="750" y1="172" x2="978" y2="232" stroke="#4f46e5" stroke-width="2.2" marker-end="url(#arrIndigo)"/>
+  <text x="600" y="208" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" font-weight="700" fill="#4f46e5" letter-spacing="0.04em">FAN OUT: each worker gets ONE typed brief</text>
+
+  <!-- ====================== WORKER 1 ====================== -->
+  <rect x="48" y="238" width="336" height="226" rx="13" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.8"/>
+  <rect x="48" y="238" width="336" height="6" rx="3" fill="#14b8a6"/>
+  <text x="72" y="268" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#0d9488">w1</text>
+  <text x="104" y="268" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11.5" font-weight="700" fill="#0d9488">WORKER (Part 1 agent, reused)</text>
+  <rect x="72" y="280" width="288" height="20" rx="5" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="84" y="294" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#0f766e">brief: summarize the refund policy</text>
+  <rect x="72" y="306" width="288" height="22" rx="5" fill="#f7fffd" stroke="#99f6e4" stroke-width="1"/>
+  <text x="84" y="321" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#475569">own isolated context &#183; 14 tokens</text>
+  <rect x="72" y="336" width="288" height="112" rx="9" fill="#ffffff" stroke="#99f6e4" stroke-width="1.2"/>
+  <text x="86" y="355" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#0d9488">returns</text>
+  <text x="86" y="374" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#334155">Refunds within 30 days; a 10%</text>
+  <text x="86" y="390" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#334155">restocking fee applies after the</text>
+  <text x="86" y="406" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#334155">window.</text>
+  <text x="86" y="432" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#64748b">sees only its brief, not the shared transcript</text>
+
+  <!-- ====================== WORKER 2 ====================== -->
+  <rect x="432" y="238" width="336" height="226" rx="13" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.8"/>
+  <rect x="432" y="238" width="336" height="6" rx="3" fill="#14b8a6"/>
+  <text x="456" y="268" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#0d9488">w2</text>
+  <text x="488" y="268" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11.5" font-weight="700" fill="#0d9488">WORKER (Part 1 agent, reused)</text>
+  <rect x="456" y="280" width="288" height="20" rx="5" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="468" y="294" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#0f766e">brief: state the earbuds warranty</text>
+  <rect x="456" y="306" width="288" height="22" rx="5" fill="#f7fffd" stroke="#99f6e4" stroke-width="1"/>
+  <text x="468" y="321" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#475569">own isolated context &#183; 14 tokens</text>
+  <rect x="456" y="336" width="288" height="112" rx="9" fill="#ffffff" stroke="#99f6e4" stroke-width="1.2"/>
+  <text x="470" y="355" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#0d9488">returns</text>
+  <text x="470" y="374" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#334155">The Globex earbuds carry a</text>
+  <text x="470" y="390" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#334155">2-year limited warranty.</text>
+  <text x="470" y="432" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#64748b">sees only its brief, not the shared transcript</text>
+
+  <!-- ====================== WORKER 3 ====================== -->
+  <rect x="816" y="238" width="336" height="226" rx="13" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.8"/>
+  <rect x="816" y="238" width="336" height="6" rx="3" fill="#14b8a6"/>
+  <text x="840" y="268" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#0d9488">w3</text>
+  <text x="872" y="268" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11.5" font-weight="700" fill="#0d9488">WORKER (Part 1 agent, reused)</text>
+  <rect x="840" y="280" width="288" height="20" rx="5" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="852" y="294" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#0f766e">brief: list the shipping options</text>
+  <rect x="840" y="306" width="288" height="22" rx="5" fill="#f7fffd" stroke="#99f6e4" stroke-width="1"/>
+  <text x="852" y="321" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#475569">own isolated context &#183; 14 tokens</text>
+  <rect x="840" y="336" width="288" height="112" rx="9" fill="#ffffff" stroke="#99f6e4" stroke-width="1.2"/>
+  <text x="854" y="355" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#0d9488">returns</text>
+  <text x="854" y="374" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#334155">Standard shipping is 3 to 5</text>
+  <text x="854" y="390" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#334155">business days; express is next</text>
+  <text x="854" y="406" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#334155">business day.</text>
+  <text x="854" y="432" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#64748b">sees only its brief, not the shared transcript</text>
+
+  <!-- post arrows: workers -> blackboard -->
+  <line x1="216" y1="464" x2="380" y2="528" stroke="#0d9488" stroke-width="2.2" marker-end="url(#arrTeal)"/>
+  <line x1="600" y1="464" x2="600" y2="528" stroke="#0d9488" stroke-width="2.2" marker-end="url(#arrTeal)"/>
+  <line x1="984" y1="464" x2="820" y2="528" stroke="#0d9488" stroke-width="2.2" marker-end="url(#arrTeal)"/>
+  <text x="600" y="500" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" font-weight="700" fill="#0d9488" letter-spacing="0.04em">POST: each worker writes one result</text>
+
+  <!-- ====================== BLACKBOARD ====================== -->
+  <rect x="200" y="534" width="800" height="96" rx="13" fill="#f0fdfa" stroke="#0d9488" stroke-width="1.8" stroke-dasharray="7 5"/>
+  <text x="224" y="560" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#0d9488">SHARED APPEND-ONLY BLACKBOARD</text>
+  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#0f766e">workers coordinate here; the lead reads it</text>
+  <text x="224" y="582" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#334155">w1 &#183; Refunds within 30 days; a 10% restocking fee applies after the window.</text>
+  <text x="224" y="599" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#334155">w2 &#183; The Globex earbuds carry a 2-year limited warranty.</text>
+  <text x="224" y="616" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#334155">w3 &#183; Standard shipping is 3 to 5 business days; express is next business day.</text>
+
+  <!-- read arrow: blackboard -> synthesis -->
+  <line x1="600" y1="630" x2="600" y2="666" stroke="#047857" stroke-width="2.2" marker-end="url(#arrEmerald)"/>
+  <text x="612" y="652" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#047857">lead reads + synthesizes</text>
+
+  <!-- ====================== SYNTHESIS ====================== -->
+  <rect x="120" y="672" width="960" height="56" rx="11" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.6"/>
+  <rect x="120" y="672" width="6" height="56" rx="3" fill="#10b981"/>
+  <text x="146" y="693" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#047857">&#10003; LEAD SYNTHESIZES the blackboard into one briefing</text>
+  <text x="146" y="712" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#064e3b">Refunds within 30 days; a 10% restocking fee applies after the window. The Globex earbuds carry a 2-year limited warranty. Standard shipping is 3 to 5 business days; express is next business day.</text>
+
+  <!-- annotation note bottom -->
+  <rect x="48" y="742" width="1104" height="0" />
+  <text x="40" y="752" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#0d9488" font-weight="700">Isolated contexts; independent workers run in one round with real concurrency. Offline they run sequentially, so we report LLM-call count and token isolation, never wall-clock.</text>
+
+</svg>
