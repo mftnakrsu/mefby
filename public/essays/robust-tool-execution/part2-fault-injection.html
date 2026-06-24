@@ -627,7 +627,7 @@ h2 {
         { kind: "fail", idx: "attempt 1", outcome: "PermanentError: 404: index 'archive' does not exist",
           policy: { type: "feedback", tag: "permanent", text: "FEED BACK to the model", backoff: null } },
       ],
-      disp: { type: "fedback", icon: "&#10007;", label: "Fed back as an Observation; not retried",
+      disp: { type: "fedback", icon: "&#10007;", label: "fed back as an Observation; not retried",
               cat: "category: permanent &nbsp;·&nbsp; a retry would fail identically, so the wrapper does not waste one." },
     },
     {
@@ -639,7 +639,7 @@ h2 {
         { kind: "fail", idx: "attempt 1", outcome: "returned, but EMPTY (the call worked, found nothing useful)",
           policy: { type: "feedback", tag: "empty-result", text: "FEED BACK to the model", backoff: null } },
       ],
-      disp: { type: "fedback", icon: "&#10007;", label: "Fed back as an Observation; not retried",
+      disp: { type: "fedback", icon: "&#10007;", label: "fed back as an Observation; not retried",
               cat: "category: empty-result &nbsp;·&nbsp; succeeded is not the same as found something; an empty payload is fed back, not retried." },
     },
     {
@@ -651,7 +651,7 @@ h2 {
         { kind: "gate", idx: "pre-flight", outcome: "unknown-tool: unknown tool 'search_web' (not in the action space)",
           policy: { type: "feedback", tag: "unknown-tool", text: "FEED BACK to the model", backoff: null } },
       ],
-      disp: { type: "fedback", icon: "&#10007;", label: "Fed back as an Observation; not retried",
+      disp: { type: "fedback", icon: "&#10007;", label: "fed back as an Observation; not retried",
               cat: "category: unknown-tool &nbsp;·&nbsp; caught pre-flight by the Part 1 validator, before any call fires." },
     },
   ];
