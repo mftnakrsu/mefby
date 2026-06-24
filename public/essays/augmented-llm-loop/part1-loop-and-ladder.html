@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Agent Ladder &amp; Tool Contract, Part 1</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --amber: #f59e0b;
+  --emerald: #10b981;
+  --rose: #f43f5e;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 760px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* ── QUESTION BANNER ── */
+.question-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+}
+.question-banner span {
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+/* ── SEGMENTED TOGGLE ── */
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  flex: 1;
+  min-width: 120px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  outline: none;
+}
+.toggle-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--indigo);
+}
+.toggle-btn[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+
+/* ── COST BADGE ── */
+.cost-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-bottom: 14px;
+}
+.cost-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ── STEP TRACE CARDS ── */
+.trace-area {
+  min-height: 220px;
+  position: relative;
+}
+
+.step-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  display: none;
+  animation: fadeIn 0.18s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .step-card { animation: none; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.step-card.active { display: block; }
+
+.step-header {
+  padding: 8px 12px;
+  background: var(--chip-bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-body {
+  padding: 14px 14px 12px;
+}
+
+.thought-block {
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #3730a3;
+  margin-bottom: 10px;
+  font-style: italic;
+}
+.thought-label {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--indigo);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.action-block {
+  margin-bottom: 10px;
+}
+.action-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--teal);
+  margin-bottom: 4px;
+}
+.code-chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 6px;
+  padding: 7px 10px;
+  word-break: break-all;
+  display: block;
+}
+.code-chip .fn { color: #7dd3fc; }
+.code-chip .key { color: #a5b4fc; }
+.code-chip .val { color: #86efac; }
+
+.result-block {
+  margin-top: 8px;
+}
+.result-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.result-text {
+  font-size: 12px;
+  color: var(--text-body);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+/* final outcome */
+.outcome-bar {
+  margin-top: 12px;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.outcome-bar.incomplete {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+}
+.outcome-bar.correct {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #064e3b;
+}
+.outcome-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.outcome-main { flex: 1; }
+.outcome-caption {
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 3px;
+  display: block;
+}
+.outcome-caption.amber { color: var(--amber); }
+.outcome-caption.indigo { color: var(--indigo); }
+
+/* ── STEP CONTROLS ── */
+.step-controls {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text-body);
+  cursor: pointer;
+  font-size: 15px;
+  outline: none;
+  transition: background 0.12s, border-color 0.12s;
+  flex-shrink: 0;
+}
+.ctrl-btn:hover { background: var(--chip-bg); }
+.ctrl-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.ctrl-btn:disabled { opacity: 0.35; cursor: default; }
+.ctrl-btn.play-btn {
+  width: 38px; height: 38px;
+  background: var(--indigo);
+  border-color: var(--indigo);
+  color: #ffffff;
+  font-size: 14px;
+}
+.ctrl-btn.play-btn:hover { background: var(--indigo-dark); }
+
+.step-dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.step-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--border);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.15s, transform 0.15s;
+  flex-shrink: 0;
+}
+.step-dot.active { background: var(--indigo); transform: scale(1.25); }
+.step-dot:focus-visible { box-shadow: 0 0 0 2px var(--indigo); border-radius: 50%; }
+.step-dot:hover:not(.active) { background: #94a3b8; }
+
+.step-counter {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ── ARIA-LIVE ── */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+
+/* ── PANEL B ── */
+.tool-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.preset-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.preset-btn {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 10px;
+  cursor: pointer;
+  color: var(--text-body);
+  text-align: left;
+  flex: 1;
+  outline: none;
+  transition: background 0.12s, border-color 0.12s;
+  word-break: break-all;
+}
+.preset-btn:hover { background: #e8edf2; }
+.preset-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+
+.validation-result {
+  min-width: 54px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  margin-top: 0;
+  align-self: center;
+}
+.validation-result.ok {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #064e3b;
+}
+.validation-result.rejected {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #9f1239;
+}
+.validation-result.idle {
+  background: var(--chip-bg);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.rejection-reason {
+  font-size: 11px;
+  color: var(--rose);
+  margin-top: 3px;
+  font-weight: 500;
+  display: none;
+}
+
+.tool-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 12px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.tool-note strong { color: var(--text-body); }
+</style>
+</head>
+<body>
+
+<!-- PANEL A -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <h2 id="panel-a-heading">The Agent Ladder</h2>
+  <p class="panel-subtitle">The same multi-hop question, three ways to answer it, rising in power and cost.</p>
+
+  <div class="question-banner">
+    <span>Question:</span> "What is the warranty on the earbuds made by the company that acquired Acme?"
+  </div>
+
+  <!-- Mode toggle -->
+  <div class="toggle-group" role="group" aria-label="Mode selector">
+    <button class="toggle-btn" id="btn-mode-0" aria-pressed="true" type="button">
+      One augmented call
+    </button>
+    <button class="toggle-btn" id="btn-mode-1" aria-pressed="false" type="button">
+      Fixed workflow
+    </button>
+    <button class="toggle-btn" id="btn-mode-2" aria-pressed="false" type="button">
+      Full agent
+    </button>
+  </div>
+
+  <!-- Cost badge -->
+  <div class="cost-badge" id="cost-badge">
+    <span class="cost-dot" id="cost-dot"></span>
+    <span id="cost-text"></span>
+  </div>
+
+  <!-- Trace area -->
+  <div class="trace-area" id="trace-area" aria-live="polite" aria-atomic="false">
+    <!-- Steps injected by JS -->
+  </div>
+
+  <!-- Aria live announcer (hidden) -->
+  <div class="sr-only" aria-live="polite" id="step-announcer"></div>
+
+  <!-- Controls -->
+  <div class="step-controls">
+    <button class="ctrl-btn" id="btn-restart" title="Restart" aria-label="Restart">&#8635;</button>
+    <button class="ctrl-btn" id="btn-back" title="Back" aria-label="Previous step">&#8592;</button>
+    <button class="ctrl-btn play-btn" id="btn-play" title="Play" aria-label="Play">&#9654;</button>
+    <button class="ctrl-btn" id="btn-next" title="Next" aria-label="Next step">&#8594;</button>
+    <div class="step-dots" id="step-dots" aria-label="Steps"></div>
+    <span class="step-counter" id="step-counter"></span>
+  </div>
+  <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+    Keyboard: <kbd style="background:var(--chip-bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:10px;">←</kbd>
+    <kbd style="background:var(--chip-bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:10px;">→</kbd> to step &nbsp;·&nbsp;
+    <kbd style="background:var(--chip-bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:10px;">Space</kbd> play/pause
+  </p>
+</section>
+
+<!-- PANEL B -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <h2 id="panel-b-heading">The Tool Contract</h2>
+  <p class="panel-subtitle">Live validator, does this call fit the action space?</p>
+
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">
+    Action space: <code style="font-family:var(--font-mono);background:var(--chip-bg);padding:1px 5px;border-radius:4px;">search_policy(query:string)</code>
+    &nbsp;<code style="font-family:var(--font-mono);background:var(--chip-bg);padding:1px 5px;border-radius:4px;">search_products(query:string)</code>
+    &nbsp;<code style="font-family:var(--font-mono);background:var(--chip-bg);padding:1px 5px;border-radius:4px;">calculator(expression:string)</code>
+    &nbsp;<code style="font-family:var(--font-mono);background:var(--chip-bg);padding:1px 5px;border-radius:4px;">finish(answer:string)</code>
+  </div>
+
+  <div class="tool-grid" id="tool-grid">
+    <!-- Preset rows injected by JS -->
+  </div>
+
+  <div class="tool-note">
+    <strong>Note:</strong> Part 19's text-parsed actions accepted all of these; the contract catches them before they fire.
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ─── COLOUR HELPERS ─── */
+  function codify(fn, args) {
+    // args is an object or null
+    var argsStr = "";
+    if (args !== null && typeof args === "object") {
+      var parts = Object.keys(args).map(function (k) {
+        var v = args[k];
+        var vStr = typeof v === "string"
+          ? '<span class="val">"' + escHtml(v) + '"</span>'
+          : '<span class="val">' + escHtml(String(v)) + '</span>';
+        return '<span class="key">' + escHtml(k) + '</span>: ' + vStr;
+      });
+      argsStr = "{" + parts.join(", ") + "}";
+    } else if (args !== null) {
+      argsStr = '<span class="val">"' + escHtml(String(args)) + '"</span>';
+    }
+    return '<code class="code-chip"><span class="fn">' + escHtml(fn) + '</span>(' + argsStr + ')</code>';
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* ─── TRACE DATA ─── */
+  var MODES = [
+    {
+      id: "augmented",
+      label: "One augmented call",
+      costLabel: "1 LLM turn · 1 tool call",
+      costColor: "#10b981",
+      steps: [
+        {
+          header: "Step 1 of 2, Tool call",
+          action: { fn: "search_products", args: { query: "who acquired Acme" } },
+          result: "Acme Corp was acquired by Globex in 2024.",
+          thought: null,
+        },
+        {
+          header: "Step 2 of 2, Forced synthesis (one round only)",
+          action: null,
+          result: null,
+          thought: null,
+          synthText: "Found that Globex acquired Acme, but the warranty needs a SECOND lookup, one round cannot make it.",
+          outcome: {
+            type: "incomplete",
+            icon: "✕",
+            label: "INCOMPLETE, cannot chain a second lookup",
+            caption: null,
+          },
+        },
+      ],
+    },
+    {
+      id: "fixed",
+      label: "Fixed workflow",
+      costLabel: "1 LLM turn · 2 tool calls · route wired at author time",
+      costColor: "#f59e0b",
+      steps: [
+        {
+          header: "Step 1 of 3, Tool call",
+          action: { fn: "search_products", args: { query: "who acquired Acme" } },
+          result: "Acme Corp was acquired by Globex in 2024.",
+          thought: null,
+        },
+        {
+          header: "Step 2 of 3, Tool call",
+          action: { fn: "search_products", args: { query: "Globex earbuds warranty" } },
+          result: "Globex-branded wireless earbuds carry a 2-year limited warranty.",
+          thought: null,
+        },
+        {
+          header: "Step 3 of 3, Synthesize",
+          action: null,
+          result: null,
+          thought: null,
+          synthText: "The earbuds are made by Globex (which acquired Acme), and they carry a 2-year limited warranty.",
+          outcome: {
+            type: "correct",
+            icon: "✓",
+            label: "CORRECT",
+            caption: "Route wired at author time",
+            captionColor: "amber",
+          },
+        },
+      ],
+    },
+    {
+      id: "agent",
+      label: "Full agent",
+      costLabel: "3 LLM turns · 2 tool calls · route decided at run time",
+      costColor: "#6366f1",
+      steps: [
+        {
+          header: "Step 1 of 3, Think → Act",
+          thought: "I don't yet know who acquired Acme; look it up.",
+          action: { fn: "search_products", args: { query: "who acquired Acme" } },
+          result: "Acme Corp was acquired by Globex in 2024.",
+        },
+        {
+          header: "Step 2 of 3, Think → Act",
+          thought: "Acme was acquired by Globex; now find Globex's earbuds warranty.",
+          action: { fn: "search_products", args: { query: "Globex earbuds warranty" } },
+          result: "Globex-branded wireless earbuds carry a 2-year limited warranty.",
+        },
+        {
+          header: "Step 3 of 3, Think → Finish",
+          thought: "I have the warranty; finish.",
+          action: { fn: "finish", args: { answer: "The earbuds are made by Globex (which acquired Acme); they carry a 2-year limited warranty." } },
+          result: null,
+          outcome: {
+            type: "correct",
+            icon: "✓",
+            label: "CORRECT, 2-year limited warranty",
+            caption: "Route decided at run time",
+            captionColor: "indigo",
+          },
+        },
+      ],
+    },
+  ];
+
+  /* ─── LADDER STATE ─── */
+  var currentMode = 0;
+  var currentStep = 0;
+  var playTimer = null;
+  var isPlaying = false;
+  var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function getSteps() { return MODES[currentMode].steps; }
+  function totalSteps() { return getSteps().length; }
+
+  function renderStep() {
+    var steps = getSteps();
+    var s = steps[currentStep];
+    var area = document.getElementById("trace-area");
+
+    // Build HTML for the step
+    var html = '<div class="step-card active">';
+    html += '<div class="step-header">' + escHtml(s.header) + '</div>';
+    html += '<div class="step-body">';
+
+    if (s.thought) {
+      html += '<div class="thought-block"><span class="thought-label">Thought</span>' + escHtml(s.thought) + '</div>';
+    }
+
+    if (s.action) {
+      html += '<div class="action-block">';
+      html += '<div class="action-label">Action</div>';
+      html += codify(s.action.fn, s.action.args);
+      html += '</div>';
+    }
+
+    if (s.result) {
+      html += '<div class="result-block">';
+      html += '<div class="result-label">Observation</div>';
+      html += '<div class="result-text">' + escHtml(s.result) + '</div>';
+      html += '</div>';
+    }
+
+    if (s.synthText) {
+      html += '<div class="result-block">';
+      html += '<div class="result-label">Synthesis</div>';
+      html += '<div class="result-text">' + escHtml(s.synthText) + '</div>';
+      html += '</div>';
+    }
+
+    if (s.outcome) {
+      var oc = s.outcome;
+      html += '<div class="outcome-bar ' + oc.type + '">';
+      html += '<span class="outcome-icon">' + oc.icon + '</span>';
+      html += '<div class="outcome-main">' + escHtml(oc.label);
+      if (oc.caption) {
+        html += '<span class="outcome-caption ' + (oc.captionColor || "") + '">' + escHtml(oc.caption) + '</span>';
+      }
+      html += '</div></div>';
+    }
+
+    html += '</div></div>';
+    area.innerHTML = html;
+
+    // Update dots
+    var dots = document.querySelectorAll(".step-dot");
+    dots.forEach(function (d, i) {
+      d.classList.toggle("active", i === currentStep);
+      d.setAttribute("aria-label", "Step " + (i + 1));
+      d.setAttribute("aria-current", i === currentStep ? "true" : "false");
+    });
+
+    // Update counter
+    document.getElementById("step-counter").textContent =
+      "Step " + (currentStep + 1) + " / " + totalSteps();
+
+    // Update button states
+    document.getElementById("btn-back").disabled = currentStep === 0;
+    document.getElementById("btn-next").disabled = currentStep === totalSteps() - 1;
+
+    // Announce for screen readers
+    document.getElementById("step-announcer").textContent =
+      "Step " + (currentStep + 1) + " of " + totalSteps() + ". " + s.header +
+      (s.thought ? " Thought: " + s.thought : "") +
+      (s.action ? " Action: " + s.action.fn + "." : "") +
+      (s.result ? " Observation: " + s.result : "") +
+      (s.synthText ? " " + s.synthText : "") +
+      (s.outcome ? " " + s.outcome.label : "");
+  }
+
+  function buildDots() {
+    var container = document.getElementById("step-dots");
+    container.innerHTML = "";
+    var n = totalSteps();
+    for (var i = 0; i < n; i++) {
+      var btn = document.createElement("button");
+      btn.className = "step-dot";
+      btn.type = "button";
+      btn.setAttribute("aria-label", "Step " + (i + 1));
+      (function (idx) {
+        btn.addEventListener("click", function () {
+          stopPlay();
+          currentStep = idx;
+          renderStep();
+        });
+      })(i);
+      container.appendChild(btn);
+    }
+  }
+
+  function setMode(idx) {
+    stopPlay();
+    currentMode = idx;
+    currentStep = 0;
+
+    // Update toggle buttons
+    [0, 1, 2].forEach(function (i) {
+      var btn = document.getElementById("btn-mode-" + i);
+      btn.setAttribute("aria-pressed", i === idx ? "true" : "false");
+    });
+
+    // Update cost badge
+    var m = MODES[idx];
+    document.getElementById("cost-dot").style.background = m.costColor;
+    document.getElementById("cost-text").textContent = m.costLabel;
+
+    buildDots();
+    renderStep();
+  }
+
+  function stopPlay() {
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    isPlaying = false;
+    var btn = document.getElementById("btn-play");
+    btn.innerHTML = "&#9654;";
+    btn.setAttribute("aria-label", "Play");
+  }
+
+  function startPlay() {
+    if (reducedMotion) return;
+    isPlaying = true;
+    var btn = document.getElementById("btn-play");
+    btn.innerHTML = "&#9646;&#9646;";
+    btn.setAttribute("aria-label", "Pause");
+    playTimer = setInterval(function () {
+      if (currentStep < totalSteps() - 1) {
+        currentStep++;
+        renderStep();
+      } else {
+        stopPlay();
+      }
+    }, 2000);
+  }
+
+  /* ─── CONTROL WIRING ─── */
+  document.getElementById("btn-play").addEventListener("click", function () {
+    if (isPlaying) { stopPlay(); }
+    else {
+      if (currentStep === totalSteps() - 1) { currentStep = 0; }
+      startPlay();
+    }
+  });
+
+  document.getElementById("btn-next").addEventListener("click", function () {
+    stopPlay();
+    if (currentStep < totalSteps() - 1) { currentStep++; renderStep(); }
+  });
+
+  document.getElementById("btn-back").addEventListener("click", function () {
+    stopPlay();
+    if (currentStep > 0) { currentStep--; renderStep(); }
+  });
+
+  document.getElementById("btn-restart").addEventListener("click", function () {
+    stopPlay();
+    currentStep = 0;
+    renderStep();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = document.activeElement && document.activeElement.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (e.key === "ArrowRight") {
+      stopPlay();
+      if (currentStep < totalSteps() - 1) { currentStep++; renderStep(); }
+      e.preventDefault();
+    } else if (e.key === "ArrowLeft") {
+      stopPlay();
+      if (currentStep > 0) { currentStep--; renderStep(); }
+      e.preventDefault();
+    } else if (e.key === " ") {
+      if (isPlaying) { stopPlay(); }
+      else {
+        if (currentStep === totalSteps() - 1) { currentStep = 0; }
+        startPlay();
+      }
+      e.preventDefault();
+    }
+  });
+
+  // Mode toggle wiring
+  [0, 1, 2].forEach(function (i) {
+    document.getElementById("btn-mode-" + i).addEventListener("click", function () {
+      setMode(i);
+    });
+  });
+
+  // Initial render
+  setMode(0);
+
+  /* ─── PANEL B, TOOL VALIDATOR ─── */
+  var SCHEMA = {
+    search_policy:   { query: "string" },
+    search_products: { query: "string" },
+    calculator:      { expression: "string" },
+    finish:          { answer: "string" },
+  };
+
+  var PRESETS = [
+    {
+      label: 'search_products({"query":"who acquired Acme"})',
+      fn: "search_products",
+      args: { query: "who acquired Acme" },
+    },
+    {
+      label: 'search_web({"query":"..."})',
+      fn: "search_web",
+      args: { query: "..." },
+    },
+    {
+      label: 'calculator({"expr":"0.18 * 250"})',
+      fn: "calculator",
+      args: { expr: "0.18 * 250" },
+    },
+    {
+      label: 'calculator({"expression": 42})',
+      fn: "calculator",
+      args: { expression: 42 },
+    },
+  ];
+
+  function validateCall(fn, args) {
+    if (!SCHEMA.hasOwnProperty(fn)) {
+      return { ok: false, reason: "unknown tool '" + fn + "'" };
+    }
+    var schema = SCHEMA[fn];
+    var reqKeys = Object.keys(schema);
+    for (var i = 0; i < reqKeys.length; i++) {
+      var k = reqKeys[i];
+      if (!args.hasOwnProperty(k)) {
+        return { ok: false, reason: "missing required arg '" + k + "'" };
+      }
+      var expected = schema[k];
+      var actual = typeof args[k];
+      if (actual !== expected) {
+        return { ok: false, reason: "arg '" + k + "' must be " + expected + ", got " + actual };
+      }
+    }
+    // Check for extra keys not in schema (optional: skip)
+    return { ok: true };
+  }
+
+  var grid = document.getElementById("tool-grid");
+
+  PRESETS.forEach(function (preset) {
+    var row = document.createElement("div");
+    row.className = "preset-row";
+
+    var col = document.createElement("div");
+    col.style.flex = "1";
+    col.style.display = "flex";
+    col.style.flexDirection = "column";
+    col.style.gap = "3px";
+
+    var pbtn = document.createElement("button");
+    pbtn.className = "preset-btn";
+    pbtn.type = "button";
+    pbtn.textContent = preset.label;
+
+    var reason = document.createElement("div");
+    reason.className = "rejection-reason";
+
+    col.appendChild(pbtn);
+    col.appendChild(reason);
+
+    var badge = document.createElement("div");
+    badge.className = "validation-result idle";
+    badge.textContent = "-";
+
+    pbtn.addEventListener("click", function () {
+      var res = validateCall(preset.fn, preset.args);
+      if (res.ok) {
+        badge.className = "validation-result ok";
+        badge.innerHTML = "&#10003; OK";
+        reason.style.display = "none";
+        reason.textContent = "";
+      } else {
+        badge.className = "validation-result rejected";
+        badge.innerHTML = "&#10007; Rejected";
+        reason.style.display = "block";
+        reason.textContent = res.reason;
+      }
+    });
+
+    row.appendChild(col);
+    row.appendChild(badge);
+    grid.appendChild(row);
+  });
+
+})();
+</script>
+</body>
+</html>

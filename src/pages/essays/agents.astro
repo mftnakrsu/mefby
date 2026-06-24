@@ -1,0 +1,115 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getCollection } from 'astro:content';
+import { readingTime } from '../../lib/essayMeta';
+
+const parts = (await getCollection('essays', ({ data }) => !data.draft && data.seriesOrder != null && data.series === 'agents'))
+  .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
+
+const core = parts.filter((p) => (p.data.seriesOrder ?? 0) <= 11);
+const frontier = parts.filter((p) => (p.data.seriesOrder ?? 0) >= 12);
+const first = parts[0];
+
+const itemListJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: 'Agents from First Principles',
+  description: 'A from-scratch course on building LLM agents, built by hand.',
+  numberOfItems: parts.length,
+  itemListElement: parts.map((p) => ({
+    '@type': 'ListItem',
+    position: p.data.seriesOrder,
+    url: new URL(`/essays/${p.slug}`, Astro.site).toString(),
+    name: p.data.title,
+  })),
+};
+---
+
+<Layout
+  title="Agents from First Principles — Meftun Akarsu"
+  description="A from-scratch course on building LLM agents: grow one agent from a bare loop into a durable, observable, secured production system, one concept at a time, with runnable code and interactive figures."
+>
+  <script type="application/ld+json" set:html={JSON.stringify(itemListJsonLd)} />
+  <div class="min-h-screen bg-white text-zinc-500 font-sans">
+    <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
+      <a href="/essays" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors mb-12 inline-block">&larr; all essays</a>
+
+      <p class="text-[11px] font-mono uppercase tracking-widest text-emerald-700 mb-3">A {parts.length}-part course</p>
+      <h1 class="text-2xl sm:text-[28px] font-semibold text-zinc-900 leading-[1.25] tracking-tight mb-5">Agents from First Principles</h1>
+      <p class="text-[15px] text-zinc-600 leading-relaxed mb-6">
+        Most agent tutorials hand you a framework and a black box. This one builds the whole thing by hand, one
+        concept at a time, so you understand every moving part: the reason/act/observe loop, typed tools, memory,
+        planning, reflection, durability, and how to make a multi-agent system observable, secure, and graded in
+        production. Retrieval is demoted to one tool the agent may call. Every part runs on a single example you
+        can follow end to end, with runnable code and an interactive figure.
+      </p>
+
+      {first && (
+        <a
+          href={`/essays/${first.slug}`}
+          class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 mb-12"
+        >
+          Start with Part 1: {first.data.title}
+          <span aria-hidden="true">&rarr;</span>
+        </a>
+      )}
+
+      <div class="flex items-center gap-3 mb-2">
+        <p class="text-[11px] font-medium text-zinc-400 uppercase tracking-widest">Core track · Parts 1&ndash;11</p>
+        <span aria-hidden="true" class="h-px flex-1 bg-zinc-100"></span>
+      </div>
+      <ol class="border-t border-zinc-100">
+        {core.map((p) => (
+          <li class="border-b border-zinc-100">
+            <a href={`/essays/${p.slug}`} class="group flex gap-3 py-4 -mx-2 px-2 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
+              <span class="shrink-0 mt-0.5 w-7 text-right font-mono text-[11px] text-zinc-400">{p.data.seriesOrder}</span>
+              <span class="min-w-0">
+                <span class="block text-[15px] font-medium text-zinc-900 group-hover:text-emerald-700 transition-colors">{p.data.title}</span>
+                <span class="mt-1 block text-[12px] font-mono text-zinc-500">{readingTime(p.body)} min read{p.data.codeUrl ? ' · code' : ''}</span>
+                <span class="mt-1.5 block text-[13px] leading-relaxed text-zinc-500 line-clamp-2">{p.data.description}</span>
+              </span>
+              <span aria-hidden="true" class="ml-auto self-center pl-2 text-zinc-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all">&rarr;</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+
+      {frontier.length > 0 && (
+        <div class="mt-10">
+          <div class="flex items-center gap-3 mb-2">
+            <p class="text-[11px] font-medium text-zinc-400 uppercase tracking-widest">Frontier track · Parts 12&ndash;{parts.length}</p>
+            <span aria-hidden="true" class="h-px flex-1 bg-zinc-100"></span>
+          </div>
+          <p class="text-[13px] text-zinc-500 mb-2 leading-relaxed">The protocol wire and multi-agent territory you reach for once the single agent is solid: MCP, sandboxed code, supervisors and handoffs, A2A, security, and evaluation.</p>
+          <ol class="border-t border-zinc-100">
+            {frontier.map((p) => (
+              <li class="border-b border-zinc-100">
+                <a href={`/essays/${p.slug}`} class="group flex gap-3 py-4 -mx-2 px-2 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
+                  <span class="shrink-0 mt-0.5 w-7 text-right font-mono text-[11px] text-zinc-400">{p.data.seriesOrder}</span>
+                  <span class="min-w-0">
+                    <span class="block text-[15px] font-medium text-zinc-900 group-hover:text-emerald-700 transition-colors">{p.data.title}</span>
+                    <span class="mt-1 block text-[12px] font-mono text-zinc-500">{readingTime(p.body)} min read{p.data.codeUrl ? ' · code' : ''}</span>
+                    <span class="mt-1.5 block text-[13px] leading-relaxed text-zinc-500 line-clamp-2">{p.data.description}</span>
+                  </span>
+                  <span aria-hidden="true" class="ml-auto self-center pl-2 text-zinc-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all">&rarr;</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      <a
+        href="https://github.com/mftnakrsu/agents-by-hand"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="group mt-10 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-3 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40"
+      >
+        <span class="text-[13px] text-zinc-600">
+          <span class="font-medium text-zinc-900">Companion code</span> &mdash; runnable scripts &amp; step-by-step notebooks for every part
+        </span>
+        <span class="shrink-0 text-[11px] font-mono text-zinc-500 group-hover:text-emerald-600">GitHub &#8599;</span>
+      </a>
+    </div>
+  </div>
+</Layout>

@@ -1,0 +1,168 @@
+---
+title: "Genişletilmiş LLM"
+description: "Çıplak bir model verinize dokunamaz, eylem alamaz. Genişletilmiş LLM (durdurma koşulu olan en küçük döngü içinde, tipli araçlarla çevrelenmiş bir model) bunu yapabilir. Part 1 ilkeli adlandırır, gerçekten-bir-agent'a-ihtiyacın-var-mı merdivenini çizer ve araçlara bir sözleşme verir."
+date: 2026-06-27
+tags: ["Agents", "LLM", "Tool Use", "Function Calling", "ReAct", "AI"]
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-01-augmented-llm-loop"
+lang: "tr"
+translationSlug: "augmented-llm-loop"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Çıplak bir dil modeli, elleri olmayan parlak bir metin tahmincisidir. Ona bugünkü sipariş sayısını sorun, tahmin yürütür; bir müşteriye iade yapmasını isteyin, yapamayacağı iadeyi yalnızca tarif edebilir. Agent'larla ilgili ilginç olan her şey, o modeli gerçekten yapabileceği şeylerle çevreldiğiniz anda başlar: araçlar (tools) ve sonrasında bellek ile retrieval. Bu, yirmi parçalık RAG serisinin devamı olan yeni bir serinin, **Agents from First Principles**'ın ilk parçası, ve işe tüm serinin üzerine inşa edildiği şeyi adlandırarak başlayacağız. **Genişletilmiş-LLM ilkelini (augmented-LLM primitive)** adlandıracağız: araçlarla çevrelenmiş, açık bir durdurma koşuluyla en küçük döngüye sarılmış tek bir model çağrısı. Ardından, RAG serisinin hiç çizmediği bir merdiven çizeceğiz: gerçekten-bir-agent'a-ihtiyacın-var-mı merdiveni. Önce one augmented call, sonra fixed workflow, sonra full agent; güçte de maliyette de yükselerek. Ve son olarak, Part 19'daki RAG agent'ının ardına kadar açık bıraktığı tek şeyi düzelteceğiz: araçlarının hiçbir sözleşmesi yoktu. Onlara tipli şemalar ve kötü bir çağrıyı ateşlenmeden önce yakalayan bir doğrulayıcı (validator) vereceğiz; potansiyel bir çökmeyi, döngünün toparlanabileceği bir şeye dönüştüreceğiz. Sonunda elinizde bir ilkel, onu ne zaman kullanacağınıza dair bir karar prosedürü ve güvenebileceğiniz araçlar olacak.
+
+## Ön koşullar
+
+Temel Python yeterli: fonksiyonlar, sözlükler (dictionary) ve küçük bir döngüyü okuyabilmek. Gerçekten hepsi bu kadar. RAG serisini bitirdiyseniz, içinde çalıştığımız dünyayı tanıyacaksınız (iade politikası, E-4042 hatası, Acme'nin Globex tarafından satın alınması) ve RAG Part 19'daki reason/act/observe döngüsünü tanıyacaksınız, ki tam da üzerine inşa etmek üzere olduğumuz şey o. Ama bu parça kendi içinde bütünlüklü. Bir RAG fikrine dayandığı yerde, onu tek bir cümleyle yeniden ifade ediyor. Eşlik eden kod, [augmented_llm_loop.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-01-augmented-llm-loop), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz.
+
+## Genişletilmiş-LLM ilkeli
+
+Kullanmadan önce şeyi adlandırayım. **Genişletilmiş LLM (augmented LLM)** terimi Anthropic'in "Building Effective Agents" çalışmasından gelir ve inşa edeceğimiz her şeyin en küçük birimidir. Genişletilmiş bir LLM, yeteneklerle çevrelenmiş tek bir model çağrısıdır: çağırabileceği araçlar, ve (sonraki parçalarda) okuyup yazabileceği bellek ve uzanabileceği retrieval. O çevrelenmiş çağrı, mümkün olan en küçük döngüye sarılır ve döngünün açık bir **durdurma koşulu (stop condition)** vardır: model işinin bittiğini söylediğinde, ya da sert bir adım sınırı onu durmaya zorladığında biter. İlkelin tamamı bu. Bir model, artı bir yetenek halkası, artı en küçük döngü, artı bir çıkış yolu.
+
+Bunu adlandırmaya değer kılan şey, serideki tek yapı olmasıdır. Sonraki her parça tam olarak bir halka ekler ve başka hiçbir şeyi değiştirmez. Planlama bir halkadır. Yansıma (reflection) bir halkadır. Multi-agent koordinasyonu bir halkadır. Dayanıklılık (durability) ve değerlendirme (evaluation) birer halkadır. Ortadaki döngü, yani modelin ne yapacağına karar verip sonra onu yapması, asla biçim değiştirmez. Yani bu tek ilkeli derinlemesine anlarsanız, gelecek olan her şeyin omurgasını anlamış olursunuz. Aşağıdaki figür hem ilkelin kendisi hem de serinin haritası: merkezde model, etrafında halkalar, döngü ve modelin çıkmasını sağlayan durdurma koşulu.
+
+<Diagram number={1} caption="Genişletilmiş-LLM ilkeli ve tüm serinin haritası. Merkezde bir LLM çağrısı durur, yeteneklerle çevrelenmiş: Tools (bu parçanın odağı), Memory ve Retrieval (sonraki parçalar). Merkezin etrafındaki kesik çizgili iz reason/act/observe döngüsüdür ve sağ alta inen dal durdurma koşuludur: döngü, model finish() çağırdığında ya da sert bir adım bütçesi onu durdurduğunda çıkar. Seri-haritası paneli yapısal iddiayı açık eder: sonraki her parça (planning, reflection, multi-agent, durability, evaluation) bu aynı ilkele tam olarak bir halka ekler ve başka hiçbir şeyi değiştirmez.">
+  <img src="/essays/augmented-llm-loop/part1-augmented-llm.svg" alt="A diagram of a central indigo LLM node labelled reason, plan, generate. Around it are three capability chips: Tools (teal, search, code, APIs) at the top, Memory (amber, short plus long term) on the left, and Retrieval (violet, vector, graph, SQL) on the right, each connected to the core. A dashed elliptical loop labelled reason then act then observe encircles the cluster. A user prompt arrow feeds in from the left, an answer arrow drops out the bottom, and a branch on the right leads to a stop node reading finish() or step budget, with a small rose MAX STEPS abort badge. A side panel titled SERIES MAP lists Part 1 (this primitive) followed by plus planning, plus reflection, plus multi-agent, plus durability, plus evaluation, with the note: each part adds one ring." class="w-full rounded-lg" />
+</Diagram>
+
+> ### Sidebar: controller bir prompt + bir modeldir
+>
+> Genişletilmiş LLM'in sırada ne yapacağına karar veren şey sihir değildir; bir sistem prompt'u artı bir modeldir. Sistem prompt'u mevcut araçları adlandırır, çıktı formatını belirtir ("önce bir Thought, sonra bir Action yaz") ve hedefi koyar. Model o prompt'u artı ilerleyen transkripti okur ve bir sonraki adımı üretir. Burada iki düğme önemli. Birincisi, reasoning ve non-reasoning modeller: bir reasoning model yanıtlamadan önce gizli token'lar harcayarak düşünür, ki bu genellikle daha iyi araç dizileri seçer ama daha pahalıdır ve daha yavaş çalışır. İkincisi, düşünme bütçesi (thinking budget): o düşünme token'larından kaç tanesine izin verdiğiniz. Bunu şimdi kuruyoruz ve gözlemlenebilirliğe (observability) geldiğimizde karşılığını alacağız, çünkü controller'ın prompt'u ve düşünme bütçesi, bir agent yanlış davrandığında ilk uzanacağınız iki koldur.
+
+## Merdiven: gerçekten bir agent'a mı ihtiyacın var?
+
+İşte tuzak. "Agent" heyecan verici, dolayısıyla içgüdü her problem için bir tane inşa etmektir. O içgüdü pahalıdır ve çoğu zaman yanlıştır. Dürüst soru "bir agent'ı nasıl inşa ederim" değildir, "bunu yanıtlayan en ucuz şey nedir" sorusudur. Bir merdiven var, üç basamak, her basamakta aynı soru, yükselen güç ve yükselen maliyet. İşe yarayan en alt basamağa uzanır ve yalnızca mecbur kaldığınızda tırmanırsınız.
+
+**Birinci basamak, one augmented call.** Model araç çağırabilir, ama yalnızca bir tur, sonra yanıtlamak zorundadır. Bu en ucuz basamaktır ve gerçek soruların şaşırtıcı bir bölümünü yanıtlar. "250 dolarlık bir siparişin %18'i nedir?" bir augmented call'dur: model bir kez calculator'a uzanır, `45.0` değerini geri okur ve yanıtlar. Bitti. Döngü yok, agent yok.
+
+**İkinci basamak, fixed workflow.** Bu, sizin, yani yazarın önceden kabloladığı, sabitlenmiş bir çağrı dizisidir: retrieve, sonra tekrar retrieve, sonra synthesize. Öngörülebilir, ucuz, bütçelemesi kolay, çünkü rota her seferinde aynıdır. Ama rota **author time'da** kablolanır, ki bu da yalnızca onu kabloladığınız problemin tam o biçimine uyacağı anlamına gelir.
+
+**Üçüncü basamak, full agent.** Bu, RAG Part 19'daki reason/act/observe döngüsüdür: model sonraki aracı **run time'da** seçer, ilerleyen transkripti okuyarak, `finish()` çağırana ya da bir adım bütçesine çarpana kadar döngüye girer. En güçlüsüdür, çünkü rota herhangi bir şey olabilir; en pahalısıdır, çünkü her adım başka bir model çağrısıdır ve kaç adım süreceğini önceden bilmezsiniz.
+
+Basamakların neden farklı olduğunu görmek için tek bir soruyu en yukarıya kadar izleyin: "Acme'yi satın alan şirketin ürettiği earbud'ların garantisi nedir?" Bu, RAG Part 10'un nesir olarak gezdirdiği ve Part 19'un çalıştırdığı multi-hop sorudur ve mükemmel bir testtir, çünkü onu yanıtlamanın iki adımı vardır ve ikinci adımın girdisi birinci adımın çıktısıdır. Hangi şirketi soracağınızı bilmeden garanti aramasını ifade bile edemezsiniz ve bunu yalnızca ilk aramadan öğrenirsiniz.
+
+Birinci basamağın bunda nasıl tökezlediğini izleyin. Bir augmented call tek bir tur alır, bu yüzden ilk aramayı yapar ve satın alan şirketi bulur, ama sonra tur biter ve yanıtlamak zorundadır:
+
+```text
+  Round 1 tool call: search_products("who acquired Acme")
+    -> Acme Corp was acquired by Globex in 2024. (score=0.58)
+  Must answer now (no second round):
+  ANSWER: I found that Globex acquired Acme, but answering the warranty needs a
+          SECOND lookup (Globex earbuds warranty) that one round cannot make.
+  -> Incomplete: hop 2 depends on hop 1's result. One call cannot chain.
+```
+
+İşte hop-2-hop-1'e-bağlı boşluğu, ve bu yapısaldır, bir ayar (tuning) problemi değil. Bir tur, henüz almadığı bir sonucu fiziksel olarak kullanamaz. Bu yüzden tırmanıyoruz. İkinci basamak, fixed workflow, iki arama yapar ve doğru sonuca varır:
+
+```text
+  Step 1: search_products("who acquired Acme")    -> Acme Corp was acquired by Globex in 2024. (score=0.58)
+  Step 2: search_products("Globex earbuds warranty") -> Globex-branded wireless earbuds carry a 2-year limited warranty. (score=0.58)
+  ANSWER: The earbuds are made by Globex (which acquired Acme), and they carry a 2-year limited warranty.
+```
+
+Doğru. Ama nedenine dikkat edin: `retrieve -> retrieve -> synthesize`'ı koda ben kabloladım çünkü ben, yazar, sorunun iki hop'u olduğunu zaten biliyordum. Tek-hop'luk bir soru sorun, bu workflow gereksiz bir ikinci arama yapar; üç-hop'luk bir soru sorun, bir hop eksik kalır. Rota tek bir biçime uyar çünkü o biçimi author time'da ben çizdim. Üçüncü basamak, full agent, aynı doğru yanıtı verir, ama rotayı run time'da kararlaştırır: arar, Globex'in Acme'yi satın aldığını okur, *o ismi* kullanarak ikinci aramayı ifade eder ve ancak o zaman bitirir. Hiçbir yere "iki hop" yazan olmadı. Agent kendi transkriptini okuyarak iki hop'a ihtiyacı olduğunu keşfetti. İşte author-time routing ile run-time routing arasındaki fark budur ve üçüncü basamağın var olmasının bütün nedeni budur.
+
+Yani merdivenin kuralı şu: agent varsayılan değildir, rotanın önceden gerçekten bilinemediği durumda tırmandığınız basamaktır. Bir augmented call yanıtlıyorsa, orada durun. Bir fixed workflow biçime uyuyorsa, orada durun. Yola çıkmadan rota bilinemiyorsa, ancak o zaman döngüye uzanın. Aşağıdaki interaktif figür aynı earbud sorusunu üç basamakta da deneyimlemenizi ve birinci basamağın tam olarak nerede yetersiz kaldığını ve run-time routing'in nerede devreye girdiğini izlemenizi sağlar.
+
+<Diagram number={2} caption="Agent merdiveni, üç basamakta tek bir soru. Aynı multi-hop earbud sorusunu (Acme'yi satın alan şirketin ürettiği earbud'ların garantisi) önce tek bir augmented call olarak, sonra fixed workflow olarak, sonra full agent olarak çalıştırmak için mod düğmesini kullanın. One augmented call satın alanı bulur ama tıkanır, çünkü ikinci hop birinci hop'un sonucuna bağlıdır ve bir tur zincirleyemez. Fixed workflow doğru sonuca varır ama iki-hop'luk rotası author time'da kablolanmıştı. Full agent aynı doğru yanıtı, rotayı run time'da kararlaştırarak verir; bir sonraki adımı ifade etmek için her gözlemi transkriptten geri okur. Düğmeyi yukarı çekmek merdiveni tırmanmaktır: yükselen güç, yükselen maliyet.">
+  <IframeFigure src="/essays/augmented-llm-loop/part1-loop-and-ladder.html" title="Interactive agent-ladder player. A mode toggle switches the same multi-hop question (what is the warranty on the earbuds made by the company that acquired Acme) across three rungs. In one augmented call, the model searches products for who acquired Acme, observes that Globex acquired Acme, and must answer with only that, noting the warranty needs a second lookup one round cannot make. In fixed workflow, a hardcoded two-step route searches for the acquirer, then searches for the Globex earbuds warranty, and synthesizes the correct answer, labelled as wired at author time. In full agent, the reason/act/observe loop searches, reads Globex from the observation, uses that name to search for the earbuds warranty, observes a 2-year limited warranty, and finishes, labelled as the route decided at run time." height={780} />
+</Diagram>
+
+## Zaten kurduğumuz döngü üzerine bir not
+
+Burada neyin yeni olduğunu, neyin olmadığını net belirtmek istiyorum, çünkü RAG serisi zaten epey iş yaptı. RAG Part 19 dört araçla, multi-hop, routing ve adım bütçesiyle gerçek bir reason/act/observe döngüsü kurdu (**ReAct** deseni, Reason artı Act'in kısaltması, Yao ve arkadaşlarından). Deterministik, kural tabanlı controller'ını bilinçli bir şeffaflık tercihi olarak çerçeveledi bile, tek bir ortam bayrağı uzaklıkta gerçek bir `generate()` yolu ile. Yani döngüyü yeniden türetmiyorum. Döngü, zaten kurduğumuz döngü, ve satır-satır ReAct mekaniğini istiyorsanız, okunacak parça odur.
+
+Bu parçanın eklediği şey o döngünün iki yanında durur. Altında, döngünün bir örneği olduğu *ilkeli adlandırıyorum*, böylece planning, reflection ve multi-agent ayrı numaralar yerine tek bir yapının varyasyonları olarak okunur. Etrafında, *merdiveni* çiziyorum, böylece döngünün ne zaman doğru araç olduğunu bilirsiniz. Ve içinde, gerçek bir boşluğu düzeltiyorum: Part 19 agent'ının çağırdığı araçların hiçbir sözleşmesi yoktu. O boşluk sırada.
+
+## Tool sözleşmesi
+
+İşte RAG Part 19'da eksik olan şey. Araçları, çıplak bir `TOOLS[name](arg)` aramasıyla yönlendirilen sade Python fonksiyonlarıydı: controller bir araç adıyla tek bir string'i devrediyordu ve arada onları kontrol eden hiçbir şey yoktu. Bu, model biraz yanlış bir şey yapana kadar işe yarar, ve modeller sürekli biraz-yanlış şeyler yapar. Var olmayan bir aracı adlandırabilir. Zorunlu bir argümanı atlayabilir. String beklenen yere integer geçebilir. Arada şema yokken, bilinmeyen bir ad `KeyError` fırlatır, hatalı biçimlendirilmiş bir argüman çalışır ya da sessizce yanlış ateşlenir ve hata, kötü çağrının yapıldığı anda değil, çağrı anında retriever'ınızın derinliklerinde yüzeye çıkar. Gerçek bir model bunu daha iyi değil, daha kötü yapar: bir çağrıya dönüştürmeniz gereken serbest metin üretir, yani yanlış yapılacak daha çok şey vardır.
+
+Düzeltme, her araca bir **sözleşme (contract)** vermektir: adını, parametrelerini ve tiplerini, ve hangilerinin zorunlu olduğunu beyan eden tipli bir şema. Önemli olan, bunun bir Python tip ipucu (type hint) değil, veri olmasıdır; gerçek bir LLM tool-calling API'sine neyi çağırabileceğini bildirmek için verilen, aynı JSON-schema biçimindeki nesnenin ta kendisi. Eşlik eden kodda her araç, bir registry'deki tek bir kayıttır:
+
+```python
+TOOL_SCHEMAS = {
+    "calculator": {
+        "description": "evaluate simple arithmetic",
+        "parameters": {"expression": {"type": "string", "required": True}},
+        "fn": calculator,
+    },
+    # ... search_policy, search_products, finish ...
+}
+```
+
+Tek bir nesne, iki iş. Hem gerçek bir modele aksiyon uzayını (action space) bilsin diye verdiğimiz şemadır, hem de o çağrı ateşlenmeden önce bir **validator'ın** her çağrıyı denetlediği spec'tir. Validator minik:
+
+```python
+def validate_call(name, args):
+    if name not in TOOL_SCHEMAS:
+        return False, f"unknown tool '{name}' (not in the action space)"
+    schema = TOOL_SCHEMAS[name]["parameters"]
+    # ... check required args present, then check each arg's type ...
+    return True, None
+```
+
+`(ok, error_message)` döndürür, asla çökmez. Artefakttan gelen dört örnek çağrıyı çalıştırmak tam olarak neyi yakaladığını gösterir:
+
+```text
+  search_products({"query": "who acquired Acme"})    -> OK
+  search_web({"query": "..."})                       -> REJECTED: unknown tool 'search_web' (not in the action space)
+  calculator({"expr": "0.18 * 250"})                 -> REJECTED: calculator is missing required arg 'expression'
+  calculator({"expression": 42})                     -> REJECTED: calculator arg 'expression' must be string, got int
+```
+
+O üç reddi okuyun, çünkü her biri gerçek bir hata modu. İlki, `search_web`, modelin hayal ettiği bir araç; aksiyon uzayında değil, bu yüzden herhangi bir şey çalışmadan adıyla reddedilir. İkincisi `expression` yerine `expr` geçirir, dolayısıyla zorunlu argüman eksiktir. Üçüncüsü string gereken yere `42` integer'ını geçirir, bir tip hatası. Part 19'da böyle bir katman yoktu, dolayısıyla bunların her biri fonksiyona ulaşıp çökerdi, ya da daha kötüsü, kötü girdiyle çalışırdı. Sözleşmeyle birlikte, validator her reddi, döngünün bir Observation olarak okuyup toparlanabileceği bir string'e dönüştürür. Modele "unknown tool 'search_web'" söylenir ve bir sonraki turunda gerçek bir aracı seçebilir, tam olarak bir araç sonuç döndürmüş gibi. Potansiyel bir çökme, toparlanabilir bir gözleme dönüşür. Figür iki dünyayı yan yana gösterir.
+
+<Diagram number={3} caption="Aynı araç çağrısı için iki sözleşme. Solda, şemasız yönlendirme: bir araç adı ve çıplak bir string argüman (burada bir yazım hatasıyla, search_prodcts) önlerinde kontrol eden hiçbir şey olmadan doğrudan TOOLS[name](arg)'a gider, dolayısıyla çağrı yalnızca çağrı anında keşfedilen bir KeyError ya da eksik-argüman çökmesi olarak yüzeye çıkar. Bu, Part 19 dünyasıdır. Sağda, tipli tool sözleşmesi: bir tool şeması adı, tipli zorunlu parametreleri ve dönüş biçimini beyan eder ve bir validate() kapısı çağrıyı ateşlenmeden önce denetler, böylece bilinmeyen bir araç ya da hatalı biçimlendirilmiş bir argüman, bir çalışma-zamanı sürprizi yerine yakalanıp yapılandırılmış bir hataya dönüştürülür. Aynı çağrı, iki sözleşme: şema, kötü çağrıyı hiç çalışmadan önce reddeder.">
+  <img src="/essays/augmented-llm-loop/part1-tool-contract.svg" alt="A before-and-after comparison. The left panel, rose-tinted and labelled no schema, no contract, shows a raw action string search_prodcts with the typo prodcts underlined, flowing through name plus arg into TOOLS[name](arg) with no validation step, ending in a crash box reading KeyError search_prodcts and missing required arg query, marked crash discovered only at call time, with failure badges for unknown tool, malformed arg, and runtime surprise, tagged BEFORE. The right panel, emerald-tinted and labelled typed schema, validated before the call, shows a tool schema card with name search_products, params query string required, returns text, and a structured error channel, feeding a validate() gate that checks the schema before it fires, with success badges for tool resolved, args type-checked, and bad args caught, tagged AFTER. A central arrow connects the two panels." class="w-full rounded-lg" />
+</Diagram>
+
+> ### Sidebar: constrained / JSON-mode decoding
+>
+> Validator bir emniyet ağıdır: kötü bir argümanı, model onu *zaten ürettikten sonra* yakalar. Bu temeldir, ama reaktiftir. Yukarı akış düzeltmesi **constrained decoding**'dir (JSON-mode ya da yapılandırılmış üretim de denir): modelin token örneklemesini kısıtlarsınız, böylece yalnızca şemaya zaten uyan çıktı üretebilir. Modelin `{"expr": ...}` yazmasına izin verip sonra reddetmek yerine, decoder hatalı biçimlendirilmiş token'ı kelimenin tam anlamıyla örneklenemez kılar, böylece üretebileceği tek şey şema-geçerli bir `{"expression": "..."}` olur. İkisi birlikte çalışır. Constrained decoding, geçerli argümanları üretim anında varsayılan yapar; validator yine de sınırı korur, çünkü kısıtlanmış bir model yine de yanlış aracı ya da mantıksal-olarak-yanlış-ama-tip-olarak-geçerli bir değeri seçebilir. Hem kemer hem de askı.
+
+> ### Sidebar: tool açıklamaları programın bir parçasıdır
+>
+> Bir tool şeması yazdığınızda, `description` string'i ve parametre adları dokümantasyon değildir, koddur, modelin davranışını doğrudan yönlendirdikleri anlamda. Gerçek model `"search the products index (acquisitions, product warranties)"`'i okur ve o birkaç kelimeden, bunun önündeki soru için doğru araç olup olmadığına karar verir. Belirsiz bir açıklama ("search stuff") yanlış aracın çağrılmasına yol açar; aracın ne *için* olduğunu ve ne döndürdüğünü söyleyen keskin bir açıklama doğru olanı çağırtır. Tool açıklamalarına ve parametre adlarına, yetenekli ama lafı düz anlayan bir okur için belgelediğiniz bir public API gibi davranın: kesin fiiller, adlandırılmış dönüş biçimleri ve ne zaman ona uzanılacağına dair tek satırlık bir ifade. O metnin kalitesi, agent'ın hiç çalışıp çalışmayacağı üzerindeki en büyük kollardan biridir.
+
+## Tek bir tool olarak RAG
+
+Bu yeniden çerçeveleme üzerinde durmaya değer, çünkü son seriden bu seriye köprüdür. Yirmi parça boyunca retrieval sistemin *kendisiydi*: bütün pipeline bir sorguyu embed etmek, bir store'da aramak ve bir yanıtı temellendirmek için vardı. Agent dünyasında retrieval indirilir, ve o indirilme bir yükseliştir. Retrieval, aksiyon uzayındaki bir kayıt olur, diğerlerinin yanında bir akran olarak. Eşlik eden kodda aksiyon uzayında dört araç var: `search_policy` (RAG serisinden destek ve politika indeksi: iadeler, E-4042 hatası, kargo, garanti), `search_products` (Acme'nin Globex'e satılmasını ve earbud garantisini tutan küçük yeni indeks), `calculator` (çünkü her soru bir arama değildir) ve `finish` (döngüyü bitirir). Bu dördün ikisi retriever'dır. Artık mimari değiller; controller'ın aralarından seçtiği seçeneklerdir.
+
+İşte bu yüzden calculator yerini hak eder. Soru "250 dolarlık bir siparişin %18'i nedir?" olduğunda, agent hiçbir şeyi embed etmez ya da hiçbir store'da aramaz; calculator'a uzanır, `45.0` alır ve en ucuz basamakta yanıtlar. *Yalnızca* retrieval yapabilen bir sistem hevesle "18% of $250"i embed eder, bir politika indeksinde arar ve alakasız chunk'ları bir prompt'a doldurur; sorunun hiç ihtiyaç duymadığı bir makine için ödeme yapar. Aksiyon uzayında bir calculator olan bir agent ise basitçe aritmetiği yapar. Birkaç araçtan biri olarak retrieval, agent'ın retrieval'ın yalnızca engel olacağı soruları tanımasını sağlayan şeydir.
+
+> 💡 **Deneyimden.** Sevkettiğim ilk agent'ın dört aracı ve kendinden emin bir controller'ı vardı ve testlerde bir raporlama görevinde "başarılı olmaya" devam ederken sessizce saçmalık üretiyordu. Transkripti çektim ve hiç yazmadığım `get_metrics` adlı bir aracı çağırdığını buldum. Model böyle bir aracın var *olması gerektiğine* karar vermiş, onun için akla yatkın bir imza uydurmuş ve metin-aksiyon katmanım çağrıyı mutlu mutlu ayrıştırıp hata vermek yerine boş bir varsayılan döndüren bir dispatcher'a yönlendirmişti. Agent o boş sonucu veri olarak aldı ve mükemmel bir dinginlik içinde akıl yürütmeye devam etti, hiçbir şeyin üzerine bir rapor inşa etti. Bir kez bile çökmedi. Registry'de olmayan herhangi bir aracı reddeden bir şema validator'ı eklediğim gün, hata ilk çalışmada yüksek sesli bir "unknown tool 'get_metrics'" olarak yüzeye çıktı ve düzeltme beş dakika sürdü. Hata iki haftadır görünmezdi çünkü sistemde hiçbir şey asla hayır demiyordu. Tool sözleşmesinin bütün gerekçesi budur: bir model var olmayan şeyleri kendinden emin biçimde çağıracaktır ve tek güvenilir savunma, çağrıyı çalışmadan önce bir şemaya karşı denetleyen bir katmandır.
+
+{/* yazar: daha iyi bir hikayeniz varsa yukarıdakini kendi birinci-tekil hikayenizle değiştirin */}
+
+## Özet / Çıkarımlar
+
+- **Genişletilmiş-LLM ilkeli** (Anthropic'in "Building Effective Agents"'ından sonra) araçlarla (ve sonrasında bellek ve retrieval ile) çevrelenmiş, açık bir durdurma koşuluyla en küçük döngüye sarılmış tek bir model çağrısıdır. Bu serinin her parçası, bu ilkel artı bir halka daha.
+- **Merdiveni** bilinçli tırmanın: one augmented call, sonra fixed workflow, sonra full agent; güçte ve maliyette yükselerek. İşe yarayan en alt basamağa uzanın; agent, ancak rota önceden bilinmediğinde tırmandığınız basamaktır.
+- One augmented call, girdisi bir önceki adımın çıktısı olan bir adımı zincirleyemez (**hop-2-hop-1'e-bağlı boşluğu**). Fixed workflow zincirleyebilir, ama rotası **author time'da** kablolanmıştır. Full agent rotayı **run time'da**, kendi transkriptini okuyarak kararlaştırır.
+- Her araca **tipli bir sözleşme** verin: bir şema (ad, tipli zorunlu parametreler, açıklama) artı çağrı ateşlenmeden *önce* bilinmeyen bir aracı ya da hatalı biçimlendirilmiş bir argümanı reddeden bir **validator**, potansiyel bir çökmeyi toparlanabilir bir gözleme dönüştüren. Bu, gerçek bir LLM'e tool-calling için verilen aynı şemadır.
+- **Retrieval tek bir tool'dur, sistemin kendisi değil.** `search_policy` ve `search_products`, aksiyon uzayında `calculator` ve `finish`'in yanında durur, böylece agent refleksle retrieval yapmak yerine doğru olana (ya da hiçbirine) yönlenebilir.
+- Tool açıklamaları ve constrained decoding gerçek kollardır: açıklama modelin hangi aracı seçeceğini yönlendirir, ve constrained / JSON-mode üretim, şema-geçerli argümanları üretim anında varsayılan yapar; validator yine de sınırı korur.
+
+## Sözlük
+
+- **Genişletilmiş LLM (Augmented LLM)**: yeteneklerle (araçlar, ve sonrasında bellek ve retrieval) çevrelenmiş ve durdurma koşulu olan en küçük döngüye sarılmış tek bir model çağrısı; serinin temel ilkeli.
+- **Agent**: bir hedefi, modelin her adımda bir sonraki aksiyonu kendisinin seçtiği bir döngü çalıştırarak çözen sistem; önceden sabitlenmiş bir rotayı yürütmek yerine.
+- **Tool / tool call**: modelin çağırmasına izin verilen, belgelenmiş argümanları ve döndürülen bir sonucu olan adlandırılmış bir fonksiyon; bir tool call, araç adı artı argümanlarıyla tanımlanan böyle bir çağrıdır.
+- **Tool şeması (tool schema)**: bir aracın tipli, veri-biçimli beyanı (adı, tipleri ve zorunlulukları ile parametreleri, açıklaması); tool-calling için gerçek bir LLM'e verilen ve validator tarafından denetlenen aynı nesne.
+- **Merdiven (workflow vs agent)**: yükselen güç ve maliyete göre sıralanmış üç-basamaklı karar prosedürü (one augmented call, fixed workflow, full agent); soruyu yanıtlayan en alt basamağa uzanırsınız.
+- **Reason-act-observe döngüsü (ReAct)**: controller'ın bir Thought (reasoning) ürettiği, bir Action (bir tool call) aldığı, bir Observation (sonuç) okuduğu ve tekrarladığı çevrim; full-agent basamağının yapısı, RAG Part 19'da kuruldu.
+- **Durdurma koşulu / adım bütçesi (stop condition / step budget)**: döngünün bittiği iki yol, yani modelin yanıtla birlikte finish çağırması, ya da hiç bitirmese bile döngüyü durduran sert bir maksimum adım sayısı; adım bütçesi sonlanmayı garanti eder.
+- **Multi-hop**: sonraki bir çağrının girdisinin daha önceki bir çağrının sonucuna bağlı olduğu, birden fazla tool call gerektiren bir soru; earbud sorusu (Acme'den Globex'e, oradan garantiye) kanonik örnektir.
+- **Run-time vs author-time routing**: tool call dizisinin döngü çalışırken mi kararlaştırıldığı (agent transkriptini okur ve seçer) yoksa yazar tarafından önceden koda mı kablolandığı (fixed workflow).
+- **Validator**: önerilen bir tool call'u, çağrı ateşlenmeden önce şemasına karşı denetleyen, bilinmeyen bir aracı, eksik bir zorunlu argümanı ya da yanlış-tipli bir argümanı reddeden ve reddi bir çökme yerine toparlanabilir bir mesaj olarak döndüren fonksiyon.
+
+---
+
+Araçlara bir sözleşme verdik, böylece şema-geçerli bir çağrı artık fonksiyonuna ulaşıyor. Ama şema-geçerli bir çağrı run time'da yine de ters gidebilir: fonksiyon hata fırlatabilir, bir ağ aracı zaman aşımına uğrayabilir, bir API her tip kontrolünden geçen çöp döndürebilir. **Part 2, When Tools Fail**, o bir sonraki katman hakkında: retry'lar, timeout'lar ve iyi-tiplenmiş bir aracın size yine de yapabileceği şeyler için bir hata taksonomisi.
