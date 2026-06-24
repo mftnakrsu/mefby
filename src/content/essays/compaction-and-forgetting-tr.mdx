@@ -1,0 +1,171 @@
+---
+title: "Uzun Yolda Hayatta Kalmak"
+description: "Uzun bir koşu window'u taşırır ve yalnızca büyüyen bir store gürültüye döner. Hot/warm/cold compaction window'u sınırlar; forgetting (decay, supersede, evict) belleği faydalı tutar."
+date: 2026-07-03
+tags: ["Agents","Memory","Context Window","Compaction","Forgetting","AI"]
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-07-compaction-and-forgetting"
+lang: "tr"
+translationSlug: "compaction-and-forgetting"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Part 6, agent'a yazabileceği typed store'lar verdi: working, semantic, episodic, procedural. Bu, bilgi-türü problemini çözdü ve hemen bir sonrakini açığa çıkarır. Agent'ı yeterince uzun çalıştırın ve iki şey bozulur, ikisi de TÜR değil ZAMAN ile ilgili. Birincisi, agent'ın her adımda yeniden gönderdiği transkript, context window'unu taşırana kadar büyümeye devam eder. Modelin tek bir çağrıda okuyabileceği şeyin sert bir tavanı vardır, ve uzun bir destek oturumu doğrudan onun içinden geçip gider. İkincisi, yalnızca büyüyen bir store, sinyal gürültüde boğulana kadar bayat ve mükerrer fact'lerle dolar. Üç tur önce düzeltilmiş bir tercih hâlâ store'da oturur ve düzeltmeye karşı oy çokluğu sağlar; havayla ilgili tek seferlik bir laf, bir read'in yüzeye çıkarabildiği birkaç slot için kullanıcının adıyla yarışır. Unutamayan bir agent uzun süre çalışamaz. Bu parça, uzun ömürlü bir agent'ın ihtiyaç duyduğu iki operasyonu, artı deneyimi bilgiye çeviren pass'i ekler. **Compaction** (window ekseni) HISTORY'yi budget'a sığacak şekilde sıkıştırır; Anthropic tarzı hot/warm/cold fikri elle yapılmış halidir. **Forgetting** (store ekseni) bellekleri importance, recency ve access'e göre sıralar ki en iyi birkaçı yüzeye çıksın, geri kalanını ise decay, supersession ve eviction sessizce emekliye ayırır. Ve **consolidation**, bir sleep-time pass'i, ham episodic log'u durable semantic fact'lere ve procedural kurallara distile eder, sonra tükettiği episode'ları budar. Tüm parçanın dürüst çerçevelemesi: unutmasız büyüme yalnızca daha yavaş bir başarısızlıktır.
+
+## Ön koşullar
+
+Temel Python yeterli: fonksiyonlar, bir liste, bir dictionary, bir class ve bir string check. Hepsi bu. [Part 1](/essays/augmented-llm-loop)'den [Part 6](/essays/four-memories-self-editing)'ya kadarını bitirmek yardımcı olur, özellikle Part 6, çünkü compaction loop'un taşıdığı aynı konuşma history'si üzerinde işler ve forgetting Part 6'nın tanıttığı aynı typed store'lar üzerinde işler. Ama yazı kendi içinde bütünlüklü: daha önceki bir fikre yaslandığı yerde onu tek bir cümleyle yeniden ifade eder, ve Part 6'nın store'larını yeniden inşa etmez, onları zaman içinde yönetir. Eşlik eden kod, [compaction_and_forgetting.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-07-compaction-and-forgetting), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz. Token'lar word count ile deterministik olarak tahmin edilir ve zaman bir logical clock'tur, dolayısıyla demo yeniden üretilebilir, gerçek LLM summarizer'ı (`generate()`) tek bir ortam bayrağı uzaklıkta, tam olarak Part 1'den 6'ya kadarki gibi.
+
+## RAG Part 20'den bir IOU'yu tahsil etmek
+
+RAG Part 20 tam burada bir borç bıraktı. Onun conversational agent'ı turların DÜZ bir buffer'ını tutuyordu ve buffer uzayınca yalnızca "eski turları özetlemeye geri döneceğiz" diye not düştü. İşte buraya geri dönüyoruz. Ama neyin farklı olduğu konusunda yüksek sesle olmak istiyorum, çünkü "özetle" sözcüğünü paylaşan iki operasyonu birbirine karıştırmak tehlikeli derecede kolay. RAG Part 20'nin CONDENSATION'ı, retrieval çalışsın diye en son SORUYU bağımsız bir soruya yeniden yazar: "ya bataryası?" -> "kulaklığın batarya ömrü nedir?". COMPACTION ise koşu window'a sığsın diye HISTORY'yi sıkıştırır. Farklı input (biri bir soru, diğeri tüm transkript), farklı output (biri yeniden yazılmış bir query, diğeri tier'lı bir özet), farklı amaç (biri bir retriever'a yardım eder, diğeri prompt'u budget altında tutar). Artefakt bunu bilerek çıktısının ilk satırında söyler:
+
+```text
+NOT the same as RAG P20 condensation: P20 rewrites the QUESTION into a standalone
+one; COMPACTION compresses the HISTORY to fit the window. Different operations.
+```
+
+Bu, RAG Part 11 ve 16'nın tarttığı long-context tradeoff'larından da ayrıdır (büyük bir window'a mı yaslanmalı yoksa retrieve mi etmeli). O parçalar window'a daha fazla şey koymak gerekip gerekmediğini soruyordu; compaction ise zaten çok büyük olan bir history'nin nasıl sığdırılacağını sorar. Ve ikinci yarıdaki read/write/forget policy'leri, artı üçüncüsündeki episodic-to-semantic consolidation, sürekli büyüyen RAG index'inin hiç dokunmadığı bir topraktır: bir vector index büyür, bir bayat fact'i decay etmez ya da supersede edilmiş bir fact'i emekliye ayırmaz. Bu parçanın gerçekten üzerine inşa ettiği şey Part 6'nın typed store'larıdır, ki onları yalnızca doldurmak yerine artık uzun bir ufuk boyunca yönetmeyi öğrenir.
+
+## Compaction: hot, warm, cold
+
+Window ekseniyle başlayın. Agent'ın her adımda yeniden gönderdiği history'nin yaşa göre üç doğal tier'ı vardır. Son N tur **HOT**'tur: verbatim tutulur, çünkü modelin anlık context'e tam olarak olduğu gibi ihtiyacı vardır. Bir karar ya da bir tool output'u taşıyan daha eski turlar **WARM**'dır: salient satırları tutan ve chatter'ı düşüren bir rolling summary'ye katlanır ("bunu kontrol ettiğin için teşekkürler" hiç yer kazanmaz). En eski warm öğeler tek bir **COLD** gist'e katlanır, kaç turun özetlenip atıldığını söyleyen lossy bir tek satır, çünkü uzak geçmişi taşımak neredeyse hiç maliyeti yoktur. Tetikleyici bir token budget'tır. Demo `BUDGET = 40` ve `HOT_N = 2` ayarlar (kasten küçük ki compaction sık ateşlensin), sonra on turluk bir destek oturumu oynatır ve her tur metre'yi yazar. Window'un budget'ı geçişini ve geri çekilişini izleyin, artefaktın gerçek çıktısından:
+
+```text
+  turn  3: window 29/40 ok  (+ user: Oh interesting, thanks for checking th)
+  turn  4: window 41/40 OVER  (+ user: It has actually been about 40 days sin)
+          -> COMPACT: dropped 1 chatter turn(s), folded older decisions warm/cold; window now 29/40
+  turn  5: window 40/40 ok  (+ tool: search_policy -> after the window, a 1)
+  turn  6: window 49/40 OVER  (+ user: Got it, that seems fair enough I suppo)
+          -> COMPACT: dropped 2 chatter turn(s), folded older decisions warm/cold; window now 28/40
+  turn  7: window 39/40 ok  (+ user: So what would my refund be on the $200)
+  turn  8: window 49/40 OVER  (+ tool: calculator -> $180.00 (200 * 0.9 after)
+          -> COMPACT: dropped 1 chatter turn(s), folded older decisions warm/cold; window now 39/40
+  turn  9: window 48/40 OVER  (+ user: Perfect. Could you also check the earb)
+          -> COMPACT: dropped 1 chatter turn(s), folded older decisions warm/cold; window now 37/40
+  turn 10: window 47/40 OVER  (+ tool: search_products -> Globex earbuds carr)
+          -> COMPACT: dropped 0 chatter turn(s), folded older decisions warm/cold; window now 32/40
+```
+
+Metre'yi okuyun, çünkü pattern mekanizmanın bütünüdür. Window tur tur büyür, ta ki turn 4'te budget'ı geçene kadar (`41/40 OVER`), ve compaction onu hemen `29/40`'a geri çeker. Turn 6, 8, 9 ve 10'da yine geçer (`49`, `49`, `48`, `47`), ve her seferinde koşu `28`, `39`, `37` ve `32`'de devam eder, hep 40'ın altına geri. Hangi turların düşürüldüğüne ve hangilerinin hayatta kaldığına dikkat edin. Turn 4'te bir chatter turu düşürülür; turn 6'da iki tanesi düşürülür. Ama salient satırlar asla kaybolmaz: policy aramaları, `calculator -> $180.00` sonucu, warranty araması, hepsi yok olmak yerine warm'a katlanır. Compaction selektif amnezidir, künt truncation değil. Naif bir "son K turu tut", `$180.00` hesabını ekrandan kaydığı anda atardı, ve agent onu yeniden türetir, ya da daha kötüsü, onsuz cevap verirdi. İşte turn 10'dan sonra tüm window, ki modelin hâlâ gördüğü her şey budur:
+
+```text
+  Final window state (this is all the model still sees):
+    COLD : [2 earlier turns summarized]
+    WARM : ['calculator -> $180.00 (200 * 0.9 after the fee).']
+    HOT  : ['user: Perfect. Could you also check the earbuds warranty?', 'tool: search_products -> Globex earbuds carry a 2-year limited warranty.']
+```
+
+Üç tier, her biri kendi işini yapıyor. COLD satırı, `[2 earlier turns summarized]`, derin geçmişin lossy gist'idir: iki tur bir sayıya indirgenmiş. WARM, ileriye taşımaya değer tek kararı tutar, `calculator -> $180.00 (200 * 0.9 after the fee).`, agent'ın kaybetmemesi gereken refund rakamı. HOT, son iki turdur verbatim, kullanıcının az önce açtığı earbuds-warranty alışverişi. On turluk oturum, her load-bearing fact'i korurken budget altına rahatça sığan bir window'a katlandı, ve chatter ("bunu kontrol ettiğin için teşekkürler", "sanırım bu yeterince adil") basitçe gitti. Diagram 1 üç tier'ı yaşa göre serer.
+
+<Diagram number={1} caption="Compaction: the conversational history compressed into three tiers by age so it stays under the token budget. The most recent HOT_N turns (here the last two, the earbuds-warranty exchange) are kept HOT and verbatim. Older turns that carried a decision or tool output (here the calculator result $180.00) are folded into a WARM rolling summary while chatter such as thanks for checking and that seems fair enough is dropped. The oldest warm items fold into a single lossy COLD gist that reads 2 earlier turns summarized. A token meter on the right shows the window crossing BUDGET 40 at turns 4, 6, 8, 9, and 10 and each compaction pulling it back under budget (to 29, 28, 39, 37, and 32). The point: salient lines survive, chatter is dropped, the window stays bounded, and the run continues.">
+  <img src="/essays/compaction-and-forgetting/part7-hot-warm-cold.svg" alt="A diagram of a conversational history split into three horizontal tiers by age. At the bottom, a small COLD box holds a single lossy line reading 2 earlier turns summarized, labelled the lossy gist of the deep past. In the middle, a WARM box holds a rolling summary line calculator arrow $180.00 (200 times 0.9 after the fee), labelled decisions and tool outputs kept, with faded crossed-out chatter lines thanks for checking and that seems fair enough labelled dropped. At the top, a HOT box holds the last two turns verbatim: user Perfect could you also check the earbuds warranty, and tool search_products arrow Globex earbuds carry a 2-year limited warranty, labelled the most recent HOT_N turns, kept verbatim. On the right, a vertical token meter shows the window rising past a red BUDGET 40 line at turns 4, 6, 8, 9 and 10 with values 41, 49, 49, 48, 47, and a downward arrow at each marked COMPACT pulling it back to 29, 28, 39, 37 and 32 under the line. A caption strip reads: hot stays verbatim, warm keeps the decisions, cold is a one-line gist, the window stays bounded." class="w-full rounded-lg" />
+</Diagram>
+
+## Forgetting: decay, supersession, eviction
+
+Şimdi store ekseni. Compaction conversational window'u sınırlar; forgetting memory store'unu sınırlar. Bir bellek sonsuza dek eşit derecede saklamaya değer değildir, dolayısıyla her fact üç şey taşır: bir **importance** (ne kadar önemli olduğu), bir **last-touch time** (recency için), ve bir **access count** (ne sıklıkta okunduğu). Read-time score bunların çarpımıdır, `importance x recency x access`, ve bir read en iyi birkaçını yüzeye çıkarır. Store'da dört fact varken başlangıçtaki ranking'i izleyin, artefaktın gerçek çıktısından:
+
+```text
+  Read-time ranking at t=0 (importance x recency x access):
+    0.90  the user is Dana
+    0.70  Dana's order is ORD-3300 ($200)
+    0.60  Dana prefers email contact
+    0.20  Dana mentioned it is raining today
+```
+
+`t=0`'da ranking yalnızca ham importance'ı izler: kullanıcının adı (`0.90`) order'ı (`0.70`) yener, o da email tercihini (`0.60`) yener, o da derme çatma hava lafını (`0.20`) yener. Şimdi zamanı geçirin. Recency bir half-life üzerinde decay eder, dolayısıyla daha eski fact'ler ağırlık kaybeder, ve okunan bir fact biraz tırmanır çünkü access sayılır. Demo `t=6`'ya atlar ve `name`'i iki kez okur. Skorların düşüşünü ve yeniden sıralanışını izleyin:
+
+```text
+  At t=6, importance has decayed with age; 'name' was accessed twice:
+    0.38  the user is Dana
+    0.25  Dana's order is ORD-3300 ($200)
+    0.21  Dana prefers email contact
+    0.07  Dana mentioned it is raining today
+```
+
+Her skor düştü (recency dördünü de decay etti), ama eşit olmayan biçimde düştüler: `name` liderliğini `0.38`'de kısmen iki kez okunduğu için korudu, hava lafı ise çıkış yolunda `0.07`'ye çöktü. Bu birinci forgetting mekanizmasıdır, **decay**: belleğe bir şey dokunmaya devam etmedikçe importance yaşla solar. İkincisi **supersession**'dır. Yeni bir fact bir eskisini doğrudan yerine koyduğunda, eski olan yarışmaya bırakılmak yerine emekliye ayrılır. Dana fikrini değiştirir:
+
+```text
+  SUPERSESSION: Dana says to use the phone instead of email.
+    [retired] Dana prefers email contact
+    [active] Dana prefers phone contact
+```
+
+Email tercihi `[retired]` olarak işaretlenir ve phone tercihi artık `[active]`'dir. Bu tam olarak Part 6'da typed memory'nin tek başına düzeltemediği başarısızlıktır: yalnızca append edilen bir düzeltme, düzelttiği şeyle aynı yığında oturur, ve recency-bias'lı bir read hâlâ bayat olanı yüzeye çıkarabilir. Supersession bunu write-time'da kaybedeni emekliye ayırarak çözer. Üçüncü mekanizma **eviction**'dır. Store'un sabit bir kapasitesi vardır (burada dört aktif fact), dolayısıyla beşinci bir tane geldiğinde, yer açmak için en düşük skorlu fact düşürülür:
+
+```text
+  EVICTION: a 5th fact arrives but capacity is 4; the weakest is evicted.
+    evicted (lowest score): Dana mentioned it is raining today
+  Active store now:
+    0.60  Dana prefers phone contact
+    0.38  the user is Dana
+    0.25  Dana's order is ORD-3300 ($200)
+    0.15  Dana clicked a promo email once
+```
+
+Zaten `0.07`'ye decay etmiş hava lafı en zayıf olandır ve `evicted` edilir, ve yeni promo fact'i `0.15`'te onun slotunu alır. Taze phone tercihinin artık `0.60`'ta lider olduğuna dikkat edin (az önce yazıldı, tam recency), name `0.38`'de oturur, order `0.25`'te. Store kapasitede kalır, bayat olan ve önemsiz olan dipten dökülür, ve read gerçekten önemli olanı yüzeye çıkarmaya devam eder. İnteraktif figür üçünü de sürmenizi sağlar: saati ilerletip skorların decay edişini izleyin, email tercihini supersede edin, ve bir eviction tetiklemek için store'u kapasitenin üzerine itin.
+
+<Diagram number={2} caption="Forgetting in a memory store, interactive. Each fact carries an importance, a last-touch time, and an access count, and the read-time score is their product (importance times recency times access). At t equals 0 the ranking follows raw importance: 0.90 the user is Dana, 0.70 the order ORD-3300, 0.60 prefers email, 0.20 the weather remark. Advance the clock to t equals 6 and recency decays every score (0.38, 0.25, 0.21, 0.07) while accessing the name twice keeps it on top. Trigger SUPERSESSION and the email preference is retired while a phone preference becomes active. Trigger EVICTION with the store at capacity 4 and the lowest-scoring fact, the decayed weather remark, is dropped to make room for a new promo fact. The figure shows read-time scoring, write-time decay, supersession, and eviction as one connected system.">
+  <IframeFigure src="/essays/compaction-and-forgetting/part7-compaction-and-decay.html" title="Interactive forgetting and decay player for a memory store. The store starts at t equals 0 with four facts ranked by a read-time score equal to importance times recency times access: 0.90 the user is Dana, 0.70 Dana's order is ORD-3300 200 dollars, 0.60 Dana prefers email contact, 0.20 Dana mentioned it is raining today. A clock control advances time to t equals 6, where recency decays every score on a half-life so they become 0.38 the user is Dana, 0.25 the order, 0.21 prefers email, 0.07 the weather remark, and a note explains the name was accessed twice so it held its lead. A supersession control replaces the email preference with a phone preference, marking Dana prefers email contact as retired and Dana prefers phone contact as active. An eviction control adds a fifth fact Dana clicked a promo email once while capacity is 4, so the lowest-scoring fact, the decayed weather remark at 0.07, is evicted, leaving the active store as 0.60 prefers phone, 0.38 the name, 0.25 the order, 0.15 the promo fact. A panel summarises the three write-time policies, decay, supersession, and eviction, alongside the read-time scoring formula." height={860} />
+</Diagram>
+
+Trace'ten geri çekilince, read path ile write path farklı işler yapar. Read path saf ranking'dir: aktif fact'leri skorla ve en iyi birkaçını yüzeye çıkar, böylece importance, recency ve access agent'ın bu tur ne gördüğüne karar verir. Write path ise belleklerin gerçekten ayrıldığı yerdir: decay importance'ı zaman içinde aşındırır, supersession bir replacement geldiği anda bir fact'i emekliye ayırır, ve eviction store dolu olduğunda en zayıfı düşürür. Diagram 3 ikisini ayırır ki read'in asla silmediği ve forgetting'in write'ta gerçekleştiği net olsun.
+
+<Diagram number={3} caption="The read path and the write path of a forgetting memory store, side by side. On the read side, a query scores every active fact by importance times recency times access and returns the top few, surfacing what matters this turn without changing the store. On the write side, three policies remove or retire memories: decay erodes a fact's importance as time passes (the weather remark falls from 0.20 to 0.07), supersession marks an old fact retired the instant a replacement is written (prefers email retired, prefers phone active), and eviction drops the lowest-scoring fact when the store exceeds its capacity of 4 (the decayed weather remark is evicted for a new promo fact). The point: reading ranks and surfaces, writing is where forgetting actually happens, so the store stays useful instead of growing into noise.">
+  <img src="/essays/compaction-and-forgetting/part7-write-manage-forget.svg" alt="A diagram split into two vertical halves. The left half, labelled READ path, shows a query arrow entering a scorer box that computes importance times recency times access for each active fact, then a ranked list returning the top few facts, with a note reading never deletes, only surfaces. The right half, labelled WRITE path, shows three stacked policy boxes. The first, DECAY, shows a fact the user mentioned it is raining today with its score falling from 0.20 at t0 to 0.07 at t6 along a downward half-life curve, labelled importance fades with age. The second, SUPERSESSION, shows Dana prefers email contact crossed out and tagged retired with an arrow to Dana prefers phone contact tagged active, labelled a new fact retires the one it replaces. The third, EVICTION, shows a store at capacity 4 with a fifth fact Dana clicked a promo email once arriving, and the lowest-scoring fact the weather remark being pushed out, labelled over capacity, drop the weakest. A caption strip reads: reading ranks and surfaces, writing is where forgetting happens." class="w-full rounded-lg" />
+</Diagram>
+
+## Consolidation: bir sleep-time pass'i
+
+Compaction ve forgetting window'u ve store'u tur tur sınırlı tutar. Uzun ömürlü bir agent'ın isteyeceği bir hamle daha var, ve o loop içinde hiç çalışmaz: ham deneyimi durable bilgiye distile eden periyodik bir **sleep-time pass**'i. Episodic log ne OLDUĞUNU kaydeder, satır başına bir event, ve her etkileşimle büyür. O event'lerin çoğu event olarak saklamaya değmez; ima ettikleri FACT ya da RULE olarak saklamaya değerler. Consolidation ham log'u okur ve bunları çıkarır, sonra tükettiği episode'ları budar. İşte ham log ve pass'in ürettiği şey, artefaktın gerçek çıktısından:
+
+```text
+  Raw episodic log (what happened):
+    t1: user asked whether a return after the window is allowed
+    t2: tool said after the window a 10% restocking fee applies
+    t3: user accepted the $180.00 refund on the $200 order
+    t4: user confirmed their name is Dana
+
+  After the sleep-time consolidation pass:
+    -> SEMANTIC facts   : ['user.name = Dana']
+    -> PROCEDURAL rules : ['returns after the 30-day window: apply a 10% restocking fee']
+    -> episodic log pruned: 4 raw events distilled and cleared
+```
+
+Neyin tür değiştirdiğini okuyun. Dört ham event bir durable **semantic** fact (`user.name = Dana`, t4'ten çıkarıldı) ve bir durable **procedural** rule (`returns after the 30-day window: apply a 10% restocking fee`, t2'den çıkarıldı) oldu, ve dört episode sonra `distilled and cleared` edildi. "user confirmed their name is Dana" event'i tek seferlik bir olaydır, ama taşıdığı fact (kullanıcının adı) sonsuza dek doğrudur ve sürekli büyüyen bir log'a değil semantic memory'ye aittir. "tool said after the window a 10% restocking fee applies" event'i bir kez oldu, ama ima ettiği rule yeniden kullanılabilir bir how-to'dur ve procedural memory'ye aittir. Bu, Part 6'nın typed store'larının long-horizon versiyonudur: Part 6 gelen bilgiyi türe göre sıraladı, ve consolidation onu zaman içinde yapmaya devam eden şeydir, birikip duran event kaydını, o event'lerin kanıtı oldukları çok daha küçük, çok daha durable bilgiye çevirir. Event'ler bilgi olur, ve onları üreten log sınırsız büyümesin diye budanır.
+
+> 💡 **Deneyimden.** Bana compaction'ı öğreten koşu, bir saat önce açıkça verdiği bir kararı kullanmayı birden bırakan uzun bir research agent'tı. Erken bir noktada bir data source seçmiş ve nedenini yazmıştı; kırk tool çağrısı sonra tamamen farklı bir source'tan bir sayı alıntıladı, kendi önceki seçimiyle çelişerek. Hata yoktu, exception yoktu. Framework, window'a sığsın diye transkriptin başını sessizce truncate etmişti, ve truncation kararı da beraberinde götürmüştü, çok daha az önemli olan bir yığın yakın zamanlı "fetched page", "parsed table" satırını tutarken. Çare daha büyük bir window değildi. Çare hot/warm/cold'du: son birkaç turu verbatim tut, daha eski turları kararları ve tool sonuçlarını açıkça koruyan bir özete katla, ve chatter'ın ilk düşen şey olmasına izin ver. Karar hayatta kaldı çünkü salient'ti, ve agent kendisiyle tartışmayı bıraktı. Forgetting yarısı beni farklı bir projede ısırdı, yalnızca büyüyen bir memory store'a sahip bir support agent. Bir müşteri shipping tercihini değiştirdi, ve store görevbilinçle yeni olanı eskinin yanına append etti. Haftalar boyunca agent bayat tercihi kabaca zamanın yarısında yüzeye çıkarmaya devam etti, çünkü her iki fact orada oturuyordu ve recency-ağırlıklı bir read hangisinin güncel olduğunu güvenilir şekilde söyleyemiyordu. Bir düzeltmeyi append etmek, onu yapıştırmakla aynı şey değildir. Onu düzelten şey supersession'dı: yeni tercihi yazmak eskisini emekliye ayırır, böylece read kaybedeni hiç görmez. Ondan sonra, bir düzeltme gerçekten bir anlam ifade etti.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Özet / Çıkarımlar
+
+- Uzun bir koşu, Part 6'nın typed store'larını ZAMAN tabanlı iki şekilde bozar: her adımda yeniden gönderilen transkript **context window'unu taşırır**, ve **yalnızca büyüyen** bir store sinyal gürültüde boğulana kadar bayat ve mükerrer fact'lerle dolar. Unutamayan bir agent uzun süre çalışamaz.
+- **Compaction** (window ekseni) HISTORY'yi hot/warm/cold'a sıkıştırır: son `HOT_N` tur HOT ve verbatim kalır, daha eski kararlar ve tool output'ları bir WARM rolling summary'ye katlanır ve chatter düşürülür, ve en eski warm tek bir lossy COLD gist'e katlanır. `BUDGET = 40` ile window turn 4, 6, 8, 9, 10'da geçti (`41/40`, `49/40`, `49/40`, `48/40`, `47/40`) ve her compaction onu budget altına geri çekti (`29`, `28`, `39`, `37`, `32`).
+- Compaction selektiftir, künt truncation değil: final window `COLD : [2 earlier turns summarized]`, `WARM : calculator -> $180.00 (200 * 0.9 after the fee).`, ve HOT earbuds-warranty turlarını tutar, "thanks for checking" ve "that seems fair enough" ise basitçe gitmiştir.
+- **Forgetting** (store ekseni) fact'leri read-time'da `importance x recency x access` ile skorlar. `t=0`'da ranking `0.90` name, `0.70` order, `0.60` email, `0.20` weather idi; `t=6`'da recency hepsini `0.38 / 0.25 / 0.21 / 0.07`'ye decay etti, `name` ise iki kez okunduğu için liderliği korudu.
+- Üç write-time policy bellekleri kaldırır: **decay** (importance yaşla solar), **supersession** (yeni bir fact yerine koyduğunu emekliye ayırır, böylece `prefers email` `[retired]` ve `prefers phone` `[active]` oldu), ve **eviction** (kapasite 4'ün üzerinde, en düşük skorlu fact, decay etmiş weather lafı, yeni bir promo fact için evict edildi). Reading sıralar ve yüzeye çıkarır; writing forgetting'in gerçekleştiği yerdir.
+- **Consolidation** bir sleep-time pass'idir: 4 ham episode'u 1 semantic fact'e (`user.name = Dana`) ve 1 procedural rule'a (`returns after the 30-day window: apply a 10% restocking fee`) distile etti, sonra tükettiği log'u budadı. Part 6'nın store'larının long-horizon versiyonudur: event'ler bilgi olur.
+- Compaction, RAG Part 20'nin question condensation'ı DEĞİLDİR (o en son soruyu bağımsız bir soruya yeniden yazar) ve RAG Part 11 ve 16'nın long-context tradeoff'ları DEĞİLDİR (onlar window'a karşı retrieval'ı tartar). O, çalışan history'yi sıkıştırır. Unutmasız büyüme yalnızca daha yavaş bir başarısızlıktır.
+
+## Sözlük
+
+- **Compaction**: yeniden gönderilen transkript token budget altında kalsın diye conversational HISTORY'yi sıkıştırmak, onu truncate etmek yerine hot, warm ve cold'a tier'layarak; RAG Part 20'nin question condensation'ından ayrıdır, ki o en son soruyu retrieval için bağımsız bir soruya yeniden yazar.
+- **Hot / warm / cold tier'ları**: history'nin üç yaş tier'ı. HOT son `HOT_N` turdur verbatim tutulur, WARM daha eski kararların ve tool output'larının bir rolling summary'sidir (chatter düşürülür), COLD en eski malzemenin tek bir lossy gist'idir (burada `[2 earlier turns summarized]`).
+- **Token budget**: canlı window'un tutabileceği şeyin tavanı (burada `BUDGET = 40`); onu geçmek, window tavanın altına dönene kadar daha eski turları katlayan bir compaction tetikler.
+- **Forgetting**: compaction'ın store-ekseni karşılığı; bir memory store'u uzun bir koşu boyunca faydalı tutmak, store'un sınırsız büyümesine izin vermek yerine neyin yüzeye çıkarılacağını sıralayarak ve artık yerini hak etmeyeni sessizce kaldırarak.
+- **Read-time scoring (importance x recency x access)**: bir read'in aktif fact'leri sıralamak ve en iyi birkaçını yüzeye çıkarmak için kullandığı skor; importance bir fact'in ne kadar önemli olduğu, recency bir half-life üzerinde yaşla decay eder, ve access okunan fact'leri ödüllendirir. Reading sıralar ve yüzeye çıkarır ama asla silmez.
+- **Decay**: bir fact'in efektif importance'ının, son dokunulduğundan beri zaman geçtikçe solduğu write-time policy'si, böylece bayat, dokunulmamış bir bellek ağırlık kaybeder (weather lafı `0.20`'den `0.07`'ye düştü).
+- **Supersession**: bir replacement yazıldığı anda eski bir fact'i emekliye ayıran write-time policy'si, böylece kaybeden read'lerde yarışmayı bırakır (`prefers email` retired, `prefers phone` active); bir düzeltmeyi gerçekten yapıştıran şey budur.
+- **Eviction**: store kapasitesini aştığında en düşük skorlu aktif fact'i düşürüp yeni bir tanesine yer açan write-time policy'si (kapasite 4'te decay etmiş weather lafı yeni bir promo fact için evict edildi).
+- **Consolidation (episodic -> semantic / procedural)**: ne olduğunun ham episodic log'unu durable semantic fact'lere ve procedural kurallara distile eden, sonra tükettiği episode'ları budayan periyodik bir sleep-time pass'i; event'lerin bilgi olmasının long-horizon yolu.
+
+---
+
+Bu parçanın kuralı: uzun süre çalışan bir agent, one-shot bir pipeline'ın hiç yapmak zorunda olmadığı iki şeyi yapmalıdır, history'yi window'a hâlâ sığacak şekilde SIKIŞTIRMAK (hot/warm/cold, RAG Part 20'nin question condensation'ı değil) ve artık yerini hak etmeyen bellekleri UNUTMAK (decay, supersession, eviction), sonra ham episode'ları durable fact'lere ve kurallara distile etmek. Ama buraya kadar her şeyin altındaki varsayıma dikkat edin: loop'un sonunda durduğu. Compaction her adımı ucuz tutar ve forgetting store'u temiz tutar, yine de sonsuza dek action almaya devam eden bir agent, her adım ne kadar derli toplu olursa olsun ikisini de tüketip bitirir. Asla pes etmeyen bir agent ölü bir tool'u retry eder, iki state arasında döner, ve ulaşamayacağı bir hedefi kovalayarak tüm budget'ı harcar. **Part 8, Stopping the Runaway**, budget'lar, loop detection ve circuit breaker ile ilgilidir: ne zaman durulacağına karar veren kontroller, RAG Part 19'un bıraktığı loop-detector notunu formalleştirir ve "tekrar dene"yi "tekrar dene, şuraya kadar, ve sonra dur"a çevirir.

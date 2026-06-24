@@ -1,0 +1,261 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780" width="100%" style="height:auto" role="img" aria-label="The forgetting lifecycle of a memory, in three stages. Stage one, WRITE: a new fact arrives carrying an importance weight, for example the user is Dana with importance 0.9. Stage two, MANAGE: at read time each fact is scored as importance times recency times access, and importance decays with age; a table shows scores falling from t equals 0 to t equals 6, the user is Dana from 0.90 to 0.38, the order from 0.70 to 0.25, prefers email from 0.60 to 0.21, raining today from 0.20 to 0.07. Stage three, FORGET: supersession retires an old fact when a newer one replaces it, prefers email is retired for prefers phone; and eviction drops the lowest-scoring fact when the store is over capacity 4, so raining today is evicted. Below, a consolidation arrow shows a sleep-time pass distilling four raw episodic events into one durable semantic fact, user name equals Dana, and one procedural rule, returns after the 30-day window apply a 10% restocking fee, after which the episodic log is pruned.">
+  <title>The forgetting lifecycle: write, manage, forget, plus a sleep-time consolidation pass</title>
+
+  <defs>
+    <marker id="arrSlate" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#64748b"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#14b8a6"/>
+    </marker>
+    <marker id="arrRose" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#f43f5e"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="780" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 7, the forgetting lifecycle of a memory</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">Write, manage, forget: a memory that must earn its place over time</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">A store that only grows fills with stale and duplicate facts. Score reads by importance x recency x access; let writes decay, supersede, and evict.</text>
+
+  <!-- ================= STAGE 1: WRITE ================= -->
+  <rect x="40" y="84" width="300" height="210" rx="13" fill="#f0fdfa" stroke="#14b8a6" stroke-width="2"/>
+  <rect x="40" y="84" width="300" height="30" rx="13" fill="#14b8a6"/>
+  <rect x="40" y="99" width="300" height="15" fill="#14b8a6"/>
+  <text x="58" y="105"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.03em">1 &#183; WRITE</text>
+  <text x="322" y="105" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">a new fact lands</text>
+  <text x="58" y="136"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="700" fill="#0f172a">each fact carries an importance</text>
+  <text x="58" y="154"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#0d9488">plus a last-touch time and an access count</text>
+
+  <rect x="58" y="168" width="264" height="46" rx="8" fill="#ffffff" stroke="#99f6e4" stroke-width="1.3"/>
+  <text x="70" y="187"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#134e4a">Fact("name", "the user is Dana",</text>
+  <text x="70" y="202"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#134e4a">     importance=0.9, created=0)</text>
+
+  <rect x="58" y="224" width="264" height="54" rx="8" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="70" y="243"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#475569">Importance is the writer's prior on how</text>
+  <text x="70" y="257"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#475569">much this fact should matter. It is not</text>
+  <text x="70" y="271"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#475569">fixed: age erodes it (see MANAGE).</text>
+
+  <!-- arrow WRITE -> MANAGE -->
+  <line x1="340" y1="189" x2="382" y2="189" stroke="#64748b" stroke-width="2.4" marker-end="url(#arrSlate)"/>
+
+  <!-- ================= STAGE 2: MANAGE ================= -->
+  <rect x="388" y="84" width="430" height="210" rx="13" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <rect x="388" y="84" width="430" height="30" rx="13" fill="#f59e0b"/>
+  <rect x="388" y="99" width="430" height="15" fill="#f59e0b"/>
+  <text x="406" y="105"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.03em">2 &#183; MANAGE</text>
+  <text x="800" y="105" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">score on read, decay over time</text>
+  <text x="406" y="135"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#b45309">score = importance x recency x access</text>
+  <text x="406" y="151"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#78350f">recency halves every HALF_LIFE = 4 time units; each read nudges access up</text>
+
+  <!-- score table header -->
+  <text x="406" y="176"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="700" fill="#64748b" letter-spacing="0.03em">FACT</text>
+  <text x="690" y="176" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" font-weight="700" fill="#64748b">t=0</text>
+  <text x="780" y="176" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" font-weight="700" fill="#64748b">t=6</text>
+  <line x1="406" y1="182" x2="800" y2="182" stroke="#fde68a" stroke-width="1"/>
+
+  <!-- row name -->
+  <text x="406" y="200" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#334155">the user is Dana</text>
+  <text x="690" y="200" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">0.90</text>
+  <text x="780" y="200" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#b45309">0.38</text>
+  <!-- row order -->
+  <text x="406" y="220" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#334155">Dana's order is ORD-3300 ($200)</text>
+  <text x="690" y="220" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">0.70</text>
+  <text x="780" y="220" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#b45309">0.25</text>
+  <!-- row contact -->
+  <text x="406" y="240" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#334155">Dana prefers email contact</text>
+  <text x="690" y="240" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">0.60</text>
+  <text x="780" y="240" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#b45309">0.21</text>
+  <!-- row chitchat -->
+  <text x="406" y="260" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#334155">Dana mentioned it is raining today</text>
+  <text x="690" y="260" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">0.20</text>
+  <text x="780" y="260" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#f43f5e">0.07</text>
+
+  <line x1="406" y1="270" x2="800" y2="270" stroke="#fde68a" stroke-width="1"/>
+  <text x="406" y="286"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="9" fill="#b45309">Age erodes every score; the 'name' fact, read twice, decays slower than the rest.</text>
+
+  <!-- arrow MANAGE -> FORGET -->
+  <line x1="818" y1="189" x2="860" y2="189" stroke="#64748b" stroke-width="2.4" marker-end="url(#arrSlate)"/>
+
+  <!-- ================= STAGE 3: FORGET ================= -->
+  <rect x="866" y="84" width="294" height="210" rx="13" fill="#fff1f2" stroke="#f43f5e" stroke-width="2"/>
+  <rect x="866" y="84" width="294" height="30" rx="13" fill="#f43f5e"/>
+  <rect x="866" y="99" width="294" height="15" fill="#f43f5e"/>
+  <text x="884" y="105"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.03em">3 &#183; FORGET</text>
+  <text x="1142" y="105" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">retire and evict</text>
+
+  <!-- supersession block -->
+  <text x="884" y="136"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#9f1239">SUPERSESSION</text>
+  <rect x="884" y="144" width="258" height="24" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.1"/>
+  <text x="896" y="160"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="9.5" fill="#94a3b8" text-decoration="line-through">Dana prefers email contact</text>
+  <rect x="884" y="172" width="258" height="24" rx="6" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.1"/>
+  <text x="896" y="188"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="9.5" fill="#047857">Dana prefers phone contact  (active)</text>
+  <text x="884" y="210"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="8.5" fill="#9f1239">a newer fact retires the one it replaces (kept, not deleted)</text>
+
+  <!-- eviction block -->
+  <text x="884" y="232"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#9f1239">EVICTION (capacity 4)</text>
+  <rect x="884" y="240" width="258" height="24" rx="6" fill="#ffffff" stroke="#fecdd3" stroke-width="1.1"/>
+  <text x="896" y="256"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="9.5" fill="#9f1239" text-decoration="line-through">Dana mentioned it is raining today  (0.07)</text>
+  <text x="884" y="282"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="8.5" fill="#9f1239">a 5th fact arrives; the lowest-scoring active fact is dropped</text>
+
+  <!-- ================= RESULTING ACTIVE STORE ================= -->
+  <text x="40" y="332"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#0f172a">The active store after one supersede and one eviction (ranked by score, at t = 6)</text>
+
+  <rect x="40" y="346" width="1120" height="96" rx="11" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.3"/>
+
+  <!-- 4 active facts, score bars -->
+  <!-- phone 0.60 -->
+  <text x="60" y="378" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0d9488">0.60</text>
+  <text x="110" y="378" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">Dana prefers phone contact</text>
+  <rect x="60" y="384" width="540" height="8" rx="4" fill="#f1f5f9"/>
+  <rect x="60" y="384" width="324" height="8" rx="4" fill="#14b8a6"/>
+  <!-- name 0.38 -->
+  <text x="60" y="414" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0d9488">0.38</text>
+  <text x="110" y="414" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">the user is Dana</text>
+  <rect x="60" y="420" width="540" height="8" rx="4" fill="#f1f5f9"/>
+  <rect x="60" y="420" width="205" height="8" rx="4" fill="#14b8a6"/>
+  <!-- order 0.25 -->
+  <text x="640" y="378" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0d9488">0.25</text>
+  <text x="690" y="378" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">Dana's order is ORD-3300 ($200)</text>
+  <rect x="640" y="384" width="500" height="8" rx="4" fill="#f1f5f9"/>
+  <rect x="640" y="384" width="125" height="8" rx="4" fill="#14b8a6"/>
+  <!-- promo 0.15 -->
+  <text x="640" y="414" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0d9488">0.15</text>
+  <text x="690" y="414" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">Dana clicked a promo email once</text>
+  <rect x="640" y="420" width="500" height="8" rx="4" fill="#f1f5f9"/>
+  <rect x="640" y="420" width="75" height="8" rx="4" fill="#14b8a6"/>
+
+  <!-- ================= CONSOLIDATION (sleep-time pass) ================= -->
+  <text x="40" y="486"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#0f172a">CONSOLIDATION: a sleep-time pass turns raw episodes into durable knowledge</text>
+  <text x="40" y="505"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#64748b">Periodically distill the raw episodic log into semantic facts and procedural rules, then prune the consumed episodes. Events become knowledge.</text>
+
+  <!-- episodic log -->
+  <rect x="40" y="522" width="420" height="222" rx="13" fill="#f0fdfa" stroke="#14b8a6" stroke-width="2"/>
+  <rect x="40" y="522" width="420" height="30" rx="13" fill="#14b8a6"/>
+  <rect x="40" y="537" width="420" height="15" fill="#14b8a6"/>
+  <text x="58" y="543"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">EPISODIC LOG (raw, what happened)</text>
+  <rect x="58" y="566" width="384" height="28" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="70" y="584" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#134e4a">t1: user asked if a return after the window is allowed</text>
+  <rect x="58" y="600" width="384" height="28" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="70" y="618" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#134e4a">t2: tool said after the window a 10% restocking fee applies</text>
+  <rect x="58" y="634" width="384" height="28" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="70" y="652" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#134e4a">t3: user accepted the $180.00 refund on the $200 order</text>
+  <rect x="58" y="668" width="384" height="28" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="70" y="686" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#134e4a">t4: user confirmed their name is Dana</text>
+  <rect x="58" y="708" width="384" height="24" rx="6" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.1"/>
+  <text x="250" y="724" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">after the pass: 4 raw events distilled and cleared</text>
+
+  <!-- consolidation arrow -->
+  <line x1="468" y1="633" x2="540" y2="633" stroke="#14b8a6" stroke-width="2.6" marker-end="url(#arrTeal)"/>
+  <text x="504" y="623" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="9" font-weight="700" fill="#0d9488">distill</text>
+  <text x="504" y="650" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="8" fill="#0d9488">consolidate()</text>
+
+  <!-- semantic out -->
+  <rect x="560" y="522" width="600" height="100" rx="13" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <rect x="560" y="522" width="600" height="28" rx="13" fill="#f59e0b"/>
+  <rect x="560" y="536" width="600" height="14" fill="#f59e0b"/>
+  <text x="578" y="541"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">SEMANTIC facts (what is TRUE)</text>
+  <text x="1142" y="541" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#ffffff">durable</text>
+  <rect x="578" y="562" width="564" height="30" rx="7" fill="#ffffff" stroke="#fde68a" stroke-width="1.2"/>
+  <text x="592" y="581" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#78350f">user.name = Dana</text>
+  <text x="578" y="610"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="9" fill="#b45309">distilled from t4: a one-off mention becomes a standing fact about the user</text>
+
+  <!-- procedural out -->
+  <rect x="560" y="638" width="600" height="106" rx="13" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <rect x="560" y="638" width="600" height="28" rx="13" fill="#10b981"/>
+  <rect x="560" y="652" width="600" height="14" fill="#10b981"/>
+  <text x="578" y="657"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">PROCEDURAL rules (how to DO a task)</text>
+  <text x="1142" y="657" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#ffffff">learned</text>
+  <rect x="578" y="678" width="564" height="30" rx="7" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+  <text x="592" y="697" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#064e3b">returns after the 30-day window: apply a 10% restocking fee</text>
+  <text x="578" y="726"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="9" fill="#047857">distilled from t2 + t3: the repeated policy outcome becomes a reusable rule</text>
+
+</svg>

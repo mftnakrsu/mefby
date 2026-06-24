@@ -1,0 +1,172 @@
+---
+title: "Surviving the Long Haul"
+description: "A long run overflows the window and a grow-only store turns to noise. Hot/warm/cold compaction bounds the window; forgetting (decay, supersede, evict) keeps memory useful."
+date: 2026-07-03
+tags: ["Agents","Memory","Context Window","Compaction","Forgetting","AI"]
+seriesOrder: 7
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-07-compaction-and-forgetting"
+lang: "en"
+translationSlug: "compaction-and-forgetting-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 6 gave the agent typed stores it can write to: working, semantic, episodic, procedural. That fixed the kind-of-knowledge problem, and it immediately exposes the next one. Run the agent long enough and two things break, both of them about TIME rather than kind. First, the transcript the agent re-sends every step keeps growing until it overflows the context window. There is a hard ceiling on what the model can read in one call, and a long support session sails straight through it. Second, a store that only ever grows fills with stale and duplicate facts until the signal drowns in noise. A preference that was corrected three turns ago still sits in the store outvoting the correction; a one-off remark about the weather competes with the user's name for the few slots a read can surface. An agent that cannot forget cannot run for long. This part adds the two operations a long-lived agent needs, plus the pass that turns experience into knowledge. **Compaction** (the window axis) compresses the HISTORY so it still fits the budget, the Anthropic-style hot/warm/cold idea done by hand. **Forgetting** (the store axis) ranks memories by importance, recency, and access so the best few surface, while decay, supersession, and eviction quietly retire the rest. And **consolidation**, a sleep-time pass, distills the raw episodic log into durable semantic facts and procedural rules, then prunes the episodes it consumed. The honest framing of the whole part: growth without forgetting is just slower failure.
+
+## Prerequisites
+
+You need basic Python: functions, a list, a dictionary, a class, and a string check. That is all. Finishing [Part 1](/essays/augmented-llm-loop) through [Part 6](/essays/four-memories-self-editing) helps, especially Part 6, because compaction operates on the same conversational history the loop carries and forgetting operates on the same typed stores Part 6 introduced. But the essay is self-contained: where it leans on an earlier idea, it restates it in a sentence, and it does not rebuild Part 6's stores, it manages them over time. The companion code, [compaction_and_forgetting.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-07-compaction-and-forgetting), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every trace in this essay yourself. Tokens are estimated deterministically by word count and time is a logical clock, so the demo is reproducible, with the real LLM summarizer (`generate()`) one environment flag away, exactly as in Parts 1 through 6.
+
+## Cashing in an IOU from RAG Part 20
+
+RAG Part 20 left a debt right here. Its conversational agent kept a FLAT buffer of turns and, when the buffer got long, simply noted that "we will come back to summarizing older turns." This is where we come back to it. But I want to be loud about what is different, because it is dangerously easy to conflate two operations that share the word "summarize." RAG Part 20's CONDENSATION rewrites the latest QUESTION into a standalone one so retrieval works: "what about its battery?" becomes "what is the battery life of the earbuds?". COMPACTION compresses the HISTORY so the run fits the window. Different input (one a question, the other the whole transcript), different output (one a rewritten query, the other a tiered summary), different purpose (one helps a retriever, the other keeps the prompt under budget). The artifact says this in its first line of output, on purpose:
+
+```text
+NOT the same as RAG P20 condensation: P20 rewrites the QUESTION into a standalone
+one; COMPACTION compresses the HISTORY to fit the window. Different operations.
+```
+
+This is also distinct from the long-context tradeoffs RAG Parts 11 and 16 weighed (when to lean on a big window versus retrieve). Those parts asked whether to put more into the window; compaction asks how to fit a history that is already too big. And the read/write/forget policies in the second half, plus the episodic-to-semantic consolidation in the third, are territory the ever-growing RAG index never touched: a vector index gets bigger, it does not decay a stale fact or retire a superseded one. What this part does build on is Part 6's typed stores, which it now learns to manage over a long horizon rather than just fill.
+
+## Compaction: hot, warm, cold
+
+Start with the window axis. The history the agent re-sends every step has three natural tiers by age. The last N turns are **HOT**: kept verbatim, because the model needs the immediate context exactly as it happened. Older turns that carried a decision or a tool output are **WARM**: folded into a rolling summary that keeps the salient lines and drops the chatter ("thanks for checking that for me" earns no space). The oldest warm items fold into a single **COLD** gist, a lossy one-liner that says how many turns were summarized away, because the far past costs almost nothing to carry. The trigger is a token budget. The demo sets `BUDGET = 40` and `HOT_N = 2` (deliberately small so compaction fires often), then plays a ten-turn support session and prints the meter each turn. Watch the window cross the budget and get pulled back, from the artifact's real output:
+
+```text
+  turn  3: window 29/40 ok  (+ user: Oh interesting, thanks for checking th)
+  turn  4: window 41/40 OVER  (+ user: It has actually been about 40 days sin)
+          -> COMPACT: dropped 1 chatter turn(s), folded older decisions warm/cold; window now 29/40
+  turn  5: window 40/40 ok  (+ tool: search_policy -> after the window, a 1)
+  turn  6: window 49/40 OVER  (+ user: Got it, that seems fair enough I suppo)
+          -> COMPACT: dropped 2 chatter turn(s), folded older decisions warm/cold; window now 28/40
+  turn  7: window 39/40 ok  (+ user: So what would my refund be on the $200)
+  turn  8: window 49/40 OVER  (+ tool: calculator -> $180.00 (200 * 0.9 after)
+          -> COMPACT: dropped 1 chatter turn(s), folded older decisions warm/cold; window now 39/40
+  turn  9: window 48/40 OVER  (+ user: Perfect. Could you also check the earb)
+          -> COMPACT: dropped 1 chatter turn(s), folded older decisions warm/cold; window now 37/40
+  turn 10: window 47/40 OVER  (+ tool: search_products -> Globex earbuds carr)
+          -> COMPACT: dropped 0 chatter turn(s), folded older decisions warm/cold; window now 32/40
+```
+
+Read the meter, because the pattern is the whole mechanism. The window grows turn by turn until it crosses the budget at turn 4 (`41/40 OVER`), and compaction immediately pulls it back to `29/40`. It crosses again at turns 6, 8, 9, and 10 (`49`, `49`, `48`, `47`), and each time the run continues at `28`, `39`, `37`, and `32`, always back under 40. Notice which turns get dropped and which survive. At turn 4 one chatter turn is dropped; at turn 6 two are dropped. But the salient lines never disappear: the policy lookups, the `calculator -> $180.00` result, the warranty search all fold into warm rather than vanish. Compaction is selective amnesia, not blunt truncation. A naive "keep the last K turns" would have thrown away the `$180.00` calculation the moment it scrolled off, and the agent would re-derive it or, worse, answer without it. Here is the entire window after turn 10, which is all the model still sees:
+
+```text
+  Final window state (this is all the model still sees):
+    COLD : [2 earlier turns summarized]
+    WARM : ['calculator -> $180.00 (200 * 0.9 after the fee).']
+    HOT  : ['user: Perfect. Could you also check the earbuds warranty?', 'tool: search_products -> Globex earbuds carry a 2-year limited warranty.']
+```
+
+Three tiers, each doing its job. The COLD line, `[2 earlier turns summarized]`, is the lossy gist of the deep past: two turns reduced to a count. WARM holds the one decision worth carrying forward, `calculator -> $180.00 (200 * 0.9 after the fee).`, the refund figure the agent must not lose. HOT is the last two turns verbatim, the earbuds-warranty exchange the user just opened. Ten turns of session have been folded into a window that fits comfortably under budget while keeping every load-bearing fact, and the chatter ("thanks for checking", "that seems fair enough I suppose") is simply gone. Diagram 1 lays the three tiers out by age.
+
+<Diagram number={1} caption="Compaction: the conversational history compressed into three tiers by age so it stays under the token budget. The most recent HOT_N turns (here the last two, the earbuds-warranty exchange) are kept HOT and verbatim. Older turns that carried a decision or tool output (here the calculator result $180.00) are folded into a WARM rolling summary while chatter such as thanks for checking and that seems fair enough is dropped. The oldest warm items fold into a single lossy COLD gist that reads 2 earlier turns summarized. A token meter on the right shows the window crossing BUDGET 40 at turns 4, 6, 8, 9, and 10 and each compaction pulling it back under budget (to 29, 28, 39, 37, and 32). The point: salient lines survive, chatter is dropped, the window stays bounded, and the run continues.">
+  <img src="/essays/compaction-and-forgetting/part7-hot-warm-cold.svg" alt="A diagram of a conversational history split into three horizontal tiers by age. At the bottom, a small COLD box holds a single lossy line reading 2 earlier turns summarized, labelled the lossy gist of the deep past. In the middle, a WARM box holds a rolling summary line calculator arrow $180.00 (200 times 0.9 after the fee), labelled decisions and tool outputs kept, with faded crossed-out chatter lines thanks for checking and that seems fair enough labelled dropped. At the top, a HOT box holds the last two turns verbatim: user Perfect could you also check the earbuds warranty, and tool search_products arrow Globex earbuds carry a 2-year limited warranty, labelled the most recent HOT_N turns, kept verbatim. On the right, a vertical token meter shows the window rising past a red BUDGET 40 line at turns 4, 6, 8, 9 and 10 with values 41, 49, 49, 48, 47, and a downward arrow at each marked COMPACT pulling it back to 29, 28, 39, 37 and 32 under the line. A caption strip reads: hot stays verbatim, warm keeps the decisions, cold is a one-line gist, the window stays bounded." class="w-full rounded-lg" />
+</Diagram>
+
+## Forgetting: decay, supersession, eviction
+
+Now the store axis. Compaction bounds the conversational window; forgetting bounds the memory store. A memory is not equally worth keeping forever, so each fact carries three things: an **importance** (how much it matters), a **last-touch time** (for recency), and an **access count** (how often it has been read). The read-time score is their product, `importance x recency x access`, and a read surfaces the top few. Watch the ranking at the start, with four facts in the store, from the artifact's real output:
+
+```text
+  Read-time ranking at t=0 (importance x recency x access):
+    0.90  the user is Dana
+    0.70  Dana's order is ORD-3300 ($200)
+    0.60  Dana prefers email contact
+    0.20  Dana mentioned it is raining today
+```
+
+At `t=0` the ranking just follows raw importance: the user's name (`0.90`) beats the order (`0.70`) beats the email preference (`0.60`) beats the throwaway weather remark (`0.20`). Now let time pass. Recency decays on a half-life, so older facts lose weight, and a fact that gets read climbs a little because access counts. The demo jumps to `t=6` and reads `name` twice. Watch the scores fall and re-order:
+
+```text
+  At t=6, importance has decayed with age; 'name' was accessed twice:
+    0.38  the user is Dana
+    0.25  Dana's order is ORD-3300 ($200)
+    0.21  Dana prefers email contact
+    0.07  Dana mentioned it is raining today
+```
+
+Every score has dropped (recency decayed all four), but they dropped unevenly: `name` held its lead at `0.38` partly because it was accessed twice, while the weather remark collapsed to `0.07`, on its way out. This is the first forgetting mechanism, **decay**: importance fades with age unless something keeps touching the memory. The second is **supersession**. When a new fact directly replaces an old one, the old one is retired rather than left to compete. Dana changes her mind:
+
+```text
+  SUPERSESSION: Dana says to use the phone instead of email.
+    [retired] Dana prefers email contact
+    [active] Dana prefers phone contact
+```
+
+The email preference is marked `[retired]` and the phone preference is now `[active]`. This is exactly the failure typed memory alone could not fix in Part 6: a correction that just gets appended sits in the same pile as the thing it corrects, and a recency-biased read can still surface the stale one. Supersession resolves it at write time by retiring the loser. The third mechanism is **eviction**. The store has a fixed capacity (here four active facts), so when a fifth arrives, the lowest-scoring fact is dropped to make room:
+
+```text
+  EVICTION: a 5th fact arrives but capacity is 4; the weakest is evicted.
+    evicted (lowest score): Dana mentioned it is raining today
+  Active store now:
+    0.60  Dana prefers phone contact
+    0.38  the user is Dana
+    0.25  Dana's order is ORD-3300 ($200)
+    0.15  Dana clicked a promo email once
+```
+
+The weather remark, already decayed to `0.07`, is the weakest and gets `evicted`, and the new promo fact takes its slot at `0.15`. Note the fresh phone preference now leads at `0.60` (just written, full recency), the name sits at `0.38`, the order at `0.25`. The store stays at capacity, the stale and the trivial fall out the bottom, and the read keeps surfacing what actually matters. The interactive figure lets you drive all three: advance the clock and watch scores decay, supersede the email preference, and push the store over capacity to trigger an eviction.
+
+<Diagram number={2} caption="Forgetting in a memory store, interactive. Each fact carries an importance, a last-touch time, and an access count, and the read-time score is their product (importance times recency times access). At t equals 0 the ranking follows raw importance: 0.90 the user is Dana, 0.70 the order ORD-3300, 0.60 prefers email, 0.20 the weather remark. Advance the clock to t equals 6 and recency decays every score (0.38, 0.25, 0.21, 0.07) while accessing the name twice keeps it on top. Trigger SUPERSESSION and the email preference is retired while a phone preference becomes active. Trigger EVICTION with the store at capacity 4 and the lowest-scoring fact, the decayed weather remark, is dropped to make room for a new promo fact. The figure shows read-time scoring, write-time decay, supersession, and eviction as one connected system.">
+  <IframeFigure src="/essays/compaction-and-forgetting/part7-compaction-and-decay.html" title="Interactive forgetting and decay player for a memory store. The store starts at t equals 0 with four facts ranked by a read-time score equal to importance times recency times access: 0.90 the user is Dana, 0.70 Dana's order is ORD-3300 200 dollars, 0.60 Dana prefers email contact, 0.20 Dana mentioned it is raining today. A clock control advances time to t equals 6, where recency decays every score on a half-life so they become 0.38 the user is Dana, 0.25 the order, 0.21 prefers email, 0.07 the weather remark, and a note explains the name was accessed twice so it held its lead. A supersession control replaces the email preference with a phone preference, marking Dana prefers email contact as retired and Dana prefers phone contact as active. An eviction control adds a fifth fact Dana clicked a promo email once while capacity is 4, so the lowest-scoring fact, the decayed weather remark at 0.07, is evicted, leaving the active store as 0.60 prefers phone, 0.38 the name, 0.25 the order, 0.15 the promo fact. A panel summarises the three write-time policies, decay, supersession, and eviction, alongside the read-time scoring formula." height={860} />
+</Diagram>
+
+Stepping back from the trace, the read path and the write path do different jobs. The read path is pure ranking: score the active facts and surface the top few, so importance, recency, and access decide what the agent sees this turn. The write path is where memories actually leave: decay erodes importance over time, supersession retires a fact the moment a replacement arrives, and eviction drops the weakest when the store is full. Diagram 3 separates the two so it is clear that reading never deletes and writing is where forgetting happens.
+
+<Diagram number={3} caption="The read path and the write path of a forgetting memory store, side by side. On the read side, a query scores every active fact by importance times recency times access and returns the top few, surfacing what matters this turn without changing the store. On the write side, three policies remove or retire memories: decay erodes a fact's importance as time passes (the weather remark falls from 0.20 to 0.07), supersession marks an old fact retired the instant a replacement is written (prefers email retired, prefers phone active), and eviction drops the lowest-scoring fact when the store exceeds its capacity of 4 (the decayed weather remark is evicted for a new promo fact). The point: reading ranks and surfaces, writing is where forgetting actually happens, so the store stays useful instead of growing into noise.">
+  <img src="/essays/compaction-and-forgetting/part7-write-manage-forget.svg" alt="A diagram split into two vertical halves. The left half, labelled READ path, shows a query arrow entering a scorer box that computes importance times recency times access for each active fact, then a ranked list returning the top few facts, with a note reading never deletes, only surfaces. The right half, labelled WRITE path, shows three stacked policy boxes. The first, DECAY, shows a fact the user mentioned it is raining today with its score falling from 0.20 at t0 to 0.07 at t6 along a downward half-life curve, labelled importance fades with age. The second, SUPERSESSION, shows Dana prefers email contact crossed out and tagged retired with an arrow to Dana prefers phone contact tagged active, labelled a new fact retires the one it replaces. The third, EVICTION, shows a store at capacity 4 with a fifth fact Dana clicked a promo email once arriving, and the lowest-scoring fact the weather remark being pushed out, labelled over capacity, drop the weakest. A caption strip reads: reading ranks and surfaces, writing is where forgetting happens." class="w-full rounded-lg" />
+</Diagram>
+
+## Consolidation: a sleep-time pass
+
+Compaction and forgetting keep the window and the store bounded turn by turn. There is one more move a long-lived agent wants, and it does not run in the loop at all: a periodic **sleep-time pass** that distills raw experience into durable knowledge. The episodic log records what HAPPENED, one event per line, and it grows with every interaction. Most of those events are not worth keeping as events; they are worth keeping as the FACT or the RULE they imply. Consolidation reads the raw log and extracts those, then prunes the episodes it consumed. Here is the raw log and what the pass produces, from the artifact's real output:
+
+```text
+  Raw episodic log (what happened):
+    t1: user asked whether a return after the window is allowed
+    t2: tool said after the window a 10% restocking fee applies
+    t3: user accepted the $180.00 refund on the $200 order
+    t4: user confirmed their name is Dana
+
+  After the sleep-time consolidation pass:
+    -> SEMANTIC facts   : ['user.name = Dana']
+    -> PROCEDURAL rules : ['returns after the 30-day window: apply a 10% restocking fee']
+    -> episodic log pruned: 4 raw events distilled and cleared
+```
+
+Read what changed kind. Four raw events became one durable **semantic** fact (`user.name = Dana`, extracted from t4) and one durable **procedural** rule (`returns after the 30-day window: apply a 10% restocking fee`, extracted from t2), and the four episodes were then `distilled and cleared`. The event "user confirmed their name is Dana" is a one-time happening, but the fact it carries (the user's name) is true forever and belongs in semantic memory, not in an ever-growing log. The event "tool said after the window a 10% restocking fee applies" happened once, but the rule it implies is a reusable how-to and belongs in procedural memory. This is the long-horizon version of Part 6's typed stores: Part 6 sorted incoming knowledge by kind, and consolidation is what keeps doing that over time, turning the accumulating record of events into the much smaller, much more durable knowledge those events were evidence for. Events become knowledge, and the log that produced them is pruned so it does not grow without bound.
+
+> 💡 **From experience.** The run that taught me compaction was a long research agent that just stopped using a decision it had clearly made an hour earlier. Early on it had picked a data source and written down why; forty tool calls later it quoted a number from a different source entirely, contradicting its own earlier choice. There was no error, no exception. The framework had silently truncated the head of the transcript to fit the window, and the truncation took the decision with it, while keeping a wall of recent "fetched page", "parsed table" lines that mattered far less. The fix was not a bigger window. It was hot/warm/cold: keep the last few turns verbatim, fold the older turns into a summary that explicitly preserves decisions and tool results, and let the chatter be the thing that gets dropped first. The decision survived because it was salient, and the agent stopped arguing with itself. The forgetting half bit me on a different project, a support agent with a memory store that only grew. A customer changed their shipping preference, and the store dutifully appended the new one next to the old. For weeks the agent kept surfacing the stale preference roughly half the time, because both facts were sitting there and a recency-weighted read could not reliably tell which was current. Appending a correction is not the same as making it stick. The thing that fixed it was supersession: writing the new preference retires the old one, so the read never sees the loser. After that, a correction actually meant something.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- A long run breaks Part 6's typed stores in two TIME-based ways: the transcript re-sent every step **overflows the context window**, and a store that **only grows** fills with stale and duplicate facts until signal drowns in noise. An agent that cannot forget cannot run for long.
+- **Compaction** (window axis) compresses the HISTORY into hot/warm/cold: the last `HOT_N` turns stay HOT and verbatim, older decisions and tool outputs fold into a WARM rolling summary while chatter is dropped, and the oldest warm folds into a single lossy COLD gist. With `BUDGET = 40` the window crossed at turns 4, 6, 8, 9, 10 (`41/40`, `49/40`, `49/40`, `48/40`, `47/40`) and each compaction pulled it back under budget (`29`, `28`, `39`, `37`, `32`).
+- Compaction is selective, not blunt truncation: the final window keeps `COLD : [2 earlier turns summarized]`, `WARM : calculator -> $180.00 (200 * 0.9 after the fee).`, and the HOT earbuds-warranty turns, while "thanks for checking" and "that seems fair enough" are simply gone.
+- **Forgetting** (store axis) scores facts by `importance x recency x access` at read time. At `t=0` the ranking was `0.90` name, `0.70` order, `0.60` email, `0.20` weather; at `t=6` recency decayed all of them to `0.38 / 0.25 / 0.21 / 0.07`, with `name` holding the lead because it was accessed twice.
+- Three write-time policies remove memories: **decay** (importance fades with age), **supersession** (a new fact retires the one it replaces, so `prefers email` was `[retired]` and `prefers phone` `[active]`), and **eviction** (over capacity 4, the lowest-scoring fact, the decayed weather remark, was evicted for a new promo fact). Reading ranks and surfaces; writing is where forgetting happens.
+- **Consolidation** is a sleep-time pass: it distilled 4 raw episodes into 1 semantic fact (`user.name = Dana`) and 1 procedural rule (`returns after the 30-day window: apply a 10% restocking fee`), then pruned the consumed log. It is the long-horizon version of Part 6's stores: events become knowledge.
+- Compaction is NOT RAG Part 20's question condensation (which rewrites the latest question into a standalone one) and NOT RAG Parts 11 and 16's long-context tradeoffs (which weigh window versus retrieval). It compresses the running history. Growth without forgetting is just slower failure.
+
+## Glossary
+
+- **Compaction**: compressing the conversational HISTORY so the re-sent transcript stays under the token budget, by tiering it into hot, warm, and cold rather than truncating; distinct from RAG Part 20's question condensation, which rewrites the latest question into a standalone one for retrieval.
+- **Hot / warm / cold tiers**: the three age tiers of the history. HOT is the last `HOT_N` turns kept verbatim, WARM is a rolling summary of older decisions and tool outputs (chatter dropped), COLD is a single lossy gist of the oldest material (here `[2 earlier turns summarized]`).
+- **Token budget**: the cap on how much the live window may hold (here `BUDGET = 40`); crossing it triggers a compaction that folds older turns until the window is back under the cap.
+- **Forgetting**: the store-axis counterpart to compaction; keeping a memory store useful over a long run by ranking what to surface and quietly removing what no longer earns its place, rather than letting the store grow without bound.
+- **Read-time scoring (importance x recency x access)**: the score a read uses to rank active facts and surface the top few; importance is how much a fact matters, recency decays with age on a half-life, and access rewards facts that get read. Reading ranks and surfaces but never deletes.
+- **Decay**: the write-time policy by which a fact's effective importance fades as time passes since it was last touched, so a stale, untouched memory loses weight (the weather remark fell from `0.20` to `0.07`).
+- **Supersession**: the write-time policy that retires an old fact the moment a replacement is written, so the loser stops competing in reads (`prefers email` retired, `prefers phone` active); this is what makes a correction actually stick.
+- **Eviction**: the write-time policy that drops the lowest-scoring active fact when the store exceeds its capacity, making room for a new one (the decayed weather remark evicted for a new promo fact at capacity 4).
+- **Consolidation (episodic -> semantic / procedural)**: a periodic sleep-time pass that distills the raw episodic log of what happened into durable semantic facts and procedural rules, then prunes the consumed episodes; the long-horizon way events become knowledge.
+
+---
+
+The rule from this part: an agent that runs for a long time must do two things a one-shot pipeline never had to, COMPRESS the history so it still fits the window (hot/warm/cold, not RAG Part 20's question condensation) and FORGET the memories that no longer earn their place (decay, supersession, eviction), then distill raw episodes into durable facts and rules. But notice the assumption underneath everything so far: that the loop eventually stops. Compaction keeps each step cheap and forgetting keeps the store clean, yet an agent that keeps acting forever will burn through both no matter how tidy each step is. An agent that never gives up will retry a dead tool, loop between two states, and spend the whole budget chasing a goal it cannot reach. **Part 8, Stopping the Runaway**, is about budgets, loop detection, and the circuit breaker: the controls that decide when to stop, formalizing the loop-detector note RAG Part 19 left and turning "try again" into "try again, up to here, and then stop."
