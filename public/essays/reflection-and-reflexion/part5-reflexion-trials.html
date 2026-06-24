@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reflection and Reflexion, Part 5</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 760px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner span { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+.goal-banner .amt { font-family: var(--font-mono); font-weight: 700; color: var(--text-heading); }
+
+/* SEGMENTED TOGGLE */
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  flex: 1;
+  min-width: 130px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.toggle-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.toggle-btn[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.toggle-btn .mode-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.strategy-blurb {
+  font-size: 12px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.strategy-blurb strong { color: var(--indigo-dark); }
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 16px 0 9px;
+}
+
+/* ===== STEP CONTROLS ===== */
+.step-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+}
+.step-btn:hover:not(:disabled) { background: #eef2ff; border-color: #c7d2fe; }
+.step-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.step-btn:disabled { opacity: 0.45; cursor: not-allowed; color: var(--text-muted); }
+.step-btn.primary { background: var(--indigo); color: #ffffff; border-color: var(--indigo); }
+.step-btn.primary:hover:not(:disabled) { background: var(--indigo-dark); }
+.step-progress {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-left: auto;
+}
+.step-progress .stepnum { font-family: var(--font-mono); color: var(--indigo-dark); }
+
+/* ===== TWO-COLUMN: trials | buffer ===== */
+.reflexion-grid {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.trials-col { flex: 1 1 360px; min-width: 300px; display: flex; flex-direction: column; gap: 10px; }
+.buffer-col { flex: 0 1 240px; min-width: 220px; }
+
+/* a trial card */
+.trial-card {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #ffffff;
+  overflow: hidden;
+  animation: fadeIn 0.2s ease;
+}
+@media (prefers-reduced-motion: reduce) { .trial-card, .buffer-item { animation: none; } }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.trial-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--chip-bg);
+}
+.trial-head .tnum {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+.trial-head .tbuf {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-left: auto;
+  font-weight: 600;
+}
+.trial-head .tbuf .bufn { font-family: var(--font-mono); color: var(--amber-dark); font-weight: 700; }
+.trial-card.is-pass .trial-head { background: #ecfdf5; border-bottom-color: #a7f3d0; }
+.trial-card.is-fail .trial-head { background: #fff1f2; border-bottom-color: #fecdd3; }
+.trial-card.is-pass { border-color: #a7f3d0; }
+.trial-card.is-fail { border-color: #fecdd3; }
+
+.trial-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+
+/* a single line within a trial (actor / self-critique / checker / reflection) */
+.tline {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  animation: fadeIn 0.18s ease;
+}
+.tline .ttag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  min-width: 72px;
+  text-align: center;
+  margin-top: 1px;
+}
+.ttag.actor { background: #eef2ff; color: var(--indigo-dark); border: 1px solid #c7d2fe; }
+.ttag.critique { background: #eef2ff; color: var(--indigo-dark); border: 1px solid #c7d2fe; }
+.ttag.checker { background: #f0fdfa; color: var(--teal-dark); border: 1px solid #99f6e4; }
+.ttag.reflect { background: #fef3c7; color: var(--amber-dark); border: 1px solid #fde68a; }
+.tline .tbody { flex: 1; min-width: 0; }
+.tline .tmain { font-size: 12px; color: var(--text-body); line-height: 1.5; }
+.tline .tmain .amt { font-family: var(--font-mono); font-weight: 700; }
+.tline .tmain .learned { color: var(--amber-dark); font-weight: 600; }
+.tline .tquote {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-heading);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-top: 4px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+/* checker verdict line */
+.tline.checker-pass .tmain { color: var(--emerald-dark); font-weight: 600; }
+.tline.checker-fail .tmain { color: var(--rose-dark); font-weight: 600; }
+.verdict-pill {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: #ffffff;
+  margin-right: 6px;
+}
+.verdict-pill.pass { background: var(--emerald); }
+.verdict-pill.fail { background: var(--rose); }
+
+/* the "appended to buffer" / "discarded" footer of a failed trial */
+.trial-foot {
+  font-size: 10.5px;
+  padding: 7px 12px 9px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  line-height: 1.45;
+}
+.trial-foot.appended { background: #fffbeb; color: var(--amber-dark); }
+.trial-foot.discarded { background: #fff1f2; color: var(--rose-dark); }
+.trial-foot .ftag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.trial-foot.appended .ftag { background: var(--amber); color: #ffffff; }
+.trial-foot.discarded .ftag { background: var(--rose); color: #ffffff; }
+.trial-foot .fquote { font-family: var(--font-mono); }
+
+/* convergence banner under the trials */
+.converge-banner {
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 4px;
+}
+.converge-banner .cb-icon {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.converge-banner .cb-main { flex: 1; }
+.converge-banner .cb-sub { font-size: 11px; font-weight: 500; margin-top: 3px; display: block; opacity: 0.92; }
+.converge-banner.converged { background: #ecfdf5; border: 1px solid #a7f3d0; color: var(--emerald-dark); }
+.converge-banner.converged .cb-icon { background: var(--emerald); }
+.converge-banner.never { background: #fff1f2; border: 1px solid #fecdd3; color: var(--rose-dark); }
+.converge-banner.never .cb-icon { background: var(--rose); }
+.converge-banner.pending { background: var(--chip-bg); border: 1px solid var(--border); color: var(--text-muted); }
+.converge-banner.pending .cb-icon { background: var(--text-muted); }
+
+/* ===== THE EPISODIC BUFFER PANEL ===== */
+.buffer-panel {
+  border: 1.5px solid #fde68a;
+  border-radius: 12px;
+  background: #fffbeb;
+  overflow: hidden;
+  position: sticky;
+  top: 12px;
+}
+.buffer-panel.is-off { border-color: var(--border); background: var(--chip-bg); }
+.buffer-head {
+  padding: 9px 12px;
+  border-bottom: 1px solid #fde68a;
+  background: #fef3c7;
+}
+.buffer-panel.is-off .buffer-head { border-bottom-color: var(--border); background: #e2e8f0; }
+.buffer-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--amber-dark);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.buffer-panel.is-off .buffer-title { color: var(--text-muted); }
+.buffer-title .bdot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); flex-shrink: 0; }
+.buffer-panel.is-off .buffer-title .bdot { background: var(--text-muted); }
+.buffer-state {
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+}
+.buffer-panel:not(.is-off) .buffer-state { color: var(--amber-dark); }
+.buffer-panel.is-off .buffer-state { color: var(--text-muted); }
+.buffer-list {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 96px;
+}
+.buffer-item {
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #78350f;
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 7px 9px;
+  animation: fadeIn 0.22s ease;
+}
+.buffer-item .bi-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--amber-dark);
+  display: block;
+  margin-bottom: 3px;
+}
+.buffer-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 18px 8px;
+  line-height: 1.5;
+}
+.buffer-foot {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 8px 11px;
+  border-top: 1px dashed var(--border);
+  line-height: 1.45;
+}
+
+/* sober note */
+.sober-note {
+  font-size: 11px;
+  color: var(--amber-dark);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin-top: 14px;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.sober-note .sn-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--amber);
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ===== self-critique ceiling panel (PANEL A) ===== */
+.sc-flow { display: flex; flex-direction: column; gap: 9px; }
+.sc-row {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 9px 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.sc-row .sc-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  min-width: 78px;
+  text-align: center;
+  margin-top: 1px;
+}
+.sc-tag.draft { background: var(--chip-bg); color: var(--text-muted); border: 1px solid var(--border); }
+.sc-tag.critique { background: #eef2ff; color: var(--indigo-dark); border: 1px solid #c7d2fe; }
+.sc-tag.revised { background: #eef2ff; color: var(--indigo-dark); border: 1px solid #c7d2fe; }
+.sc-tag.checker { background: #f0fdfa; color: var(--teal-dark); border: 1px solid #99f6e4; }
+.sc-body { flex: 1; min-width: 0; }
+.sc-main { font-size: 12px; color: var(--text-body); line-height: 1.5; }
+.sc-quote {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-heading);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.sc-row.is-fail { border-color: #fecdd3; background: #fff1f2; }
+.sc-row.is-fail .sc-main { color: var(--rose-dark); font-weight: 600; }
+.sc-ceiling {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 9px 12px;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+.sc-ceiling strong { color: var(--indigo-dark); }
+.sc-main .amt { font-family: var(--font-mono); font-weight: 700; }
+
+/* CAPTION / LEGEND */
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption .swatch {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== PANEL A: IN-LOOP SELF-CRITIQUE CEILING ===================== -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <h2 id="panel-a-heading">In-loop self-critique: it fixes what it can see, and stops there</h2>
+  <p class="panel-subtitle">Within a single trial, the agent re-reads its own draft against a checklist and revises. That catches a missing amount or an uncited policy. It cannot catch a wrong number it has no ground truth for.</p>
+
+  <div class="goal-banner">
+    <span>The task:</span> a return for <code>ORD-3300</code>, a <span class="amt">$200.00</span> order, arrives AFTER the 30-day window.
+    <br />Policy: refundable, but a 10% restocking fee applies, so the policy-correct refund is <span class="amt">$180.00</span>, and the decision must state the amount and the policy basis.
+  </div>
+
+  <div class="sc-flow">
+    <div class="sc-row">
+      <span class="sc-tag draft">draft</span>
+      <div class="sc-body">
+        <div class="sc-main" style="margin-bottom:5px;">The naive actor forgets the fee and quotes the full total. Its first draft is a bare approval.</div>
+        <div class="sc-quote">'Your return is approved.'</div>
+      </div>
+    </div>
+    <div class="sc-row">
+      <span class="sc-tag critique">critique</span>
+      <div class="sc-body">
+        <div class="sc-main">state the refund amount; cite the policy basis</div>
+      </div>
+    </div>
+    <div class="sc-row">
+      <span class="sc-tag revised">revised</span>
+      <div class="sc-body">
+        <div class="sc-main" style="margin-bottom:5px;">Self-critique makes the text complete. Notice it confidently keeps the wrong number.</div>
+        <div class="sc-quote">'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'</div>
+      </div>
+    </div>
+    <div class="sc-row is-fail">
+      <span class="sc-tag checker">checker</span>
+      <div class="sc-body">
+        <div class="sc-main"><span class="verdict-pill fail">FAIL</span>refund <span class="amt">$200.00</span> != policy-correct <span class="amt">$180.00</span>: the 10% restocking fee for returns after the window was not applied</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sc-ceiling">
+    <strong>The ceiling.</strong> Self-critique made the text complete, but it could NOT catch a wrong number it has no ground truth for. It will polish a draft that is quietly incorrect. That gap is exactly what Reflexion fills, below.
+  </div>
+</section>
+
+<!-- ===================== PANEL B: REFLEXION WITH BUFFER TOGGLE ===================== -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <h2 id="panel-b-heading">Reflexion: the buffer is the only thing that changes</h2>
+  <p class="panel-subtitle">Same actor, same task. The external checker catches the wrong number; the reflector turns the verdict into a verbal lesson. The toggle decides whether that lesson persists. Step through both states and compare.</p>
+
+  <div class="goal-banner">
+    <span>The loop:</span> <code>actor</code> &#8594; <code>checker (reward)</code> &#8594; <code>self-reflection (verbal)</code> &#8594; <code>episodic buffer</code> &#8594; back to <code>actor</code>.
+    <br />The actor's computation MECHANICALLY reads the buffer: if a reflection mentions the restocking fee, it multiplies the total by 0.9. The buffer-OFF control discards the lesson, so the same mistake repeats.
+  </div>
+
+  <!-- buffer toggle -->
+  <div class="toggle-group" role="group" aria-label="Episodic buffer selector">
+    <button class="toggle-btn" id="btn-buf-1" aria-pressed="true" type="button">
+      <span class="mode-dot" style="background:var(--amber)"></span>buffer ON (lesson persists)
+    </button>
+    <button class="toggle-btn" id="btn-buf-0" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--text-muted)"></span>buffer OFF (control)
+    </button>
+  </div>
+
+  <div class="strategy-blurb" id="buf-blurb"></div>
+
+  <!-- step controls -->
+  <div class="step-controls">
+    <button class="step-btn" id="btn-prev" type="button">&#8592; Back</button>
+    <button class="step-btn primary" id="btn-next" type="button">Step &#8594;</button>
+    <button class="step-btn" id="btn-reset" type="button">Reset</button>
+    <span class="step-progress" id="step-progress"></span>
+  </div>
+
+  <div class="reflexion-grid">
+    <div class="trials-col">
+      <div id="trials-list"></div>
+      <div id="converge-banner"></div>
+    </div>
+    <div class="buffer-col">
+      <div class="buffer-panel" id="buffer-panel">
+        <div class="buffer-head">
+          <div class="buffer-title"><span class="bdot"></span>Episodic buffer</div>
+          <div class="buffer-state" id="buffer-state"></div>
+        </div>
+        <div class="buffer-list" id="buffer-list"></div>
+        <div class="buffer-foot" id="buffer-foot"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sober-note">
+    <span class="sn-tag">sober note</span>
+    <span>Reflection is not monotonic. A wrong lesson can mislead the next trial and make it worse. Verbal reinforcement is a heuristic, not a guarantee.</span>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="reflexion-announcer"></div>
+
+  <div class="caption">
+    <strong>Why this proves the buffer causes convergence:</strong> the actor, the checker, and the task are identical in both states. With the buffer ON, the appended reflection changes the actor's computation from <span style="font-family:var(--font-mono);font-weight:600;">$200.00</span> to <span style="font-family:var(--font-mono);font-weight:600;">$180.00</span> and it converges on trial 2. With the buffer OFF the lesson is discarded, every trial starts amnesiac, and the same mistake repeats and never converges. The only difference is whether the lesson persisted. The checker here is RAG Part 11's LLM-as-judge repurposed as an offline pass/fail reward signal, not an answer-quality score. This buffer is the seed of Part 6's typed episodic memory store.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>actor &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>checker &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>reflection / buffer &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>PASS &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>FAIL
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* The verified lesson text, appended on a failure (verbatim from the source). */
+  var REFLECTION_TEXT = "Returns after the 30-day window incur a 10% restocking fee; multiply the order total by 0.9 before quoting the refund.";
+
+  /* The verified checker failure / pass reasons (verbatim). */
+  var FAIL_REASON = "refund $200.00 != policy-correct $180.00: the 10% restocking fee for returns after the window was not applied";
+  var PASS_REASON = "refund $180.00 matches the policy-correct $180.00";
+
+  var REVISED_FAIL = "'Refund decision for ORD-3300: $200.00 approved, per the returns policy (item returned after the 30-day window).'";
+  var REVISED_PASS = "'Refund decision for ORD-3300: $180.00 approved, per the returns policy (item returned after the 30-day window).'";
+
+  /* ============================================================
+     The two runs, built as ordered "events". Each event reveals
+     one line; the buffer panel state is derived from the events
+     already played. This keeps the timeline honest: the buffer
+     fills (ON) or stays empty (OFF) exactly when the source does.
+     ============================================================ */
+
+  /* ON: Trial 1 (actor 200 -> fail -> append), Trial 2 (actor reads buffer -> 180 -> pass). Converged. */
+  var RUN_ON = {
+    converged: 2,
+    trials: [
+      {
+        trial: 1, bufBefore: 0, learned: false,
+        events: [
+          { kind: "actor", refund: "$200.00", note: "full refund (no restocking fee considered)" },
+          { kind: "critique", issues: "state the refund amount; cite the policy basis", revised: REVISED_FAIL },
+          { kind: "checker", pass: false, reason: FAIL_REASON },
+        ],
+        foot: { mode: "appended", text: REFLECTION_TEXT },
+      },
+      {
+        trial: 2, bufBefore: 1, learned: true,
+        events: [
+          { kind: "actor", refund: "$180.00", note: "applied the 10% restocking fee", learned: true },
+          { kind: "critique", issues: "state the refund amount; cite the policy basis", revised: REVISED_PASS },
+          { kind: "checker", pass: true, reason: PASS_REASON },
+        ],
+        foot: null,
+      },
+    ],
+  };
+
+  /* OFF: Trials 1,2,3 each actor 200 -> fail -> discarded. Never converges. */
+  function offTrial(n) {
+    return {
+      trial: n, bufBefore: 0, learned: false,
+      events: [
+        { kind: "actor", refund: "$200.00", note: "full refund (no restocking fee considered)" },
+        { kind: "critique", issues: "state the refund amount; cite the policy basis", revised: REVISED_FAIL },
+        { kind: "checker", pass: false, reason: FAIL_REASON },
+      ],
+      foot: { mode: "discarded", text: "reflection discarded; next trial starts amnesiac" },
+    };
+  }
+  var RUN_OFF = {
+    converged: null,
+    trials: [ offTrial(1), offTrial(2), offTrial(3) ],
+  };
+
+  /* Flatten a run into an ordered list of atomic steps so Step/Back can walk it.
+     Each step is { trialIdx, eventIdx (or -1 for the foot) }. */
+  function buildSteps(run) {
+    var steps = [];
+    run.trials.forEach(function (t, ti) {
+      t.events.forEach(function (_, ei) { steps.push({ ti: ti, ei: ei }); });
+      if (t.foot) { steps.push({ ti: ti, ei: -1 }); }   // -1 = the foot (append/discard)
+    });
+    return steps;
+  }
+
+  var RUNS = { on: RUN_ON, off: RUN_OFF };
+  var bufferOn = true;
+  var stepIndex = 0;        // how many steps have been revealed (0 = nothing yet)
+
+  function currentRun() { return bufferOn ? RUNS.on : RUNS.off; }
+  function currentSteps() { return buildSteps(currentRun()); }
+
+  /* How many reflections are in the buffer after `n` revealed steps. ON only;
+     a reflection enters the buffer when a foot with mode "appended" is revealed. */
+  function bufferCountAt(run, steps, n) {
+    if (!bufferOn) return 0;
+    var count = 0;
+    for (var i = 0; i < n && i < steps.length; i++) {
+      var s = steps[i];
+      var t = run.trials[s.ti];
+      if (s.ei === -1 && t.foot && t.foot.mode === "appended") count++;
+    }
+    return count;
+  }
+
+  /* ---- render the trials column ---- */
+  function renderTrials() {
+    var run = currentRun();
+    var steps = currentSteps();
+    var html = "";
+
+    run.trials.forEach(function (t, ti) {
+      /* find which steps for this trial have been revealed */
+      var revealedEvents = [];
+      var footRevealed = false;
+      for (var i = 0; i < stepIndex && i < steps.length; i++) {
+        if (steps[i].ti !== ti) continue;
+        if (steps[i].ei === -1) footRevealed = true;
+        else revealedEvents.push(steps[i].ei);
+      }
+      if (revealedEvents.length === 0 && !footRevealed) return;   // trial not started yet
+
+      /* trial outcome class (only once the checker line is revealed) */
+      var checkerEvent = t.events[t.events.length - 1];
+      var checkerRevealed = revealedEvents.indexOf(t.events.length - 1) !== -1;
+      var cardCls = "trial-card";
+      if (checkerRevealed) cardCls += checkerEvent.pass ? " is-pass" : " is-fail";
+
+      var bufBefore = bufferCountAtTrialStart(run, steps, ti);
+
+      html += '<div class="' + cardCls + '">';
+      html += '<div class="trial-head">';
+      html += '<span class="tnum">Trial ' + t.trial + '</span>';
+      html += '<span class="tbuf">reflections in buffer: <span class="bufn">' + bufBefore + '</span></span>';
+      html += '</div>';
+      html += '<div class="trial-body">';
+
+      t.events.forEach(function (ev, ei) {
+        if (revealedEvents.indexOf(ei) === -1) return;
+        if (ev.kind === "actor") {
+          var noteHtml = escHtml(ev.note);
+          if (ev.learned) {
+            noteHtml = escHtml(ev.note) + ' <span class="learned">(learned from a reflection)</span>';
+          }
+          html += '<div class="tline">';
+          html += '<span class="ttag actor">actor</span>';
+          html += '<div class="tbody"><div class="tmain">' + noteHtml + ' &#8594; <span class="amt">' + escHtml(ev.refund) + '</span></div></div>';
+          html += '</div>';
+        } else if (ev.kind === "critique") {
+          html += '<div class="tline">';
+          html += '<span class="ttag critique">self-critique</span>';
+          html += '<div class="tbody"><div class="tmain">revise (' + escHtml(ev.issues) + ')</div>';
+          html += '<div class="tquote">&#8627; ' + escHtml(ev.revised) + '</div></div>';
+          html += '</div>';
+        } else if (ev.kind === "checker") {
+          html += '<div class="tline ' + (ev.pass ? "checker-pass" : "checker-fail") + '">';
+          html += '<span class="ttag checker">checker</span>';
+          html += '<div class="tbody"><div class="tmain"><span class="verdict-pill ' + (ev.pass ? "pass" : "fail") + '">' + (ev.pass ? "PASS" : "FAIL") + '</span>' + reasonHtml(ev.reason) + '</div></div>';
+          html += '</div>';
+        }
+      });
+
+      html += '</div>';  /* end trial-body */
+
+      if (footRevealed && t.foot) {
+        if (t.foot.mode === "appended") {
+          html += '<div class="trial-foot appended"><span class="ftag">reflection appended</span>';
+          html += '<span class="fquote">' + escHtml(t.foot.text) + '</span></div>';
+        } else {
+          html += '<div class="trial-foot discarded"><span class="ftag">buffer OFF</span>';
+          html += '<span>' + escHtml(t.foot.text) + '</span></div>';
+        }
+      }
+
+      html += '</div>';  /* end trial-card */
+    });
+
+    if (html === "") {
+      html = '<div class="caption" style="margin-top:0;">Press <strong>Step</strong> to run the first trial. Each step reveals one line: the actor acts, self-critique revises, the checker grades, and on a failure the reflector writes a lesson.</div>';
+    }
+
+    document.getElementById("trials-list").innerHTML = html;
+  }
+
+  /* amount/policy numbers in the checker reason get the mono treatment */
+  function reasonHtml(reason) {
+    return escHtml(reason)
+      .replace(/\$200\.00/g, '<span class="amt">$200.00</span>')
+      .replace(/\$180\.00/g, '<span class="amt">$180.00</span>');
+  }
+
+  /* reflections in buffer BEFORE trial ti begins = appended foots from earlier trials revealed so far */
+  function bufferCountAtTrialStart(run, steps, ti) {
+    if (!bufferOn) return 0;
+    var count = 0;
+    for (var i = 0; i < stepIndex && i < steps.length; i++) {
+      var s = steps[i];
+      if (s.ti >= ti) break;   // only earlier trials count toward "before this trial"
+      var t = run.trials[s.ti];
+      if (s.ei === -1 && t.foot && t.foot.mode === "appended") count++;
+    }
+    return count;
+  }
+
+  /* ---- render the buffer panel ---- */
+  function renderBuffer() {
+    var run = currentRun();
+    var steps = currentSteps();
+    var panel = document.getElementById("buffer-panel");
+    var stateEl = document.getElementById("buffer-state");
+    var listEl = document.getElementById("buffer-list");
+    var footEl = document.getElementById("buffer-foot");
+
+    if (!bufferOn) {
+      panel.classList.add("is-off");
+      stateEl.textContent = "OFF (control)";
+      listEl.innerHTML = '<div class="buffer-empty">empty, and it stays empty.<br />every lesson is discarded, so each trial starts amnesiac.</div>';
+      footEl.textContent = "With no memory, the actor never reads a fee, so it quotes $200.00 every trial.";
+      return;
+    }
+
+    panel.classList.remove("is-off");
+    var count = bufferCountAt(run, steps, stepIndex);
+    stateEl.textContent = "ON, " + count + " reflection" + (count === 1 ? "" : "s");
+
+    if (count === 0) {
+      listEl.innerHTML = '<div class="buffer-empty">empty for now.<br />a reflection lands here only after the checker fails a trial.</div>';
+    } else {
+      var html = "";
+      for (var c = 1; c <= count; c++) {
+        html += '<div class="buffer-item"><span class="bi-tag">reflection #' + c + ' (from trial ' + c + ')</span>' + escHtml(REFLECTION_TEXT) + '</div>';
+      }
+      listEl.innerHTML = html;
+    }
+    footEl.innerHTML = count === 0
+      ? "The next actor reads this buffer before it acts. Right now there is nothing to read."
+      : "The next actor reads this buffer before it acts. Seeing &quot;restocking fee&quot;, it multiplies the total by 0.9.";
+  }
+
+  /* ---- convergence banner ---- */
+  function renderConverge() {
+    var run = currentRun();
+    var steps = currentSteps();
+    var el = document.getElementById("converge-banner");
+    var done = stepIndex >= steps.length;
+
+    if (!done) {
+      el.innerHTML = '<div class="converge-banner pending"><span class="cb-icon">&#8226;</span>'
+        + '<div class="cb-main">Run in progress.'
+        + '<span class="cb-sub">Keep stepping to the end of the run to see whether it converges.</span></div></div>';
+      return;
+    }
+
+    if (bufferOn) {
+      el.innerHTML = '<div class="converge-banner converged"><span class="cb-icon">&#10003;</span>'
+        + '<div class="cb-main">Converged on trial 2.'
+        + '<span class="cb-sub">The buffer carried the lesson forward; the actor read it and computed $180.00 instead of $200.00.</span></div></div>';
+    } else {
+      el.innerHTML = '<div class="converge-banner never"><span class="cb-icon">&#10007;</span>'
+        + '<div class="cb-main">Did NOT converge in 3 trials.'
+        + '<span class="cb-sub">Same actor, same task, but with the lesson discarded the identical mistake repeated every trial.</span></div></div>';
+    }
+  }
+
+  /* ---- step progress + button states ---- */
+  function renderControls() {
+    var steps = currentSteps();
+    var prog = document.getElementById("step-progress");
+    prog.innerHTML = 'step <span class="stepnum">' + stepIndex + '</span> of <span class="stepnum">' + steps.length + '</span>';
+    document.getElementById("btn-prev").disabled = stepIndex <= 0;
+    document.getElementById("btn-next").disabled = stepIndex >= steps.length;
+  }
+
+  function renderBlurb() {
+    var el = document.getElementById("buf-blurb");
+    if (bufferOn) {
+      el.innerHTML = 'Buffer <strong>ON</strong>: the checker\'s verdict becomes a lesson written to the episodic buffer, and the next trial reads it before acting. Watch the buffer panel fill on trial 1, then change the actor on trial 2.';
+    } else {
+      el.innerHTML = 'Buffer <strong>OFF</strong> (the control): the same actor and checker, but every reflection is discarded. The buffer panel stays empty, so each trial starts amnesiac and repeats the same $200.00 mistake.';
+    }
+  }
+
+  function announce() {
+    var steps = currentSteps();
+    var msg = (bufferOn ? "Buffer on. " : "Buffer off. ") + "Step " + stepIndex + " of " + steps.length + ". ";
+    if (stepIndex >= steps.length) {
+      msg += bufferOn
+        ? "Converged on trial 2: the appended reflection changed the actor's refund from 200 dollars to 180 dollars."
+        : "Did not converge in 3 trials: with the lesson discarded the same 200 dollar mistake repeated every trial.";
+    }
+    document.getElementById("reflexion-announcer").textContent = msg;
+  }
+
+  function renderAll() {
+    renderBlurb();
+    renderTrials();
+    renderBuffer();
+    renderConverge();
+    renderControls();
+    announce();
+  }
+
+  function setBuffer(on) {
+    bufferOn = on;
+    stepIndex = 0;
+    document.getElementById("btn-buf-1").setAttribute("aria-pressed", on ? "true" : "false");
+    document.getElementById("btn-buf-0").setAttribute("aria-pressed", on ? "false" : "true");
+    renderAll();
+  }
+
+  function stepFwd() {
+    var steps = currentSteps();
+    if (stepIndex < steps.length) { stepIndex++; renderAll(); }
+  }
+  function stepBack() {
+    if (stepIndex > 0) { stepIndex--; renderAll(); }
+  }
+  function reset() { stepIndex = 0; renderAll(); }
+
+  /* ---- wiring ---- */
+  document.getElementById("btn-buf-1").addEventListener("click", function () { setBuffer(true); });
+  document.getElementById("btn-buf-0").addEventListener("click", function () { setBuffer(false); });
+  document.getElementById("btn-next").addEventListener("click", stepFwd);
+  document.getElementById("btn-prev").addEventListener("click", stepBack);
+  document.getElementById("btn-reset").addEventListener("click", reset);
+
+  /* keyboard: left/right toggles the buffer inside the toggle group */
+  var bufGroup = document.getElementById("btn-buf-1").closest(".toggle-group");
+  bufGroup.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      setBuffer(!bufferOn);
+      document.getElementById(bufferOn ? "btn-buf-1" : "btn-buf-0").focus();
+      e.preventDefault();
+    }
+  });
+
+  setBuffer(true);
+})();
+</script>
+</body>
+</html>

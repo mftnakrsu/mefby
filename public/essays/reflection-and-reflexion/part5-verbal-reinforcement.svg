@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="100%" style="height:auto" role="img" aria-label="The Reflexion loop drawn as a cycle of four boxes. An actor acts on the task and reads the episodic buffer first. An external checker, RAG Part 11's judge repurposed as a pass or fail reward signal against the policy, grades the attempt. On a pass the loop converges. On a fail, a reflector turns the verdict into a concrete verbal lesson, which is appended to the episodic buffer, and the next trial reads it before acting. The lesson is plain text, no weights are updated, which is why this is called verbal reinforcement.">
+  <title>The Reflexion loop as verbal reinforcement: actor, checker, reflector, episodic buffer</title>
+
+  <defs>
+    <marker id="arrIndigo" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#6366f1"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#14b8a6"/>
+    </marker>
+    <marker id="arrAmber" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#10b981"/>
+    </marker>
+    <marker id="arrRose" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#f43f5e"/>
+    </marker>
+    <marker id="arrSlate" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="760" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 5, the Reflexion loop as verbal reinforcement</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">The Reflexion loop: a verdict on a failure becomes a verbal lesson the next trial reads</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">actor &#8594; checker (reward) &#8594; self-reflection (verbal) &#8594; buffer &#8594; actor. Nothing is retrained; the policy update is a sentence in a prompt.</text>
+
+  <!-- ================= CYCLE BOXES ================= -->
+
+  <!-- ACTOR (top-left, indigo) -->
+  <rect x="80" y="118" width="380" height="150" rx="14" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <rect x="80" y="118" width="380" height="30" rx="14" fill="#6366f1"/>
+  <rect x="80" y="133" width="380" height="15" fill="#6366f1"/>
+  <text x="100" y="139"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">ACTOR</text>
+  <text x="440" y="139" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">reads the buffer first</text>
+  <text x="100" y="174"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">Acts on the task.</text>
+  <text x="100" y="196"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#4f46e5">Its computation conditions on whatever reflections</text>
+  <text x="100" y="212"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#4f46e5">are already in the episodic buffer.</text>
+  <rect x="100" y="226" width="340" height="28" rx="7" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <text x="114" y="244"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#0f172a">if a reflection mentions the fee &#8594; multiply by 0.9</text>
+
+  <!-- CHECKER (top-right, teal) -->
+  <rect x="740" y="118" width="380" height="150" rx="14" fill="#f0fdfa" stroke="#14b8a6" stroke-width="2"/>
+  <rect x="740" y="118" width="380" height="30" rx="14" fill="#14b8a6"/>
+  <rect x="740" y="133" width="380" height="15" fill="#14b8a6"/>
+  <text x="760" y="139"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">CHECKER (REWARD SIGNAL)</text>
+  <text x="1100" y="139" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">external to the actor</text>
+  <text x="760" y="174"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">Grades the attempt: pass or fail against the policy.</text>
+  <text x="760" y="196"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#0d9488">Catches the wrong number self-critique cannot, because</text>
+  <text x="760" y="212"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#0d9488">it knows the ground-truth refund.</text>
+  <rect x="760" y="226" width="340" height="28" rx="7" fill="#ccfbf1" stroke="#5eead4" stroke-width="1.2"/>
+  <text x="774" y="244"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="700" fill="#0f766e">RAG Part 11's LLM-as-judge repurposed as a pass/fail oracle</text>
+
+  <!-- REFLECTOR (bottom-right, amber) -->
+  <rect x="740" y="430" width="380" height="150" rx="14" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <rect x="740" y="430" width="380" height="30" rx="14" fill="#f59e0b"/>
+  <rect x="740" y="445" width="380" height="15" fill="#f59e0b"/>
+  <text x="760" y="451"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">REFLECTOR (SELF-REFLECTION)</text>
+  <text x="1100" y="451" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">on a fail only</text>
+  <text x="760" y="486"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">Turns the verdict into a concrete verbal lesson.</text>
+  <text x="760" y="508"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#92400e">The lesson must be specific enough to change behavior</text>
+  <text x="760" y="524"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#92400e">on the next trial.</text>
+  <rect x="760" y="538" width="340" height="28" rx="7" fill="#ffffff" stroke="#fde68a" stroke-width="1.2"/>
+  <text x="774" y="556"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#78350f">"returns after the window incur a 10% fee; multiply by 0.9"</text>
+
+  <!-- EPISODIC BUFFER (bottom-left, slate) -->
+  <rect x="80" y="430" width="380" height="150" rx="14" fill="#f1f5f9" stroke="#64748b" stroke-width="2"/>
+  <rect x="80" y="430" width="380" height="30" rx="14" fill="#475569"/>
+  <rect x="80" y="445" width="380" height="15" fill="#475569"/>
+  <text x="100" y="451"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">EPISODIC BUFFER</text>
+  <text x="440" y="451" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">a flat list of lessons</text>
+  <text x="100" y="486"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">Holds the verbal lessons across trials.</text>
+  <!-- stack of notes -->
+  <rect x="100" y="500" width="340" height="22" rx="5" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.1"/>
+  <text x="112" y="515"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#334155">reflection 1: 10% restocking fee &#183; multiply by 0.9</text>
+  <rect x="108" y="526" width="332" height="20" rx="5" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="120" y="540"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#94a3b8">reflection 2: (empty until the next failure)</text>
+  <text x="100" y="566"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#475569">The next trial reads this before it acts.</text>
+
+  <!-- ================= ARROWS (the cycle) ================= -->
+
+  <!-- ACTOR -> CHECKER (top edge, indigo) -->
+  <line x1="460" y1="170" x2="734" y2="170" stroke="#6366f1" stroke-width="2.6" marker-end="url(#arrIndigo)"/>
+  <text x="597" y="160" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#4f46e5">acts &#8594; grade the attempt</text>
+
+  <!-- CHECKER -> CONVERGED (pass, emerald, down-right) -->
+  <line x1="930" y1="268" x2="930" y2="328" stroke="#10b981" stroke-width="2.6" marker-end="url(#arrEmerald)"/>
+  <text x="942" y="300"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#047857">PASS</text>
+  <rect x="800" y="334" width="260" height="62" rx="11" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.6"/>
+  <circle cx="828" cy="365" r="11" fill="#10b981"/>
+  <text x="828" y="370" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff">&#10003;</text>
+  <text x="848" y="361"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#047857">CONVERGED</text>
+  <text x="848" y="380"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#065f46">the loop stops; the answer matches the policy</text>
+
+  <!-- CHECKER -> REFLECTOR (fail, rose, down) -->
+  <line x1="820" y1="268" x2="820" y2="426" stroke="#f43f5e" stroke-width="2.6" marker-end="url(#arrRose)"/>
+  <text x="808" y="350" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#e11d48">FAIL</text>
+
+  <!-- REFLECTOR -> BUFFER (bottom edge, amber, right-to-left) -->
+  <line x1="740" y1="505" x2="464" y2="505" stroke="#f59e0b" stroke-width="2.6" marker-end="url(#arrAmber)"/>
+  <text x="602" y="495" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#b45309">append the lesson</text>
+
+  <!-- BUFFER -> ACTOR (left edge, slate, bottom-to-top) -->
+  <line x1="200" y1="430" x2="200" y2="270" stroke="#64748b" stroke-width="2.6" marker-end="url(#arrSlate)"/>
+  <text x="188" y="356" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#475569">next trial</text>
+  <text x="188" y="372" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#475569">reads it</text>
+
+  <!-- ================= BOTTOM: the verbal-reinforcement caption ================= -->
+  <rect x="40" y="710" width="1120" height="36" rx="10" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="600" y="733" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#475569">The lesson is plain text in a buffer, not a weight update. This is verbal reinforcement: the policy improves by what the next trial reads, not by a gradient step.</text>
+
+</svg>
