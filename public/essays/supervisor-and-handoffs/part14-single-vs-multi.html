@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Supervisor and the Handoff, Part 14</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --slate: #64748b;
+  --slate-dark: #475569;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 880px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.panel-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* ALWAYS-VISIBLE HONESTY BANNER */
+.honesty {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  background: #fff7ed;
+  border: 1.5px solid #fdba74;
+  border-left: 4px solid var(--amber);
+  border-radius: 10px;
+  padding: 10px 13px;
+  margin-bottom: 18px;
+  font-size: 11.5px;
+  color: var(--amber-dark);
+  line-height: 1.5;
+}
+.honesty svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
+.honesty strong { color: #92400e; }
+.honesty code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #fed7aa;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10.5px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner .lead { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 18px 0 9px;
+}
+
+/* STRATEGY TOGGLE */
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  flex: 1;
+  min-width: 150px;
+  padding: 9px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.toggle-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.toggle-btn .mode-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.toggle-btn[aria-pressed="true"] {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+#btn-single[aria-pressed="true"] { color: var(--indigo-dark); }
+#btn-supervisor[aria-pressed="true"] { color: var(--teal-dark); }
+#btn-debate[aria-pressed="true"] { color: var(--amber-dark); }
+
+.mode-blurb {
+  font-size: 12px;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.mode-blurb.single { background: #eef2ff; border-left: 3px solid var(--indigo); color: var(--indigo-dark); }
+.mode-blurb.supervisor { background: #f0fdfa; border-left: 3px solid var(--teal); color: var(--teal-dark); }
+.mode-blurb.debate { background: #fffbeb; border-left: 3px solid var(--amber); color: var(--amber-dark); }
+.mode-blurb strong { font-weight: 700; }
+
+/* READOUT (three headline numbers) */
+.readout {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.metric {
+  flex: 1;
+  min-width: 130px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  padding: 10px 12px;
+}
+.metric-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-heading);
+}
+.metric-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+.metric.calls { border-color: #c7d2fe; }
+.metric.calls .metric-value { color: var(--indigo-dark); }
+.metric.tokens { border-color: #99f6e4; }
+.metric.tokens .metric-value { color: var(--teal-dark); }
+.metric.quality { border-color: var(--border); }
+.metric.quality .metric-value { color: var(--text-body); }
+.metric.is-win { background: #ecfdf5; border-color: #a7f3d0; }
+.metric.is-win .metric-value { color: var(--emerald-dark); }
+.metric.is-cost { background: #fffbeb; border-color: #fde68a; }
+.metric.is-cost .metric-value { color: var(--amber-dark); }
+
+/* VISUAL AREA */
+.viz-area { min-height: 220px; }
+
+/* SINGLE: one growing context bar */
+.grow-wrap { display: flex; flex-direction: column; gap: 8px; }
+.grow-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  animation: fadeIn 0.18s ease;
+}
+.grow-step {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--indigo-dark);
+  min-width: 96px;
+  flex-shrink: 0;
+}
+.grow-track {
+  flex: 1;
+  height: 22px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+.grow-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #818cf8, #6366f1);
+  border-radius: 6px 0 0 6px;
+}
+.grow-tok {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  min-width: 70px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.grow-note {
+  font-size: 11px;
+  color: var(--indigo-dark);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 7px 7px 0;
+  padding: 8px 11px;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.grow-note strong { font-weight: 700; }
+
+/* SUPERVISOR: lead -> 3 isolated workers -> blackboard -> synthesis */
+.sup-lead, .sup-synth {
+  border-radius: 10px;
+  padding: 9px 12px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.sup-lead { background: #eef2ff; border: 1px solid #c7d2fe; color: var(--indigo-dark); margin-bottom: 4px; }
+.sup-lead .sl-sub { font-weight: 400; font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+.sup-fan {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--teal-dark);
+  margin: 8px 0;
+}
+.sup-workers { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+@media (max-width: 560px) { .sup-workers { grid-template-columns: 1fr; } }
+.worker {
+  background: #ffffff;
+  border: 1px solid #99f6e4;
+  border-top: 3px solid var(--teal);
+  border-radius: 9px;
+  padding: 9px 10px;
+  animation: fadeIn 0.18s ease;
+}
+.worker .w-id {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--teal-dark);
+}
+.worker .w-brief { font-size: 10px; color: var(--text-body); margin-top: 2px; line-height: 1.35; }
+.worker .w-ctx {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: inline-block;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.worker .w-out { font-size: 10px; color: var(--teal-dark); margin-top: 6px; line-height: 1.4; }
+.blackboard {
+  margin-top: 10px;
+  background: #f0fdfa;
+  border: 1px dashed var(--teal);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.bb-head {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--teal-dark);
+  margin-bottom: 6px;
+}
+.bb-entry {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-body);
+  padding: 3px 0;
+  line-height: 1.4;
+}
+.bb-entry .bb-who { color: var(--teal-dark); font-weight: 700; margin-right: 6px; }
+.sup-synth { background: #ecfdf5; border: 1px solid #a7f3d0; color: var(--emerald-dark); margin-top: 8px; text-align: left; }
+.sup-synth .ss-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sup-synth .ss-text { font-size: 11px; font-weight: 400; color: #064e3b; line-height: 1.5; }
+.sup-round-note {
+  font-size: 11px;
+  color: var(--teal-dark);
+  text-align: center;
+  margin-top: 9px;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-radius: 7px;
+  padding: 7px 10px;
+  line-height: 1.45;
+}
+.sup-round-note strong { color: var(--teal-dark); font-weight: 700; }
+
+/* DEBATE: proposer + 3 rounds with a quality line that regresses */
+.debate-rounds { display: flex; flex-direction: column; gap: 7px; }
+.deb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 8px 11px;
+  animation: fadeIn 0.18s ease;
+}
+.deb-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--amber-dark);
+  min-width: 78px;
+  flex-shrink: 0;
+}
+.deb-bar-track {
+  flex: 1;
+  height: 16px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.deb-bar-fill { height: 100%; border-radius: 5px 0 0 5px; }
+.deb-bar-fill.up { background: linear-gradient(90deg, #34d399, #10b981); }
+.deb-bar-fill.down { background: linear-gradient(90deg, #fb7185, #f43f5e); }
+.deb-q {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 70px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.deb-q.up { color: var(--emerald-dark); }
+.deb-q.down { color: var(--rose-dark); }
+.deb-flag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #fff1f2;
+  color: var(--rose-dark);
+  border: 1px solid #fecdd3;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+.deb-note {
+  font-size: 11px;
+  color: var(--amber-dark);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 3px solid var(--amber);
+  border-radius: 0 7px 7px 0;
+  padding: 8px 11px;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.deb-note strong { font-weight: 700; }
+
+/* SCOREBOARD */
+.scoreboard {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.scoreboard th, .scoreboard td {
+  text-align: right;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.scoreboard th:first-child, .scoreboard td:first-child { text-align: left; }
+.scoreboard th {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.scoreboard td { font-family: var(--font-mono); color: var(--text-body); }
+.scoreboard td:first-child { font-family: var(--font-sans); font-weight: 600; color: var(--text-heading); }
+.scoreboard tr.is-active td { background: #eef2ff; }
+.scoreboard tr.is-active td:first-child { color: var(--indigo-dark); }
+.score-win { color: var(--emerald-dark); font-weight: 700; }
+.score-cost { color: var(--amber-dark); font-weight: 700; }
+
+/* HANDOFF MINI-PANEL */
+.handoff-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+@media (max-width: 640px) { .handoff-grid { grid-template-columns: 1fr; } }
+.ho-card {
+  border: 1px solid var(--border);
+  border-top-width: 3px;
+  border-radius: 11px;
+  background: #ffffff;
+  overflow: hidden;
+}
+.ho-card.clean { border-top-color: var(--emerald); }
+.ho-card.trunc { border-top-color: var(--rose); }
+.ho-card.role { border-top-color: var(--amber); }
+.ho-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--border);
+}
+.ho-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ho-card.clean .ho-title { color: var(--emerald-dark); }
+.ho-card.trunc .ho-title { color: var(--rose-dark); }
+.ho-card.role .ho-title { color: var(--amber-dark); }
+.ho-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ho-body { padding: 10px 11px; }
+.ho-call {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-body);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 7px;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+.ho-trace {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.ho-tcell {
+  flex: 1;
+  height: 7px;
+  border-radius: 3px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+}
+.ho-tcell.carried { background: var(--emerald); border-color: var(--emerald-dark); }
+.ho-tcell.cut { background: #fff1f2; border-color: #fecdd3; }
+.ho-tlabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.ho-result {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  border-radius: 7px;
+  padding: 7px 9px;
+}
+.ho-result .ho-tag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 6px;
+}
+.ho-result.done { background: #ecfdf5; border: 1px solid #a7f3d0; color: var(--emerald-dark); }
+.ho-result.done .ho-tag { background: var(--emerald-dark); color: #ffffff; }
+.ho-result.failed { background: #fff1f2; border: 1px solid #fecdd3; color: var(--rose-dark); }
+.ho-result.failed .ho-tag { background: #e11d48; color: #ffffff; }
+.ho-result.stalled { background: #fffbeb; border: 1px solid #fde68a; color: var(--amber-dark); }
+.ho-result.stalled .ho-tag { background: var(--amber-dark); color: #ffffff; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .grow-row, .worker, .deb-row { animation: none; } }
+
+/* CAPTION / LEGEND */
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+}
+.caption .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+
+.contrast {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.contrast strong { color: var(--indigo-dark); }
+.contrast code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  color: var(--indigo-dark);
+}
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<!-- PANEL A: the strategy comparison -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <h2 id="panel-a-heading">One task, three strategies: single, supervisor, debate</h2>
+  <p class="panel-subtitle">The same briefing, wired three ways. Watch the LLM calls, the total context tokens, and the quality change. More agents is not automatically better, and more rounds is not more quality.</p>
+
+  <div class="honesty" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span><strong>Parallelism is sequential in this demo.</strong> Workers run one after another in the offline default, so we report <strong>LLM-call count</strong> and <strong>token isolation</strong> (each worker sees only its small brief), never a fabricated wall-clock speedup. With real concurrency the independent workers run in <strong>one round</strong>.</span>
+  </div>
+
+  <div class="goal-banner">
+    <span class="lead">The task:</span> <code>Prepare a customer briefing on refunds, the earbuds warranty, and shipping.</code> Three independent facts to gather, then one synthesis. The right shape depends on how broad the work is.
+  </div>
+
+  <div class="section-label">Strategy</div>
+  <div class="toggle-group" role="group" aria-label="Strategy selector">
+    <button class="toggle-btn" id="btn-single" aria-pressed="true" type="button">
+      <span class="mode-dot" style="background:var(--indigo)"></span>Single agent
+    </button>
+    <button class="toggle-btn" id="btn-supervisor" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--teal)"></span>Supervisor
+    </button>
+    <button class="toggle-btn" id="btn-debate" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--amber)"></span>Debate
+    </button>
+  </div>
+
+  <div class="mode-blurb single" id="mode-blurb"></div>
+
+  <div class="readout" id="readout">
+    <div class="metric calls" id="metric-calls">
+      <div class="metric-label">LLM calls</div>
+      <div class="metric-value" id="val-calls">4</div>
+      <div class="metric-sub" id="sub-calls">the cost lever</div>
+    </div>
+    <div class="metric tokens" id="metric-tokens">
+      <div class="metric-label">Context tokens</div>
+      <div class="metric-value" id="val-tokens">300</div>
+      <div class="metric-sub" id="sub-tokens">total across the run</div>
+    </div>
+    <div class="metric quality" id="metric-quality">
+      <div class="metric-label">Quality</div>
+      <div class="metric-value" id="val-quality">3/3</div>
+      <div class="metric-sub" id="sub-quality">facts correct</div>
+    </div>
+  </div>
+
+  <div class="section-label">What the run looks like</div>
+  <div class="viz-area" id="viz-area" aria-live="polite" aria-atomic="false"></div>
+
+  <div class="sr-only" aria-live="polite" id="mode-announcer"></div>
+</section>
+
+<!-- PANEL B: the scoreboard -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <h2 id="panel-b-heading">The economics, side by side</h2>
+  <p class="panel-subtitle">Cost-per-success follows the tokens. Pay for breadth only when the task is broad.</p>
+
+  <table class="scoreboard" id="scoreboard">
+    <thead>
+      <tr>
+        <th scope="col">Strategy</th>
+        <th scope="col">LLM calls</th>
+        <th scope="col">Tokens</th>
+        <th scope="col">Quality</th>
+      </tr>
+    </thead>
+    <tbody id="scoreboard-body"></tbody>
+  </table>
+  <p style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.55;">
+    The single agent has the fewest calls but ONE growing context (tokens climb every step). The supervisor adds calls (decompose plus three workers plus synthesize) yet each worker context is ISOLATED and small, and the independent workers parallelize into one round with real concurrency. Debate is the most expensive AND non-monotonic: round 3 made it worse.
+  </p>
+</section>
+
+<!-- PANEL C: handoff mini-panel -->
+<section class="panel" aria-labelledby="panel-c-heading">
+  <h2 id="panel-c-heading">Handoff as a tool call: transfer control plus the trace</h2>
+  <p class="panel-subtitle">Sometimes the move is not to fan out but to hand off to a specialist, carrying the live trace. A clean handoff works; two classic failure modes do not.</p>
+
+  <div class="handoff-grid">
+    <div class="ho-card clean">
+      <div class="ho-head"><span class="ho-dot" style="background:var(--emerald)"></span><span class="ho-title">clean handoff</span></div>
+      <div class="ho-body">
+        <div class="ho-call">handoff(to='billing-specialist')<br />carrying 3/3 trace, role=clear</div>
+        <div class="ho-trace"><span class="ho-tcell carried"></span><span class="ho-tcell carried"></span><span class="ho-tcell carried"></span></div>
+        <div class="ho-tlabel">3/3 entries carried, role clear</div>
+        <div class="ho-result done"><span class="ho-tag">done</span>billing-specialist refunded order ORD-3300 using the carried trace.</div>
+      </div>
+    </div>
+
+    <div class="ho-card trunc">
+      <div class="ho-head"><span class="ho-dot" style="background:var(--rose)"></span><span class="ho-title">truncation</span></div>
+      <div class="ho-body">
+        <div class="ho-call">handoff(to='billing-specialist')<br />carrying 1/3 trace, role=clear</div>
+        <div class="ho-trace"><span class="ho-tcell cut"></span><span class="ho-tcell cut"></span><span class="ho-tcell carried"></span></div>
+        <div class="ho-tlabel">trace cut to the last entry; the order id was earlier</div>
+        <div class="ho-result failed"><span class="ho-tag">failed</span>billing-specialist cannot act: the order id was truncated out of the carried trace.</div>
+      </div>
+    </div>
+
+    <div class="ho-card role">
+      <div class="ho-head"><span class="ho-dot" style="background:var(--amber)"></span><span class="ho-title">role confusion</span></div>
+      <div class="ho-body">
+        <div class="ho-call">handoff(to='billing-specialist')<br />carrying 3/3 trace, role=UNCLEAR</div>
+        <div class="ho-trace"><span class="ho-tcell carried"></span><span class="ho-tcell carried"></span><span class="ho-tcell carried"></span></div>
+        <div class="ho-tlabel">full trace, but the brief never said who owns it</div>
+        <div class="ho-result stalled"><span class="ho-tag">stalled</span>billing-specialist and the lead both wait: the brief never said who owns the task.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="contrast">
+    <strong>This is categorically different from a router.</strong> RAG's complexity router and the text-vs-SQL router chose a path and stayed in one agent. A handoff transfers <em>control</em> and the live <em>trace</em> to a different agent. The trace is the payload, so truncating it or leaving ownership unstated breaks the handoff even when the specialist is perfectly capable.
+  </div>
+
+  <div class="caption">
+    <strong>How we keep it honest:</strong> the offline default runs workers sequentially, so we never print a wall-clock speedup. What multi-agent buys is reported as <strong>LLM-call count</strong> and <strong>token isolation</strong>: each worker sees only its own small brief, not one ever-growing transcript. With real concurrency the independent workers run in one round (depth 1), and a runaway supervisor is stopped by Part 8's circuit breaker, reused not rebuilt.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>lead / single &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>workers / blackboard &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>debate / caution &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>quality up / done &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>regress / failed
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* =====================================================================
+     Verified facts from supervisor_and_handoffs.py (single source of truth).
+     Economics: single 4/300/3-3; supervisor 5/220/3-3; debate 7/320/2-3.
+     Debate by round: proposer 2/3, round 1 3/3, round 2 3/3, round 3 2/3.
+     All result strings reproduced EXACTLY. No string is invented.
+  ===================================================================== */
+
+  var STRATEGIES = [
+    {
+      id: "single", btn: "btn-single", label: "Single agent", dot: "var(--indigo)",
+      calls: 4, tokens: 300, quality: "3/3",
+      callsTone: "win", tokensTone: "cost", qualityTone: "neutral",
+      callsSub: "fewest calls", tokensSub: "ONE growing context", qualitySub: "facts correct",
+      blurb: '<strong>Single agent, one growing context.</strong> Each step re-sends everything before it, so the token bill climbs every step. Fewest LLM calls, but the cheapest only when the task is small and sequential.',
+      kind: "single"
+    },
+    {
+      id: "supervisor", btn: "btn-supervisor", label: "Supervisor", dot: "var(--teal)",
+      calls: 5, tokens: 220, quality: "3/3",
+      callsTone: "neutral", tokensTone: "win", qualityTone: "neutral",
+      callsSub: "decompose + 3 + synthesize", tokensSub: "ISOLATED small contexts", qualitySub: "facts correct",
+      blurb: '<strong>A lead decomposes, fans out, synthesizes.</strong> Three workers each run in their OWN isolated context (14 tokens each) and post to a shared blackboard. More calls than single, but each context is small and the independent workers parallelize.',
+      kind: "supervisor"
+    },
+    {
+      id: "debate", btn: "btn-debate", label: "Debate", dot: "var(--amber)",
+      calls: 7, tokens: 320, quality: "2/3",
+      callsTone: "cost", tokensTone: "cost", qualityTone: "cost",
+      callsSub: "proposer + 3x(critic+revise)", tokensSub: "transcripts grow fast", qualitySub: "round 3 regressed",
+      blurb: '<strong>Proposer plus three critic-revise rounds.</strong> Quality is NOT monotonic in rounds: it rises then regresses on round 3. The most expensive shape and the least reliable; more rounds bought a worse answer.',
+      kind: "debate"
+    }
+  ];
+
+  /* SINGLE: a growing context bar, one row per step. Tokens climb 30 per step
+     and the bar shows cumulative context (30, 60, 90, 120), total = 300. */
+  var SINGLE_STEPS = [
+    { step: "refund policy", ctx: 30 },
+    { step: "earbuds warranty", ctx: 60 },
+    { step: "shipping options", ctx: 90 },
+    { step: "synthesize", ctx: 120 }
+  ];
+
+  /* SUPERVISOR: three workers, each its own 14-token context, posting to the
+     blackboard, then the lead synthesizes the entries into one briefing. */
+  var WORKERS = [
+    { id: "w1", brief: "summarize the refund policy", ctx: 14,
+      out: "Refunds within 30 days; a 10% restocking fee applies after the window." },
+    { id: "w2", brief: "state the earbuds warranty", ctx: 14,
+      out: "The Globex earbuds carry a 2-year limited warranty." },
+    { id: "w3", brief: "list the shipping options", ctx: 14,
+      out: "Standard shipping is 3 to 5 business days; express is next business day." }
+  ];
+  var SYNTHESIS = "Refunds within 30 days; a 10% restocking fee applies after the window. The Globex earbuds carry a 2-year limited warranty. Standard shipping is 3 to 5 business days; express is next business day.";
+
+  /* DEBATE: proposer 2/3, round 1 3/3, round 2 3/3, round 3 2/3 (regressed). */
+  var DEBATE_ROUNDS = [
+    { name: "proposer", q: 2, regressed: false },
+    { name: "round 1", q: 3, regressed: false },
+    { name: "round 2", q: 3, regressed: false },
+    { name: "round 3", q: 2, regressed: true }
+  ];
+
+  var current = 0;
+
+  function renderSingle() {
+    var maxCtx = SINGLE_STEPS[SINGLE_STEPS.length - 1].ctx;
+    var html = '<div class="grow-wrap">';
+    SINGLE_STEPS.forEach(function (s) {
+      var pct = Math.round((s.ctx / maxCtx) * 100);
+      html += '<div class="grow-row">';
+      html += '<span class="grow-step">' + escHtml(s.step) + '</span>';
+      html += '<span class="grow-track"><span class="grow-fill" style="width:' + pct + '%"></span></span>';
+      html += '<span class="grow-tok">' + s.ctx + ' tok ctx</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '<div class="grow-note"><strong>One context, growing every step.</strong> Step 4 re-reads steps 1 to 3 before it can synthesize. Summed across the run that is <strong>300 tokens</strong> in 4 LLM calls. Cheap in calls, but the context never resets.</div>';
+    return html;
+  }
+
+  function renderSupervisor() {
+    var html = '';
+    html += '<div class="sup-lead">lead decomposes the briefing into 3 typed briefs<div class="sl-sub">objective, output format, tool guidance, boundaries</div></div>';
+    html += '<div class="sup-fan">&#8595;&nbsp;&nbsp;fan out to 3 isolated workers&nbsp;&nbsp;&#8595;</div>';
+    html += '<div class="sup-workers">';
+    WORKERS.forEach(function (w) {
+      html += '<div class="worker">';
+      html += '<div class="w-id">' + escHtml(w.id) + '</div>';
+      html += '<div class="w-brief">brief: ' + escHtml(w.brief) + '</div>';
+      html += '<div class="w-ctx">own context, ' + w.ctx + ' tokens</div>';
+      html += '<div class="w-out">&#8594; ' + escHtml(w.out) + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '<div class="blackboard"><div class="bb-head">shared append-only blackboard</div>';
+    WORKERS.forEach(function (w) {
+      html += '<div class="bb-entry"><span class="bb-who">' + escHtml(w.id) + '</span>' + escHtml(w.out) + '</div>';
+    });
+    html += '</div>';
+    html += '<div class="sup-synth"><div class="ss-label">&#10003; lead synthesizes the blackboard into the briefing</div><div class="ss-text">' + escHtml(SYNTHESIS) + '</div></div>';
+    html += '<div class="sup-round-note">3 workers, each its own context; with real concurrency they run in <strong>ONE round</strong>. Offline they run sequentially, so we report calls and token isolation, never wall-clock.</div>';
+    return html;
+  }
+
+  function renderDebate() {
+    var html = '<div class="debate-rounds">';
+    DEBATE_ROUNDS.forEach(function (r) {
+      var pct = Math.round((r.q / 3) * 100);
+      var tone = r.regressed ? "down" : "up";
+      html += '<div class="deb-row">';
+      html += '<span class="deb-name">' + escHtml(r.name) + '</span>';
+      html += '<span class="deb-bar-track"><span class="deb-bar-fill ' + tone + '" style="width:' + pct + '%"></span></span>';
+      html += '<span class="deb-q ' + tone + '">' + r.q + '/3</span>';
+      if (r.regressed) { html += '<span class="deb-flag">regressed</span>'; }
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '<div class="deb-note"><strong>More rounds is NOT more quality.</strong> The quality line rises from 2/3 to 3/3, holds, then drops back to 2/3 on round 3. Seven LLM calls and 320 tokens bought a final answer no better than the proposer plus one critique. Debate is the most expensive and non-monotonic shape.</div>';
+    return html;
+  }
+
+  function renderViz(s) {
+    if (s.kind === "single") return renderSingle();
+    if (s.kind === "supervisor") return renderSupervisor();
+    return renderDebate();
+  }
+
+  function setMetric(metricEl, valEl, subEl, value, sub, tone) {
+    metricEl.classList.remove("is-win", "is-cost");
+    if (tone === "win") metricEl.classList.add("is-win");
+    else if (tone === "cost") metricEl.classList.add("is-cost");
+    valEl.textContent = value;
+    if (subEl) subEl.textContent = sub;
+  }
+
+  function render() {
+    var s = STRATEGIES[current];
+
+    setMetric(document.getElementById("metric-calls"),
+      document.getElementById("val-calls"),
+      document.getElementById("sub-calls"),
+      s.calls, s.callsSub, s.callsTone);
+    setMetric(document.getElementById("metric-tokens"),
+      document.getElementById("val-tokens"),
+      document.getElementById("sub-tokens"),
+      s.tokens, s.tokensSub, s.tokensTone);
+    setMetric(document.getElementById("metric-quality"),
+      document.getElementById("val-quality"),
+      document.getElementById("sub-quality"),
+      s.quality, s.qualitySub, s.qualityTone);
+
+    var blurb = document.getElementById("mode-blurb");
+    blurb.className = "mode-blurb " + s.id;
+    blurb.innerHTML = s.blurb;
+
+    document.getElementById("viz-area").innerHTML = renderViz(s);
+
+    STRATEGIES.forEach(function (st) {
+      document.getElementById(st.btn)
+        .setAttribute("aria-pressed", st.id === s.id ? "true" : "false");
+    });
+
+    var rows = document.querySelectorAll("#scoreboard-body tr");
+    rows.forEach(function (r, i) { r.classList.toggle("is-active", i === current); });
+
+    document.getElementById("mode-announcer").textContent =
+      s.label + ": " + s.calls + " LLM calls, " + s.tokens + " context tokens, quality " + s.quality + ".";
+  }
+
+  function setMode(i) { current = i; render(); }
+
+  (function buildScoreboard() {
+    var body = document.getElementById("scoreboard-body");
+    var html = "";
+    STRATEGIES.forEach(function (s) {
+      var callsCls = s.callsTone === "cost" ? "score-cost" : (s.callsTone === "win" ? "score-win" : "");
+      var tokCls = s.tokensTone === "cost" ? "score-cost" : (s.tokensTone === "win" ? "score-win" : "");
+      var qCls = s.qualityTone === "cost" ? "score-cost" : (s.qualityTone === "win" ? "score-win" : "");
+      html += '<tr>';
+      html += '<td>' + escHtml(s.label) + '</td>';
+      html += '<td class="' + callsCls + '">' + s.calls + '</td>';
+      html += '<td class="' + tokCls + '">' + s.tokens + '</td>';
+      html += '<td class="' + qCls + '">' + escHtml(s.quality) + '</td>';
+      html += '</tr>';
+    });
+    body.innerHTML = html;
+  })();
+
+  STRATEGIES.forEach(function (s, i) {
+    document.getElementById(s.btn).addEventListener("click", function () { setMode(i); });
+  });
+
+  document.querySelector(".toggle-group").addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight") {
+      setMode((current + 1) % STRATEGIES.length);
+      document.getElementById(STRATEGIES[current].btn).focus();
+      e.preventDefault();
+    } else if (e.key === "ArrowLeft") {
+      setMode((current - 1 + STRATEGIES.length) % STRATEGIES.length);
+      document.getElementById(STRATEGIES[current].btn).focus();
+      e.preventDefault();
+    }
+  });
+
+  setMode(0);
+})();
+</script>
+</body>
+</html>
