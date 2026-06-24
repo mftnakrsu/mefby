@@ -1,0 +1,159 @@
+---
+title: "The Four Memories"
+description: "A flat buffer cannot separate what happened from what is true from how to do a task, and read-only tools cannot update state. Four typed stores plus self-editing memory fix it."
+date: 2026-07-02
+tags: ["Agents","Memory","MemGPT","Self-Editing","Letta","AI"]
+seriesOrder: 6
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-06-four-memories-self-editing"
+lang: "en"
+translationSlug: "four-memories-self-editing-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 5 gave the agent an episodic buffer: a flat list of verbal lessons that one trial wrote and the next trial read. That was enough to carry one kind of knowledge across runs, and it immediately exposes the next gap. A flat list cannot tell three different KINDS of knowledge apart. What HAPPENED (the user opened a return earlier today) is an event. What is TRUE (the user is Dana, she prefers email) is a durable fact. How to DO a task (returns after the window take a 10% fee, multiply by 0.9) is a procedure. Stuff all three into one list and retrieval gets noisy, facts get buried under events, and a learned procedure reads like a one-off note. Worse, every tool the agent has had through Part 5 was READ-ONLY: RAG Part 19's tools only fetched, and the agent could never deliberately UPDATE its own state. This part fixes both. First, **four typed memories** by the kind of knowledge they hold, a cognitive-science taxonomy used in MemGPT and Letta: **working** (what we are doing now), **semantic** (what is true), **episodic** (what happened), and **procedural** (how to do a task), with a **write router** that classifies each incoming item and sends it to the right store. Second, **memory as an action**: `memory_append` and `memory_replace` become first-class tools, declared with the Part 1 contract, over labeled **core blocks** the controller rewrites in-loop. The agent stops being a read-only consumer of its own state. And a third, orthogonal sketch borrowed from operating systems, a **placement hierarchy** by access pattern: **core** (always in context), **recall** (recent, paged in), and **archival** (large, searched). The archival read reuses RAG retrieval as a black-box tool, not something we re-derive.
+
+## Prerequisites
+
+You need basic Python: functions, a dictionary, a list, and a string check. That is all. Finishing [Part 1](/essays/augmented-llm-loop) through [Part 5](/essays/reflection-and-reflexion) helps, because we lean on Part 1's tool contract (the memory tools reuse it exactly) and on Part 5's flat reflection buffer (which this part finally types). But the essay is self-contained: where it leans on an earlier idea, it restates it in a sentence. The companion code, [four_memories.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-06-four-memories-self-editing), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every trace in this essay yourself. A deterministic rule router and controller is the source of truth by default, with the real LLM path (`generate()`) one environment flag away, exactly as in Parts 1 through 5.
+
+## What is new since Part 5
+
+I want to be precise about what is new, because a lot is not. The RAG series never had typed memory: RAG Part 20 carried a FLAT buffer and did query condensation, which is a different operation entirely (it rewrites a follow-up question into a standalone one, it does not sort knowledge by kind). RAG Part 19's tools only READ; none of them ever wrote state back. So the typed four-store taxonomy, the write router, and memory-as-an-action are all genuinely absent from RAG, and they are what this part builds. The one RAG touchpoint is real and worth naming loudly: the **archival** read reuses RAG retrieval AS A BLACK-BOX TOOL. We do NOT re-derive embeddings, similarity, or vector databases here. That was RAG Parts 2 through 4, and re-teaching it would be wasted pages. Vector search is demoted to one read tool the memory system calls, and we treat its result as opaque. I am also not re-teaching the loop or the tool contract; Part 1 owns those, and the memory tools simply reuse them.
+
+## Four kinds of knowledge
+
+The taxonomy comes from cognitive science, where psychologists separate memory by the kind of thing it stores rather than where it sits. MemGPT and Letta carry the same split into agents. Four kinds, one line each:
+
+```text
+  working    what we are doing now   (volatile scratchpad)
+  semantic   what is TRUE            (durable facts: the user, the world)
+  episodic   what HAPPENED           (an event log; formalizes Part 5's buffer)
+  procedural how to DO a task        (learned rules; e.g. Part 5's promoted reflection)
+```
+
+Note the two lineage lines, because they connect this part to the last one. **Episodic** memory is a typed event log, and it formalizes Part 5's flat reflection buffer: the buffer was already a list of things that happened, so it was episodic memory all along, just untyped. **Procedural** memory holds learned rules, which is exactly where Part 5's promoted reflection belongs: the lesson "multiply the order total by 0.9" is a procedure, not an event, and now it has a place to live that is not the event log. The mechanism that keeps these straight is a **write router**: given an incoming item, it decides which kind of knowledge the item is and sends it to the matching store. Watch it route four real inputs, from the artifact's output:
+
+```text
+  route -> semantic   (a durable fact about the user)
+           "Hi, I'm Dana and I prefer email contact."
+  route -> episodic   (an event that happened)
+           'User opened a return request for ORD-3300 earlier today.'
+  route -> procedural (a reusable how-to rule)
+           'Returns after the 30-day window incur a 10% restocking fee; multiply the total by 0.9.'
+  route -> working    (the current task focus)
+           'Quoting the refund for ORD-3300 now.'
+```
+
+Read each routing decision, because the router is the whole separation. Dana's introduction is a durable fact about who the user is, so it goes to **semantic**. The return request is something that happened at a point in time, so it goes to **episodic**. The fee rule is a reusable how-to, so it goes to **procedural**. And "quoting the refund now" is the current focus, volatile and about to change, so it goes to **working**. After routing, each store holds exactly its own kind:
+
+```text
+  Stores after routing:
+    CORE.user_profile : 'name: Dana; prefers email'
+    CORE.task_state   : 'Quoting the refund for ORD-3300 now.'
+    EPISODIC          : ['User opened a return request for ORD-3300 earlier today.']
+    PROCEDURAL        : ['Returns after the 30-day window incur a 10% restocking fee; multiply the total by 0.9.']
+```
+
+One detail worth pointing at: the semantic write did not store Dana's raw sentence. It stored `'name: Dana; prefers email'`, a normalized, compact profile. That normalization is what lets a later edit target a clean phrase instead of a whole raw sentence, which is the next section. The offline router is a transparent rule policy; a real system swaps its body for one `generate()` classification call. Diagram 1 lays the four stores out next to the router that fills them.
+
+<Diagram number={1} caption="The four typed memory stores and the write router that fills them. An incoming item enters the write router, which classifies it by the kind of knowledge it carries and sends it to one of four stores: working (what we are doing now, a volatile scratchpad), semantic (what is true, durable facts about the user and the world), episodic (what happened, an event log that formalizes Part 5's flat reflection buffer), and procedural (how to do a task, learned rules such as Part 5's promoted multiply-by-0.9 reflection). Each store has its own read path. The figure traces the four refund-world inputs to their stores: Dana's introduction to semantic, the return request to episodic, the restocking-fee rule to procedural, and the current task focus to working.">
+  <img src="/essays/four-memories-self-editing/part6-four-memories.svg" alt="A diagram of a write router at the centre with one incoming item arrow on the left. The router fans out to four labelled store boxes on the right. The first, working, is tinted volatile and labelled what we are doing now, a scratchpad, holding the current task focus quoting the refund for ORD-3300 now. The second, semantic, is labelled what is true, durable facts, holding name Dana, prefers email. The third, episodic, is labelled what happened, an event log, with a note that it formalizes Part 5's flat reflection buffer, holding the event user opened a return request for ORD-3300 earlier today. The fourth, procedural, is labelled how to do a task, learned rules, with a note that it holds Part 5's promoted reflection, containing the rule returns after the 30-day window incur a 10% restocking fee, multiply the total by 0.9. Four coloured routing arrows trace each of the four inputs from the router to its matching store. A caption strip reads: one router, four stores, sorted by the kind of knowledge, not by where it sits." class="w-full rounded-lg" />
+</Diagram>
+
+## Memory as an action
+
+The router writes when knowledge arrives from outside. But a controller in the middle of a task often needs to deliberately rewrite what it already knows: a user corrects a fact, a task acquires a new detail. Through Part 5 the agent could not do that, because every tool it had was read-only. This part introduces the move that MemGPT and Letta are built on: **memory as an action**. `memory_append` and `memory_replace` become first-class tools, declared with the Part 1 contract (a typed schema, validated before the call fires), operating over labeled **core blocks** (`user_profile`, `task_state`). The controller calls them in-loop to rewrite its own persistent memory. Watch three edits, from the artifact's output:
+
+```text
+  memory_replace(block='user_profile', old='prefers email', new='prefers phone')
+    -> replaced 'prefers email' with 'prefers phone' in user_profile
+  memory_append(block='task_state', text='order ORD-3300, $200, returned after the window')
+    -> appended to task_state
+  memory_replace(block='preferences', old='x', new='y')
+    -> [error] unknown memory block 'preferences'
+```
+
+Read all three. The first is a correction: Dana now prefers phone, so `memory_replace` swaps `'prefers email'` for `'prefers phone'` inside `user_profile`, and because the profile was normalized to a clean phrase, the edit targets exactly that phrase. The second appends a new task detail to `task_state` without disturbing what was already there. The third is the interesting one: it targets a block named `'preferences'` that does not exist, and instead of throwing, it returns `[error] unknown memory block 'preferences'`. That is the **error-as-observation** reframe from Part 2: a bad memory edit comes back as a readable observation the controller can act on, not a crash. The Part 1 validator runs first on every call, so a malformed argument is rejected before the tool body ever runs; only well-formed calls reach the store, and even then an unknown block is reported, not crashed. Here are the two core blocks after the successful edits:
+
+```text
+  CORE.user_profile : 'name: Dana; prefers phone'
+  CORE.task_state   : 'Quoting the refund for ORD-3300 now.; order ORD-3300, $200, returned after the window'
+  The agent corrected a durable fact about the user with a single tool call.
+```
+
+Before the edit the profile read `'name: Dana; prefers email'`; after it reads `'name: Dana; prefers phone'`. The agent corrected a durable fact about itself, in-loop, with a validated tool call. That is the line that separates this part from everything before it: the agent is no longer a read-only consumer of state. Diagram 2 draws a core block being edited by a tool call.
+
+<Diagram number={2} caption="A labeled core-memory block being edited by a validated tool call, the MemGPT and Letta self-editing move done by hand. The user_profile core block starts as name Dana, prefers email. A memory_replace tool call, declared with the Part 1 contract and validated before it fires, targets the clean phrase prefers email and swaps it for prefers phone, leaving the block as name Dana, prefers phone. A second panel shows a memory_replace against a block named preferences that does not exist returning the observation unknown memory block, the error-as-observation reframe from Part 2: a bad edit comes back as a readable observation, not a crash. The point: memory is an action the agent takes with tools, not just state it reads.">
+  <img src="/essays/four-memories-self-editing/part6-self-editing-block.svg" alt="A diagram in two panels. The left panel shows a labelled core-memory block named user_profile containing the text name Dana, prefers email. A tool call memory_replace with block user_profile, old prefers email, new prefers phone enters through a Part 1 contract validator gate marked validated before firing, then targets the phrase prefers email inside the block and rewrites it, so the block now reads name Dana, prefers phone, with a green note replaced prefers email with prefers phone in user_profile. The right panel shows a second memory_replace call targeting a block named preferences, which passes the schema validator but hits an unknown block, returning a rose-tinted observation unknown memory block preferences, labelled error-as-observation from Part 2, not a crash. A caption strip reads: memory_append and memory_replace make memory an action the agent takes, the MemGPT and Letta core-memory editing done by hand." class="w-full rounded-lg" />
+</Diagram>
+
+## Where memory lives
+
+The four-store taxonomy sorts memory by the KIND of knowledge. There is a second, orthogonal question: by ACCESS PATTERN, where does a piece of memory physically live, and how is it read? MemGPT borrows the answer from operating systems, which solved the same problem for RAM and disk: a small fast tier always present, and large slow tiers paged in on demand. Three tiers:
+
+```text
+  core      always in context  -> user_profile, task_state (above)
+  recall    recent, paged in   -> last episodic event: 'User opened a return request for ORD-3300 earlier today.'
+  archival  large, searched    -> vector_search (black-box RAG; not re-derived here):
+             query 'restocking fee returns after the window'
+             -> 'Returns after the 30-day window are still refundable, minus a 10% restocking fee.' (score=0.63)
+```
+
+**Core** is the labeled blocks that are always in the context window, the ones the agent edits with the memory tools. **Recall** is recent episodic events, paged in on demand, here the last event Dana triggered. **Archival** is the large store, too big to keep in context, read only by searching. And here is the part to read loudly: the archival read is `vector_search('restocking fee returns after the window')`, which returns a chunk and a score of `0.63`, and it is a **black-box RAG call**. The trace labels it `(black-box RAG; not re-derived here)` on purpose. The internals, the embeddings, the similarity metric, the index, are the subject of RAG Parts 2 through 4, and we do not rebuild them. Vector search is demoted to one read tool that the memory system calls and whose result it treats as opaque. That demotion is the whole point of putting RAG inside an agent: retrieval is no longer the system, it is one tier of memory the controller reaches into when core and recall do not have the answer. The interactive figure lets you watch an item flow through the router into a store, then watch a read pull from core, recall, and archival.
+
+<Diagram number={3} caption="The memory router and the OS-style access hierarchy, interactive. The top half shows the write path: drop one of the four refund-world inputs into the write router and watch it land in working, semantic, episodic, or procedural. The bottom half shows the three placement tiers by access pattern: core (always in context, the labeled user_profile and task_state blocks the agent edits with tools), recall (recent episodic events paged in, here the last return event), and archival (the large store read only via a black-box vector_search that returns a chunk and a score of 0.63). The archival panel is labeled black-box RAG, not re-derived here, to make plain that vector search is demoted to one read tool, with embeddings and the index left to RAG Parts 2 through 4.">
+  <IframeFigure src="/essays/four-memories-self-editing/part6-memory-router.html" title="Interactive memory router and access-hierarchy player. The top half is the write path: four buttons load the refund-world inputs (Dana's introduction, the return request event, the restocking-fee rule, and the current task focus) into a write router, which animates the item travelling into one of four typed stores: working holds quoting the refund for ORD-3300 now, semantic holds name Dana prefers email, episodic holds the event user opened a return request for ORD-3300 earlier today, and procedural holds the rule returns after the 30-day window incur a 10% restocking fee multiply the total by 0.9. The bottom half is the OS-style access hierarchy with three tiers. Core, always in context, shows the editable user_profile and task_state blocks. Recall, recent and paged in, shows the last episodic event. Archival, large and searched, runs vector_search with the query restocking fee returns after the window and returns the chunk returns after the 30-day window are still refundable minus a 10% restocking fee with score 0.63, under a banner reading black-box RAG, not re-derived here, vector search demoted to one read tool. A note states the taxonomy sorts by kind of knowledge while the hierarchy sorts by access pattern, and the two are orthogonal." height={860} />
+</Diagram>
+
+## All four at once
+
+The payoff is reading all four memories together to produce one grounded reply. The controller pulls the user's name and preference from **semantic**, the live task from **working**, the fee rule from **procedural**, the supporting policy chunk from **archival**, and the triggering event from **episodic**, then composes:
+
+```text
+  semantic   (user_profile): name: Dana; prefers phone
+  working    (task_state)  : Quoting the refund for ORD-3300 now.; order ORD-3300, $200, returned after the window
+  procedural (rule)        : Returns after the 30-day window incur a 10% restocking fee; multiply the total by 0.9.
+  archival   (RAG chunk)   : Returns after the 30-day window are still refundable, minus a 10% restocking fee.
+  episodic   (event)       : User opened a return request for ORD-3300 earlier today.
+
+  REPLY: Hi Dana, for ORD-3300 returned after the 30-day window your refund is
+         $180.00 (the 10% restocking fee applies). We will call you by phone.
+```
+
+Trace each fact in the reply back to its store. The name "Hi Dana" and the closing "We will call you by phone" come from **semantic** memory, including the correction we made with `memory_replace`: the agent remembers Dana now prefers phone, not email. The order and the after-the-window framing come from **working** and **episodic**. The `$180.00` is the **procedural** rule applied to the $200 order ($200 times 0.9), backed by the **archival** policy chunk that confirms returns after the window are refundable minus a 10% fee. Five typed sources, one coherent answer, and not a single one of them buried under the others. That is what a flat list could not do.
+
+> 💡 **From experience.** The bug that finally sold me on typed memory was an agent whose entire memory was one growing list of messages and events. A user told it, early in a long session, that their account was in EUR not USD. Forty turns later, buried under a pile of "fetched order", "called API", "got 200" event lines, that one durable fact was effectively gone: the retrieval step kept surfacing recent events because they were recent, and the currency note sat there outvoted by noise, never pulled back into context. The agent quoted a refund in dollars to a euro customer, twice. The fix was not a bigger context window or a better retriever over the flat list. It was to stop treating a durable fact and an event as the same kind of thing. The currency note went into a semantic store that was always in context, the API events went into an episodic log that aged out, and the fact stopped competing with the noise because it was no longer in the same pile. The second thing that changed how I build agents was letting the agent edit that semantic store with a tool. Before, a user correction was just another message in the history that the model might or might not weight; after, the agent could `memory_replace` the stale fact and the correction actually stuck across turns, because it had rewritten the thing it reads, not just added a sentence the model has to notice.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- Part 5's reflection buffer is a **flat list**, and a flat list cannot tell apart what HAPPENED (an event) from what is TRUE (a durable fact) from how to DO a task (a procedure); facts get buried under events and a learned rule reads like a one-off note.
+- The fix is **four typed memories** by the kind of knowledge: **working** (now), **semantic** (true), **episodic** (happened), **procedural** (how-to), filled by a **write router** that routed Dana's intro to semantic, the return to episodic, the fee rule to procedural, and the current task to working. Episodic formalizes Part 5's buffer; procedural holds Part 5's promoted rule.
+- Every tool through Part 5 was **read-only** (RAG Part 19 only fetched). This part makes **memory an action**: `memory_append` and `memory_replace` are tools with the Part 1 contract, validated before firing, over labeled **core blocks**. The agent rewrote `user_profile` from `prefers email` to `prefers phone` with one call.
+- A bad edit is an **observation, not a crash**: `memory_replace` on a missing block returns `[error] unknown memory block 'preferences'`, the error-as-observation reframe from Part 2. This is the MemGPT and Letta core-memory editing pattern, done by hand.
+- A second, orthogonal sketch sorts memory by **access pattern**, OS-style: **core** (always in context), **recall** (recent episodic, paged in), **archival** (large, searched). Archival is `vector_search(...)` returning a chunk at score `0.63`, a **black-box RAG call**: vector search is demoted to one read tool, and embeddings and the index are NOT re-derived (that was RAG Parts 2 through 4).
+- Read together, the four stores compose one grounded reply: `$180.00` for ORD-3300, with the phone preference honored, every fact traceable to its own store and none drowned out by the rest.
+
+## Glossary
+
+- **Working memory**: the volatile scratchpad of what the agent is doing right now (here the `task_state` block); it changes constantly and is not meant to persist.
+- **Semantic memory**: durable facts about the user and the world (here the `user_profile` block, `name: Dana; prefers phone`); true now and likely true later, the kind of thing that must not get buried under events.
+- **Episodic memory**: an event log of what happened (the return request earlier today); this is the typed form of Part 5's flat reflection buffer, which was episodic all along.
+- **Procedural memory**: learned how-to rules (the 10% restocking-fee rule, multiply the total by 0.9); this is where Part 5's promoted reflection belongs, as a procedure rather than an event.
+- **Write router**: the policy that classifies an incoming item by the kind of knowledge it carries and routes it to the matching store; a transparent rule policy offline, one `generate()` classification call in a real system.
+- **Core memory block**: a labeled, always-in-context chunk of memory (`user_profile`, `task_state`) that the agent reads on every turn and edits with tools.
+- **memory_append / memory_replace (memory as an action)**: first-class tools, declared with the Part 1 contract and validated before firing, that the controller calls in-loop to write or rewrite a core block; they make memory something the agent does, not just state it reads.
+- **MemGPT / Letta core-memory editing**: the pattern, originating in MemGPT and carried into Letta, in which an agent rewrites its own persistent memory with tool calls; this part reconstructs it by hand.
+- **The OS tiers (core / recall / archival)**: a placement hierarchy by access pattern, orthogonal to the kind-of-knowledge taxonomy: core is always in context, recall is recent memory paged in, archival is the large store read only by search.
+- **Black-box archival retrieval**: the archival read is a single `vector_search` call whose result (a chunk and a score) is treated as opaque; vector search is demoted to one read tool, with embeddings, similarity, and the index left to RAG Parts 2 through 4 and not re-derived here.
+
+---
+
+The rule from this part: separate memory by the kind of knowledge it holds so the right fact lives in the right place, and give the agent tools to rewrite its own core memory so a correction actually sticks instead of competing with the noise. But notice what we have not solved. Every store here only grows. The episodic log appends events forever, the archival store accumulates, and a long enough run will overflow the context window no matter how cleanly it is typed. A memory that only grows eventually becomes noise of a new kind: too much of the right thing. **Part 7, Surviving the Long Haul**, is about compaction and forgetting: how an agent summarizes and prunes its own memory so a long run stays inside its budget, which is where RAG Part 20's note about summarizing older turns finally gets cashed in.

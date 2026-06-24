@@ -1,0 +1,223 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="100%" style="height:auto" role="img" aria-label="Memory as an action: a self-editing core memory block. On the left, the core block user_profile holds name Dana, prefers email. A memory_replace tool call, carrying the Part 1 typed-schema contract with block, old, and new arguments, passes through a validate() gate. The gate confirms the args are present and typed and that the block exists, then fires, replacing prefers email with prefers phone. On the right, the block now holds name Dana, prefers phone. Below, a second call targets an unknown block called preferences. It is schema-valid but the runtime rejects it, returning an error as an observation rather than crashing, so the block is left unchanged.">
+  <title>Memory as an action: a self-editing core block, validated then fired, with an unknown block rejected</title>
+
+  <defs>
+    <marker id="arrSlate" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#64748b"/>
+    </marker>
+    <marker id="arrAmber" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrRose" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#f43f5e"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="700" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 6, memory as an action over a core block</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">Memory as an action: the agent rewrites its own core block with a validated tool call</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">Every tool through Part 5 was read-only. memory_replace is a first-class tool with the Part 1 contract: typed schema, validated before it fires.</text>
+
+  <!-- ================= BEFORE block ================= -->
+  <text x="40" y="102"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#64748b" letter-spacing="0.05em">BEFORE</text>
+  <rect x="40" y="112" width="280" height="120" rx="13" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <rect x="40" y="112" width="280" height="30" rx="13" fill="#f59e0b"/>
+  <rect x="40" y="127" width="280" height="15" fill="#f59e0b"/>
+  <text x="58" y="133"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#ffffff" letter-spacing="0.02em">CORE block: user_profile</text>
+  <text x="302" y="133" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">always in context</text>
+  <rect x="58" y="156" width="244" height="58" rx="8" fill="#ffffff" stroke="#fde68a" stroke-width="1.3"/>
+  <text x="72" y="180"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#78350f">name: Dana;</text>
+  <text x="72" y="200"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#b45309">prefers email</text>
+
+  <!-- ================= TOOL CALL with contract + gate ================= -->
+  <!-- arrow before -> tool -->
+  <line x1="320" y1="172" x2="386" y2="172" stroke="#f59e0b" stroke-width="2.4" marker-end="url(#arrAmber)"/>
+
+  <rect x="390" y="100" width="420" height="216" rx="13" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.6"/>
+  <rect x="390" y="100" width="420" height="28" rx="13" fill="#475569"/>
+  <rect x="390" y="114" width="420" height="14" fill="#475569"/>
+  <text x="408" y="119"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.02em">TOOL CALL</text>
+  <text x="794" y="119" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">the Part 1 contract, reused</text>
+
+  <!-- the call signature -->
+  <rect x="408" y="142" width="384" height="32" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="420" y="162"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10.5" fill="#0f172a"><tspan fill="#b45309" font-weight="700">memory_replace</tspan>(block, old, new)</text>
+
+  <!-- typed schema -->
+  <text x="408" y="194"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="700" fill="#64748b" letter-spacing="0.04em">TYPED SCHEMA (declared up front)</text>
+  <rect x="408" y="202" width="384" height="46" rx="7" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1.1"/>
+  <text x="420" y="219"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#334155">block: string (required)   old: string (required)</text>
+  <text x="420" y="236"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#334155">new: string (required)</text>
+
+  <!-- validate() gate -->
+  <rect x="408" y="260" width="384" height="42" rx="8" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.4"/>
+  <circle cx="430" cy="281" r="10" fill="#10b981"/>
+  <text x="430" y="286" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff">&#10003;</text>
+  <text x="448" y="277"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" font-weight="700" fill="#047857">validate() gate</text>
+  <text x="448" y="293"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#065f46">args present and typed, block exists &#8594; the call may fire</text>
+
+  <!-- the bound arguments above the arrow -->
+  <text x="600" y="340" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#334155">old='prefers email'  new='prefers phone'</text>
+
+  <!-- arrow tool -> after -->
+  <line x1="810" y1="172" x2="876" y2="172" stroke="#f59e0b" stroke-width="2.4" marker-end="url(#arrAmber)"/>
+  <text x="843" y="162" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" font-weight="700" fill="#b45309">fires</text>
+
+  <!-- ================= AFTER block ================= -->
+  <text x="880" y="102"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#047857" letter-spacing="0.05em">AFTER</text>
+  <rect x="880" y="112" width="280" height="120" rx="13" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <rect x="880" y="112" width="280" height="30" rx="13" fill="#10b981"/>
+  <rect x="880" y="127" width="280" height="15" fill="#10b981"/>
+  <text x="898" y="133"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#ffffff" letter-spacing="0.02em">CORE block: user_profile</text>
+  <text x="1142" y="133" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">rewritten in-loop</text>
+  <rect x="898" y="156" width="244" height="58" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.3"/>
+  <text x="912" y="180"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#064e3b">name: Dana;</text>
+  <text x="912" y="200"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#047857">prefers phone</text>
+
+  <!-- observation pill under after -->
+  <rect x="880" y="244" width="280" height="32" rx="8" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.2"/>
+  <text x="896" y="264"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#047857">&#8594; replaced 'prefers email' with 'prefers phone'</text>
+
+  <!-- result note -->
+  <text x="880" y="298"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#475569">A durable fact corrected with a single tool call.</text>
+  <text x="880" y="313"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#475569">A read-only agent could never do this.</text>
+
+  <!-- ================= LOWER BAND: the unknown-block rejection ================= -->
+  <text x="40" y="386"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#0f172a">An invalid edit is rejected AS an observation, not a crash (error-as-observation, Part 2)</text>
+  <text x="40" y="405"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#64748b">The shape is fine, but the named block does not exist. The runtime returns an error string; the agent reads it and the state is left untouched.</text>
+
+  <!-- the bad call -->
+  <rect x="40" y="422" width="360" height="120" rx="13" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.6"/>
+  <rect x="40" y="422" width="360" height="28" rx="13" fill="#475569"/>
+  <rect x="40" y="436" width="360" height="14" fill="#475569"/>
+  <text x="58" y="441"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.02em">TOOL CALL (unknown block)</text>
+  <rect x="58" y="464" width="324" height="30" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="70" y="483"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#0f172a"><tspan fill="#b45309" font-weight="700">memory_replace</tspan>(block='preferences', old='x', new='y')</text>
+  <text x="58" y="516"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#475569">Schema OK: block, old, new are all present and strings.</text>
+  <text x="58" y="531"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#475569">But 'preferences' is not one of the known core blocks.</text>
+
+  <!-- arrow bad call -> reject -->
+  <line x1="400" y1="482" x2="466" y2="482" stroke="#f43f5e" stroke-width="2.4" marker-end="url(#arrRose)"/>
+
+  <!-- reject gate -->
+  <rect x="470" y="440" width="320" height="84" rx="13" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.8"/>
+  <circle cx="498" cy="468" r="11" fill="#f43f5e"/>
+  <text x="498" y="473" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff">&#10007;</text>
+  <text x="518" y="464"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10.5" font-weight="700" fill="#9f1239">runtime check fails</text>
+  <text x="518" y="480"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#9f1239">the block must exist before any edit</text>
+  <rect x="488" y="494" width="288" height="22" rx="6" fill="#ffffff" stroke="#fecdd3" stroke-width="1.2"/>
+  <text x="500" y="509"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#9f1239">[error] unknown memory block 'preferences'</text>
+
+  <!-- arrow reject -> unchanged -->
+  <line x1="790" y1="482" x2="856" y2="482" stroke="#64748b" stroke-width="2.2" marker-end="url(#arrSlate)"/>
+
+  <!-- unchanged state -->
+  <rect x="860" y="440" width="300" height="84" rx="13" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.6"/>
+  <text x="878" y="464"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="700" fill="#0f172a">State unchanged</text>
+  <text x="878" y="484"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#475569">No core block was written. The error is</text>
+  <text x="878" y="498"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#475569">handed back as an observation the agent</text>
+  <text x="878" y="512"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#475569">can read and recover from.</text>
+
+  <!-- ================= BOTTOM CAPTION ================= -->
+  <rect x="40" y="586" width="1120" height="80" rx="10" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="60" y="612"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#475569">memory_append and memory_replace turn memory into an ACTION the agent takes, not just state it reads. They carry the same Part 1 contract as</text>
+  <text x="60" y="630"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#475569">every other tool: a typed schema, validated before firing. A valid call rewrites a labeled core block in-loop; an invalid one returns an error</text>
+  <text x="60" y="648"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#475569">as an observation. This is MemGPT and Letta by hand: the controller editing its own persistent memory through the same tool loop.</text>
+
+</svg>
