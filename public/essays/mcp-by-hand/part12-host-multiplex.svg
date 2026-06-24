@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="100%" style="height:auto" role="img" aria-label="One host multiplexing two MCP servers into a single run-time tool palette, contrasted with the old hardcoded single-process tool dict. On the left, the OLD way: a hardcoded TOOL_SCHEMAS dict baked into one process, holding search_policy and process_refund. It cannot be shared, swapped, or discovered by another host. In the center, the NEW way: a single HOST connects over JSON-RPC to two separate servers. The support-server exposes tools search_policy and process_refund, a resource file:///policies/refund.md, and a prompt refund_decision. The catalog-server exposes the tool search_products. Each connection runs the initialize handshake at protocolVersion 2025-06-18 and a tools/list discovery. On the right, the host merges the discovered tools into a single run-time PALETTE the controller draws from: search_policy from support-server, process_refund from support-server, and search_products from catalog-server. A multi-hop task uses search_products from catalog and process_refund from support transparently off the same palette. The point is that the action space is assembled at run time from whatever servers the host connects to, not hardcoded at author time.">
+  <title>One host multiplexes two MCP servers into a single run-time palette, replacing the hardcoded single-process tool dict</title>
+
+  <defs>
+    <marker id="arrIndigo" markerWidth="12" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0 0, 12 5, 0 10" fill="#6366f1"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#14b8a6"/>
+    </marker>
+    <marker id="arrSlate" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="720" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#94a3b8">Part 12, tools as a protocol (MCP)</text>
+
+  <!-- Title -->
+  <text x="40" y="34" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="18" font-weight="700" fill="#0f172a">One host, many servers: the palette is assembled at run time</text>
+  <text x="40" y="54" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#64748b">A hardcoded tool dict cannot be shared, swapped, or discovered. MCP multiplexes N servers into one run-time palette the controller draws from.</text>
+
+  <!-- ====================== LEFT: THE OLD WAY (hardcoded dict) ====================== -->
+  <text x="40" y="92" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#9f1239" letter-spacing="0.04em">THE OLD WAY: A HARDCODED SINGLE-PROCESS DICT</text>
+  <rect x="40" y="104" width="300" height="556" rx="13" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.6"/>
+
+  <rect x="62" y="126" width="256" height="40" rx="8" fill="#ffffff" stroke="#fecdd3" stroke-width="1.3"/>
+  <text x="78" y="142" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#9f1239">one process</text>
+  <text x="78" y="157" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#be123c">agent.py imports the dict directly</text>
+
+  <rect x="62" y="180" width="256" height="180" rx="9" fill="#ffffff" stroke="#fecdd3" stroke-width="1.4"/>
+  <text x="78" y="202" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#9f1239">TOOL_SCHEMAS = {</text>
+  <text x="92" y="222" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#be123c">"search_policy": {...},</text>
+  <text x="92" y="240" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#be123c">"process_refund": {...},</text>
+  <text x="78" y="260" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#9f1239">}</text>
+  <line x1="78" y1="276" x2="302" y2="276" stroke="#fecdd3" stroke-width="1"/>
+  <text x="78" y="296" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">Schemas are hand-written Python,</text>
+  <text x="78" y="310" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">baked into the same process as the</text>
+  <text x="78" y="324" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">controller. The action space is fixed</text>
+  <text x="78" y="338" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">at author time.</text>
+
+  <rect x="62" y="376" width="256" height="262" rx="9" fill="#ffffff" stroke="#fecdd3" stroke-width="1.2"/>
+  <text x="78" y="398" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#9f1239">Why this does not scale</text>
+  <text x="78" y="420" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">&#10007; cannot be SHARED with another</text>
+  <text x="92" y="434" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">agent or process</text>
+  <text x="78" y="456" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">&#10007; cannot be SWAPPED at deploy time</text>
+  <text x="92" y="470" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">without editing source</text>
+  <text x="78" y="492" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">&#10007; cannot be DISCOVERED by a host</text>
+  <text x="92" y="506" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">that did not import it</text>
+  <text x="78" y="528" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">&#10007; every integration is bespoke</text>
+  <text x="92" y="542" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">wiring, no standard</text>
+  <line x1="78" y1="560" x2="302" y2="560" stroke="#fecdd3" stroke-width="1"/>
+  <text x="78" y="582" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">Adding a catalog tool means editing</text>
+  <text x="78" y="596" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">this dict and redeploying the agent.</text>
+  <text x="78" y="618" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">There is no way to point at a running</text>
+  <text x="78" y="632" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#be123c">server and ask what it offers.</text>
+
+  <!-- contrast arrow -->
+  <line x1="346" y1="380" x2="392" y2="380" stroke="#94a3b8" stroke-width="2.4" marker-end="url(#arrSlate)" stroke-dasharray="5 4"/>
+  <text x="369" y="368" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#64748b">MCP</text>
+
+  <!-- ====================== CENTER + RIGHT: THE NEW WAY ====================== -->
+  <text x="408" y="92" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#4f46e5" letter-spacing="0.04em">THE NEW WAY: ONE HOST MULTIPLEXES MANY SERVERS OVER JSON-RPC</text>
+
+  <!-- HOST -->
+  <rect x="408" y="108" width="248" height="64" rx="11" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.8"/>
+  <rect x="408" y="108" width="6" height="64" rx="3" fill="#4f46e5"/>
+  <text x="532" y="134" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#4f46e5">HOST</text>
+  <text x="532" y="153" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#3730a3">handshake + tools/list per server</text>
+  <text x="532" y="166" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#4f46e5">protocol 2025-06-18</text>
+
+  <!-- connection arrows host -> servers -->
+  <line x1="470" y1="172" x2="470" y2="222" stroke="#6366f1" stroke-width="2.2" marker-end="url(#arrIndigo)"/>
+  <text x="382" y="200" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#4f46e5">JSON-RPC</text>
+  <line x1="594" y1="172" x2="594" y2="222" stroke="#6366f1" stroke-width="2.2" marker-end="url(#arrIndigo)"/>
+
+  <!-- SUPPORT SERVER -->
+  <rect x="408" y="226" width="248" height="232" rx="12" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.6"/>
+  <rect x="408" y="226" width="248" height="34" rx="12" fill="#ccfbf1"/>
+  <rect x="408" y="244" width="248" height="16" fill="#ccfbf1"/>
+  <text x="428" y="248" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0d9488">support-server</text>
+  <line x1="408" y1="260" x2="656" y2="260" stroke="#99f6e4" stroke-width="1.2"/>
+  <text x="428" y="280" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="8.5" font-weight="700" fill="#0f766e" letter-spacing="0.03em">CAPABILITIES: tools, resources, prompts</text>
+
+  <rect x="428" y="290" width="208" height="22" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <circle cx="442" cy="301" r="3.5" fill="#6366f1"/>
+  <text x="452" y="305" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#4f46e5">tool: search_policy</text>
+  <rect x="428" y="318" width="208" height="22" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <circle cx="442" cy="329" r="3.5" fill="#6366f1"/>
+  <text x="452" y="333" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#4f46e5">tool: process_refund</text>
+  <rect x="428" y="346" width="208" height="22" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <circle cx="442" cy="357" r="3.5" fill="#14b8a6"/>
+  <text x="452" y="361" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#0d9488">resource: refund.md</text>
+  <rect x="428" y="374" width="208" height="22" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <circle cx="442" cy="385" r="3.5" fill="#f59e0b"/>
+  <text x="452" y="389" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#b45309">prompt: refund_decision</text>
+  <text x="428" y="420" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#0f766e">A separate process. The host talks to it</text>
+  <text x="428" y="434" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#0f766e">over JSON-RPC, not by importing code.</text>
+  <text x="428" y="448" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#0f766e">Swappable and shareable.</text>
+
+  <!-- CATALOG SERVER -->
+  <rect x="408" y="474" width="248" height="164" rx="12" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.6"/>
+  <rect x="408" y="474" width="248" height="34" rx="12" fill="#ccfbf1"/>
+  <rect x="408" y="492" width="248" height="16" fill="#ccfbf1"/>
+  <text x="428" y="496" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0d9488">catalog-server</text>
+  <line x1="408" y1="508" x2="656" y2="508" stroke="#99f6e4" stroke-width="1.2"/>
+  <text x="428" y="528" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="8.5" font-weight="700" fill="#0f766e" letter-spacing="0.03em">CAPABILITIES: tools</text>
+  <rect x="428" y="538" width="208" height="22" rx="6" fill="#ffffff" stroke="#99f6e4" stroke-width="1.1"/>
+  <circle cx="442" cy="549" r="3.5" fill="#6366f1"/>
+  <text x="452" y="553" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#4f46e5">tool: search_products</text>
+  <text x="428" y="588" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#0f766e">A second, independent server. Connecting</text>
+  <text x="428" y="602" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#0f766e">it adds its tools to the palette with no</text>
+  <text x="428" y="616" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#0f766e">change to the agent's code.</text>
+
+  <!-- merge arrows servers -> palette -->
+  <line x1="656" y1="342" x2="712" y2="372" stroke="#14b8a6" stroke-width="2.2" marker-end="url(#arrTeal)"/>
+  <line x1="656" y1="549" x2="712" y2="408" stroke="#14b8a6" stroke-width="2.2" marker-end="url(#arrTeal)"/>
+  <rect x="660" y="300" width="58" height="22" rx="6" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <text x="689" y="315" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" font-weight="700" fill="#4f46e5">merge</text>
+
+  <!-- ====================== PALETTE (right) ====================== -->
+  <rect x="724" y="226" width="436" height="412" rx="13" fill="#fbfbff" stroke="#c7d2fe" stroke-width="1.8"/>
+  <rect x="724" y="226" width="436" height="38" rx="13" fill="#eef2ff"/>
+  <rect x="724" y="244" width="436" height="20" fill="#eef2ff"/>
+  <text x="746" y="252" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#4f46e5">RUN-TIME TOOL PALETTE</text>
+  <text x="1138" y="252" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#6366f1">union across 2 servers</text>
+  <line x1="724" y1="264" x2="1160" y2="264" stroke="#c7d2fe" stroke-width="1.4"/>
+
+  <text x="746" y="288" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">The controller draws from one list, not knowing which server each tool came from.</text>
+
+  <!-- palette item 1 -->
+  <rect x="746" y="300" width="392" height="44" rx="9" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.3"/>
+  <circle cx="768" cy="322" r="5" fill="#6366f1"/>
+  <text x="784" y="318" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#4f46e5">search_policy</text>
+  <text x="784" y="333" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">discovered tool</text>
+  <text x="1122" y="326" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#0d9488">from support-server</text>
+
+  <!-- palette item 2 -->
+  <rect x="746" y="352" width="392" height="44" rx="9" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.3"/>
+  <circle cx="768" cy="374" r="5" fill="#6366f1"/>
+  <text x="784" y="370" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#4f46e5">process_refund</text>
+  <text x="784" y="385" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">discovered tool &#183; side-effecting</text>
+  <text x="1122" y="378" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#0d9488">from support-server</text>
+
+  <!-- palette item 3 -->
+  <rect x="746" y="404" width="392" height="44" rx="9" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.3"/>
+  <circle cx="768" cy="426" r="5" fill="#6366f1"/>
+  <text x="784" y="422" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#4f46e5">search_products</text>
+  <text x="784" y="437" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#64748b">discovered tool</text>
+  <text x="1122" y="430" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#0d9488">from catalog-server</text>
+
+  <!-- multi-hop note -->
+  <rect x="746" y="464" width="392" height="156" rx="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.3"/>
+  <text x="762" y="486" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#0d9488">A multi-hop task uses both servers transparently</text>
+  <text x="762" y="506" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">search_products (catalog) &#8594; Acme Corp was</text>
+  <text x="762" y="520" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">acquired by Globex in 2024.</text>
+  <text x="762" y="540" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">search_products (catalog) &#8594; Globex earbuds</text>
+  <text x="762" y="554" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">carry a 2-year limited warranty.</text>
+  <text x="762" y="574" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">process_refund (support) available on the</text>
+  <text x="762" y="588" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">same palette.</text>
+  <line x1="762" y1="600" x2="1122" y2="600" stroke="#99f6e4" stroke-width="1"/>
+  <text x="762" y="614" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#0f766e">The action space is assembled at run time from whatever servers the host connects to.</text>
+
+  <!-- ====================== bottom takeaway ====================== -->
+  <rect x="40" y="678" width="838" height="30" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.1"/>
+  <text x="56" y="697" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#4f46e5">Tools stop being a dict baked into one process and become discovered, standardized capabilities. Any host can use any server; the agent's palette is a run-time union, not an author-time constant.</text>
+
+  <!-- legend bottom-right -->
+  <g font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">
+    <rect x="900" y="680" width="11" height="11" rx="2" fill="#6366f1"/>
+    <text x="916" y="689">host / tool</text>
+    <rect x="1020" y="680" width="11" height="11" rx="2" fill="#14b8a6"/>
+    <text x="1036" y="689">server</text>
+    <rect x="900" y="696" width="11" height="11" rx="2" fill="#f43f5e"/>
+    <text x="916" y="705">old hardcoded dict</text>
+    <rect x="1020" y="696" width="11" height="11" rx="2" fill="#f59e0b"/>
+    <text x="1036" y="705">prompt</text>
+  </g>
+
+</svg>
