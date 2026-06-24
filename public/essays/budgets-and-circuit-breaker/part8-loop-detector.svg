@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="100%" style="height:auto" role="img" aria-label="The loop detector. A stuck controller re-issues the identical action search_policy with the argument discount code for ORD-9999, every step returning no discount code on file. A detector keyed on action plus args counts repeats: step 1 count x1, step 2 count x2, step 3 count x3. At the threshold of 3 it flags LOOP DETECTED and signals the circuit breaker, which trips and returns a graceful partial result after 3 steps with the meter at steps 3, tokens 240, dollars 0.0024, about 3.6 seconds, well under budget because the loop caught it first. An annotation notes this formalizes RAG Part 19's informal saw-the-same-search-twice note.">
+  <title>The loop detector: count identical (action, args), flag a loop at the threshold, signal the breaker</title>
+
+  <defs>
+    <marker id="arrSlate" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#64748b"/>
+    </marker>
+    <marker id="arrRose" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#f43f5e"/>
+    </marker>
+    <marker id="arrIndigo" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#6366f1"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="620" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 8, the loop detector</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">The loop detector: the same action, three times, is a stuck agent</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">Key on (action, args). Count exact repeats. At the threshold, flag a loop and signal the breaker. Re-running the same search cannot help.</text>
+
+  <!-- ============ THE STREAM OF CALLS ============ -->
+  <text x="40" y="92"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.04em">THE STUCK CONTROLLER RE-ISSUES THE IDENTICAL CALL EVERY STEP</text>
+
+  <!-- step 1 -->
+  <rect x="40" y="106" width="300" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.4"/>
+  <rect x="40" y="106" width="300" height="26" rx="12" fill="#f0fdfa"/>
+  <rect x="40" y="120" width="300" height="12" fill="#f0fdfa"/>
+  <text x="56" y="124" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0d9488">step 1</text>
+  <text x="324" y="124" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#0d9488">tokens 80 &#183; $0.0008 &#183; ~1.2s</text>
+  <text x="56" y="152" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#0d9488">search_policy(</text>
+  <text x="56" y="168" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#b45309">  'discount code for ORD-9999')</text>
+  <text x="56" y="192" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#64748b">&#8594; (no discount code on file)</text>
+  <rect x="262" y="200" width="64" height="18" rx="9" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="294" y="213" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#475569">count x1</text>
+
+  <!-- step 2 -->
+  <rect x="370" y="106" width="300" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.4"/>
+  <rect x="370" y="106" width="300" height="26" rx="12" fill="#f0fdfa"/>
+  <rect x="370" y="120" width="300" height="12" fill="#f0fdfa"/>
+  <text x="386" y="124" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0d9488">step 2</text>
+  <text x="654" y="124" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#0d9488">tokens 160 &#183; $0.0016 &#183; ~2.4s</text>
+  <text x="386" y="152" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#0d9488">search_policy(</text>
+  <text x="386" y="168" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#b45309">  'discount code for ORD-9999')</text>
+  <text x="386" y="192" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#64748b">&#8594; (no discount code on file)</text>
+  <rect x="588" y="200" width="68" height="18" rx="9" fill="#fffbeb" stroke="#fde68a" stroke-width="1"/>
+  <text x="622" y="213" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#b45309">count x2</text>
+
+  <!-- step 3 (the threshold hit) -->
+  <rect x="700" y="106" width="300" height="118" rx="12" fill="#fff1f2" stroke="#f43f5e" stroke-width="2"/>
+  <rect x="700" y="106" width="300" height="26" rx="12" fill="#f43f5e"/>
+  <rect x="700" y="120" width="300" height="12" fill="#f43f5e"/>
+  <text x="716" y="124" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#ffffff">step 3</text>
+  <text x="984" y="124" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#ffffff">tokens 240 &#183; $0.0024 &#183; ~3.6s</text>
+  <text x="716" y="152" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#9f1239">search_policy(</text>
+  <text x="716" y="168" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#9f1239">  'discount code for ORD-9999')</text>
+  <text x="716" y="192" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#9f1239">&#8594; (no discount code on file)</text>
+  <rect x="916" y="200" width="68" height="18" rx="9" fill="#f43f5e"/>
+  <text x="950" y="213" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#ffffff">count x3</text>
+
+  <!-- arrows between steps -->
+  <line x1="340" y1="165" x2="368" y2="165" stroke="#64748b" stroke-width="2.2" marker-end="url(#arrSlate)"/>
+  <line x1="670" y1="165" x2="698" y2="165" stroke="#64748b" stroke-width="2.2" marker-end="url(#arrSlate)"/>
+
+  <!-- ============ THE DETECTOR ============ -->
+  <text x="40" y="270"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.04em">THE DETECTOR: A COUNT KEYED ON (ACTION, ARGS)</text>
+
+  <rect x="40" y="284" width="620" height="148" rx="13" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.4"/>
+  <text x="60" y="312" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0f172a">counts[(action, args)] += 1</text>
+  <text x="60" y="332" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#64748b">An exact repeat of the same call is the signature of a stuck agent.</text>
+
+  <!-- the key chip -->
+  <rect x="60" y="346" width="580" height="32" rx="7" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.1"/>
+  <text x="74" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#475569">key = ("search_policy", {"query": "discount code for ORD-9999"})</text>
+
+  <!-- count progression -->
+  <rect x="60" y="390" width="120" height="26" rx="8" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="120" y="407" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#475569">x1  ok</text>
+  <line x1="184" y1="403" x2="208" y2="403" stroke="#64748b" stroke-width="2" marker-end="url(#arrSlate)"/>
+  <rect x="212" y="390" width="120" height="26" rx="8" fill="#fffbeb" stroke="#fde68a" stroke-width="1"/>
+  <text x="272" y="407" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#b45309">x2  watch</text>
+  <line x1="336" y1="403" x2="360" y2="403" stroke="#64748b" stroke-width="2" marker-end="url(#arrSlate)"/>
+  <rect x="364" y="390" width="160" height="26" rx="8" fill="#f43f5e"/>
+  <text x="444" y="407" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#ffffff">x3  >= threshold</text>
+
+  <!-- threshold note -->
+  <text x="544" y="400" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">threshold = 3</text>
+  <text x="544" y="412" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">identical actions</text>
+
+  <!-- ============ FLAG LOOP + SIGNAL BREAKER ============ -->
+  <!-- arrow from detector to flag -->
+  <line x1="660" y1="358" x2="708" y2="358" stroke="#f43f5e" stroke-width="2.6" marker-end="url(#arrRose)"/>
+
+  <rect x="714" y="300" width="446" height="132" rx="13" fill="#fff1f2" stroke="#f43f5e" stroke-width="2"/>
+  <rect x="714" y="300" width="446" height="28" rx="13" fill="#f43f5e"/>
+  <rect x="714" y="314" width="446" height="14" fill="#f43f5e"/>
+  <text x="732" y="319" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">LOOP DETECTED &#8594; SIGNAL THE BREAKER</text>
+  <text x="732" y="350" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#9f1239">loop detected: identical action repeated 3 times</text>
+  <text x="732" y="372" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#9f1239">The breaker trips and returns a graceful partial result.</text>
+
+  <!-- partial-result chip -->
+  <rect x="732" y="384" width="410" height="36" rx="8" fill="#ffffff" stroke="#fecdd3" stroke-width="1.2"/>
+  <text x="746" y="400" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">stopped after 3 steps, not a crash or a spin</text>
+  <text x="746" y="414" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">final meter: steps 3 | tokens 240 | $0.0024 | ~3.6s</text>
+
+  <!-- ============ WHY NOT THE BUDGET ============ -->
+  <rect x="40" y="452" width="620" height="64" rx="11" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.4"/>
+  <text x="60" y="478" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#047857">Why the loop caught it, not the budget</text>
+  <text x="60" y="498" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#047857">At 3 steps the meter is well under every ceiling (4 steps, 600 tokens, $0.02, 12s). The cheaper, faster guard wins.</text>
+
+  <!-- ============ THE RAG P19 ANNOTATION ============ -->
+  <rect x="714" y="452" width="446" height="64" rx="11" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.4"/>
+  <text x="734" y="478" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#4f46e5">Formalizes RAG Part 19's note</text>
+  <text x="734" y="498" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#4f46e5">P19 said informally: "if the agent runs the same search twice, stop." Here it is a reusable, threshold-driven check.</text>
+
+  <!-- ============ FOOTNOTE ============ -->
+  <text x="40" y="548"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="10.5" fill="#64748b">Exact repeats are the simple case. Alternating A-B-A-B cycles are a natural extension; this detector keys on the exact (action, args) tuple.</text>
+  <text x="40" y="568"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="10" fill="#94a3b8">Wall-clock is simulated (~1.2s per step, not measured); cost is an illustrative per-token estimate, not a real price sheet.</text>
+
+</svg>
