@@ -1,0 +1,169 @@
+---
+title: "The Augmented LLM"
+description: "A bare model cannot touch your data or act. The augmented LLM (a model ringed by typed tools in the smallest loop with a stop condition) can. Part 1 names the primitive, draws the do-you-even-need-an-agent ladder, and gives tools a contract."
+date: 2026-06-27
+tags: ["Agents", "LLM", "Tool Use", "Function Calling", "ReAct", "AI"]
+seriesOrder: 1
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-01-augmented-llm-loop"
+lang: "en"
+translationSlug: "augmented-llm-loop-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+A bare language model is a brilliant text predictor with no hands. Ask it for today's order count and it will guess; ask it to refund a customer and it can only describe the refund it cannot perform. Everything interesting about agents starts the moment you ring that model with things it can actually do: tools, and later memory and retrieval. This is the first part of a new series, **Agents from First Principles**, the sequel to the twenty-part RAG series, and we are going to start by naming the thing the whole series is built on. We will name the **augmented-LLM primitive**: a single model call, ringed by tools, wrapped in the smallest loop with an explicit stop condition. Then we will draw a ladder, the do-you-even-need-an-agent ladder, that the RAG series never drew: one augmented call, then a fixed workflow, then a full agent, rising in power and in cost. And then we will fix the one thing the RAG agent in Part 19 left wide open: its tools had no contract. We will give them typed schemas and a validator that catches a bad call before it fires, turning a would-be crash into something the loop can recover from. By the end you will have a primitive, a decision procedure for when to use it, and tools you can trust.
+
+## Prerequisites
+
+You need basic Python: functions, dictionaries, and reading a small loop. That is genuinely all. If you finished the RAG series you will recognize the world we are working in (the refund policy, the E-4042 error, the Acme-to-Globex acquisition) and you will recognize the reason/act/observe loop from RAG Part 19, which is exactly the thing we are about to build on. But this part is self-contained. Where it leans on a RAG idea, it restates it in a sentence. The companion code, [augmented_llm_loop.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-01-augmented-llm-loop), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every trace in this essay yourself.
+
+## The augmented-LLM primitive
+
+Let me name the thing before we use it. The term **augmented LLM** comes from Anthropic's "Building Effective Agents," and it is the smallest unit of everything we will build. An augmented LLM is a single model call, ringed by capabilities: tools it can call, and (in later parts) memory it can read and write, and retrieval it can reach into. That ringed call is wrapped in the smallest possible loop, and the loop has an explicit **stop condition**: it ends when the model says it is done, or when a hard step limit forces it to stop. That is the whole primitive. A model, plus a ring of capabilities, plus the smallest loop, plus a way out.
+
+What makes this worth naming is that it is the only structure in the series. Every later part adds exactly one ring and changes nothing else. Planning is a ring. Reflection is a ring. Multi-agent coordination is a ring. Durability and evaluation are rings. The loop in the middle, the model deciding what to do and then doing it, never changes shape. So if you understand this one primitive deeply, you understand the spine of everything that follows. The figure below is both the primitive and the map of the series: the model in the center, the rings around it, the loop, and the stop condition that lets it exit.
+
+<Diagram number={1} caption="The augmented-LLM primitive, and the map of the whole series. An LLM call sits in the center, ringed by capabilities: Tools (the focus of this part), Memory, and Retrieval (later parts). The dashed track around the center is the reason/act/observe loop, and the branch down to the right is the stop condition: the loop exits when the model calls finish() or when a hard step budget aborts it. The series-map panel makes the structural claim explicit: every later part (planning, reflection, multi-agent, durability, evaluation) adds exactly one ring to this same primitive and changes nothing else.">
+  <img src="/essays/augmented-llm-loop/part1-augmented-llm.svg" alt="A diagram of a central indigo LLM node labelled reason, plan, generate. Around it are three capability chips: Tools (teal, search, code, APIs) at the top, Memory (amber, short plus long term) on the left, and Retrieval (violet, vector, graph, SQL) on the right, each connected to the core. A dashed elliptical loop labelled reason then act then observe encircles the cluster. A user prompt arrow feeds in from the left, an answer arrow drops out the bottom, and a branch on the right leads to a stop node reading finish() or step budget, with a small rose MAX STEPS abort badge. A side panel titled SERIES MAP lists Part 1 (this primitive) followed by plus planning, plus reflection, plus multi-agent, plus durability, plus evaluation, with the note: each part adds one ring." class="w-full rounded-lg" />
+</Diagram>
+
+> ### Sidebar: the controller is a prompt + a model
+>
+> The thing that decides what the augmented LLM does next is not magic; it is a system prompt plus a model. The system prompt names the available tools, states the output format ("write a Thought, then an Action"), and sets the goal. The model reads that prompt plus the running transcript and emits the next step. Two knobs matter here. First, reasoning versus non-reasoning models: a reasoning model spends hidden tokens deliberating before it answers, which usually picks better tool sequences but costs more and runs slower. Second, the thinking budget: how many of those deliberation tokens you allow. We are setting this up now and will pay it off when we get to observability, because the controller's prompt and its thinking budget are the two levers you reach for first when an agent misbehaves.
+
+## The ladder: do you even need an agent?
+
+Here is the trap. "Agent" is exciting, so the instinct is to build one for every problem. That instinct is expensive and often wrong. The honest question is not "how do I build an agent," it is "what is the cheapest thing that answers this?" There is a ladder, three rungs, same question at every rung, rising power and rising cost. You reach for the lowest rung that works and climb only when you must.
+
+**Rung 1 is one augmented call.** The model may call tools, but only one round of them, and then it must answer. This is the cheapest rung and it answers a surprising fraction of real questions. "What is 18% of a $250 order?" is one augmented call: the model reaches for a calculator once, reads back `45.0`, and answers. Done. No loop, no agent.
+
+**Rung 2 is a fixed workflow.** This is a hardcoded sequence of calls that you, the author, wire up in advance: retrieve, then retrieve again, then synthesize. Predictable, cheap, easy to budget, because the route is the same every time. But the route is wired at **author time**, which means it only fits the exact shape of problem you wired it for.
+
+**Rung 3 is a full agent.** This is the reason/act/observe loop from RAG Part 19: the model picks the next tool at **run time**, reading the running transcript, looping until it calls `finish()` or hits a step budget. Most powerful, because the route can be anything; most expensive, because every step is another model call and you do not know in advance how many steps it will take.
+
+To see why the rungs differ, follow one question all the way up: "what is the warranty on the earbuds made by the company that acquired Acme?" This is the multi-hop question RAG Part 10 toured in prose and Part 19 ran, and it is the perfect test, because answering it has two steps where the second step's input is the first step's output. You cannot phrase the warranty lookup until you know which company to ask about, and you only learn that from the first lookup.
+
+Watch rung 1 fail on it. One augmented call gets a single round, so it does the first lookup and finds the acquirer, but then the round is over and it must answer:
+
+```text
+  Round 1 tool call: search_products("who acquired Acme")
+    -> Acme Corp was acquired by Globex in 2024. (score=0.58)
+  Must answer now (no second round):
+  ANSWER: I found that Globex acquired Acme, but answering the warranty needs a
+          SECOND lookup (Globex earbuds warranty) that one round cannot make.
+  -> Incomplete: hop 2 depends on hop 1's result. One call cannot chain.
+```
+
+That is the hop-2-depends-on-hop-1 gap, and it is structural, not a tuning problem. One round physically cannot use a result it has not retrieved yet. So we climb. Rung 2, the fixed workflow, does two searches and gets it right:
+
+```text
+  Step 1: search_products("who acquired Acme")    -> Acme Corp was acquired by Globex in 2024. (score=0.58)
+  Step 2: search_products("Globex earbuds warranty") -> Globex-branded wireless earbuds carry a 2-year limited warranty. (score=0.58)
+  ANSWER: The earbuds are made by Globex (which acquired Acme), and they carry a 2-year limited warranty.
+```
+
+Correct. But notice why: I wired `retrieve -> retrieve -> synthesize` into the code because I, the author, already knew the question had two hops. Ask a one-hop question and this workflow does a pointless second search; ask a three-hop question and it stops one hop short. The route fits one shape because I drew that shape at author time. Rung 3, the full agent, gets the same right answer, but it decides the route at run time: it searches, reads that Globex acquired Acme, uses *that name* to phrase the second search, and only then finishes. Nobody wrote "two hops" anywhere. The agent discovered it needed two hops by reading its own transcript. That is the difference between author-time routing and run-time routing, and it is the entire reason rung 3 exists.
+
+So the rule of the ladder is: the agent is not the default, it is the rung you climb to when the route is genuinely unknown in advance. If one augmented call answers it, stop there. If a fixed workflow fits the shape, stop there. Reach for the loop only when the path cannot be known until you walk it. The interactive figure below lets you toggle the same earbuds question across all three rungs and watch exactly where rung 1 falls short and where run-time routing takes over.
+
+<Diagram number={2} caption="The agent ladder, one question across three rungs. Use the mode toggle to run the same multi-hop earbuds question (the warranty on the earbuds made by the company that acquired Acme) as a single augmented call, then as a fixed workflow, then as a full agent. The one augmented call finds the acquirer but stalls, because the second hop depends on the first hop's result and one round cannot chain. The fixed workflow gets it right but its two-hop route was wired at author time. The full agent gets the same right answer with the route decided at run time, reading each observation back out of the transcript to phrase the next step. Climbing the toggle is climbing the ladder: rising power, rising cost.">
+  <IframeFigure src="/essays/augmented-llm-loop/part1-loop-and-ladder.html" title="Interactive agent-ladder player. A mode toggle switches the same multi-hop question (what is the warranty on the earbuds made by the company that acquired Acme) across three rungs. In one augmented call, the model searches products for who acquired Acme, observes that Globex acquired Acme, and must answer with only that, noting the warranty needs a second lookup one round cannot make. In fixed workflow, a hardcoded two-step route searches for the acquirer, then searches for the Globex earbuds warranty, and synthesizes the correct answer, labelled as wired at author time. In full agent, the reason/act/observe loop searches, reads Globex from the observation, uses that name to search for the earbuds warranty, observes a 2-year limited warranty, and finishes, labelled as the route decided at run time." height={780} />
+</Diagram>
+
+## A note on the loop we already built
+
+I want to be precise about what is and is not new here, because the RAG series already did a lot. RAG Part 19 built a real reason/act/observe loop (the **ReAct** pattern, short for Reason plus Act, from Yao and colleagues) with four tools, multi-hop, routing, and a step budget. It even framed its deterministic, rule-based controller as a deliberate transparency choice, with a real `generate()` path one environment flag away. So I am not re-deriving the loop. The loop is the loop we already built, and if you want the line-by-line ReAct mechanics, that is the part to read.
+
+What this part adds sits on either side of that loop. Below it, I am *naming the primitive* the loop is one instance of, so that planning and reflection and multi-agent all read as variations on one structure rather than separate tricks. Around it, I am drawing the *ladder*, so you know when the loop is even the right tool. And inside it, I am fixing a real gap: the tools the Part 19 agent called had no contract. That gap is next.
+
+## The tool contract
+
+Here is the thing RAG Part 19 lacked. Its tools were plain Python functions, dispatched by a bare `TOOLS[name](arg)` lookup: the controller handed over a tool name and a single string, and nothing sat in between to check them. That works right up until the model does something slightly wrong, and models do slightly-wrong things constantly. It can name a tool that does not exist. It can leave out a required argument. It can pass an integer where a string belongs. With no schema in the way, an unknown name raises a `KeyError`, a malformed argument runs or quietly misfires, and the failure surfaces deep in your retriever at call time rather than at the moment the bad call was made. A real model makes this worse, not better: it emits free text you have to turn into a call, so there is even more to get wrong.
+
+The fix is to give every tool a **contract**: a typed schema declaring its name, its parameters with their types, and which are required. Crucially, this is not a Python type hint, it is data, the same JSON-schema-shaped object a real LLM tool-calling API is handed to know what it may call. In the companion code each tool is one entry in a registry:
+
+```python
+TOOL_SCHEMAS = {
+    "calculator": {
+        "description": "evaluate simple arithmetic",
+        "parameters": {"expression": {"type": "string", "required": True}},
+        "fn": calculator,
+    },
+    # ... search_policy, search_products, finish ...
+}
+```
+
+One object, two jobs. It is the schema we hand a real model so it knows the action space, and it is the spec a **validator** checks every call against before that call ever fires. The validator is tiny:
+
+```python
+def validate_call(name, args):
+    if name not in TOOL_SCHEMAS:
+        return False, f"unknown tool '{name}' (not in the action space)"
+    schema = TOOL_SCHEMAS[name]["parameters"]
+    # ... check required args present, then check each arg's type ...
+    return True, None
+```
+
+It returns `(ok, error_message)`, never a crash. Running the four sample calls from the artifact shows exactly what it catches:
+
+```text
+  search_products({"query": "who acquired Acme"})    -> OK
+  search_web({"query": "..."})                       -> REJECTED: unknown tool 'search_web' (not in the action space)
+  calculator({"expr": "0.18 * 250"})                 -> REJECTED: calculator is missing required arg 'expression'
+  calculator({"expression": 42})                     -> REJECTED: calculator arg 'expression' must be string, got int
+```
+
+Read those three rejections, because each is a real failure mode. The first, `search_web`, is a tool the model imagined; it is not in the action space, so it is rejected by name before anything runs. The second passes `expr` instead of `expression`, so the required argument is missing. The third passes the integer `42` where a string is required, a type error. Part 19 had no such layer, so every one of these would have reached the function and crashed, or worse, run with bad input. With the contract, the validator turns each rejection into a string the loop can read as an Observation and recover from. The model gets told "unknown tool 'search_web'" and can pick a real tool on its next turn, exactly as if a tool had returned a result. A would-be crash becomes a recoverable observation. The figure shows the two worlds side by side.
+
+<Diagram number={3} caption="Two contracts for the same tool call. On the left, the no-schema dispatch: a tool name and a bare string argument (here with a typo, search_prodcts) go straight to TOOLS[name](arg) with nothing checking them first, so the call surfaces as a KeyError or a missing-argument crash discovered only at call time. This is the Part 19 world. On the right, the typed tool contract: a tool schema declares the name, the typed required parameters, and the return shape, and a validate() gate checks the call before it fires, so an unknown tool or a malformed argument is caught and turned into a structured error instead of a runtime surprise. Same call, two contracts: the schema rejects the bad call before it ever runs.">
+  <img src="/essays/augmented-llm-loop/part1-tool-contract.svg" alt="A before-and-after comparison. The left panel, rose-tinted and labelled no schema, no contract, shows a raw action string search_prodcts with the typo prodcts underlined, flowing through name plus arg into TOOLS[name](arg) with no validation step, ending in a crash box reading KeyError search_prodcts and missing required arg query, marked crash discovered only at call time, with failure badges for unknown tool, malformed arg, and runtime surprise, tagged BEFORE. The right panel, emerald-tinted and labelled typed schema, validated before the call, shows a tool schema card with name search_products, params query string required, returns text, and a structured error channel, feeding a validate() gate that checks the schema before it fires, with success badges for tool resolved, args type-checked, and bad args caught, tagged AFTER. A central arrow connects the two panels." class="w-full rounded-lg" />
+</Diagram>
+
+> ### Sidebar: constrained / JSON-mode decoding
+>
+> The validator is a safety net: it catches a bad argument *after* the model has already emitted it. That is essential, but it is reactive. The upstream fix is **constrained decoding** (also called JSON-mode or structured generation): you constrain the model's token sampling so it can only produce output that already matches the schema. Instead of letting the model write `{"expr": ...}` and then rejecting it, the decoder makes the malformed token literally unsamplable, so the only thing it can emit is a schema-valid `{"expression": "..."}`. The two work together. Constrained decoding makes valid args the default at generation time; the validator still guards the boundary, because a constrained model can still pick the wrong tool or a logically-wrong-but-type-valid value. Belt and suspenders.
+
+> ### Sidebar: tool descriptions are part of the program
+>
+> When you write a tool schema, the `description` string and the parameter names are not documentation, they are code, in the sense that they directly steer the model's behavior. The real model reads `"search the products index (acquisitions, product warranties)"` and decides, from those few words, whether this is the tool for the question in front of it. A vague description ("search stuff") gets the wrong tool called; a sharp one that says what the tool is *for* and what it returns gets the right one. Treat tool descriptions and parameter names like a public API you are documenting for a capable but literal-minded reader: precise verbs, named return shapes, and a one-line statement of when to reach for it. The quality of that prose is one of the largest levers on whether the agent works at all.
+
+## RAG as one tool
+
+This reframe is worth pausing on, because it is the bridge from the last series to this one. For twenty parts, retrieval *was* the system: the whole pipeline existed to embed a query, search a store, and ground an answer. In the agent world, retrieval is demoted, and that demotion is a promotion. Retrieval becomes one entry in the action space, sitting beside the others as a peer. In the companion code the action space has four tools: `search_policy` (the support and policy index from the RAG series: refunds, the E-4042 error, shipping, warranty), `search_products` (the small new index holding the Acme-to-Globex acquisition and the earbuds warranty), `calculator` (because not every question is a lookup), and `finish` (which ends the loop). Two of those four are retrievers. They are no longer the architecture; they are options the controller chooses among.
+
+This is why the calculator earns its place. When the question is "what is 18% of a $250 order?", the agent does not embed anything or search any store; it reaches for the calculator, gets `45.0`, and answers on the cheapest rung. A system that can *only* retrieve would gamely embed "18% of $250," search a policy index, and stuff irrelevant chunks into a prompt, paying for machinery the question never needed. An agent whose action space includes a calculator simply does the arithmetic. Retrieval as one tool among several is what lets the agent recognize the questions retrieval would only get in the way of.
+
+> 💡 **From experience.** The first agent I shipped had four tools and a confident controller, and in testing it kept "succeeding" at a reporting task while quietly producing nonsense. I pulled the transcript and found it calling a tool named `get_metrics` that I had never written. The model had decided such a tool *ought* to exist, invented a plausible signature for it, and my text-action layer had happily parsed the call and routed it to a dispatcher that returned an empty default instead of erroring. The agent took that empty result as data and reasoned onward, perfectly serene, building a report on nothing. It never crashed once. The day I added a schema validator that rejected any tool not in the registry, the failure surfaced on the first run as a loud "unknown tool 'get_metrics'", and the fix took five minutes. The bug had been invisible for two weeks because nothing in the system ever said no. That is the whole case for the tool contract: a model will confidently call things that do not exist, and the only reliable defense is a layer that checks the call against a schema before it runs.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- The **augmented-LLM primitive** (after Anthropic's "Building Effective Agents") is a single model call ringed by tools (and later memory and retrieval), wrapped in the smallest loop with an explicit stop condition. Every part of this series is this primitive plus one more ring.
+- Climb the **ladder** deliberately: one augmented call, then a fixed workflow, then a full agent, rising in power and cost. Reach for the lowest rung that works; the agent is the rung you climb to only when the route is unknown in advance.
+- One augmented call cannot chain a step whose input is the previous step's output (the **hop-2-depends-on-hop-1 gap**). A fixed workflow can, but its route is wired at **author time**. A full agent decides the route at **run time** by reading its own transcript.
+- Give every tool a **typed contract**: a schema (name, typed required parameters, description) plus a **validator** that rejects an unknown tool or a malformed argument *before* the call fires, turning a would-be crash into a recoverable observation. It is the same schema a real LLM is handed for tool calling.
+- **Retrieval is one tool, not the system.** `search_policy` and `search_products` sit in the action space beside `calculator` and `finish`, so the agent can route to the right one (or to none) instead of retrieving by reflex.
+- Tool descriptions and constrained decoding are real levers: the description steers which tool the model picks, and constrained / JSON-mode generation makes schema-valid arguments the default at generation time, with the validator still guarding the boundary.
+
+## Glossary
+
+- **Augmented LLM**: a single model call ringed with capabilities (tools, and later memory and retrieval) and wrapped in the smallest loop with a stop condition; the base primitive of the series.
+- **Agent**: a system that solves a goal by running a loop in which the model chooses the next action itself at each step, rather than executing a route fixed in advance.
+- **Tool / tool call**: a named function the model is allowed to invoke, with documented arguments and a returned result; a tool call is one such invocation, identified by the tool name plus its arguments.
+- **Tool schema**: the typed, data-shaped declaration of a tool (its name, its parameters with types and required-ness, its description); the same object handed to a real LLM for tool calling and checked by the validator.
+- **The ladder (workflow vs agent)**: the three-rung decision procedure (one augmented call, fixed workflow, full agent) ordered by rising power and cost; you reach for the lowest rung that answers the question.
+- **Reason-act-observe loop (ReAct)**: the cycle in which the controller emits a Thought (reasoning), takes one Action (a tool call), reads an Observation (the result), and repeats; the structure of the full-agent rung, built in RAG Part 19.
+- **Stop condition / step budget**: the two ways the loop ends, namely the model calling finish with the answer, or a hard maximum number of steps that aborts the loop even if it never finishes; the step budget guarantees termination.
+- **Multi-hop**: a question that needs more than one tool call where a later call's input depends on an earlier call's result; the earbuds question (Acme to Globex to warranty) is the canonical example.
+- **Run-time vs author-time routing**: whether the sequence of tool calls is decided as the loop runs (the agent reads its transcript and chooses) or wired into the code in advance by the author (the fixed workflow).
+- **Validator**: the function that checks a proposed tool call against its schema before the call fires, rejecting an unknown tool, a missing required argument, or a wrong-typed argument, and returning the rejection as a recoverable message rather than a crash.
+
+---
+
+We gave tools a contract, so a schema-valid call now reaches its function. But a schema-valid call can still go wrong at run time: the function can throw, a network tool can time out, an API can return garbage that passes every type check. **Part 2, When Tools Fail**, is about that next layer: retries, timeouts, and a failure taxonomy for the things a well-typed tool can still do to you.
