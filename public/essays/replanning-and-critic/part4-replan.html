@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Replanning and the Critic, Part 4</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --amber: #f59e0b;
+  --emerald: #10b981;
+  --rose: #f43f5e;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 760px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner span { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+/* SEGMENTED TOGGLE */
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  flex: 1;
+  min-width: 120px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.toggle-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.toggle-btn[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.toggle-btn .mode-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.strategy-blurb {
+  font-size: 12px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.strategy-blurb strong { color: var(--indigo-dark); }
+
+/* ===== PART 1: the critic ===== */
+
+/* draft node list */
+.node-list { display: flex; flex-direction: column; gap: 7px; }
+.draft-node {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 9px 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.draft-node .nid {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--indigo-dark);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  min-width: 34px;
+  text-align: center;
+}
+.draft-node .nbody { flex: 1; min-width: 0; }
+.draft-node .ncall {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-heading);
+  word-break: break-word;
+}
+.draft-node .ncall .fn { color: #0d9488; font-weight: 600; }
+.draft-node .ncall .arg { color: #b45309; }
+.draft-node .ncall .ev { color: var(--indigo-dark); font-weight: 700; }
+.draft-node .ndep {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+/* a problem flagged by the critic (only when critic ON) */
+.draft-node.is-flagged {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  box-shadow: 0 0 0 1px #fecdd3;
+}
+.draft-node.is-flagged .problem {
+  font-size: 11px;
+  color: #9f1239;
+  margin-top: 5px;
+  font-weight: 600;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.45;
+}
+.draft-node.is-flagged .problem .ptag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--rose);
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.draft-node.is-clean.show-clean {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+.draft-node .ok-mark {
+  font-size: 11px;
+  color: #047857;
+  margin-top: 4px;
+  font-weight: 600;
+  display: none;
+}
+.draft-node.is-clean.show-clean .ok-mark { display: block; }
+
+/* critic verdict banner */
+.verdict {
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+}
+.verdict .v-icon {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.verdict .v-main { flex: 1; }
+.verdict .v-sub { font-size: 11px; font-weight: 500; margin-top: 3px; display: block; opacity: 0.9; }
+.verdict.rejected { background: #fff1f2; border: 1px solid #fecdd3; color: #9f1239; }
+.verdict.rejected .v-icon { background: var(--rose); }
+.verdict.cleared { background: #ecfdf5; border: 1px solid #a7f3d0; color: #064e3b; }
+.verdict.cleared .v-icon { background: var(--emerald); }
+.verdict.pending { background: var(--chip-bg); border: 1px solid var(--border); color: var(--text-muted); }
+.verdict.pending .v-icon { background: var(--text-muted); }
+
+/* the GOOD plan as DAG rounds */
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 18px 0 9px;
+}
+.dag-rounds { display: flex; flex-direction: column; gap: 12px; }
+.dag-round {
+  border: 1px dashed var(--teal);
+  border-radius: 11px;
+  padding: 10px 11px;
+  background: #f0fdfa;
+}
+.dag-round.r2 { border-color: var(--indigo); background: #eef2ff; }
+.dag-round-head {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #0d9488;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dag-round.r2 .dag-round-head { color: var(--indigo-dark); }
+.dag-round-head .badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--teal);
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.dag-round.r2 .dag-round-head .badge { background: var(--indigo); }
+.dag-nodes { display: flex; gap: 8px; flex-wrap: wrap; }
+.dag-node {
+  flex: 1;
+  min-width: 150px;
+  background: #ffffff;
+  border: 1px solid #99f6e4;
+  border-radius: 9px;
+  padding: 8px 10px;
+}
+.dag-round.r2 .dag-node { border-color: #c7d2fe; }
+.dag-node .nid {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0d9488;
+}
+.dag-round.r2 .dag-node .nid { color: var(--indigo-dark); }
+.dag-node .ncall {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-body);
+  margin-top: 2px;
+  word-break: break-word;
+}
+.dag-node .ncall .fn { color: #0d9488; font-weight: 600; }
+.dag-node .ncall .arg { color: #b45309; }
+.dag-node .ncall .ev { color: var(--indigo-dark); font-weight: 700; }
+.dag-node .ndep {
+  font-size: 10px;
+  color: var(--indigo);
+  margin-top: 3px;
+  font-weight: 600;
+}
+
+/* ===== PART 2: the broken plan ===== */
+
+/* readout tiles */
+.readout {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.metric {
+  flex: 1;
+  min-width: 130px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  padding: 10px 12px;
+}
+.metric-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-heading);
+}
+.metric-sub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.metric.is-win { background: #ecfdf5; border-color: #a7f3d0; }
+.metric.is-win .metric-value { color: #047857; }
+.metric.is-cost { background: #fff1f2; border-color: #fecdd3; }
+.metric.is-cost .metric-value { color: #9f1239; }
+.metric.is-caution { background: #fffbeb; border-color: #fde68a; }
+.metric.is-caution .metric-value { color: #b45309; }
+
+/* execution trace rows */
+.exec-list { display: flex; flex-direction: column; gap: 7px; }
+.exec-row {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #ffffff;
+  overflow: hidden;
+  animation: fadeIn 0.18s ease;
+}
+@media (prefers-reduced-motion: reduce) { .exec-row { animation: none; } }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.exec-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 11px;
+}
+.exec-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  min-width: 34px;
+  text-align: center;
+  background: #f0fdfa;
+  color: #0d9488;
+  border: 1px solid #99f6e4;
+}
+.exec-body { flex: 1; min-width: 0; }
+.exec-call {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-heading);
+  word-break: break-word;
+}
+.exec-call .fn { color: #0d9488; font-weight: 600; }
+.exec-call .arg { color: #b45309; }
+.exec-call .ev { color: var(--indigo-dark); font-weight: 700; }
+.exec-result {
+  font-size: 11px;
+  margin-top: 3px;
+  color: var(--text-muted);
+}
+.exec-icon {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.exec-icon.ok { background: var(--emerald); }
+.exec-icon.fail { background: var(--rose); }
+.exec-icon.info { background: var(--teal); }
+
+.exec-row.is-fail { border-color: #fecdd3; }
+.exec-row.is-ok { border-color: #a7f3d0; }
+.exec-row.is-info { border-color: #99f6e4; }
+
+/* memoized badge on a kept node */
+.memo-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #ccfbf1;
+  color: #0f766e;
+  border: 1px solid #5eead4;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rewritten-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* permanent-error footer inside a row */
+.exec-foot {
+  font-size: 11px;
+  padding: 7px 11px 8px 54px;
+  border-top: 1px dashed var(--border);
+}
+.exec-foot.fedback { background: #fff1f2; color: #9f1239; }
+.exec-foot.replan { background: #fffbeb; color: #92400e; }
+.exec-foot .tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  margin-right: 7px;
+}
+
+/* the REPLAN event card */
+.replan-card {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  border-radius: 11px;
+  padding: 11px 13px;
+  animation: fadeIn 0.18s ease;
+}
+.replan-card .rc-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #b45309;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.replan-card .rc-head .rc-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--amber);
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 1px 7px;
+  letter-spacing: 0.02em;
+}
+.replan-card .rc-rewrite {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #78350f;
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  border-radius: 7px;
+  padding: 7px 9px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.replan-card .rc-rewrite .old { color: #9f1239; text-decoration: line-through; }
+.replan-card .rc-rewrite .new { color: #047857; font-weight: 700; }
+.replan-card .rc-rewrite .arrow { color: #b45309; font-weight: 700; padding: 0 4px; }
+.replan-card .rc-keep {
+  font-size: 10.5px;
+  color: #92400e;
+  margin-top: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.replan-card .rc-keep .kbadge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #ccfbf1;
+  color: #0f766e;
+  border: 1px solid #5eead4;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* QUOTE box */
+.quote-box {
+  margin-top: 14px;
+  border-radius: 10px;
+  padding: 11px 13px;
+}
+.quote-box.bad { background: #fff1f2; border: 1px solid #fecdd3; }
+.quote-box.good { background: #ecfdf5; border: 1px solid #a7f3d0; }
+.quote-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.quote-box.bad .quote-label { color: #9f1239; }
+.quote-box.good .quote-label { color: #047857; }
+.quote-text { font-size: 12.5px; line-height: 1.55; }
+.quote-box.bad .quote-text { color: #881337; }
+.quote-box.good .quote-text { color: #064e3b; }
+.quote-text .amt { font-family: var(--font-mono); font-weight: 700; }
+.quote-verdict { display: block; font-size: 11px; font-weight: 600; margin-top: 5px; }
+
+/* CAPTION / LEGEND */
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption .swatch {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== PANEL A: THE CRITIC ===================== -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <h2 id="panel-a-heading">The critic: catch a bad plan before it spends a tool call</h2>
+  <p class="panel-subtitle">Part 1 validated one call before it fired. The critic is the plan-time analog: it reads the whole DAG up front and rejects the structural mistakes a planner makes.</p>
+
+  <div class="goal-banner">
+    <span>Goal:</span> Quote the price, warranty, and tax-included total for the Acme earbuds (<code>SKU-ACME-EB</code>).
+    <br />A planner first hands back a draft. Toggle the critic on to see what it catches before anything runs.
+  </div>
+
+  <!-- critic toggle -->
+  <div class="toggle-group" role="group" aria-label="Critic selector">
+    <button class="toggle-btn" id="btn-critic-0" aria-pressed="true" type="button">
+      <span class="mode-dot" style="background:var(--text-muted)"></span>critic OFF (raw draft)
+    </button>
+    <button class="toggle-btn" id="btn-critic-1" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--indigo)"></span>critic ON (run the checks)
+    </button>
+  </div>
+
+  <div class="strategy-blurb" id="critic-blurb"></div>
+
+  <p class="section-label">The planner's first draft (six steps)</p>
+  <div class="node-list" id="draft-list"></div>
+
+  <div id="critic-verdict"></div>
+
+  <p class="section-label">The good quote plan, the same critic clears it</p>
+  <div class="dag-rounds" id="good-plan"></div>
+  <div id="good-verdict"></div>
+
+  <div class="sr-only" aria-live="polite" id="critic-announcer"></div>
+
+  <div class="caption">
+    <strong>Four structural checks, all before execution:</strong> an unknown tool (not in the registry), an unsatisfiable dependency (needs a node that is not in the plan), a dependency cycle (a step that transitively needs itself), and a redundant step (identical tool and argument). An empty problem list clears the plan for execution.
+  </div>
+</section>
+
+<!-- ===================== PANEL B: THE BROKEN PLAN ===================== -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <h2 id="panel-b-heading">The broken plan: when the world changes under a committed plan</h2>
+  <p class="panel-subtitle">The good plan cleared the critic, but mid-run the SKU turns out discontinued. Same failure, two executors. Watch what each one can do about it.</p>
+
+  <div class="goal-banner">
+    <span>The world changed:</span> <code>SKU-ACME-EB</code> is discontinued, replaced by <code>SKU-GLX-EB</code> ($79.00, 2-year limited warranty). The Acme to Globex acquisition retired the Acme earbuds. A discontinued SKU raises a <code>PermanentError</code> (Part 2): retrying the same call cannot help.
+  </div>
+
+  <!-- executor toggle -->
+  <div class="toggle-group" role="group" aria-label="Executor selector">
+    <button class="toggle-btn" id="btn-exec-0" aria-pressed="true" type="button">
+      <span class="mode-dot" style="background:var(--rose)"></span>blind executor (Part 3)
+    </button>
+    <button class="toggle-btn" id="btn-exec-1" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--emerald)"></span>critic + replanner
+    </button>
+  </div>
+
+  <div class="readout" id="exec-readout">
+    <div class="metric" id="metric-outcome">
+      <div class="metric-label">Outcome</div>
+      <div class="metric-value" id="val-outcome">INCOMPLETE</div>
+      <div class="metric-sub" id="sub-outcome">price uncomputable</div>
+    </div>
+    <div class="metric" id="metric-replans">
+      <div class="metric-label">Replans used</div>
+      <div class="metric-value" id="val-replans">0</div>
+      <div class="metric-sub" id="sub-replans">no recovery path</div>
+    </div>
+    <div class="metric" id="metric-total">
+      <div class="metric-label">Tax-included total</div>
+      <div class="metric-value" id="val-total">--</div>
+      <div class="metric-sub" id="sub-total">never produced</div>
+    </div>
+  </div>
+
+  <div class="strategy-blurb" id="exec-blurb"></div>
+
+  <div class="exec-list" id="exec-trace" aria-live="polite"></div>
+
+  <div id="exec-quote"></div>
+
+  <div class="sr-only" aria-live="polite" id="exec-announcer"></div>
+
+  <div class="caption">
+    Feeding the error back (Part 2) tells the agent the step failed; <strong>replanning</strong> is how a committed plan does something about it. The replanner rewrites only the not-yet-run tail to the replacement SKU, keeps completed steps
+    <span class="swatch" style="background:#5eead4"></span>memoized (never re-run), and continues under a replan budget (max 2 here; the full circuit breaker is Part 8).
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>plan / critic &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>tools &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>replan / caution &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>success &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>failure / blind
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* Render a tool call as a coloured mono chip. Highlights #E references. */
+  function callHtml(fn, arg) {
+    var argHtml = escHtml(arg).replace(/#E\d/g, function (m) {
+      return '<span class="ev">' + m + '</span>';
+    });
+    return '<span class="fn">' + escHtml(fn) + '</span>(<span class="arg">' + argHtml + '</span>)';
+  }
+
+  /* ============================================================
+     PANEL A: THE CRITIC
+     ============================================================ */
+
+  /* The planner's deliberately broken first draft (verbatim from the source).
+     Each node carries the exact problem string the critic reports, when ON. */
+  var DRAFT = [
+    { id: "B1", fn: "get_price", arg: "SKU-GLX-EB", dep: "no dependencies", clean: true },
+    { id: "B2", fn: "get_price", arg: "SKU-GLX-EB", dep: "no dependencies",
+      problem: { tag: "redundant", text: "B2: redundant, identical to B1 (get_price('SKU-GLX-EB'))" } },
+    { id: "B3", fn: "search_web", arg: "earbuds review", dep: "no dependencies",
+      problem: { tag: "unknown tool", text: "B3: unknown tool 'search_web' (not in the registry)" } },
+    { id: "B4", fn: "calculator", arg: "#B9 * 2", dep: "needs B9",
+      problem: { tag: "missing dep", text: "B4: depends on 'B9', which is not in the plan" } },
+    { id: "B5", fn: "get_warranty", arg: "SKU-GLX-EB", dep: "needs B6",
+      problem: { tag: "cycle", text: "dependency cycle detected (a step transitively depends on itself)" } },
+    { id: "B6", fn: "lookup_status", arg: "SKU-GLX-EB", dep: "needs B5",
+      problem: { tag: "cycle", text: "B5 and B6 each depend on the other: the cycle" } },
+  ];
+
+  /* The good plan E1..E4 by DAG round. E1,E2,E3 @ round 1, E4 @ round 2. */
+  var GOOD_PLAN = [
+    {
+      name: "round 1 (E1, E2, E3)", cls: "r1", badge: "independent",
+      nodes: [
+        { id: "E1", fn: "lookup_status", arg: "SKU-ACME-EB", dep: null },
+        { id: "E2", fn: "get_price", arg: "SKU-ACME-EB", dep: null },
+        { id: "E3", fn: "get_warranty", arg: "SKU-ACME-EB", dep: null },
+      ],
+    },
+    {
+      name: "round 2 (E4)", cls: "r2", badge: "depends on E2",
+      nodes: [
+        { id: "E4", fn: "calculator", arg: "#E2 * 1.18", dep: "needs E2" },
+      ],
+    },
+  ];
+
+  var criticOn = false;
+
+  function renderCriticBlurb() {
+    var el = document.getElementById("critic-blurb");
+    if (!criticOn) {
+      el.innerHTML = 'The planner just handed this draft back. <strong>No checks have run.</strong> The blind executor (Part 3) would start firing tools against it right now, paying for every structural mistake one wasted call at a time.';
+    } else {
+      el.innerHTML = 'The critic walks every node before a single tool fires and reports <strong>four problems</strong>. A bad plan is rejected here, so the planner is asked to try again before anything runs.';
+    }
+  }
+
+  function renderDraft() {
+    var html = "";
+    DRAFT.forEach(function (n) {
+      var flagged = criticOn && n.problem;
+      var clean = criticOn && n.clean;
+      var cls = "draft-node";
+      if (flagged) cls += " is-flagged";
+      if (n.clean) cls += " is-clean";
+      if (criticOn && n.clean) cls += " show-clean";
+      html += '<div class="' + cls + '">';
+      html += '<span class="nid">' + escHtml(n.id) + '</span>';
+      html += '<div class="nbody">';
+      html += '<div class="ncall">' + callHtml(n.fn, n.arg) + '</div>';
+      html += '<div class="ndep">&#8627; ' + escHtml(n.dep) + '</div>';
+      if (flagged) {
+        html += '<div class="problem"><span class="ptag">' + escHtml(n.problem.tag) + '</span><span>' + escHtml(n.problem.text) + '</span></div>';
+      }
+      if (clean) {
+        html += '<div class="ok-mark">&#10003; the only well-formed step in the draft</div>';
+      }
+      html += '</div></div>';
+    });
+    document.getElementById("draft-list").innerHTML = html;
+  }
+
+  function renderCriticVerdict() {
+    var el = document.getElementById("critic-verdict");
+    if (!criticOn) {
+      el.innerHTML = '<div class="verdict pending"><span class="v-icon">?</span>'
+        + '<div class="v-main">Critic not run yet.'
+        + '<span class="v-sub">Toggle the critic on to check the draft before it wastes a tool call.</span></div></div>';
+    } else {
+      el.innerHTML = '<div class="verdict rejected"><span class="v-icon">&#10007;</span>'
+        + '<div class="v-main">Rejected: four problems found.'
+        + '<span class="v-sub">redundant B2 &nbsp;&middot;&nbsp; unknown tool B3 &nbsp;&middot;&nbsp; missing dep B9 (from B4) &nbsp;&middot;&nbsp; B5 to B6 cycle. The planner is asked to try again before anything runs.</span></div></div>';
+    }
+  }
+
+  function renderGoodPlan() {
+    var html = "";
+    GOOD_PLAN.forEach(function (r) {
+      html += '<div class="dag-round ' + r.cls + '">';
+      html += '<div class="dag-round-head">' + escHtml(r.name) + '<span class="badge">' + escHtml(r.badge) + '</span></div>';
+      html += '<div class="dag-nodes">';
+      r.nodes.forEach(function (n) {
+        html += '<div class="dag-node">';
+        html += '<div class="nid">' + escHtml(n.id) + '</div>';
+        html += '<div class="ncall">' + callHtml(n.fn, n.arg) + '</div>';
+        if (n.dep) { html += '<div class="ndep">&#8627; ' + escHtml(n.dep) + '</div>'; }
+        html += '</div>';
+      });
+      html += '</div></div>';
+    });
+    document.getElementById("good-plan").innerHTML = html;
+  }
+
+  function renderGoodVerdict() {
+    var el = document.getElementById("good-verdict");
+    if (!criticOn) {
+      el.innerHTML = '<div class="verdict pending"><span class="v-icon">?</span>'
+        + '<div class="v-main">levels: E1@L1, E2@L1, E3@L1, E4@L2.'
+        + '<span class="v-sub">Run the critic to confirm this plan is clear.</span></div></div>';
+    } else {
+      el.innerHTML = '<div class="verdict cleared"><span class="v-icon">&#10003;</span>'
+        + '<div class="v-main">No problems found; cleared for execution.'
+        + '<span class="v-sub">levels: E1@L1, E2@L1, E3@L1, E4@L2. Every tool is in the registry, every dependency exists, no cycle, no duplicate.</span></div></div>';
+    }
+  }
+
+  function setCritic(on) {
+    criticOn = on;
+    document.getElementById("btn-critic-0").setAttribute("aria-pressed", on ? "false" : "true");
+    document.getElementById("btn-critic-1").setAttribute("aria-pressed", on ? "true" : "false");
+    renderCriticBlurb();
+    renderDraft();
+    renderCriticVerdict();
+    renderGoodPlan();
+    renderGoodVerdict();
+    document.getElementById("critic-announcer").textContent = on
+      ? "Critic on. Draft rejected: B2 redundant, B3 unknown tool, B4 depends on missing B9, B5 to B6 cycle. The good plan E1 to E4 is cleared for execution."
+      : "Critic off. Showing the planner's raw six-step draft.";
+  }
+
+  /* ============================================================
+     PANEL B: THE BROKEN PLAN (blind vs critic+replanner)
+     ============================================================ */
+
+  /* BLIND executor trace (Part 3, no critic, no replanner). Verbatim outcomes. */
+  var BLIND = {
+    blurb: 'The Part 3 DAG executor with <strong>no critic and no replanner</strong>. It feeds the permanent error back as an observation (Part 2), but it has no way to revise a plan that names a dead SKU in three places.',
+    metrics: {
+      outcome: "INCOMPLETE", outcomeSub: "price unavailable", outcomeTone: "cost",
+      replans: "0", replansSub: "no recovery path", replansTone: "cost",
+      total: "--", totalSub: "uncomputable", totalTone: "cost",
+    },
+    rows: [
+      { tag: "E1", kind: "info", fn: "lookup_status", arg: "SKU-ACME-EB",
+        result: "SKU-ACME-EB: discontinued, replaced by SKU-GLX-EB" },
+      { tag: "E2", kind: "fail", fn: "get_price", arg: "SKU-ACME-EB",
+        result: "PermanentError: SKU-ACME-EB is discontinued (replaced by SKU-GLX-EB)",
+        foot: { cls: "fedback", tag: "fed back", text: "fed back as an observation (Part 2), but the plan still names a dead SKU" } },
+      { tag: "E3", kind: "fail", fn: "get_warranty", arg: "SKU-ACME-EB",
+        result: "PermanentError: SKU-ACME-EB is discontinued (replaced by SKU-GLX-EB)",
+        foot: { cls: "fedback", tag: "fed back", text: "fed back as an observation (Part 2), but the plan still names a dead SKU" } },
+      { tag: "E4", kind: "fail", fn: "calculator", arg: "#E2 * 1.18",
+        result: "calculator error: cannot evaluate (missing input?)" },
+    ],
+    quote: {
+      cls: "bad", icon: "&#10007;", label: "QUOTE: INCOMPLETE",
+      text: 'price <span class="amt">unavailable</span>, warranty <span class="amt">unavailable</span>, total <span class="amt">uncomputable</span>.',
+      verdict: "The executor knew the SKU was dead and still could not revise the committed plan.",
+    },
+  };
+
+  /* CRITIC + REPLANNER trace. E1 stays memoized; the tail [E2,E3] is rewritten. */
+  var REPLAN = {
+    blurb: 'The critic clears the plan, then execution hits the same failure. On the permanent error the replanner rewrites <strong>only the remaining tail</strong> to the replacement SKU, keeps the completed lookup memoized, and continues.',
+    metrics: {
+      outcome: "VALID", outcomeSub: "full quote produced", outcomeTone: "win",
+      replans: "1", replansSub: "of a budget of 2", replansTone: "caution",
+      total: "$93.22", totalSub: "79.0 * 1.18", totalTone: "win",
+    },
+    rows: [
+      { tag: "critic", kind: "ok", plain: "no problems found; plan cleared for execution." },
+      { tag: "E1", kind: "info", fn: "lookup_status", arg: "SKU-ACME-EB",
+        result: "SKU-ACME-EB: discontinued, replaced by SKU-GLX-EB", memo: true },
+      { tag: "E2", kind: "fail", fn: "get_price", arg: "SKU-ACME-EB",
+        result: "PermanentError: SKU-ACME-EB is discontinued (replaced by SKU-GLX-EB)" },
+      { replan: true },
+      { tag: "E2", kind: "ok", fn: "get_price", arg: "SKU-GLX-EB",
+        result: "$79.00", rewritten: true },
+      { tag: "E3", kind: "ok", fn: "get_warranty", arg: "SKU-GLX-EB",
+        result: "2-year limited warranty", rewritten: true },
+      { tag: "E4", kind: "ok", fn: "calculator", arg: "79.0 * 1.18",
+        result: "$93.22", note: "E4's arg carries no SKU, so it was not in the rewritten tail" },
+    ],
+    quote: {
+      cls: "good", icon: "&#10003;", label: "QUOTE: VALID",
+      text: '<span class="amt">SKU-GLX-EB</span> (replaces discontinued SKU-ACME-EB): price <span class="amt">$79.00</span>, 2-year limited warranty, total with tax <span class="amt">$93.22</span>.',
+      verdict: "Completed with 1 replan; the dead tail was rewritten, the lookup reused.",
+    },
+  };
+
+  var EXECS = [BLIND, REPLAN];
+  var execCurrent = 0;
+
+  function setMetric(metricEl, valEl, subEl, value, sub, tone) {
+    metricEl.classList.remove("is-win", "is-cost", "is-caution");
+    if (tone === "win") metricEl.classList.add("is-win");
+    else if (tone === "cost") metricEl.classList.add("is-cost");
+    else if (tone === "caution") metricEl.classList.add("is-caution");
+    valEl.textContent = value;
+    if (subEl) subEl.textContent = sub;
+  }
+
+  function iconChar(kind) {
+    if (kind === "ok") return "&#10003;";
+    if (kind === "fail") return "&#10007;";
+    return "&#8226;";
+  }
+
+  function renderExecRows(ex) {
+    var html = "";
+    ex.rows.forEach(function (r) {
+      /* the REPLAN event card */
+      if (r.replan) {
+        html += '<div class="replan-card">';
+        html += '<div class="rc-head"><span class="rc-badge">REPLAN #1</span>rewrite the remaining tail, keep what is done</div>';
+        html += '<div class="rc-rewrite">rewrite remaining [E2, E3]: <span class="old">SKU-ACME-EB</span><span class="arrow">&#8594;</span><span class="new">SKU-GLX-EB</span></div>';
+        html += '<div class="rc-keep"><span class="kbadge">memoized</span>[E1] stays put, not re-run.</div>';
+        html += '</div>';
+        return;
+      }
+      /* a plain note row (critic clears) */
+      if (r.plain) {
+        var stateCls = r.kind === "ok" ? "is-ok" : "is-info";
+        html += '<div class="exec-row ' + stateCls + '"><div class="exec-top">';
+        html += '<span class="exec-tag" style="background:#eef2ff;color:#4f46e5;border-color:#c7d2fe;">' + escHtml(r.tag) + '</span>';
+        html += '<span class="exec-icon ' + r.kind + '">' + iconChar(r.kind) + '</span>';
+        html += '<div class="exec-body"><div class="exec-result" style="margin-top:2px;color:var(--text-body);font-size:11.5px;">' + escHtml(r.plain) + '</div></div>';
+        html += '</div></div>';
+        return;
+      }
+      /* a normal execution row */
+      var sCls = r.kind === "ok" ? "is-ok" : (r.kind === "fail" ? "is-fail" : "is-info");
+      html += '<div class="exec-row ' + sCls + '"><div class="exec-top">';
+      html += '<span class="exec-tag">' + escHtml(r.tag) + '</span>';
+      html += '<span class="exec-icon ' + r.kind + '">' + iconChar(r.kind) + '</span>';
+      html += '<div class="exec-body">';
+      html += '<div class="exec-call">' + callHtml(r.fn, r.arg) + '</div>';
+      html += '<div class="exec-result">' + escHtml(r.result) + '</div>';
+      if (r.note) { html += '<div class="exec-result" style="color:var(--amber);font-weight:600;">&#8627; ' + escHtml(r.note) + '</div>'; }
+      html += '</div>';
+      if (r.memo) { html += '<span class="memo-badge">memoized</span>'; }
+      if (r.rewritten) { html += '<span class="rewritten-badge">rewritten</span>'; }
+      html += '</div>';
+      if (r.foot) {
+        html += '<div class="exec-foot ' + r.foot.cls + '"><span class="tag">' + escHtml(r.foot.tag) + '</span>' + escHtml(r.foot.text) + '</div>';
+      }
+      html += '</div>';
+    });
+    return html;
+  }
+
+  function renderQuote(ex) {
+    var q = ex.quote;
+    var html = '<div class="quote-box ' + q.cls + '">';
+    html += '<div class="quote-label">' + q.icon + ' ' + escHtml(q.label) + '</div>';
+    html += '<div class="quote-text">' + q.text + '<span class="quote-verdict">&#8594; ' + escHtml(q.verdict) + '</span></div>';
+    html += '</div>';
+    return html;
+  }
+
+  function renderExec() {
+    var ex = EXECS[execCurrent];
+    var m = ex.metrics;
+
+    setMetric(document.getElementById("metric-outcome"),
+      document.getElementById("val-outcome"),
+      document.getElementById("sub-outcome"),
+      m.outcome, m.outcomeSub, m.outcomeTone);
+    setMetric(document.getElementById("metric-replans"),
+      document.getElementById("val-replans"),
+      document.getElementById("sub-replans"),
+      m.replans, m.replansSub, m.replansTone);
+    setMetric(document.getElementById("metric-total"),
+      document.getElementById("val-total"),
+      document.getElementById("sub-total"),
+      m.total, m.totalSub, m.totalTone);
+
+    document.getElementById("exec-blurb").innerHTML = ex.blurb;
+    document.getElementById("exec-trace").innerHTML = renderExecRows(ex);
+    document.getElementById("exec-quote").innerHTML = renderQuote(ex);
+
+    document.getElementById("btn-exec-0").setAttribute("aria-pressed", execCurrent === 0 ? "true" : "false");
+    document.getElementById("btn-exec-1").setAttribute("aria-pressed", execCurrent === 1 ? "true" : "false");
+
+    document.getElementById("exec-announcer").textContent = execCurrent === 0
+      ? "Blind executor. E1 finds the SKU discontinued. E2 and E3 raise PermanentError, fed back but not revised. E4 calculator error. Quote incomplete."
+      : "Critic plus replanner. Critic clears the plan. E1 finds the SKU discontinued. E2 raises PermanentError, triggering replan number 1 that rewrites the tail E2 and E3 to SKU-GLX-EB while E1 stays memoized. E2 returns 79 dollars, E3 a 2-year limited warranty, E4 totals 93 dollars 22. Quote valid, completed with 1 replan.";
+  }
+
+  function setExec(i) {
+    execCurrent = i;
+    renderExec();
+  }
+
+  /* ---- wiring ---- */
+  document.getElementById("btn-critic-0").addEventListener("click", function () { setCritic(false); });
+  document.getElementById("btn-critic-1").addEventListener("click", function () { setCritic(true); });
+  document.getElementById("btn-exec-0").addEventListener("click", function () { setExec(0); });
+  document.getElementById("btn-exec-1").addEventListener("click", function () { setExec(1); });
+
+  /* keyboard: left/right toggles inside each group */
+  var criticGroup = document.getElementById("btn-critic-0").closest(".toggle-group");
+  criticGroup.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      setCritic(!criticOn);
+      document.getElementById(criticOn ? "btn-critic-1" : "btn-critic-0").focus();
+      e.preventDefault();
+    }
+  });
+  var execGroup = document.getElementById("btn-exec-0").closest(".toggle-group");
+  execGroup.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight") {
+      setExec((execCurrent + 1) % EXECS.length);
+      document.getElementById("btn-exec-" + execCurrent).focus();
+      e.preventDefault();
+    } else if (e.key === "ArrowLeft") {
+      setExec((execCurrent - 1 + EXECS.length) % EXECS.length);
+      document.getElementById("btn-exec-" + execCurrent).focus();
+      e.preventDefault();
+    }
+  });
+
+  setCritic(false);
+  setExec(0);
+})();
+</script>
+</body>
+</html>

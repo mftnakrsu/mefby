@@ -1,0 +1,128 @@
+---
+title: "Surviving a Broken Plan"
+description: "An up-front plan is a bet that the world will not change. When a SKU is discontinued mid-run, a prospective critic and an error-triggered replanner that revises only the remaining steps save the run."
+date: 2026-06-30
+tags: ["Agents","Planning","Replanning","Critic","Reliability","AI"]
+seriesOrder: 4
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-04-replanning-and-critic"
+lang: "en"
+translationSlug: "replanning-and-critic-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 3 made the plan a first-class artifact: write the whole DAG down once, then execute it cheaply, instead of re-deriving the route in the model's head at every hop. That is a real win, and it buys a new failure. A plan written up front is a bet that the world will still look the way it did when you planned. The instant the world disagrees, the committed plan becomes a liability, and the Part 3 DAG executor charges ahead and runs it anyway. This part injects the realistic break: a SKU is **discontinued** mid-run. The plan was built to quote a price, a warranty, and a tax-included total for `SKU-ACME-EB`, but that product turns out to be retired and replaced by `SKU-GLX-EB`. You will build two mechanisms that fix it, one before execution and one during. First, a **prospective critic** that inspects the plan before a single tool fires and rejects the structural mistakes a planner makes: an unknown tool, an unsatisfiable dependency, a dependency cycle, and a redundant step. Second, an **error-triggered replanner** that, on a plan-invalidating failure, revises only the **remaining subgraph**, keeps every completed step **memoized** so it is never re-run, and continues under a **replan budget** so a plan that keeps breaking trips out instead of looping forever. The thesis: feeding an error back (Part 2) tells the agent the step failed; replanning is how a committed plan does something about it.
+
+## Prerequisites
+
+You need basic Python: functions, dictionaries, a small loop, and reading a list. That is all. Finishing [Part 2](/essays/robust-tool-execution) and [Part 3](/essays/planning-and-the-tool-dag) helps, because we reuse Part 3's `TaskNode`, dependency DAG, and topological execution, and we lean on Part 2's failure taxonomy (a discontinued SKU is a permanent error). But this part is self-contained: where it leans on an earlier idea, it restates it in a sentence. The companion code, [replanning_critic.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-04-replanning-and-critic), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every trace in this essay yourself. A deterministic rule planner and critic is the source of truth by default, with the real LLM path (`generate()`) one environment flag away, exactly as in Parts 1 through 3.
+
+## What is new since Part 3
+
+I want to be precise about what is new, because a lot is not. For twenty parts the RAG series had no plan object to revise at all, and even RAG Part 19's agent had only a single flat step budget, with nothing written down to critique or rewrite. Part 3 here owns the planner-executor family: the `TaskNode`, the dependency DAG, evidence-variable binding, and topological-level execution. I am not re-building any of that, and I am not re-teaching the ReAct loop, the tool contract, or the retry ladder; those are Parts 1 and 2, and they are the baseline this part stands on. What is genuinely new is the pair of mechanisms that wrap the existing DAG: a **prospective critic** that runs before execution, and an **error-triggered replanner** that runs during it. New with them are three ideas the replanner needs: **partial replanning** (rewrite only the not-yet-run tail), **step memoization** (completed nodes are never re-run across a replan), and an honest **replan budget**. The DAG is the DAG we already built; what changes is that the plan stops being a one-shot bet and becomes something the agent can vet up front and revise on the fly.
+
+## The prospective critic
+
+The first mechanism runs before any tool fires. A planner, whether a deterministic rule or a real LLM, can write a plan that is broken on paper, and executing it just wastes calls discovering that. So the critic inspects the plan as data and looks for four structural mistakes. An **unknown tool** is a step that names a tool not in the registry, so it can never run. An **unsatisfiable dependency** is a step that declares it needs a node that does not exist in the plan. A **dependency cycle** is a step that transitively needs itself, so topological order can never schedule it. And a **redundant step** is two nodes with the identical tool and argument, where the second is pure waste. This is the plan-time analog of Part 1's pre-flight argument validator: Part 1 rejected a call that was wrong on paper before it fired; the critic rejects a plan that is wrong on paper before any of it fires. Here is the critic on a planner's deliberately broken first draft, from the artifact's real output:
+
+```text
+  Critiquing a planner's first draft (it has four kinds of mistake):
+      - B2: redundant, identical to B1 (get_price('SKU-GLX-EB'))
+      - B3: unknown tool 'search_web' (not in the registry)
+      - B4: depends on 'B9', which is not in the plan
+      - dependency cycle detected (a step transitively depends on itself)
+  -> rejected; the planner is asked to try again before anything runs.
+```
+
+Four problems, four checks, and not one tool call spent to find them. `B2` repeats `B1` exactly, so it is flagged redundant. `B3` names `search_web`, which is not in the registry, so it is an unknown tool. `B4` declares a dependency on `B9`, a node that is nowhere in the plan, so that dependency is unsatisfiable. And the draft wires `B5` and `B6` to depend on each other, so the critic reports a dependency cycle. Because the critic returns a non-empty list of problems, the plan is rejected and the planner is asked to try again, before the executor touches a tool. Now the same critic on the real quote plan:
+
+```text
+  The same critic on the real quote plan:
+  plan:  E1=lookup_status('SKU-ACME-EB') | E2=get_price('SKU-ACME-EB') | E3=get_warranty('SKU-ACME-EB') | E4=calculator('#E2 * 1.18')
+  levels: E1@L1, E2@L1, E3@L1, E4@L2
+  critic: no problems found; cleared for execution.
+```
+
+This plan is well-formed: four known tools, every dependency present, no cycle, no duplicate. The level line reads `E1@L1, E2@L1, E3@L1, E4@L2`, which is Part 3's topological layering at work: the three lookups sit at level 1 and `E4` (the tax-included total) waits at level 2 because its argument `'#E2 * 1.18'` names `E2`'s result. The critic finds no problems and clears the plan for execution. A clean structure, though, is not the same as a plan that will survive contact with the world, which is the next failure.
+
+<Diagram number={1} caption="The prospective critic as a gate before execution. A planner emits a plan, and the critic inspects it as data for four structural mistakes before a single tool fires: an unknown tool not in the registry, an unsatisfiable dependency on a node not in the plan, a dependency cycle where a step transitively needs itself, and a redundant step identical to an earlier one. A bad draft (B2 redundant with B1, B3 the unknown tool search_web, B4 depending on the missing B9, and a B5/B6 cycle) is rejected and sent back to the planner before any call is spent. The real quote plan (E1 lookup_status, E2 get_price, E3 get_warranty, E4 calculator) passes all four checks and is cleared for execution. This is the plan-time analog of Part 1's pre-flight argument validator.">
+  <img src="/essays/replanning-and-critic/part4-critic-gate.svg" alt="A diagram of a planner box on the left emitting a plan into a critic gate in the centre. The critic gate lists four checks stacked vertically: unknown tool (not in the registry), unsatisfiable dependency (needs a node not in the plan), dependency cycle (a step transitively needs itself), and redundant step (identical tool and argument). A broken draft enters first, shown as six nodes B1 through B6, and the gate emits four red problem labels: B2 redundant identical to B1, B3 unknown tool search_web, B4 depends on B9 not in the plan, and a dependency cycle between B5 and B6; an arrow loops the rejected draft back to the planner labelled try again before anything runs. Below, the real quote plan enters as four nodes E1 lookup_status, E2 get_price, E3 get_warranty at level 1 and E4 calculator at level 2, and the gate emits a single green label no problems found, cleared for execution. A caption strip reads: catch a bad plan before it wastes a single tool call, the plan-time analog of Part 1's argument validator." class="w-full rounded-lg" />
+</Diagram>
+
+## When the world disagrees
+
+The cleared plan names `SKU-ACME-EB` in three places. But that SKU is discontinued, replaced by `SKU-GLX-EB`: the Acme-to-Globex acquisition made concrete, the acquisition retiring the Acme earbuds in favor of the Globex line. Part 2 already taught us how to classify this failure. A discontinued SKU raises a **permanent error**, the category where retrying the same call cannot help, because the SKU will be just as dead on the second try. Part 2's prescription for a permanent error was to feed it back to the model as an observation rather than retry it. That is necessary here, and it is not sufficient, because the agent is now committed to a plan that names a dead SKU in three steps. Watch the blind executor, the Part 3 DAG with no critic and no replanner, hit the discontinued SKU and dutifully feed the error back, from the artifact's real trace:
+
+```text
+    E1: lookup_status('SKU-ACME-EB') -> SKU-ACME-EB: discontinued, replaced by SKU-GLX-EB
+    E2: get_price('SKU-ACME-EB') -> PermanentError: SKU-ACME-EB is discontinued (replaced by SKU-GLX-EB)
+         fed back as an observation (Part 2), but the plan still names a dead SKU
+    E3: get_warranty('SKU-ACME-EB') -> PermanentError: SKU-ACME-EB is discontinued (replaced by SKU-GLX-EB)
+         fed back as an observation (Part 2), but the plan still names a dead SKU
+    E4: calculator('#E2 * 1.18') -> calculator error: cannot evaluate (missing input?)
+    QUOTE: INCOMPLETE -- price=unavailable, warranty=unavailable, total=uncomputable.
+    -> The executor knew the SKU was dead and still could not revise the committed plan.
+```
+
+Read the cascade. `E1` reports the SKU is discontinued and even tells us the replacement. `E2` and `E3` then raise the permanent error and feed it back exactly as Part 2 prescribes, but feeding back changes nothing about the plan: the next step still names the same dead SKU. `E4` has nothing to compute with, because `E2` never produced a price, so the calculator returns an error. The final quote is `INCOMPLETE`: price unavailable, warranty unavailable, total uncomputable. The executor literally knew the SKU was dead, the answer was right there in `E1`'s result, and it still could not produce a valid quote, because knowing a step failed is not the same as being able to revise a committed plan. Part 2 closed the door on the run crashing; it left wide open the run finishing with nothing.
+
+## Error-triggered replanning
+
+The fix is the second mechanism. When a step fails in a way that invalidates the rest of the plan, do not abandon the run and do not start over. Revise only the **remaining subgraph**: rewrite the not-yet-run steps to target the replacement SKU, keep every completed step **memoized** so it is never re-run, and continue. Here is the critic-plus-replanner executor on the same task, same world, same failure, from the artifact's real trace:
+
+```text
+    critic: no problems found; plan cleared for execution.
+    E1: lookup_status('SKU-ACME-EB') -> SKU-ACME-EB: discontinued, replaced by SKU-GLX-EB
+    E2: get_price('SKU-ACME-EB') -> PermanentError: SKU-ACME-EB is discontinued (replaced by SKU-GLX-EB)
+         REPLAN #1: rewrite remaining ['E2', 'E3'] to SKU-GLX-EB; memoized ['E1'] stay (not re-run).
+    E2: get_price('SKU-GLX-EB') -> $79.00
+    E3: get_warranty('SKU-GLX-EB') -> 2-year limited warranty
+    E4: calculator('79.0 * 1.18') -> $93.22
+    QUOTE: SKU-GLX-EB (replaces discontinued SKU-ACME-EB): price $79.00, 2-year limited warranty, total with tax $93.22.
+    -> Completed with 1 replan(s); the dead tail was rewritten, the lookup reused.
+```
+
+The critic clears the plan, and execution starts the same as the blind run: `E1` reports the SKU is discontinued, `E2` raises the permanent error. Here the two runs diverge. Instead of feeding the error back and marching on, the replanner fires: `REPLAN #1: rewrite remaining ['E2', 'E3'] to SKU-GLX-EB; memoized ['E1'] stay (not re-run).` Three things to read in that one line. The remaining tail is `['E2', 'E3']`, the not-yet-completed steps whose argument names the dead SKU, and only those are rewritten to the replacement. The completed step `['E1']` is memoized and stays put, never re-run, because its result is already in hand and re-running it would be waste. And the replan is counted, `#1`, against a budget. After the rewrite, `E2` retries with the live SKU and returns `$79.00`, `E3` returns the `2-year limited warranty`, and `E4` computes `'79.0 * 1.18'` to `$93.22`. The final quote is valid. Notice that `E4` was not in the rewritten tail: its argument is `'#E2 * 1.18'`, which carries no SKU, so there is nothing in it to rewrite, and the replanner correctly leaves it untouched. The run completes with exactly one replan, the dead tail rewritten and the lookup reused. The interactive figure below lets you step through both executors, blind and replanning, on the same discontinued SKU.
+
+<Diagram number={2} caption="Error-triggered partial replanning, interactive. Step through both executors on the same discontinued SKU. The blind executor (Part 3 DAG, no critic, no replanner) runs E1 lookup_status (reporting the SKU is discontinued), then E2 and E3 raise the permanent error and are fed back as observations (Part 2), then E4's calculator fails with no price, ending in an INCOMPLETE quote. The critic-plus-replanner executor clears the plan, hits the same E2 failure, and fires REPLAN #1: it rewrites only the remaining tail E2 and E3 to the replacement SKU-GLX-EB, keeps the memoized E1 (never re-run), and continues, so E2 returns 79.00 dollars, E3 the 2-year limited warranty, and E4 computes 79.0 times 1.18 to 93.22 dollars, ending in a valid quote with one replan. E4's argument carries no SKU, so it is left untouched.">
+  <IframeFigure src="/essays/replanning-and-critic/part4-replan.html" title="Interactive replanning player comparing two executors on a discontinued SKU. A toggle switches between the blind executor and the critic-plus-replanner executor running the same four-step quote plan for SKU-ACME-EB: E1 lookup_status, E2 get_price, E3 get_warranty, and E4 calculator of hash-E2 times 1.18. The blind executor runs E1 which reports SKU-ACME-EB is discontinued and replaced by SKU-GLX-EB, then E2 and E3 raise PermanentError and are fed back as observations per Part 2 but the plan still names the dead SKU, then E4 fails with a calculator error because no price exists, ending in an INCOMPLETE quote with price unavailable, warranty unavailable, and total uncomputable. The replanner executor first shows the critic clearing the plan, then runs E1, then E2 raises the permanent error and triggers REPLAN number 1: it rewrites only the remaining steps E2 and E3 to SKU-GLX-EB while the memoized E1 stays and is not re-run, after which E2 returns 79.00 dollars, E3 returns the 2-year limited warranty, and E4 computes 79.0 times 1.18 to 93.22 dollars, ending in a valid quote that completes with one replan. A note states E4's argument names hash-E2 and carries no SKU, so the replanner leaves it untouched, and a replan budget caps the number of rewrites." height={840} />
+</Diagram>
+
+## Knowing when to stop
+
+Replanning is only safe if it is bounded. A plan that keeps breaking, where every rewrite hits another dead end, would loop forever rewriting and retrying, which is just a slow hang dressed up as resilience. So the replanner runs under an honest **replan budget**, capped at `max_replans=2` here. Each error-triggered rewrite counts against it, and once the budget is exhausted the executor stops instead of trying again, surfacing that it gave up rather than silently spinning. In the happy case here, one replan was enough and the budget was never close to spent. The budget is the same instinct as Part 2's bounded retry, lifted up to the plan level: bound the loop so a recoverable situation recovers and an unrecoverable one fails fast and visibly. This is a deliberately simple cap, a counter and a comparison; the full treatment, with state across attempts and a real trip-and-cool-down policy, is the **circuit breaker** in Part 8. For this part the lesson is narrow and important: an agent that can rewrite its plan must also be able to decide it has rewritten enough.
+
+> 💡 **From experience.** The first replanning agent I shipped had no memoization, and it cost us in the worst quiet way. One of its early steps was an expensive enrichment call, a third-party lookup we paid per request for, and it sat near the front of a long plan. Whenever a later step failed and the agent replanned, it rebuilt the plan from the goal and re-ran everything, including that enrichment call, which had already succeeded and whose result had not changed. On a clean run it fired once. On a run that replanned three times it fired four times, and we were paying for three of them for nothing. Worse, the duplicate calls occasionally tripped the vendor's own rate limit, which surfaced as a transient error, which the agent treated as a reason to replan again, which re-ran the enrichment yet again. The fix was the boring, correct one: memoize completed steps and only ever rewrite the remaining tail, so a replan touches the part of the plan that is actually wrong and leaves the part that already worked alone. The day we added memoization the duplicate-enrichment line in the bill went flat, and the accidental replan-because-of-rate-limit loop disappeared with it.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- Part 3 made the plan a first-class artifact, which buys a new failure: an up-front plan is a bet that the world will not change, and the instant it does (a SKU discontinued mid-run) the committed plan becomes a liability the Part 3 executor charges through anyway.
+- A **prospective critic** inspects the plan before any tool fires and rejects four structural mistakes: an **unknown tool** (not in the registry), an **unsatisfiable dependency** (needs a node not in the plan), a **dependency cycle** (a step transitively needs itself), and a **redundant step** (identical tool and argument). It is the plan-time analog of Part 1's argument validator.
+- A discontinued SKU is a **permanent error** in Part 2's taxonomy. The blind executor feeds it back as an observation, exactly as Part 2 prescribes, and still finishes `INCOMPLETE`, because feeding an error back tells the agent the step failed but does not revise the committed plan.
+- An **error-triggered replanner** revises only the **remaining subgraph** on a plan-invalidating failure: `REPLAN #1` rewrites the not-yet-run tail `['E2', 'E3']` to the replacement SKU and continues to a valid quote (`$79.00`, a `2-year limited warranty`, total `$93.22`).
+- Completed steps are **memoized**: the rewrite keeps `['E1']` in place and never re-runs it. The replanner also leaves steps with no dead reference untouched, so `E4`'s `'#E2 * 1.18'` (no SKU) is not in the rewritten tail.
+- A **replan budget** (max 2 here) bounds the loop, so a plan that keeps breaking trips out instead of looping forever. It is Part 2's bounded retry lifted to the plan level; the full circuit breaker is Part 8.
+
+## Glossary
+
+- **Prospective critic**: a check that inspects a plan as data before any tool fires and rejects structural mistakes, so a broken plan is sent back to the planner instead of wasting calls; the plan-time analog of Part 1's pre-flight argument validator.
+- **Unknown tool (critic check)**: a step that names a tool not present in the registry, so it can never run; flagged before execution.
+- **Unsatisfiable dependency (critic check)**: a step that declares a dependency on a node that does not exist in the plan, so its prerequisite can never be produced.
+- **Dependency cycle (critic check)**: a step that transitively depends on itself, so a topological order can never schedule it; detected before execution.
+- **Redundant step (critic check)**: two nodes with the identical tool and argument, where the second is pure waste; the critic flags the duplicate.
+- **Error-triggered replanning**: revising a committed plan in response to a plan-invalidating failure at run time, rather than abandoning the run or starting over; replanning is how a committed plan acts on an error, where Part 2's feed-back only reports it.
+- **Partial replanning (remaining subgraph)**: rewriting only the not-yet-run steps (the tail of the topological order) that reference the failed input, leaving already-completed and unaffected steps alone.
+- **Step memoization**: keeping the results of completed steps so they are never re-run across a replan, which avoids repeating expensive or side-effecting work the rewrite did not invalidate.
+- **Replan budget**: an honest cap on how many times the agent may replan in one run (max 2 here), so a plan that keeps breaking trips out instead of looping forever; Part 2's bounded retry lifted to the plan level, with the full circuit breaker in Part 8.
+- **Permanent error** (from [Part 2](/essays/robust-tool-execution)): a failure that retrying the same call cannot fix (here a discontinued SKU); Part 2 feeds it back as an observation, and this part replans around it.
+
+---
+
+The rule from this part: a committed plan needs a way to be vetted before it runs and revised when the world disagrees, and both must be bounded. But notice what replanning does not do. It rewrites the route around a failure it is told about, in the moment, and then it forgets. Run the same broken task again, or hit the same class of mistake later in the same run, and the agent repeats it, because nothing persists what it learned, the replan was a local patch, not a lesson. **Part 5, Learning from Failure**, is about closing that gap: in-loop reflection and the Reflexion pattern, where the agent writes down what went wrong and feeds that back into its next attempt, so it stops making the same kind of mistake twice.

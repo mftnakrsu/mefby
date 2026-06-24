@@ -1,0 +1,321 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="100%" style="height:auto" role="img" aria-label="Two gates around the Part 3 tool DAG. On the left, a prospective critic gate runs before execution: it checks the plan for an unknown tool, an unsatisfiable dependency, a dependency cycle, and a redundant step, then either rejects a bad draft or clears the good plan E1 to E4 for execution. On the right, the DAG executes: E1 lookup_status returns that SKU-ACME-EB is discontinued and permanent, E2 get_price raises a permanent error, and an error-triggered replanner rewrites only the remaining tail E2 and E3 from SKU-ACME-EB to the replacement SKU-GLX-EB while the completed node E1 is kept memoized. After the rewrite E2 returns 79 dollars, E3 a 2-year limited warranty, and E4 totals 93 dollars 22.">
+  <title>Two gates around the DAG: a prospective critic before execution, an error-triggered replanner during it</title>
+
+  <defs>
+    <marker id="arrIndigo" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#6366f1"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#14b8a6"/>
+    </marker>
+    <marker id="arrAmber" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#10b981"/>
+    </marker>
+    <marker id="arrRose" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#f43f5e"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="760" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 4, the prospective critic and the replanner</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">Two gates around the DAG: critique the plan before it runs, replan only the tail when it breaks</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">The critic catches the planner's structural mistakes up front; the replanner revises the not-yet-run subgraph when the world disagrees mid-run.</text>
+
+  <!-- ================= LEFT: PROSPECTIVE CRITIC GATE (indigo) ================= -->
+  <rect x="40" y="84" width="420" height="612" rx="16" fill="#eef2ff" stroke="#6366f1" stroke-width="1.6"/>
+  <rect x="40" y="84" width="420" height="34" rx="16" fill="#6366f1"/>
+  <rect x="40" y="101" width="420" height="17" fill="#6366f1"/>
+  <text x="60" y="107"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">GATE 1, THE PROSPECTIVE CRITIC</text>
+  <text x="60" y="138"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#4f46e5">Runs once, before a single tool fires. The plan-time analog of Part 1's argument validator.</text>
+
+  <!-- the four checks -->
+  <text x="60" y="170"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#64748b" letter-spacing="0.05em">FOUR STRUCTURAL CHECKS</text>
+
+  <!-- check 1: unknown tool -->
+  <rect x="60" y="182" width="380" height="52" rx="10" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.4"/>
+  <circle cx="84" cy="208" r="9" fill="#6366f1"/>
+  <text x="84" y="212" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">1</text>
+  <text x="104" y="204"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">unknown tool</text>
+  <text x="104" y="222"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#64748b">a step calls a tool not in the registry</text>
+
+  <!-- check 2: unsatisfiable dep -->
+  <rect x="60" y="242" width="380" height="52" rx="10" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.4"/>
+  <circle cx="84" cy="268" r="9" fill="#6366f1"/>
+  <text x="84" y="272" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">2</text>
+  <text x="104" y="264"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">unsatisfiable dependency</text>
+  <text x="104" y="282"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#64748b">a step needs a node that is not in the plan</text>
+
+  <!-- check 3: cycle -->
+  <rect x="60" y="302" width="380" height="52" rx="10" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.4"/>
+  <circle cx="84" cy="328" r="9" fill="#6366f1"/>
+  <text x="84" y="332" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">3</text>
+  <text x="104" y="324"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">dependency cycle</text>
+  <text x="104" y="342"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#64748b">a step transitively depends on itself</text>
+
+  <!-- check 4: redundant -->
+  <rect x="60" y="362" width="380" height="52" rx="10" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.4"/>
+  <circle cx="84" cy="388" r="9" fill="#6366f1"/>
+  <text x="84" y="392" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">4</text>
+  <text x="104" y="384"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">redundant step</text>
+  <text x="104" y="402"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#64748b">two nodes with identical tool and argument</text>
+
+  <!-- verdict: REJECT (bad draft) -->
+  <rect x="60" y="436" width="380" height="92" rx="11" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.6"/>
+  <circle cx="84" cy="462" r="11" fill="#f43f5e"/>
+  <text x="84" y="467" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff">&#10007;</text>
+  <text x="104" y="460"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#9f1239">bad draft, REJECTED before any call</text>
+  <text x="104" y="481"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#9f1239">B2 redundant &#183; B3 unknown tool</text>
+  <text x="104" y="497"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#9f1239">B4 needs missing B9 &#183; B5 to B6 cycle</text>
+  <text x="104" y="516"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#9f1239">the planner is asked to try again</text>
+
+  <!-- verdict: CLEAR (good plan) -->
+  <rect x="60" y="540" width="380" height="138" rx="11" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.6"/>
+  <circle cx="84" cy="566" r="11" fill="#10b981"/>
+  <text x="84" y="571" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff">&#10003;</text>
+  <text x="104" y="564"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#047857">good plan, CLEARED for execution</text>
+  <text x="104" y="582"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#065f46">no problems found; levels E1@L1, E2@L1, E3@L1, E4@L2</text>
+  <rect x="80" y="596" width="340" height="68" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+  <text x="94" y="616"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#0f172a">E1 lookup_status('SKU-ACME-EB')</text>
+  <text x="94" y="632"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#0f172a">E2 get_price('SKU-ACME-EB')</text>
+  <text x="94" y="648"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#0f172a">E3 get_warranty('SKU-ACME-EB')</text>
+  <text x="94" y="664"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#0f172a">E4 calculator('#E2 * 1.18')</text>
+
+  <!-- gate -> DAG flow arrow -->
+  <line x1="460" y1="610" x2="520" y2="610" stroke="#10b981" stroke-width="2.6" marker-end="url(#arrEmerald)"/>
+  <text x="490" y="600" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="700" fill="#047857">cleared</text>
+
+  <!-- ================= RIGHT: EXECUTION + REPLANNER (teal/amber) ================= -->
+  <rect x="528" y="84" width="632" height="612" rx="16" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+  <rect x="528" y="84" width="632" height="34" rx="16" fill="#14b8a6"/>
+  <rect x="528" y="101" width="632" height="17" fill="#14b8a6"/>
+  <text x="548" y="107"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">GATE 2, EXECUTE THE DAG, REPLAN ON A PLAN-INVALIDATING FAILURE</text>
+  <text x="548" y="138"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#0d9488">Same Part 3 DAG and topological execution. The replanner only fires when a node fails permanently.</text>
+
+  <!-- E1 node: completed, memoized -->
+  <rect x="548" y="162" width="260" height="96" rx="12" fill="#ffffff" stroke="#14b8a6" stroke-width="2"/>
+  <rect x="548" y="162" width="260" height="26" rx="12" fill="#14b8a6"/>
+  <rect x="548" y="176" width="260" height="12" fill="#14b8a6"/>
+  <text x="564" y="180"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11.5" font-weight="700" fill="#ffffff">E1</text>
+  <text x="794" y="180" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">completed, kept</text>
+  <text x="564" y="206"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#0f172a">lookup_status('SKU-ACME-EB')</text>
+  <text x="564" y="226"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#0d9488">discontinued, replaced by SKU-GLX-EB</text>
+  <rect x="564" y="234" width="118" height="18" rx="6" fill="#ccfbf1" stroke="#5eead4" stroke-width="1"/>
+  <text x="623" y="246" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" font-weight="700" fill="#0f766e">MEMOIZED (not re-run)</text>
+
+  <!-- E2 first attempt: permanent failure -->
+  <rect x="548" y="276" width="260" height="96" rx="12" fill="#ffffff" stroke="#f43f5e" stroke-width="2"/>
+  <rect x="548" y="276" width="260" height="26" rx="12" fill="#f43f5e"/>
+  <rect x="548" y="290" width="260" height="12" fill="#f43f5e"/>
+  <text x="564" y="294"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11.5" font-weight="700" fill="#ffffff">E2</text>
+  <text x="794" y="294" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">permanent error</text>
+  <text x="564" y="320"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#0f172a">get_price('SKU-ACME-EB')</text>
+  <text x="564" y="340"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#9f1239">PermanentError: SKU is discontinued</text>
+  <text x="564" y="358"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#9f1239">retrying the same SKU cannot help (Part 2)</text>
+
+  <!-- arrow E2 fail -> replanner -->
+  <line x1="678" y1="372" x2="678" y2="404" stroke="#f59e0b" stroke-width="2.4" marker-end="url(#arrAmber)"/>
+
+  <!-- THE REPLANNER card -->
+  <rect x="548" y="410" width="584" height="120" rx="13" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8"/>
+  <rect x="548" y="410" width="200" height="28" rx="12" fill="#f59e0b"/>
+  <text x="564" y="429"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="700" fill="#ffffff" letter-spacing="0.02em">REPLAN #1 (budget 2)</text>
+  <text x="566" y="458"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="700" fill="#92400e">Rewrite only the remaining tail to the replacement SKU.</text>
+  <text x="566" y="478"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#78350f">tail [E2, E3]:</text>
+  <text x="652" y="478"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#9f1239" text-decoration="line-through">SKU-ACME-EB</text>
+  <text x="752" y="478"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#b45309">&#8594;</text>
+  <text x="772" y="478"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#047857">SKU-GLX-EB</text>
+  <text x="566" y="500"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#78350f">E1 stays memoized (never re-run). E4's arg carries no SKU, so it is not in the rewritten tail.</text>
+  <text x="566" y="518"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#78350f">Completed nodes are kept; only the not-yet-run subgraph is revised, then execution continues.</text>
+
+  <!-- arrow replanner -> rewritten tail -->
+  <line x1="678" y1="530" x2="678" y2="558" stroke="#10b981" stroke-width="2.4" marker-end="url(#arrEmerald)"/>
+
+  <!-- E2 rewritten (success) -->
+  <rect x="548" y="564" width="186" height="110" rx="12" fill="#ffffff" stroke="#10b981" stroke-width="2"/>
+  <rect x="548" y="564" width="186" height="24" rx="12" fill="#10b981"/>
+  <rect x="548" y="576" width="186" height="12" fill="#10b981"/>
+  <text x="562" y="581"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">E2</text>
+  <text x="720" y="581" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">rewritten</text>
+  <text x="562" y="606"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#0f172a">get_price</text>
+  <text x="562" y="622"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#047857">('SKU-GLX-EB')</text>
+  <text x="562" y="648"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="14" font-weight="700" fill="#047857">$79.00</text>
+
+  <!-- E3 rewritten (success) -->
+  <rect x="746" y="564" width="186" height="110" rx="12" fill="#ffffff" stroke="#10b981" stroke-width="2"/>
+  <rect x="746" y="564" width="186" height="24" rx="12" fill="#10b981"/>
+  <rect x="746" y="576" width="186" height="12" fill="#10b981"/>
+  <text x="760" y="581"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">E3</text>
+  <text x="918" y="581" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">rewritten</text>
+  <text x="760" y="606"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#0f172a">get_warranty</text>
+  <text x="760" y="622"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#047857">('SKU-GLX-EB')</text>
+  <text x="760" y="646"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="700" fill="#047857">2-year limited</text>
+  <text x="760" y="662"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="700" fill="#047857">warranty</text>
+
+  <!-- E4 (depends on E2, unchanged arg) -->
+  <rect x="944" y="564" width="186" height="110" rx="12" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
+  <rect x="944" y="564" width="186" height="24" rx="12" fill="#6366f1"/>
+  <rect x="944" y="576" width="186" height="12" fill="#6366f1"/>
+  <text x="958" y="581"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">E4</text>
+  <text x="1116" y="581" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">needs E2</text>
+  <text x="958" y="606"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#0f172a">calculator</text>
+  <text x="958" y="622"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#4f46e5">('79.0 * 1.18')</text>
+  <text x="958" y="648"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="14" font-weight="700" fill="#4f46e5">$93.22</text>
+
+  <!-- E2 -> E4 dependency edge -->
+  <line x1="734" y1="638" x2="942" y2="638" stroke="#6366f1" stroke-width="1.8" marker-end="url(#arrIndigo)"/>
+  <text x="838" y="630" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" font-weight="700" fill="#4f46e5">#E2 binds the price</text>
+
+  <!-- ================= BOTTOM: the contrast caption ================= -->
+  <rect x="40" y="710" width="1120" height="36" rx="10" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="600" y="733" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#475569">Feeding an error back (Part 2) says the step failed; replanning is how a committed plan does something about it. A blind executor hits the same dead SKU and produces no valid quote.</text>
+
+</svg>
