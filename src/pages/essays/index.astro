@@ -9,11 +9,12 @@ const all = await getCollection('essays', ({ data }) => !data.draft && !data.isT
 // else follows, newest first. The "New" badge stays on the genuinely newest essay.
 const byDateDesc = (a: CollectionEntry<'essays'>, b: CollectionEntry<'essays'>) =>
   b.data.date.getTime() - a.data.date.getTime();
-const series = all
-  .filter((e) => e.data.seriesOrder != null)
-  .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
+const byOrder = (a: CollectionEntry<'essays'>, b: CollectionEntry<'essays'>) =>
+  (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0);
+const ragSeries = all.filter((e) => e.data.seriesOrder != null && e.data.series === 'rag').sort(byOrder);
+const agentsSeries = all.filter((e) => e.data.seriesOrder != null && e.data.series === 'agents').sort(byOrder);
 const rest = all.filter((e) => e.data.seriesOrder == null).sort(byDateDesc);
-const essays = [...series, ...rest];
+const essays = [...ragSeries, ...agentsSeries, ...rest];
 const newestSlug = [...all].sort(byDateDesc)[0]?.slug;
 // Count canonicals that have a Turkish counterpart (translations are filtered out above),
 // so the bilingual claim stays accurate as more essays get translated.
@@ -35,7 +36,7 @@ const bilingualCount = all.filter((e) => e.data.translationSlug).length;
         class="group mb-8 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-3 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40"
       >
         <span class="text-[13px] text-zinc-600">
-          <span class="font-medium text-zinc-900">RAG from First Principles</span> — runnable code &amp; step-by-step notebooks for the {series.length}-part series
+          <span class="font-medium text-zinc-900">RAG from First Principles</span> &mdash; runnable code &amp; step-by-step notebooks for the {ragSeries.length}-part series
         </span>
         <span class="shrink-0 text-[11px] font-mono text-zinc-400 group-hover:text-emerald-600">Code on GitHub &#8599;</span>
       </a>

@@ -17,21 +17,27 @@ interface Props {
   translationSlug?: string;
   codeUrl?: string;
   ogImage?: string;
+  series?: 'rag' | 'agents';
   seriesOrder?: number;
   seriesTotal?: number | null;
   prevEssay?: SeriesLink | null;
   nextEssay?: SeriesLink | null;
 }
-const { title, description, date, tags = [], lang = 'en', slug, summary, translationSlug, codeUrl, ogImage, seriesOrder, seriesTotal, prevEssay, nextEssay } = Astro.props;
+const { title, description, date, tags = [], lang = 'en', slug, summary, translationSlug, codeUrl, ogImage, series = 'rag', seriesOrder, seriesTotal, prevEssay, nextEssay } = Astro.props;
 const dateFormatted = date.toISOString().slice(0, 10);
 
 const backLabel = lang === 'tr' ? 'geri' : 'back';
 const langs = ['en', 'tr'] as const;
 
+const SERIES_META = {
+  rag: { en: 'RAG FROM FIRST PRINCIPLES', tr: 'RAG: İLK İLKELERDEN', hub: '/essays/rag' },
+  agents: { en: 'AGENTS FROM FIRST PRINCIPLES', tr: 'AJANLAR: İLK İLKELERDEN', hub: '/essays/agents' },
+} as const;
+const sm = SERIES_META[series] ?? SERIES_META.rag;
 const inSeries = seriesOrder != null && seriesTotal != null;
 const seriesLabel = lang === 'tr'
-  ? `RAG: İLK İLKELERDEN · BÖLÜM ${seriesOrder} / ${seriesTotal}`
-  : `RAG FROM FIRST PRINCIPLES · PART ${seriesOrder} OF ${seriesTotal}`;
+  ? `${sm.tr} · BÖLÜM ${seriesOrder} / ${seriesTotal}`
+  : `${sm.en} · PART ${seriesOrder} OF ${seriesTotal}`;
 
 const abs = (path: string) => new URL(path, Astro.site).toString();
 const canonicalUrl = slug ? abs(`/essays/${slug}/`) : abs(Astro.url.pathname);
@@ -135,7 +141,7 @@ const breadcrumbJsonLd = {
 
       <article lang={lang}>
         {inSeries && (
-          <a href="/essays/rag" class="inline-block text-[11px] font-mono uppercase tracking-widest text-emerald-700 hover:text-emerald-800 transition-colors mb-3">{seriesLabel}</a>
+          <a href={sm.hub} class="inline-block text-[11px] font-mono uppercase tracking-widest text-emerald-700 hover:text-emerald-800 transition-colors mb-3">{seriesLabel}</a>
         )}
         <p class="text-xs font-mono text-zinc-400 mb-3 tracking-wider">{dateFormatted}</p>
         <h1 class="text-2xl sm:text-[28px] font-semibold text-zinc-900 leading-[1.25] tracking-tight mb-6">{title}</h1>

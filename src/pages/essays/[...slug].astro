@@ -5,27 +5,34 @@ import EssayLayout from '../../layouts/EssayLayout.astro';
 export async function getStaticPaths() {
   const essays = await getCollection('essays', ({ data }) => !data.draft);
 
-  // The numbered RAG series, in part order. Used to derive prev/next links and
-  // the "Part X of N" badge so they can never drift from the actual content.
-  const series = essays
-    .filter((e) => e.data.seriesOrder != null)
-    .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
-  const seriesTotal = series.length;
-  const posInSeries = new Map(series.map((e, i) => [e.slug, i]));
+  // Numbered series, grouped by `series` so each (RAG, Agents) has its own part
+  // count and prev/next chain. Derives the "Part X of N" badge and links so they
+  // can never drift from the actual content.
+  const seriesByKey = new Map<string, CollectionEntry<'essays'>[]>();
+  for (const e of essays) {
+    if (e.data.seriesOrder == null) continue;
+    const list = seriesByKey.get(e.data.series) ?? [];
+    list.push(e);
+    seriesByKey.set(e.data.series, list);
+  }
+  for (const list of seriesByKey.values()) {
+    list.sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
+  }
 
   const lite = (e: CollectionEntry<'essays'> | undefined | null) =>
     e ? { slug: e.slug, title: e.data.title, seriesOrder: e.data.seriesOrder } : null;
 
   return essays.map((essay) => {
-    const i = posInSeries.get(essay.slug);
-    const inSeries = i !== undefined;
+    const group = essay.data.seriesOrder != null ? (seriesByKey.get(essay.data.series) ?? []) : [];
+    const i = group.findIndex((e) => e.slug === essay.slug);
+    const inSeries = i !== -1;
     return {
       params: { slug: essay.slug },
       props: {
         essay,
-        prevEssay: inSeries && i > 0 ? lite(series[i - 1]) : null,
-        nextEssay: inSeries && i < series.length - 1 ? lite(series[i + 1]) : null,
-        seriesTotal: inSeries ? seriesTotal : null,
+        prevEssay: inSeries && i > 0 ? lite(group[i - 1]) : null,
+        nextEssay: inSeries && i < group.length - 1 ? lite(group[i + 1]) : null,
+        seriesTotal: inSeries ? group.length : null,
       },
     };
   });
@@ -56,7 +63,8 @@ const { Content } = await essay.render();
   summary={essay.data.summary}
   translationSlug={essay.data.translationSlug}
   codeUrl={essay.data.codeUrl}
-  ogImage={essay.data.ogImage ?? (essay.data.seriesOrder != null ? '/og/rag-by-hand.png' : undefined)}
+  ogImage={essay.data.ogImage ?? (essay.data.seriesOrder != null ? (essay.data.series === 'agents' ? '/og/agents-by-hand.png' : '/og/rag-by-hand.png') : undefined)}
+  series={essay.data.series}
   seriesOrder={essay.data.seriesOrder}
   seriesTotal={seriesTotal}
   prevEssay={prevEssay}
