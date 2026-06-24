@@ -1,0 +1,172 @@
+---
+title: "Tools as a Protocol"
+description: "Tools are a hardcoded dict no other host can discover. A minimal MCP server and host by hand turn tool use into a JSON-RPC wire protocol with discovery and multiplexing."
+date: 2026-07-08
+tags: ["Agents","MCP","Protocols","JSON-RPC","Tool Use","AI"]
+seriesOrder: 12
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-12-mcp-by-hand"
+lang: "en"
+translationSlug: "mcp-by-hand-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+The core track ended with a production-shaped agent: it can plan, recover from a bad step, remember across runs, stop itself before it spirals, survive a crash, pause for a human, and be seen into. By any reasonable measure it is a real agent. And yet one assumption has held since Part 1 and never been questioned: **the agent's tools are a hardcoded Python dictionary baked into the same process.** That was `TOOL_SCHEMAS` in [Part 1](/essays/augmented-llm-loop), and it has been the agent's entire action space ever since. The trouble is that a dict in one process cannot be shared with another agent, swapped at deploy time, or **discovered** by a host that did not import it. Every integration is bespoke wiring, hand-soldered into the agent's own code. This part opens the **frontier track** by fixing that, and the fix is a protocol. The **Model Context Protocol** (MCP) turns the question "what tools do you have and how do I call them" into a wire protocol: a **server** advertises capabilities, and a **host** discovers and calls them over **JSON-RPC**. We build both sides by hand, stdlib only. First, an **MCP server** that answers JSON-RPC requests: the `initialize` handshake (protocol version plus capability negotiation), `tools/list`, `tools/call`, and MCP's three server **primitives**, tools, resources, and prompts. Second, an **MCP host** that does the handshake, calls `tools/list`, and feeds the discovered JSON `inputSchema` **straight into Part 1's validator and controller**, replacing the hardcoded dict, then **multiplexes** two servers into one tool palette. Once tools speak a protocol, any host can use any server, and the agent's action space is assembled at run time from whatever it connects to.
+
+## Prerequisites
+
+You need basic Python and a feel for JSON: an object, a list, a string. That is all. [Part 1](/essays/augmented-llm-loop) helps, because the host reuses its tool-argument validator unchanged, and [Part 2](/essays/robust-tool-execution) helps, because the refund here is the same **side-effecting** tool we learned to treat carefully. But the essay is self-contained: where it leans on an earlier idea it restates it in a sentence, and it does **not** re-teach the ReAct loop or re-derive the validator; those are owned by Parts 1 and 2 and referenced here. The companion code, [mcp_server_and_host.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-12-mcp-by-hand), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every JSON-RPC frame in this essay yourself. The default transport is an in-process shim that prints real protocol frames; the real LLM controller (`generate()`) and the real subprocess-over-stdio transport are each one step away, exactly as in Parts 1 through 11.
+
+## What is new since the core track
+
+I want to be precise about what is new, because this is genuinely new ground and not a refinement of anything in the earlier series. Every part so far, all the way back through RAG, gave the agent its tools the same way: as a **single-process dictionary**, wired in by the author. RAG Part 19 hardcoded a tool dict; Part 1 here hardcoded `TOOL_SCHEMAS`; the memory tools in [Part 6](/essays/four-memories-self-editing) were declared with that same in-process contract. In every case the agent knew its tools because someone typed them into the agent's own source. What MCP changes is the *source* of that knowledge. Tools become **discovered, schema-described capabilities** that arrive over JSON-RPC at run time, not symbols imported at author time. A server publishes a tool's name, description, and `inputSchema`; the host learns them by asking. And MCP standardizes more than tools: it defines **three primitives**, tools (callable actions), resources (read-only data the host can fetch), and prompts (named prompt templates), so a server can offer all three behind one handshake. The one thing this part deliberately reuses rather than rebuilds is **Part 1's validator**. The schema it checks against no longer comes from a hardcoded dict; it comes off the wire from `tools/list`. Same validator, same guarantee, different source. We reference it and do not re-derive it.
+
+## The handshake and discovery
+
+A protocol starts with a handshake, and MCP's is `initialize`. The host opens the connection by announcing the protocol version it speaks and who it is; the server replies with the version it agrees on, its own identity, and the set of **capabilities** it supports. Here are the first two frames on the wire, quoted from the artifact's real output:
+
+```text
+    --> {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "clientInfo": {"name": "agents-by-hand-host"}}}
+    <-- {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-06-18", "serverInfo": {"name": "support-server"}, "capabilities": {"tools": {}, "resources": {}, "prompts": {}}}}
+    [host] connected to support-server (protocol 2025-06-18, capabilities: tools, resources, prompts)
+```
+
+Read the shape of those frames, because it is just **JSON-RPC**: every request is a JSON object with `"jsonrpc": "2.0"`, an `id`, a `method`, and `params`; every response echoes the `id` and carries either a `result` or an `error`. The `id` is what lets request and reply be matched up even when several are in flight. In the handshake, the host sends `protocolVersion: "2025-06-18"`, and the server confirms the same version back: that is **version negotiation**, the step that lets a host and a server that were written years apart agree on a dialect before they say anything else. The server also advertises its **capabilities**: `support-server` declares `tools`, `resources`, and `prompts`, meaning it offers all three primitives. A server that only had callable actions would advertise just `tools`, and the host would know not to ask it for resources or prompts. With the handshake done, the host issues the discovery call:
+
+```text
+    --> {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+    <-- {"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "search_policy", "description": "search the support/policy index", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}, {"name": "process_refund", "description": "issue a refund for an order (side-effecting)", "inputSchema": {"type": "object", "properties": {"order_id": {"type": "string"}, "amount": {"type": "number"}}, "required": ["order_id", "amount"]}}]}}
+    [host] discovered tools: ['search_policy', 'process_refund']
+```
+
+That single reply is the whole point of the protocol. The host did not import `TOOL_SCHEMAS`; it **asked**, and the server handed back two tools with their names, descriptions, and `inputSchema` objects. `search_policy` takes a required `query` string; `process_refund` takes a required `order_id` string and a required `amount` number, and its description flags it as side-effecting. The host now knows the server's entire action space, and it learned it over the wire. The line `discovered tools: ['search_policy', 'process_refund']` is the agent's palette being assembled at run time from a server it had never seen the source of.
+
+## The three primitives
+
+MCP standardizes three kinds of thing a server can expose, and they map onto three things an agent actually needs. **Tools** are callable actions with side effects or computation. **Resources** are read-only data the host can fetch by URI, like a document or a config file. **Prompts** are named, reusable prompt templates the server curates so the host does not have to hardcode wording. One handshake, three primitives, each with its own method. Here is the host exercising all three, quoted from the artifact's real output:
+
+```text
+  tools/call:
+    --> {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "search_policy", "arguments": {"query": "refund window"}}}
+    <-- {"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "Refunds are accepted within 30 days; after the window a 10% restocking fee applies."}], "isError": false}}
+    [host] result: Refunds are accepted within 30 days; after the window a 10% restocking fee applies.
+  resources/read:
+    --> {"jsonrpc": "2.0", "id": 4, "method": "resources/read", "params": {"uri": "file:///policies/refund.md"}}
+    <-- {"jsonrpc": "2.0", "id": 4, "result": {"contents": [{"uri": "file:///policies/refund.md", "text": "Refunds within 30 days; 10% restocking fee after."}]}}
+    [host] resource text: 'Refunds within 30 days; 10% restocking fee after.'
+  prompts/get:
+    --> {"jsonrpc": "2.0", "id": 5, "method": "prompts/get", "params": {"name": "refund_decision"}}
+    <-- {"jsonrpc": "2.0", "id": 5, "result": {"messages": [{"role": "user", "content": {"type": "text", "text": "Decide the refund for {order}, citing the policy."}}]}}
+    [host] prompt template: 'Decide the refund for {order}, citing the policy.'
+```
+
+Read each call against its primitive. `tools/call` (id 3) runs `search_policy` with `arguments: {"query": "refund window"}` and gets back a content block of `type: "text"`, `Refunds are accepted within 30 days; after the window a 10% restocking fee applies.`, plus `isError: false`, which is how a server signals success versus a tool-level failure. `resources/read` (id 4) fetches the URI `file:///policies/refund.md` and returns its text, `Refunds within 30 days; 10% restocking fee after.`: read-only data, no execution, addressed by URI rather than called by name. `prompts/get` (id 5) retrieves the named template `refund_decision`, which comes back as a message with the text `Decide the refund for {order}, citing the policy.`, a server-curated prompt the host can fill in and send to its model. Three methods, three primitives, all behind the same handshake and the same JSON-RPC envelope. Notice that the `id` climbs (3, 4, 5) so each reply matches its request, and that the host code calling these is identical in shape regardless of which primitive it is reaching for.
+
+<Diagram number={1} caption="MCP's three server primitives behind one handshake. After the initialize handshake negotiates the protocol version and the server advertises its capabilities, the host reaches the support-server through three JSON-RPC methods, one per primitive. tools/call (id 3) runs the callable action search_policy with arguments query refund window and gets back a text content block, refunds are accepted within 30 days then a 10 percent restocking fee, with isError false. resources/read (id 4) fetches the read-only resource at the URI file slash slash slash policies slash refund dot md and returns its text, refunds within 30 days, 10 percent restocking fee after. prompts/get (id 5) retrieves the named prompt template refund_decision, decide the refund for the order, citing the policy. The figure shows that tools are callable actions, resources are read-only data fetched by URI, and prompts are reusable templates, all exposed by one server behind one handshake over the same JSON-RPC envelope.">
+  <img src="/essays/mcp-by-hand/part12-three-primitives.svg" alt="A diagram of one MCP server, the support-server, exposing three primitives to a host across a labelled JSON-RPC boundary. At the top, an initialize handshake box notes protocol version 2025-06-18 negotiated and capabilities tools, resources, prompts advertised. Below it, three parallel lanes each show a request arrow from host to server and a response arrow back. The first lane, tools, labelled callable actions, shows tools/call id 3 with name search_policy and arguments query refund window going right, and a text content block coming back reading refunds are accepted within 30 days, after the window a 10 percent restocking fee applies, tagged isError false. The second lane, resources, labelled read-only data fetched by URI, shows resources/read id 4 with uri file slash slash slash policies slash refund dot md going right, and the text refunds within 30 days, 10 percent restocking fee after coming back. The third lane, prompts, labelled reusable templates, shows prompts/get id 5 with name refund_decision going right, and a user message coming back reading decide the refund for the order, citing the policy. A caption strip reads: one handshake, three primitives, tools to call, resources to read, prompts to fill, all over the same JSON-RPC envelope." class="w-full rounded-lg" />
+</Diagram>
+
+## Discovered schemas drive the controller
+
+Here is where the protocol pays off and connects back to Part 1. The `inputSchema` the host discovered for `process_refund` is an ordinary JSON Schema object, and that is exactly what Part 1's validator already knows how to check. So the host hands the **wire-discovered** schema straight into the unchanged validator, and the controller's argument-checking works as it always did, only now the rules came over the network instead of out of a dict. Watch three argument sets validated against the discovered `process_refund` schema, quoted from the artifact's real output:
+
+```text
+    validate {"order_id": "ORD-3300", "amount": 180.0} -> OK
+    validate {"order_id": "ORD-3300"} -> REJECTED: missing required arg 'amount'
+    validate {"order_id": "ORD-3300", "amount": "lots"} -> REJECTED: arg 'amount' must be number
+    The schema was not hardcoded; it arrived from tools/list. Part 1's guarantee, over MCP.
+```
+
+Read all three. A well-formed call, `{"order_id": "ORD-3300", "amount": 180.0}`, passes: both required keys are present and `amount` is a number, so the validator returns `OK`. Drop `amount` and the validator rejects it with `missing required arg 'amount'`, because the schema's `required` list (which the host read off the wire) names it. Send `amount` as the string `"lots"` and it is rejected with `arg 'amount' must be number`, because the schema's `properties` say `amount` is `type: "number"`. This is byte-for-byte the Part 1 contract, a typed schema checked before the call ever fires, except the schema is no longer something the agent's author typed in. It arrived from `tools/list`. The last line says it plainly: the schema was not hardcoded, it came from the protocol, and Part 1's guarantee holds over MCP. The flagship figure below lets you step through the full sequence, from the handshake to discovery to a validated call, watching each JSON-RPC frame cross the wire.
+
+<Diagram number={2} caption="The full MCP exchange, interactive, from handshake to a schema-validated tool call. Step through the wire frames in order: the initialize handshake where the host announces protocol version 2025-06-18 and the server confirms it back and advertises capabilities tools, resources, prompts; the tools/list discovery call where the host learns search_policy and process_refund with their inputSchemas; and then the discovered process_refund schema being fed straight into Part 1's validator. Three argument sets are checked against that wire-discovered schema: order_id ORD-3300 with amount 180 passes as OK, order_id ORD-3300 alone is rejected for the missing required argument amount, and order_id ORD-3300 with amount the string lots is rejected because amount must be a number. The figure makes the central claim concrete, that the schema arrived over JSON-RPC rather than from a hardcoded dict, and Part 1's typed-argument guarantee runs unchanged over the protocol.">
+  <IframeFigure src="/essays/mcp-by-hand/part12-jsonrpc-and-discovery.html" title="Interactive JSON-RPC and discovery walkthrough for the MCP exchange between a host and the support-server. The view is a stepper with three stages on a shared wire. Stage one, the handshake, shows a request arrow from host to server carrying initialize id 1 with protocolVersion 2025-06-18 and clientInfo name agents-by-hand-host, and a response arrow back carrying result protocolVersion 2025-06-18, serverInfo name support-server, and capabilities tools, resources, prompts, with a note that the version was negotiated and the capabilities advertised. Stage two, discovery, shows a request tools/list id 2 going right and a response carrying two tools, search_policy with inputSchema requiring a query string, and process_refund with inputSchema requiring an order_id string and an amount number, ending in the line discovered tools search_policy, process_refund. Stage three, validation, takes the discovered process_refund schema and feeds it into Part 1's validator, then runs three checks: order_id ORD-3300 amount 180 returns OK, order_id ORD-3300 alone returns rejected missing required arg amount, and order_id ORD-3300 amount the string lots returns rejected arg amount must be number. A banner reads the schema was not hardcoded, it arrived from tools/list, Part 1's guarantee over MCP." height={860} />
+</Diagram>
+
+## One host, many servers
+
+A single server is useful, but the real reach of a protocol shows up with more than one. Because every server speaks the same handshake and the same discovery call, a host can connect to several at once and **multiplex** them: it merges what each one advertises into a single tool palette, and the agent calls any tool on it without knowing or caring which server backs it. Here is the host connecting to two servers, `support-server` and a `catalog-server`, and the merged palette that results, quoted from the artifact's real output:
+
+```text
+    [host] connected to support-server (protocol 2025-06-18, capabilities: tools, resources, prompts)
+    [host] connected to catalog-server (protocol 2025-06-18, capabilities: tools)
+    [host] palette across 2 servers:
+      search_policy    from support-server
+      process_refund   from support-server
+      search_products  from catalog-server
+    A multi-hop task now uses tools from different servers transparently:
+      search_products (catalog-server) -> Acme Corp was acquired by Globex in 2024.
+      search_products (catalog-server) -> Globex-branded wireless earbuds carry a 2-year limited warranty.
+      process_refund  (support-server) available on the same palette
+```
+
+Read the palette. `support-server` advertised `tools, resources, prompts`; `catalog-server` advertised only `tools`, and the host respects that, asking it for nothing it does not offer. The merged palette holds three tools: `search_policy` and `process_refund` from `support-server`, and `search_products` from `catalog-server`. The host keeps a small map from each tool name to the server that backs it, so when the agent calls `search_products`, the host routes the `tools/call` to `catalog-server`, and when it calls `process_refund`, it routes to `support-server`, all without the agent's logic changing. The multi-hop run shows it working: two `search_products` calls hit `catalog-server` (returning `Acme Corp was acquired by Globex in 2024.` and `Globex-branded wireless earbuds carry a 2-year limited warranty.`), and `process_refund` from `support-server` sits ready on the very same palette. That is the protocol's compounding return: add a server, and its tools simply appear in the agent's action space, no new wiring, no edit to the agent.
+
+<Diagram number={3} caption="One host multiplexing two MCP servers into a single tool palette. The host completes the handshake with two servers: support-server, which advertises capabilities tools, resources, and prompts, and catalog-server, which advertises only tools. The host merges what each one discovers into one palette of three tools, keeping a map from tool name to backing server: search_policy and process_refund are routed to support-server, and search_products is routed to catalog-server. A multi-hop task then calls across servers transparently, two search_products calls go to catalog-server and return that Acme Corp was acquired by Globex in 2024 and that Globex-branded wireless earbuds carry a 2-year limited warranty, while process_refund from support-server sits ready on the same palette. The figure shows that because every server speaks the same handshake and discovery call, the agent's action space is the union of all connected servers, assembled at run time with no new wiring.">
+  <img src="/essays/mcp-by-hand/part12-host-multiplex.svg" alt="A diagram of one host in the centre connected to two MCP servers, with a merged tool palette below it. On the left, a server box labelled support-server lists capabilities tools, resources, prompts and the tools search_policy and process_refund. On the right, a server box labelled catalog-server lists capability tools only and the tool search_products. Two handshake arrows, each marked protocol 2025-06-18, connect the host to the two servers. Below the host, a single merged palette box headed palette across 2 servers lists three rows: search_policy from support-server, process_refund from support-server, and search_products from catalog-server, each row with a small routing arrow pointing back to its backing server. At the bottom, a multi-hop strip shows search_products called twice against catalog-server returning Acme Corp was acquired by Globex in 2024 and Globex-branded wireless earbuds carry a 2-year limited warranty, with process_refund from support-server marked available on the same palette. A caption strip reads: every server speaks the same handshake, so the palette is the union of all of them, assembled at run time with no new wiring." class="w-full rounded-lg" />
+</Diagram>
+
+## In-process now, stdio in production
+
+Now the honest part, because the transport is the whole feasibility question and it is easy to wave at. The **default** in the companion code is an **in-process JSON-RPC shim**: the host calls `server.handle(request)` directly, in the same Python process, with no socket and no second process involved. But every message it sends and receives is a **real JSON-RPC frame, printed verbatim**, so the bytes you read above are exactly the bytes that would cross a wire. The opening line of the run says so:
+
+```text
+[transport] in-process JSON-RPC shim (default): the host calls server.handle()
+directly, but every frame below is a real JSON-RPC message printed verbatim.
+```
+
+This is what makes the run deterministic and reproducible: no network, no timing, no second process to coordinate, just function calls dressed in protocol frames. The **real deployment** is different. The server runs as its own **operating-system process**, and the host talks to it over **stdio**: it writes JSON-RPC requests to the server's standard input and reads responses from its standard output, one local process piping to another, still no network required for a local server. The companion code shows that path too, but as a clearly **labeled, illustrative transcript**, not a frozen verified run. It is marked exactly that way:
+
+```text
+THE REAL TRANSPORT (illustrative, not executed here): server as a subprocess over
+stdio. Two local processes, no network. Shown for reference; the verified run above
+uses the in-process shim.
+    $ python mcp_server.py            # process A: reads JSON-RPC from stdin
+    host -> server (stdin):  {"jsonrpc":"2.0","id":1,"method":"initialize",...}
+    server -> host (stdout): {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":...}}
+    host -> server (stdin):  {"jsonrpc":"2.0","id":2,"method":"tools/list"}
+    server -> host (stdout): {"jsonrpc":"2.0","id":2,"result":{"tools":[...]}}
+    (same frames as above, now crossing a pipe between two OS processes)
+```
+
+The thing to carry away is that the two paths differ only in **transport**, not in protocol. The frames are identical; what changes is whether `handle()` is a function call in the same process or a pipe between two processes. That is by design: a protocol is exactly the layer that lets you swap how the bytes travel without touching what they say. The in-process shim is the verified default precisely because it isolates the protocol from the messiness of process management, and the stdio path is one of several real transports (stdio for local servers, HTTP for remote ones) that carry the very same frames. I have labeled the stdio transcript illustrative on purpose: process startup, buffering, and the protocol version itself all move fast, so treat it as a faithful picture of the shape rather than a byte-frozen run.
+
+> ### Sidebar: skills and progressive tool disclosure
+>
+> A host that connects to many servers runs into a scaling problem the moment the palette gets big. Connect to a dozen servers and you might be holding **hundreds of tools**, and stuffing every one of their schemas into the model's context on every turn is both expensive and confusing: the model has to read past tools it will never use, and the bill grows with the catalog rather than the task. The fix pairs naturally with MCP's discovery calls: **progressive tool disclosure**. Rather than putting all the schemas in the prompt up front, the host discloses tools in stages, names and one-line descriptions first, and fetches a tool's full `inputSchema` only when the model actually reaches for it. This is the same idea behind **skills**: a large library of capabilities the agent can browse cheaply and load in detail on demand. MCP's `tools/list` (cheap, names and descriptions) and `tools/call` (the full schema and execution, reached only when needed) are exactly the two-stage shape progressive disclosure wants, so the protocol and the disclosure strategy fit together without extra machinery.
+
+> 💡 **From experience.** The clearest moment this protocol earned its keep was the day I deleted an integration instead of writing one. We had a refund tool wired by hand into one team's agent, the usual bespoke job: argument schema in the agent's code, the HTTP call inline, error handling tangled into the loop. A second team wanted the same capability in *their* agent, and the old answer would have been to copy the wiring, fork the schema, and keep two slightly-drifting versions in sync forever. Instead I pulled the tool out into a small MCP server that advertised it over `tools/list`, and pointed both hosts at it. The second team's agent discovered the tool, fed its `inputSchema` into their own validator, and called it, with **zero new integration code** on their side. The schema could not drift because there was now exactly one of it, living behind the protocol. The other lesson came from the handshake, and it came as a save rather than a story: a server we connected to advertised only `tools` in its capabilities, no `resources`, and our host had assumed it could `resources/read` a config file from it. Because capability negotiation happens at `initialize`, the mismatch surfaced at connection time as a clean "this server does not offer resources," not as a confusing failure three steps into a live run. The handshake turned what would have been a runtime mystery into a startup check.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- The agent's tools have been a **hardcoded Python dict** in one process since Part 1 (`TOOL_SCHEMAS`). A dict cannot be shared with another host, swapped at deploy time, or **discovered** by code that did not import it. The frontier track opens by replacing that dict with a protocol.
+- **MCP turns tool use into a wire protocol.** A **server** advertises capabilities; a **host** discovers and calls them over **JSON-RPC** (`"jsonrpc": "2.0"`, an `id`, a `method`, `params`, and a matching `result` or `error`). The agent's action space is assembled at run time from whatever servers it connects to.
+- The **`initialize` handshake** negotiates the protocol version (`2025-06-18` here) and advertises **capabilities**. `support-server` advertises `tools, resources, prompts`; `catalog-server` advertises only `tools`. Then `tools/list` discovers the tools: the host learned `search_policy` and `process_refund` by asking, not by importing.
+- MCP defines **three primitives** behind one handshake: **tools** (callable actions, via `tools/call`), **resources** (read-only data fetched by URI, via `resources/read`), and **prompts** (named templates, via `prompts/get`). The host code calling each is identical in shape.
+- The **discovered `inputSchema` drives Part 1's validator unchanged**: `{"order_id": "ORD-3300", "amount": 180.0}` validates `OK`, dropping `amount` is `REJECTED: missing required arg 'amount'`, and `amount: "lots"` is `REJECTED: arg 'amount' must be number`. Same typed-argument guarantee, except the schema arrived from `tools/list`, not a dict.
+- One host **multiplexes** many servers: the palette across two servers is the union (`search_policy`, `process_refund` from `support-server`; `search_products` from `catalog-server`), and a multi-hop task calls across them transparently. Add a server and its tools just appear, with no new wiring.
+- The verified default is an **in-process JSON-RPC shim** (real frames, no network); the real transport runs the server as a **subprocess over stdio** (shown as an illustrative, not-executed transcript). The two differ only in transport, not protocol; the frames are identical. A big palette pairs with **progressive tool disclosure** (names first, full schema on demand), the same idea as **skills**.
+
+## Glossary
+
+- **MCP (Model Context Protocol)**: a standard that turns "what tools do you have and how do I call them" into a wire protocol, so a server can advertise capabilities and any host can discover and call them. Replaces the hardcoded, single-process tool dict.
+- **JSON-RPC**: the message format MCP rides on. Every request is a JSON object with `"jsonrpc": "2.0"`, an `id`, a `method`, and `params`; every response echoes the `id` and carries either a `result` or an `error`. The `id` matches replies to requests.
+- **The `initialize` handshake**: the first exchange on a connection, where the host announces the protocol version and its identity and the server replies with the agreed version, its identity, and its capabilities. Nothing else happens until it completes.
+- **protocolVersion / capability negotiation**: the handshake agrees on a dialect (here `2025-06-18`) so a host and server written apart can interoperate, and the server advertises which **capabilities** it supports (tools, resources, prompts), so the host knows what it may ask for. A `tools`-only server like `catalog-server` will not be asked for resources.
+- **The three primitives (tools / resources / prompts)**: the three kinds of thing an MCP server can expose. **Tools** are callable actions (`tools/call`); **resources** are read-only data fetched by URI (`resources/read`); **prompts** are named, reusable prompt templates (`prompts/get`).
+- **inputSchema**: the JSON Schema for a tool's arguments, carried in `tools/list` (`type`, `properties`, `required`). It is just data, so the host can feed it straight into Part 1's validator; the schema now arrives over the wire rather than from a dict.
+- **Host vs server**: the **server** owns and exposes capabilities (it answers `initialize`, `tools/list`, `tools/call`, and the resource and prompt methods); the **host** connects, discovers, and calls them, then feeds discovered schemas to the agent's controller. The agent lives on the host side.
+- **Multiplexing**: one host connecting to several servers and merging their advertised capabilities into a single tool palette, keeping a map from each tool name to its backing server, so the agent calls any tool without knowing which server fulfills it.
+- **In-process shim vs stdio transport**: two ways to move the same frames. The **in-process shim** has the host call `server.handle()` directly in one process (deterministic, the verified default); the **stdio transport** runs the server as a separate OS process and pipes JSON-RPC over standard input and output (the real local deployment). They differ only in transport, not in protocol.
+- **Progressive tool disclosure**: a strategy for a host holding hundreds of tools, disclosing them in stages (names and descriptions first, full `inputSchema` only when the model reaches for a tool) instead of putting every schema in the prompt. The same idea as **skills**, and a natural fit for MCP's cheap `tools/list` plus on-demand `tools/call`.
+
+---
+
+The rule from this part: stop hardcoding the agent's tools into its own process, and make tool use a protocol instead. Stand up a **server** that advertises its capabilities and a **host** that discovers them over **JSON-RPC**, negotiate the protocol version and capabilities in an `initialize` handshake, expose the **three primitives** (tools, resources, prompts), feed the discovered `inputSchema` straight into the validator you already have, and **multiplex** many servers into one run-time-assembled palette. Keep the in-process shim for reproducibility and swap in the stdio transport for the real deployment; they carry the same frames. That turns a private dictionary of tools into something any host can connect to, discover, and call. But notice the shape of every tool we have discussed: it is a typed JSON function the agent fills in and the server runs. Some tasks do not fit that mold. When the work is "explore this directory, transform these files, compute this thing," the agent does not want to call a hundred typed functions; it wants to **write and run code**. **Part 13, The Code-Running Tool**, gives the agent a sandbox to execute code and operate a computer, which is enormously more powerful and, the moment the agent can run arbitrary code, enormously more dangerous: once it can run code, it can do real damage, and the sandbox is what stands between a useful agent and a catastrophic one.

@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tools as a Protocol, Part 12</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --slate: #64748b;
+  --slate-dark: #475569;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 880px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner .lead { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 18px 0 9px;
+}
+
+/* TRANSPORT TAG */
+.transport-tag {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 11px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin-bottom: 16px;
+  color: var(--indigo-dark);
+  line-height: 1.45;
+}
+.transport-tag svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.transport-tag code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+.transport-tag .verified {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: var(--emerald-dark);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+/* STEP CONTROLS */
+.step-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+}
+.step-btn:hover:not(:disabled) { background: #eef2ff; border-color: #c7d2fe; }
+.step-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.step-btn:disabled { opacity: 0.42; cursor: not-allowed; color: var(--text-muted); }
+.step-btn.primary { background: var(--indigo); color: #ffffff; border-color: var(--indigo); }
+.step-btn.primary:hover:not(:disabled) { background: var(--indigo-dark); }
+.step-progress { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+.step-progress .stepnum { font-family: var(--font-mono); color: var(--indigo-dark); }
+
+/* WIRE STEP STRIP */
+.wire-strip {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.wire-pill {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 8px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  background: transparent;
+  border: none;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+.wire-pill .pid {
+  display: block;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+  color: var(--text-muted);
+}
+.wire-pill[data-active="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.wire-pill[data-active="true"] .pid { color: var(--indigo-dark); }
+
+/* SUBPANELS */
+.subpanel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.subpanel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.subpanel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.subpanel-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.subpanel-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.subpanel-body { padding: 12px; }
+
+/* WIRE INSPECTOR */
+.wire-annotation {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 8px 8px 0;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+  min-height: 50px;
+}
+.wire-annotation .role {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--indigo-dark);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 7px;
+}
+.wire-annotation strong { color: var(--indigo-dark); }
+
+.frame {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.55;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: fadeIn 0.2s ease;
+}
+.frame .dir {
+  font-weight: 700;
+  margin-right: 8px;
+  user-select: none;
+}
+.frame.req {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+}
+.frame.req .dir { color: var(--indigo-dark); }
+.frame.res {
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+}
+.frame.res .dir { color: var(--teal-dark); }
+.frame .jk { color: var(--indigo-dark); }
+.frame .js { color: var(--emerald-dark); }
+.frame .jn { color: var(--amber-dark); }
+.frame .jb { color: var(--rose-dark); }
+.frame.res .jk { color: var(--teal-dark); }
+.host-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--slate-dark);
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--slate);
+  border-radius: 0 7px 7px 0;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+  animation: fadeIn 0.2s ease;
+}
+.host-note .tag { color: var(--slate-dark); font-weight: 700; }
+.wire-empty { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 6px 2px; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .frame, .host-note, .pchip, .feed-row { animation: none; transition: none; } }
+
+/* HOST MULTIPLEX */
+.mux-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 700px) { .mux-grid { grid-template-columns: 1fr; } }
+
+.server-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fcfcfd;
+  padding: 11px 12px;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.server-card.connected {
+  border-color: #5eead4;
+  background: #f0fdfa;
+  box-shadow: 0 0 0 1px #99f6e4;
+}
+.server-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.server-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--teal-dark);
+}
+.server-state {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: #ffffff;
+}
+.server-card.connected .server-state {
+  color: var(--emerald-dark);
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+.server-caps {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.cap-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 7px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.server-card.connected .cap-badge {
+  background: #ffffff;
+  border-color: #99f6e4;
+  color: var(--teal-dark);
+}
+.connect-btn {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 7px;
+  padding: 7px 12px;
+  cursor: pointer;
+  border: 1px solid var(--teal);
+  background: var(--teal);
+  color: #ffffff;
+  outline: none;
+  width: 100%;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.connect-btn:hover:not(:disabled) { background: var(--teal-dark); border-color: var(--teal-dark); }
+.connect-btn:focus-visible { box-shadow: 0 0 0 2px var(--teal); }
+.connect-btn:disabled {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: var(--emerald-dark);
+  cursor: default;
+}
+
+/* PALETTE */
+.palette-zone {
+  border: 1.5px dashed var(--border);
+  border-radius: 11px;
+  background: #fcfcfd;
+  padding: 12px;
+  margin-top: 13px;
+}
+.palette-zone[data-has="true"] { border-style: solid; border-color: #c7d2fe; background: #fbfbff; }
+.palette-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.palette-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--indigo-dark);
+}
+.palette-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.palette-list { display: flex; flex-direction: column; gap: 6px; }
+.pchip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px 10px;
+  animation: fadeIn 0.2s ease;
+}
+.pchip .pname {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--indigo-dark);
+}
+.pchip .pfrom {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--teal-dark);
+  font-weight: 700;
+}
+.pchip .pfrom .lbl { color: var(--text-muted); font-weight: 600; }
+.palette-empty { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 2px; }
+
+.mux-hop {
+  font-size: 11px;
+  color: var(--text-body);
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-left: 3px solid var(--teal);
+  border-radius: 0 8px 8px 0;
+  padding: 9px 11px;
+  margin-top: 12px;
+  line-height: 1.5;
+  display: none;
+}
+.mux-hop.show { display: block; }
+.mux-hop strong { color: var(--teal-dark); }
+.mux-hop .hopline { font-family: var(--font-mono); font-size: 10px; display: block; margin-top: 4px; color: var(--slate-dark); }
+.mux-hop .hopline .from { color: var(--teal-dark); font-weight: 700; }
+
+/* SCHEMA VALIDATOR */
+.schema-box {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 3px solid var(--amber);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  color: var(--amber-dark);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.schema-box .slbl {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+.schema-box .jk { color: var(--amber-dark); }
+.schema-box .js { color: var(--amber-dark); }
+.schema-source {
+  font-size: 10.5px;
+  color: var(--amber-dark);
+  margin-top: 6px;
+  font-family: var(--font-sans);
+  display: block;
+}
+.vcase-list { display: flex; flex-direction: column; gap: 7px; }
+.vcase {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fcfcfd;
+  padding: 9px 11px;
+  flex-wrap: wrap;
+}
+.vcase .args {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-body);
+  flex: 1;
+  min-width: 180px;
+}
+.vcase .args .jk { color: var(--slate-dark); }
+.vcase .args .js { color: var(--emerald-dark); }
+.vcase .args .jn { color: var(--amber-dark); }
+.vcase .args .jb { color: var(--rose-dark); }
+.vbadge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+.vbadge.ok { background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0; }
+.vbadge.rej { background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3; }
+.vbadge .arrow { opacity: 0.7; margin: 0 4px; }
+
+/* CONTRAST + CAPTION */
+.contrast {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.contrast strong { color: var(--indigo-dark); }
+.contrast code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  color: var(--indigo-dark);
+}
+
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 14px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+}
+.caption .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+
+/* STDIO TRANSCRIPT */
+.stdio {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  line-height: 1.6;
+  color: #e2e8f0;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 12px 13px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.stdio .cmt { color: #94a3b8; }
+.stdio .dir-out { color: #a5b4fc; }
+.stdio .dir-in { color: #5eead4; }
+.stdio-warn {
+  font-size: 10.5px;
+  color: var(--rose-dark);
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 7px;
+  padding: 7px 10px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.stdio-toggle {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 7px;
+  padding: 5px 10px;
+  cursor: pointer;
+  outline: none;
+}
+.stdio-toggle:hover { background: #eef2ff; border-color: #c7d2fe; }
+.stdio-toggle:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.stdio-body { display: none; }
+.stdio-body.show { display: block; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <h2 id="panel-heading">Discover tools over the wire: a JSON-RPC inspector for MCP</h2>
+  <p class="panel-subtitle">Part 1's tools were a hardcoded Python dict baked into one process. The Model Context Protocol turns "what tools do you have and how do I call them" into a wire protocol. A SERVER advertises capabilities; a HOST discovers and calls them over JSON-RPC. Step through the exact frames, then connect two servers and watch their tools merge into one run-time palette.</p>
+
+  <div class="goal-banner">
+    <span class="lead">The world:</span> a host speaking <code>protocolVersion 2025-06-18</code> to a <code>support-server</code> (capabilities <code>tools</code>, <code>resources</code>, <code>prompts</code>) and a <code>catalog-server</code> (<code>tools</code> only). The handshake negotiates the protocol; <code>tools/list</code> returns JSON <code>inputSchema</code>s; the discovered schema feeds Part 1's validator unchanged. No dict was imported.
+  </div>
+
+  <div class="transport-tag" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M8 21h8"/></svg>
+    <span><span class="verified">verified</span> The default is an <strong>in-process JSON-RPC shim</strong>: the host calls <code>server.handle(request)</code> directly, but every frame below is a real JSON-RPC message printed verbatim, the exact bytes that would cross a socket. The real <code>stdio</code> subprocess path (two OS processes, no network) is shown at the bottom as an illustrative transcript, not a frozen run.</span>
+  </div>
+
+  <div class="section-label">1 &#183; The wire inspector: step the JSON-RPC frames</div>
+  <div class="wire-strip" role="list" aria-label="JSON-RPC steps">
+    <span class="wire-pill" id="wp-0" data-active="true" role="listitem"><span class="pid">id 1</span>initialize</span>
+    <span class="wire-pill" id="wp-1" data-active="false" role="listitem"><span class="pid">id 2</span>tools/list</span>
+    <span class="wire-pill" id="wp-2" data-active="false" role="listitem"><span class="pid">id 3</span>tools/call</span>
+  </div>
+
+  <div class="step-controls" id="wire-controls"></div>
+
+  <div class="wire-annotation" id="wire-annotation" aria-live="polite"></div>
+
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-dot" style="background:var(--indigo)"></span>
+      <span class="subpanel-title">wire frames &#183; host &#8594; support-server (JSON-RPC 2.0)</span>
+      <span class="subpanel-meta" id="wire-meta">frame 1 / 3</span>
+    </div>
+    <div class="subpanel-body">
+      <div id="wire-frames" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="section-label">2 &#183; Host multiplex: connect servers, watch the palette assemble</div>
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-dot" style="background:var(--teal)"></span>
+      <span class="subpanel-title">one host, N servers &#183; capability negotiation</span>
+      <span class="subpanel-meta" id="mux-meta">0 / 2 connected</span>
+    </div>
+    <div class="subpanel-body">
+      <div class="mux-grid">
+        <div class="server-card" id="srv-support">
+          <div class="server-card-head">
+            <span class="subpanel-dot" style="background:var(--teal)"></span>
+            <span class="server-name">support-server</span>
+            <span class="server-state" id="state-support">offline</span>
+          </div>
+          <div class="server-caps">
+            <span class="cap-badge">tools</span>
+            <span class="cap-badge">resources</span>
+            <span class="cap-badge">prompts</span>
+          </div>
+          <button class="connect-btn" id="conn-support" type="button">Connect (initialize)</button>
+        </div>
+        <div class="server-card" id="srv-catalog">
+          <div class="server-card-head">
+            <span class="subpanel-dot" style="background:var(--teal)"></span>
+            <span class="server-name">catalog-server</span>
+            <span class="server-state" id="state-catalog">offline</span>
+          </div>
+          <div class="server-caps">
+            <span class="cap-badge">tools</span>
+          </div>
+          <button class="connect-btn" id="conn-catalog" type="button">Connect (initialize)</button>
+        </div>
+      </div>
+
+      <div class="palette-zone" id="palette-zone" data-has="false">
+        <div class="palette-head">
+          <span class="subpanel-dot" style="background:var(--indigo)"></span>
+          <span class="palette-title">run-time tool palette (union across servers)</span>
+          <span class="palette-count" id="palette-count">0 tools</span>
+        </div>
+        <div class="palette-list" id="palette-list" aria-live="polite"></div>
+        <div class="mux-hop" id="mux-hop"></div>
+      </div>
+
+      <div class="step-controls" style="margin-top:13px;margin-bottom:0">
+        <button class="step-btn primary" id="conn-both" type="button">Connect both &#8594;</button>
+        <button class="step-btn" id="mux-reset" type="button">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">3 &#183; The discovered schema drives Part 1's validator (over the wire)</div>
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-dot" style="background:var(--amber)"></span>
+      <span class="subpanel-title">process_refund inputSchema &#183; validate_against_schema()</span>
+    </div>
+    <div class="subpanel-body">
+      <div class="schema-box">
+        <span class="slbl">inputSchema (arrived from tools/list, not hardcoded)</span><span id="schema-json"></span>
+        <span class="schema-source">The schema is just data. Part 1's validator reads it the same way whether it was hand-written or discovered over MCP.</span>
+      </div>
+      <div class="vcase-list" id="vcase-list"></div>
+    </div>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="announce"></div>
+
+  <div class="contrast">
+    <strong>Tools are no longer a hardcoded dict.</strong> The same <code>inputSchema</code> Part 1 hand-wrote now arrives over the wire from <code>tools/list</code>, and feeds the same validator and controller unchanged. One host MULTIPLEXES many servers: the agent's action space is the union of <code>support-server</code> and <code>catalog-server</code>, assembled at run time, not at author time. A multi-hop task draws <code>search_products</code> from catalog and <code>process_refund</code> from support transparently, off one palette.
+  </div>
+
+  <div class="section-label">The real transport (illustrative, not executed here)</div>
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-dot" style="background:var(--rose)"></span>
+      <span class="subpanel-title">server as a subprocess over stdio</span>
+      <button class="stdio-toggle" id="stdio-toggle" type="button" aria-expanded="false" aria-controls="stdio-body">Show transcript</button>
+    </div>
+    <div class="subpanel-body stdio-body" id="stdio-body">
+      <div class="stdio-warn">Illustrative only. Two local processes, no network. NOT a frozen, verified run; the verified run above uses the in-process shim. The frames are the same, now crossing a pipe between two OS processes.</div>
+      <pre class="stdio"><span class="cmt">$ python mcp_server.py            # process A: reads JSON-RPC from stdin</span>
+<span class="dir-out">host -&gt; server (stdin):</span>  {"jsonrpc":"2.0","id":1,"method":"initialize",...}
+<span class="dir-in">server -&gt; host (stdout):</span> {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":...}}
+<span class="dir-out">host -&gt; server (stdin):</span>  {"jsonrpc":"2.0","id":2,"method":"tools/list"}
+<span class="dir-in">server -&gt; host (stdout):</span> {"jsonrpc":"2.0","id":2,"result":{"tools":[...]}}
+<span class="cmt">(same frames as above, now crossing a pipe between two OS processes)</span></pre>
+    </div>
+  </div>
+
+  <div class="caption">
+    <strong>How we keep it honest:</strong> the in-process shim is fully reproducible and every frame is a verbatim JSON-RPC message. The <code>protocolVersion</code> string and SDK shapes move fast; only the transport and version string would need edits for a live run. The real subprocess-over-stdio path, like the <code>generate()</code> LLM swap in earlier parts, is one flag away. The three primitives (<code>tools</code>, <code>resources</code>, <code>prompts</code>) are shown in full in the companion figures.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>host / request &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>server / response &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>schema &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>connected / OK &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>rejected / stdio
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =====================================================================
+     Verified facts from mcp_server_and_host.py (the single source of truth).
+     protocolVersion "2025-06-18". support-server caps: tools, resources,
+     prompts. catalog-server: tools only. All frames and strings below are
+     reproduced EXACTLY from the verified Expected output.
+  ===================================================================== */
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* Pretty JSON-RPC frame coloring: keys, string values, numbers, booleans. */
+  function colorFrame(line) {
+    return escHtml(line)
+      .replace(/&quot;([a-zA-Z0-9_\/.]+)&quot;:/g, '<span class="jk">&quot;$1&quot;</span>:')
+      .replace(/: (&quot;[^&]*?&quot;)/g, ': <span class="js">$1</span>')
+      .replace(/: (-?\d+\.?\d*)/g, ': <span class="jn">$1</span>')
+      .replace(/: (true|false)/g, ': <span class="jb">$1</span>');
+  }
+
+  /* ---- The three verified wire frames (initialize, tools/list, tools/call) ---- */
+  var FRAMES = [
+    {
+      id: 1, method: "initialize", role: "handshake",
+      annotation: '<span class="role">handshake</span><strong>initialize</strong> negotiates the protocol version and asks the server what it can do. The server replies with its <code>protocolVersion</code>, its <code>serverInfo</code>, and the capabilities it advertises: support-server exposes tools, resources, and prompts.',
+      req: '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "clientInfo": {"name": "agents-by-hand-host"}}}',
+      res: '{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-06-18", "serverInfo": {"name": "support-server"}, "capabilities": {"tools": {}, "resources": {}, "prompts": {}}}}',
+      host: '[host] connected to support-server (protocol 2025-06-18, capabilities: tools, resources, prompts)'
+    },
+    {
+      id: 2, method: "tools/list", role: "discovery",
+      annotation: '<span class="role">discovery</span><strong>tools/list</strong> is how the host learns the action space at run time. The server returns each tool with a JSON <code>inputSchema</code>. This replaces Part 1\'s hardcoded TOOL_SCHEMAS dict: nothing was imported, it was discovered.',
+      req: '{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}',
+      res: '{"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "search_policy", "description": "search the support/policy index", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}, {"name": "process_refund", "description": "issue a refund for an order (side-effecting)", "inputSchema": {"type": "object", "properties": {"order_id": {"type": "string"}, "amount": {"type": "number"}}, "required": ["order_id", "amount"]}}]}}',
+      host: "[host] discovered tools: ['search_policy', 'process_refund']"
+    },
+    {
+      id: 3, method: "tools/call", role: "invocation",
+      annotation: '<span class="role">invocation</span><strong>tools/call</strong> runs a discovered tool by name with arguments. The server executes the tool body and returns a content list. Here search_policy returns the refund window text, wrapped in MCP\'s content envelope.',
+      req: '{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "search_policy", "arguments": {"query": "refund window"}}}',
+      res: '{"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "Refunds are accepted within 30 days; after the window a 10% restocking fee applies."}], "isError": false}}',
+      host: '[host] result: Refunds are accepted within 30 days; after the window a 10% restocking fee applies.'
+    }
+  ];
+
+  /* ---- Wire inspector state ---- */
+  var wireStep = 0; // 0..2, the current frame index (cumulative reveal)
+
+  function renderWirePills() {
+    for (var i = 0; i < FRAMES.length; i++) {
+      var pill = document.getElementById("wp-" + i);
+      pill.setAttribute("data-active", i <= wireStep ? "true" : "false");
+    }
+  }
+
+  function renderWireAnnotation() {
+    document.getElementById("wire-annotation").innerHTML = FRAMES[wireStep].annotation;
+  }
+
+  function renderWireFrames() {
+    var box = document.getElementById("wire-frames");
+    var html = "";
+    for (var i = 0; i <= wireStep; i++) {
+      var f = FRAMES[i];
+      html += '<div class="frame req"><span class="dir">--&gt;</span>' + colorFrame(f.req) + '</div>';
+      html += '<div class="frame res"><span class="dir">&lt;--</span>' + colorFrame(f.res) + '</div>';
+      html += '<div class="host-note"><span class="tag">' + escHtml(f.host) + '</span></div>';
+    }
+    box.innerHTML = html;
+    document.getElementById("wire-meta").textContent = "frame " + (wireStep + 1) + " / 3";
+  }
+
+  function renderWireControls() {
+    var el = document.getElementById("wire-controls");
+    var atStart = wireStep === 0;
+    var atEnd = wireStep >= FRAMES.length - 1;
+    var html = "";
+    html += '<button class="step-btn" id="b-prev" type="button"' + (atStart ? " disabled" : "") + '>&#8592; Previous frame</button>';
+    html += '<button class="step-btn primary" id="b-next" type="button"' + (atEnd ? " disabled" : "") + '>Next frame &#8594;</button>';
+    html += '<button class="step-btn" id="b-wreset" type="button"' + (atStart ? " disabled" : "") + '>Reset</button>';
+    var label = atEnd ? "all 3 frames shown" : "frame " + (wireStep + 1) + " / 3 &#183; " + FRAMES[wireStep].method;
+    html += '<span class="step-progress"><span class="stepnum">' + label + '</span></span>';
+    el.innerHTML = html;
+    bind("b-prev", function () { if (wireStep > 0) { wireStep--; renderWire(); announceWire(); } });
+    bind("b-next", function () { if (wireStep < FRAMES.length - 1) { wireStep++; renderWire(); announceWire(); } });
+    bind("b-wreset", function () { wireStep = 0; renderWire(); announceWire(); });
+  }
+
+  function announceWire() {
+    var f = FRAMES[wireStep];
+    document.getElementById("announce").textContent =
+      "Frame id " + f.id + ", method " + f.method + " (" + f.role + "). Request and response shown.";
+  }
+
+  function renderWire() {
+    renderWirePills();
+    renderWireAnnotation();
+    renderWireFrames();
+    renderWireControls();
+  }
+
+  /* =====================================================================
+     Host multiplex. Connecting a server appends its discovered tools to the
+     palette, in source order: support first (search_policy, process_refund),
+     then catalog (search_products). Caps per the verified initialize results.
+  ===================================================================== */
+  var SERVERS = {
+    support: {
+      name: "support-server",
+      caps: ["tools", "resources", "prompts"],
+      tools: ["search_policy", "process_refund"]
+    },
+    catalog: {
+      name: "catalog-server",
+      caps: ["tools"],
+      tools: ["search_products"]
+    }
+  };
+  // Build the canonical palette order: support tools, then catalog tools.
+  var PALETTE_ORDER = [
+    { tool: "search_policy",   server: "support-server" },
+    { tool: "process_refund",  server: "support-server" },
+    { tool: "search_products", server: "catalog-server" }
+  ];
+
+  var connected = { support: false, catalog: false };
+
+  function paletteEntries() {
+    var entries = [];
+    PALETTE_ORDER.forEach(function (p) {
+      var key = p.server === "support-server" ? "support" : "catalog";
+      if (connected[key]) entries.push(p);
+    });
+    return entries;
+  }
+
+  function renderMux() {
+    ["support", "catalog"].forEach(function (key) {
+      var card = document.getElementById("srv-" + key);
+      var state = document.getElementById("state-" + key);
+      var btn = document.getElementById("conn-" + key);
+      if (connected[key]) {
+        card.classList.add("connected");
+        state.textContent = "connected";
+        btn.disabled = true;
+        btn.textContent = "Connected · protocol 2025-06-18";
+      } else {
+        card.classList.remove("connected");
+        state.textContent = "offline";
+        btn.disabled = false;
+        btn.textContent = "Connect (initialize)";
+      }
+    });
+
+    var nConn = (connected.support ? 1 : 0) + (connected.catalog ? 1 : 0);
+    document.getElementById("mux-meta").textContent = nConn + " / 2 connected";
+
+    var entries = paletteEntries();
+    var zone = document.getElementById("palette-zone");
+    var list = document.getElementById("palette-list");
+    var count = document.getElementById("palette-count");
+    zone.setAttribute("data-has", entries.length > 0 ? "true" : "false");
+    count.textContent = entries.length + (entries.length === 1 ? " tool" : " tools");
+
+    if (entries.length === 0) {
+      list.innerHTML = '<div class="palette-empty">No tools yet. Connect a server to populate the palette over JSON-RPC.</div>';
+    } else {
+      list.innerHTML = entries.map(function (e) {
+        return '<div class="pchip"><span class="subpanel-dot" style="background:var(--indigo)"></span>'
+          + '<span class="pname">' + escHtml(e.tool) + '</span>'
+          + '<span class="pfrom"><span class="lbl">from</span> ' + escHtml(e.server) + '</span></div>';
+      }).join("");
+    }
+
+    // multi-hop only once BOTH servers are connected
+    var hop = document.getElementById("mux-hop");
+    if (connected.support && connected.catalog) {
+      hop.classList.add("show");
+      hop.innerHTML = '<strong>A multi-hop task draws from both servers transparently.</strong>'
+        + '<span class="hopline">search_products <span class="from">(catalog-server)</span> -&gt; Acme Corp was acquired by Globex in 2024.</span>'
+        + '<span class="hopline">search_products <span class="from">(catalog-server)</span> -&gt; Globex-branded wireless earbuds carry a 2-year limited warranty.</span>'
+        + '<span class="hopline">process_refund <span class="from">(support-server)</span> available on the same palette</span>';
+    } else {
+      hop.classList.remove("show");
+      hop.innerHTML = "";
+    }
+  }
+
+  function connect(key) {
+    if (connected[key]) return;
+    connected[key] = true;
+    renderMux();
+    var s = SERVERS[key];
+    document.getElementById("announce").textContent =
+      "Connected to " + s.name + ", protocol 2025-06-18, capabilities " + s.caps.join(", ")
+      + ". Palette now has " + paletteEntries().length + " tools.";
+  }
+
+  document.getElementById("conn-support").addEventListener("click", function () { connect("support"); });
+  document.getElementById("conn-catalog").addEventListener("click", function () { connect("catalog"); });
+  document.getElementById("conn-both").addEventListener("click", function () {
+    connect("support"); connect("catalog");
+  });
+  document.getElementById("mux-reset").addEventListener("click", function () {
+    connected.support = false; connected.catalog = false;
+    renderMux();
+    document.getElementById("announce").textContent = "Multiplex reset. No servers connected.";
+  });
+
+  /* =====================================================================
+     Schema validator. The process_refund inputSchema (from tools/list)
+     drives Part 1's validate_against_schema over three verified cases.
+  ===================================================================== */
+  var SCHEMA_JSON =
+    '{"type": "object", "properties": {"order_id": {"type": "string"}, "amount": {"type": "number"}}, "required": ["order_id", "amount"]}';
+
+  var VCASES = [
+    { args: '{"order_id": "ORD-3300", "amount": 180.0}', ok: true,  msg: "OK" },
+    { args: '{"order_id": "ORD-3300"}',                   ok: false, msg: "REJECTED: missing required arg 'amount'" },
+    { args: '{"order_id": "ORD-3300", "amount": "lots"}', ok: false, msg: "REJECTED: arg 'amount' must be number" }
+  ];
+
+  function renderSchema() {
+    document.getElementById("schema-json").innerHTML =
+      escHtml(SCHEMA_JSON)
+        .replace(/&quot;([a-zA-Z0-9_]+)&quot;:/g, '<span class="jk">&quot;$1&quot;</span>:')
+        .replace(/: (&quot;[^&]*?&quot;)/g, ': <span class="js">$1</span>');
+
+    var list = document.getElementById("vcase-list");
+    list.innerHTML = VCASES.map(function (c) {
+      var args = escHtml(c.args)
+        .replace(/&quot;([a-zA-Z0-9_]+)&quot;:/g, '<span class="jk">&quot;$1&quot;</span>:')
+        .replace(/: (&quot;[^&]*?&quot;)/g, ': <span class="js">$1</span>')
+        .replace(/: (-?\d+\.?\d*)/g, ': <span class="jn">$1</span>');
+      var badge = c.ok
+        ? '<span class="vbadge ok"><span class="arrow">&#8594;</span>OK</span>'
+        : '<span class="vbadge rej"><span class="arrow">&#8594;</span>' + escHtml(c.msg) + '</span>';
+      return '<div class="vcase"><span class="args">' + args + '</span>' + badge + '</div>';
+    }).join("");
+  }
+
+  /* ---- shared ---- */
+  function bind(id, fn) {
+    var b = document.getElementById(id);
+    if (b) b.addEventListener("click", fn);
+  }
+
+  document.getElementById("stdio-toggle").addEventListener("click", function () {
+    var body = document.getElementById("stdio-body");
+    var open = body.classList.toggle("show");
+    this.setAttribute("aria-expanded", open ? "true" : "false");
+    this.textContent = open ? "Hide transcript" : "Show transcript";
+  });
+
+  /* init */
+  renderWire();
+  renderMux();
+  renderSchema();
+})();
+</script>
+</body>
+</html>
