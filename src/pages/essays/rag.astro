@@ -3,7 +3,7 @@ import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import { readingTime } from '../../lib/essayMeta';
 
-const parts = (await getCollection('essays', ({ data }) => !data.draft && data.seriesOrder != null))
+const parts = (await getCollection('essays', ({ data }) => !data.draft && data.seriesOrder != null && data.series === 'rag'))
   .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
 
 const core = parts.filter((p) => (p.data.seriesOrder ?? 0) <= 12);

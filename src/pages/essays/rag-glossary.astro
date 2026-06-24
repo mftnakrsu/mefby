@@ -2,7 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 
-const parts = (await getCollection('essays', ({ data }) => !data.draft && data.seriesOrder != null))
+const parts = (await getCollection('essays', ({ data }) => !data.draft && data.seriesOrder != null && data.series === 'rag'))
   .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
 ---
 
