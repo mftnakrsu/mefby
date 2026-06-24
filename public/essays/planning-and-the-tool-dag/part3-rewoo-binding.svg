@@ -1,0 +1,215 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="100%" style="height:auto" role="img" aria-label="ReWOO evidence-variable binding. A worksheet lists four steps: E1 searches the policy for the refund window, E2 searches products for who acquired Acme, E3 searches products for the bound earbuds warranty, and E4 calculates 18 percent of 250. The result of E2, that Acme was acquired by Globex, binds into E3 so the literal string hash E2 earbuds warranty becomes Globex earbuds warranty. One solver call then reads the filled worksheet and writes the answer.">
+  <title>ReWOO: the planner names results as #E variables before they exist; tools fill them; one solver reads the worksheet</title>
+
+  <defs>
+    <marker id="arrGray" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#64748b"/>
+    </marker>
+    <marker id="arrIndigo" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#6366f1"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#14b8a6"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="760" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 3, ReWOO evidence-variable binding</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">ReWOO: name the results before they exist, then fill them in</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">The planner writes one worksheet with #E variables. Tools fill them. One solver reads the completed worksheet. No model calls in between.</text>
+
+  <!-- ============ PLANNER (indigo) ============ -->
+  <rect x="40" y="92" width="210" height="74" rx="13" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <rect x="40" y="92" width="210" height="28" rx="13" fill="#6366f1"/>
+  <rect x="40" y="106" width="210" height="14" fill="#6366f1"/>
+  <text x="145" y="111" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">PLANNER (1 LLM call)</text>
+  <text x="145" y="140" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#4f46e5">writes the whole worksheet</text>
+  <text x="145" y="156" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#4f46e5">up front, with #E variables</text>
+
+  <!-- arrow planner -> worksheet -->
+  <line x1="145" y1="166" x2="145" y2="196" stroke="#6366f1" stroke-width="2" marker-end="url(#arrIndigo)"/>
+
+  <!-- ============ WORKSHEET (the four #E rows) ============ -->
+  <rect x="40" y="200" width="700" height="392" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="40" y="200" width="700" height="34" rx="14" fill="#f1f5f9"/>
+  <rect x="40" y="217" width="700" height="17" fill="#f1f5f9"/>
+  <text x="64" y="222"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a" letter-spacing="0.02em">THE WORKSHEET</text>
+  <text x="716" y="222" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#64748b">an #E name can be used before the value arrives</text>
+
+  <!-- E1 row (teal, independent) -->
+  <rect x="60" y="250" width="660" height="62" rx="11" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+  <rect x="60" y="250" width="8" height="62" rx="4" fill="#14b8a6"/>
+  <text x="84" y="276"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="14" font-weight="700" fill="#0d9488">#E1</text>
+  <text x="134" y="276"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#0f172a">= search_policy[<tspan fill="#b45309">"refund window 30 days"</tspan>]</text>
+  <text x="134" y="298"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#64748b">independent &#183; filled by the tool: "Refunds are accepted within 30 days of purchase."</text>
+
+  <!-- E2 row (teal, independent, the source of the binding) -->
+  <rect x="60" y="324" width="660" height="62" rx="11" fill="#f0fdfa" stroke="#14b8a6" stroke-width="2"/>
+  <rect x="60" y="324" width="8" height="62" rx="4" fill="#14b8a6"/>
+  <text x="84" y="350"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="14" font-weight="700" fill="#0d9488">#E2</text>
+  <text x="134" y="350"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#0f172a">= search_products[<tspan fill="#b45309">"who acquired Acme"</tspan>]</text>
+  <text x="134" y="372"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#64748b">filled by the tool: "Acme Corp was acquired by Globex in 2024."</text>
+  <!-- source dot for the binding arrow -->
+  <circle cx="690" cy="355" r="5" fill="#6366f1"/>
+
+  <!-- E3 row (indigo border: it depends on E2) -->
+  <rect x="60" y="398" width="660" height="78" rx="11" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <rect x="60" y="398" width="8" height="78" rx="4" fill="#6366f1"/>
+  <text x="84" y="424"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="14" font-weight="700" fill="#4f46e5">#E3</text>
+  <text x="134" y="424"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#0f172a">= search_products[<tspan fill="#4f46e5" font-weight="700">"#E2</tspan><tspan fill="#b45309"> earbuds warranty"</tspan>]</text>
+  <!-- binding target dot -->
+  <circle cx="156" cy="430" r="5" fill="#6366f1"/>
+  <text x="134" y="446"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#6366f1" font-weight="600">depends on #E2 &#183; the planner referenced E2's result before it existed</text>
+  <!-- bound line -->
+  <rect x="134" y="454" width="566" height="16" rx="5" fill="#e0e7ff"/>
+  <text x="142" y="466"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#3730a3">bound: "#E2 earbuds warranty"  -&gt;  "Globex earbuds warranty"</text>
+
+  <!-- E4 row (teal, independent) -->
+  <rect x="60" y="488" width="660" height="62" rx="11" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+  <rect x="60" y="488" width="8" height="62" rx="4" fill="#14b8a6"/>
+  <text x="84" y="514"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="14" font-weight="700" fill="#0d9488">#E4</text>
+  <text x="134" y="514"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#0f172a">= calculator[<tspan fill="#b45309">"0.18 * 250"</tspan>]</text>
+  <text x="134" y="536"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#64748b">independent &#183; filled by the tool: 45.0</text>
+
+  <!-- caption inside worksheet -->
+  <text x="400" y="578" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#94a3b8">E1, E2, E4 are independent; only E3 names an earlier result, so only E3 must wait.</text>
+
+  <!-- ============ THE BINDING ARROW (E2 result -> E3 placeholder) ============ -->
+  <!-- from E2 source dot (690,355) curving left and up into E3's #E2 token (156,430) -->
+  <path d="M 690 355 C 770 355, 770 430, 156 430"
+    fill="none" stroke="#6366f1" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#arrIndigo)"/>
+  <!-- binding label badge on the curve -->
+  <rect x="772" y="378" width="156" height="44" rx="9" fill="#eef2ff" stroke="#6366f1" stroke-width="1.4"/>
+  <text x="850" y="396" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#4f46e5">BIND #E2</text>
+  <text x="850" y="412" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#6366f1">acquirer name -&gt; "Globex"</text>
+
+  <!-- ============ SOLVER (emerald, one call) ============ -->
+  <rect x="790" y="200" width="370" height="150" rx="14" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <rect x="790" y="200" width="370" height="30" rx="14" fill="#10b981"/>
+  <rect x="790" y="215" width="370" height="15" fill="#10b981"/>
+  <text x="975" y="221" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">SOLVER (1 LLM call)</text>
+  <text x="810" y="252"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">reads the fully filled worksheet</text>
+  <text x="810" y="270"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">(all four #E values resolved) and</text>
+  <text x="810" y="288"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">writes the final answer in one pass.</text>
+  <rect x="810" y="304" width="340" height="34" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.4"/>
+  <text x="824" y="319"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="700" fill="#047857">TOTAL: 2 LLM calls</text>
+  <text x="824" y="332"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#047857">planner + solver, 4 tool calls, no model calls mid-run</text>
+
+  <!-- arrow worksheet -> solver -->
+  <path d="M 740 396 C 762 396, 762 300, 788 300"
+    fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrEmerald)"/>
+
+  <!-- arrow solver -> answer -->
+  <line x1="975" y1="350" x2="975" y2="610" stroke="#10b981" stroke-width="2" marker-end="url(#arrEmerald)"/>
+
+  <!-- ============ FINAL ANSWER (emerald, shared) ============ -->
+  <rect x="790" y="614" width="370" height="118" rx="14" fill="#ffffff" stroke="#10b981" stroke-width="2"/>
+  <text x="810" y="638"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#047857" letter-spacing="0.04em">FINAL ANSWER (same as every strategy)</text>
+  <text x="810" y="660"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">Refund window is 30 days from</text>
+  <text x="810" y="676"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">purchase. The earbuds (made by Globex,</text>
+  <text x="810" y="692"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">which acquired Acme) carry a 2-year</text>
+  <text x="810" y="708"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">limited warranty. Tax on a $250 order</text>
+  <text x="810" y="724"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">at 18% is $45.00.</text>
+
+  <!-- ============ BOTTOM CAPTION ============ -->
+  <rect x="40" y="614" width="700" height="118" rx="14" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="64" y="640"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#0f172a">Why this is cheap</text>
+  <text x="64" y="664"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#475569">The plan is written once, so the model is never consulted</text>
+  <text x="64" y="682"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#475569">mid-run. Evidence variables (#E2) let a step reference a</text>
+  <text x="64" y="700"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#475569">result that does not exist yet; the tools fill it in, the binding</text>
+  <text x="64" y="718"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#475569">resolves, and one solver call reads the finished sheet.</text>
+
+</svg>

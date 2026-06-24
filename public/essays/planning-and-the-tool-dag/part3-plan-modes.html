@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Planning and the Tool DAG, Part 3</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --amber: #f59e0b;
+  --emerald: #10b981;
+  --rose: #f43f5e;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 760px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner span { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+/* SEGMENTED TOGGLE */
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  flex: 1;
+  min-width: 120px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.toggle-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.toggle-btn[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.toggle-btn .mode-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* READOUT (the two headline numbers) */
+.readout {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.metric {
+  flex: 1;
+  min-width: 130px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  padding: 10px 12px;
+}
+.metric-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-heading);
+}
+.metric-sub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.metric.llm { border-color: #c7d2fe; }
+.metric.llm .metric-value { color: var(--indigo-dark); }
+.metric.depth { border-color: #99f6e4; }
+.metric.depth .metric-value { color: #0d9488; }
+.metric.tools { border-color: var(--border); }
+.metric.tools .metric-value { color: var(--text-body); font-size: 22px; }
+/* win/cost colour cues applied via JS */
+.metric.is-win { background: #ecfdf5; border-color: #a7f3d0; }
+.metric.is-win .metric-value { color: #047857; }
+.metric.is-cost { background: #fffbeb; border-color: #fde68a; }
+.metric.is-cost .metric-value { color: #b45309; }
+
+/* TRACE AREA */
+.trace-area { min-height: 200px; }
+
+.strategy-blurb {
+  font-size: 12px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.strategy-blurb strong { color: var(--indigo-dark); }
+
+/* step / worksheet rows */
+.row-list { display: flex; flex-direction: column; gap: 7px; }
+.trace-row {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 8px 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  animation: fadeIn 0.18s ease;
+}
+@media (prefers-reduced-motion: reduce) { .trace-row { animation: none; } }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.row-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: center;
+}
+.row-tag.llm { background: #eef2ff; color: var(--indigo-dark); border: 1px solid #c7d2fe; }
+.row-tag.tool { background: #f0fdfa; color: #0d9488; border: 1px solid #99f6e4; }
+.row-tag.evid { background: #f0fdfa; color: #0d9488; border: 1px solid #99f6e4; }
+.row-tag.synth { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.row-body { flex: 1; min-width: 0; }
+.row-call {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-heading);
+  word-break: break-word;
+}
+.row-call .fn { color: #0d9488; font-weight: 600; }
+.row-call .arg { color: #b45309; }
+.row-call .ev { color: var(--indigo-dark); font-weight: 700; }
+.row-result {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.row-note {
+  font-size: 10.5px;
+  color: var(--amber);
+  margin-top: 3px;
+  font-weight: 600;
+}
+.row-note.dep { color: var(--indigo); }
+
+/* transcript pill (ReAct only) */
+.transcript-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* DAG rounds layout */
+.dag-rounds { display: flex; flex-direction: column; gap: 12px; }
+.dag-round {
+  border: 1px dashed var(--teal);
+  border-radius: 11px;
+  padding: 10px 11px;
+  background: #f0fdfa;
+}
+.dag-round.r2 { border-color: var(--indigo); background: #eef2ff; }
+.dag-round-head {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #0d9488;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dag-round.r2 .dag-round-head { color: var(--indigo-dark); }
+.dag-round-head .badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--teal);
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.dag-round.r2 .dag-round-head .badge { background: var(--indigo); }
+.dag-nodes { display: flex; gap: 8px; flex-wrap: wrap; }
+.dag-node {
+  flex: 1;
+  min-width: 150px;
+  background: #ffffff;
+  border: 1px solid #99f6e4;
+  border-radius: 9px;
+  padding: 8px 10px;
+}
+.dag-round.r2 .dag-node { border-color: #c7d2fe; }
+.dag-node .nid {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0d9488;
+}
+.dag-round.r2 .dag-node .nid { color: var(--indigo-dark); }
+.dag-node .ncall {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-body);
+  margin-top: 2px;
+  word-break: break-word;
+}
+.dag-node .ndep {
+  font-size: 10px;
+  color: var(--indigo);
+  margin-top: 3px;
+  font-weight: 600;
+}
+.dag-depth-note {
+  font-size: 11px;
+  color: var(--text-body);
+  text-align: center;
+  margin-top: 2px;
+}
+.dag-depth-note strong { color: #0d9488; }
+
+/* FINAL ANSWER */
+.answer-box {
+  margin-top: 16px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 11px 13px;
+}
+.answer-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #047857;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.answer-text {
+  font-size: 12.5px;
+  color: #064e3b;
+  line-height: 1.55;
+}
+
+/* CAPTION / LEGEND */
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption .swatch {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+/* SCOREBOARD */
+.scoreboard {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.scoreboard th, .scoreboard td {
+  text-align: right;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.scoreboard th:first-child, .scoreboard td:first-child { text-align: left; }
+.scoreboard th {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.scoreboard td { font-family: var(--font-mono); color: var(--text-body); }
+.scoreboard td:first-child { font-family: var(--font-sans); font-weight: 600; color: var(--text-heading); }
+.scoreboard tr.is-active td { background: #eef2ff; }
+.scoreboard tr.is-active td:first-child { color: var(--indigo-dark); }
+.score-win { color: #047857; font-weight: 700; }
+.score-cost { color: #b45309; font-weight: 700; }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- PANEL A -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <h2 id="panel-a-heading">Same answer, four ways to plan the work</h2>
+  <p class="panel-subtitle">One task, four strategies. Watch the LLM calls and the critical-path depth change while the answer stays the same.</p>
+
+  <div class="goal-banner">
+    <span>Goal:</span> Build a refund summary: the refund window from policy, the warranty on the earbuds made by the company that acquired Acme, and 18% tax on a $250 order.
+    <br />Four tool calls, one dependency chain (<code>E2 acquirer -&gt; E3 warranty</code>), two independent branches (<code>E1 policy</code>, <code>E4 tax</code>).
+  </div>
+
+  <!-- Strategy toggle -->
+  <div class="toggle-group" role="group" aria-label="Strategy selector">
+    <button class="toggle-btn" id="btn-mode-0" aria-pressed="true" type="button">
+      <span class="mode-dot" style="background:var(--rose)"></span>ReAct
+    </button>
+    <button class="toggle-btn" id="btn-mode-1" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--indigo)"></span>Plan-and-Execute
+    </button>
+    <button class="toggle-btn" id="btn-mode-2" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--indigo)"></span>ReWOO
+    </button>
+    <button class="toggle-btn" id="btn-mode-3" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--emerald)"></span>Tool DAG
+    </button>
+  </div>
+
+  <!-- Live readout -->
+  <div class="readout" id="readout">
+    <div class="metric llm" id="metric-llm">
+      <div class="metric-label">LLM calls</div>
+      <div class="metric-value" id="val-llm">5</div>
+      <div class="metric-sub" id="sub-llm">the cost lever</div>
+    </div>
+    <div class="metric depth" id="metric-depth">
+      <div class="metric-label">Critical-path depth</div>
+      <div class="metric-value" id="val-depth">4</div>
+      <div class="metric-sub" id="sub-depth">sequential rounds</div>
+    </div>
+    <div class="metric tools" id="metric-tools">
+      <div class="metric-label">Tool calls</div>
+      <div class="metric-value" id="val-tools">4</div>
+      <div class="metric-sub">same work, always</div>
+    </div>
+  </div>
+
+  <!-- Strategy blurb + trace -->
+  <div class="strategy-blurb" id="strategy-blurb"></div>
+  <div class="trace-area" id="trace-area" aria-live="polite" aria-atomic="false"></div>
+
+  <div class="sr-only" aria-live="polite" id="mode-announcer"></div>
+
+  <!-- Shared final answer -->
+  <div class="answer-box">
+    <div class="answer-label">&#10003; Final answer (identical for every strategy)</div>
+    <div class="answer-text">Refund window is 30 days from purchase. The earbuds (made by Globex, which acquired Acme) carry a 2-year limited warranty. Tax on a $250 order at 18% is $45.00.</div>
+  </div>
+
+  <!-- Caption / legend -->
+  <div class="caption">
+    <strong>How we keep it honest:</strong> we report LLM calls plus critical-path depth, never wall-clock. "Parallel" means "could run in the same round"; depth is the sequential rounds that real concurrency would shrink.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>controller / plan &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>tools &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>cost / caution &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>cheap / win &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>expensive
+  </div>
+</section>
+
+<!-- PANEL B -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <h2 id="panel-b-heading">The scoreboard</h2>
+  <p class="panel-subtitle">LLM calls is the cost lever; depth is the sequential rounds. Tool calls never change.</p>
+
+  <table class="scoreboard" id="scoreboard">
+    <thead>
+      <tr>
+        <th scope="col">Strategy</th>
+        <th scope="col">LLM calls</th>
+        <th scope="col">Tool calls</th>
+        <th scope="col">Crit-path depth</th>
+      </tr>
+    </thead>
+    <tbody id="scoreboard-body"></tbody>
+  </table>
+  <p style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.55;">
+    Writing the plan down once cuts LLM calls from 5 (one per hop) to 2 (plan plus synthesize). ReWOO removes every mid-run model call via <code style="font-family:var(--font-mono);background:#ffffff;border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:10px;">#E</code> binding. The DAG additionally cuts critical-path depth from 4 to 2: the three independent lookups collapse into one round; only <code style="font-family:var(--font-mono);background:#ffffff;border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:10px;">E2 -&gt; E3</code> chains.
+  </p>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* Render a tool call as a coloured mono chip. Highlights #E references. */
+  function callHtml(fn, arg) {
+    var argHtml = escHtml(arg).replace(/#E\d/g, function (m) {
+      return '<span class="ev">' + m + '</span>';
+    });
+    return '<span class="fn">' + escHtml(fn) + '</span>(<span class="arg">' + argHtml + '</span>)';
+  }
+
+  /* The verified scoreboard. These four numbers are the source of truth. */
+  var STRATEGIES = [
+    {
+      id: "react", label: "ReAct", dot: "var(--rose)",
+      llm: 5, tools: 4, depth: 4,
+      llmTone: "cost", depthTone: "cost",
+      llmSub: "one per hop + finish",
+      depthSub: "serial; one round per hop",
+      blurb: 'The baseline from Parts 1 and 2. <strong>No plan object exists.</strong> Each hop is a fresh LLM call that re-reads the whole transcript before deciding the next step, so the bill grows with the work.',
+      kind: "steps",
+      steps: [
+        { tag: "LLM 1", call: ["search_policy", "refund window 30 days"], result: "Refunds are accepted within 30 days of purchase ... (score=0.43)", transcript: "transcript: 0 chars" },
+        { tag: "LLM 2", call: ["search_products", "who acquired Acme"], result: "Acme Corp was acquired by Globex in 2024. (score=0.58)", transcript: "re-sends step 1" },
+        { tag: "LLM 3", call: ["search_products", "Globex earbuds warranty"], result: "Globex-branded wireless earbuds carry a 2-year limited warranty. (score=0.58)", transcript: "re-sends steps 1-2" },
+        { tag: "LLM 4", call: ["calculator", "0.18 * 250"], result: "45.0", transcript: "re-sends steps 1-3" },
+        { tag: "LLM 5", synth: "LLM reads the full transcript and writes the answer.", transcript: "re-sends steps 1-4" },
+      ],
+      footer: '5 LLM calls, 4 tool calls, depth 4 (serial). Transcript re-sent: ~1077 chars total.',
+    },
+    {
+      id: "plan", label: "Plan-and-Execute", dot: "var(--indigo)",
+      llm: 2, tools: 4, depth: 4,
+      llmTone: "win", depthTone: "neutral",
+      llmSub: "plan + synthesize",
+      depthSub: "linear executor",
+      blurb: 'A planner writes the ordered plan <strong>once</strong>; an executor runs the steps without calling the model again; one final call synthesizes. Two LLM calls instead of one-per-hop, no matter how many tools the plan has.',
+      kind: "steps",
+      steps: [
+        { tag: "LLM 1", planLabel: "Planner writes the plan (one call):" },
+        { tag: "E1", call: ["search_policy", "refund window 30 days"], result: "executor runs it, no model call", exec: true },
+        { tag: "E2", call: ["search_products", "who acquired Acme"], result: "executor runs it, no model call", exec: true },
+        { tag: "E3", call: ["search_products", "#E2 earbuds warranty"], result: "executor runs it, no model call", exec: true, dep: "needs E2" },
+        { tag: "E4", call: ["calculator", "0.18 * 250"], result: "executor runs it, no model call", exec: true },
+        { tag: "LLM 2", synth: "One synthesis call composes the answer." },
+      ],
+      footer: '2 LLM calls, 4 tool calls, depth 4 (linear). The executor never called the model.',
+    },
+    {
+      id: "rewoo", label: "ReWOO", dot: "var(--indigo)",
+      llm: 2, tools: 4, depth: 4,
+      llmTone: "win", depthTone: "neutral",
+      llmSub: "planner + solver",
+      depthSub: "linear worksheet",
+      blurb: 'Reasoning WithOut Observation. The plan binds <strong>evidence variables</strong> (#E1, #E2, ...) so a later step can name an earlier result before it exists. Tools fill the variables; one solver call reads the filled worksheet. No mid-run model calls.',
+      kind: "steps",
+      steps: [
+        { tag: "LLM 1", planLabel: "Planner writes the worksheet with #E variables (one call):" },
+        { tag: "#E1", call: ["search_policy", "refund window 30 days"], evid: true },
+        { tag: "#E2", call: ["search_products", "who acquired Acme"], evid: true },
+        { tag: "#E3", call: ["search_products", "#E2 earbuds warranty"], evid: true, bind: 'bound: "#E2 earbuds warranty" -> "Globex earbuds warranty"' },
+        { tag: "#E4", call: ["calculator", "0.18 * 250"], evid: true },
+        { tag: "LLM 2", synth: "One solver call reads the filled worksheet and writes the answer." },
+      ],
+      footer: '2 LLM calls, 4 tool calls, depth 4 (linear). One planner call, one solver call, no model calls in between.',
+    },
+    {
+      id: "dag", label: "Tool DAG", dot: "var(--emerald)",
+      llm: 2, tools: 4, depth: 2,
+      llmTone: "win", depthTone: "win",
+      llmSub: "plan + join",
+      depthSub: "two rounds, not four",
+      blurb: 'LLMCompiler-style. The plan is a <strong>DAG with explicit dependencies</strong>; the executor runs it by topological level, so independent nodes share a round. The headline is critical-path depth (the longest dependency chain), not step count.',
+      kind: "dag",
+      rounds: [
+        {
+          name: "round 1", kind: "parallel", badge: "could run in parallel",
+          nodes: [
+            { id: "E1", call: ["search_policy", "refund window 30 days"], dep: null },
+            { id: "E2", call: ["search_products", "who acquired Acme"], dep: null },
+            { id: "E4", call: ["calculator", "0.18 * 250"], dep: null },
+          ],
+        },
+        {
+          name: "round 2", kind: "single", badge: "depends on round 1",
+          nodes: [
+            { id: "E3", call: ["search_products", "#E2 earbuds warranty"], dep: "needs E2" },
+          ],
+        },
+      ],
+      footer: '2 LLM calls, 4 tool calls, critical-path depth 2 (E2 -> E3 is the only chain; E1, E2, E4 share round 1).',
+    },
+  ];
+
+  var current = 0;
+
+  /* ---- render the per-strategy trace ---- */
+  function renderTrace(s) {
+    var html = "";
+    if (s.kind === "steps") {
+      html += '<div class="row-list">';
+      s.steps.forEach(function (st) {
+        if (st.planLabel) {
+          html += '<div class="trace-row">';
+          html += '<span class="row-tag llm">' + escHtml(st.tag) + '</span>';
+          html += '<div class="row-body"><div class="row-result" style="font-size:11.5px;color:var(--text-body);">' + escHtml(st.planLabel) + '</div></div>';
+          html += '</div>';
+          return;
+        }
+        if (st.synth) {
+          html += '<div class="trace-row">';
+          html += '<span class="row-tag llm">' + escHtml(st.tag) + '</span>';
+          html += '<div class="row-body"><div class="row-call">' + escHtml(st.synth) + '</div>';
+          if (st.transcript) { html += ''; }
+          html += '</div>';
+          if (st.transcript) { html += '<span class="transcript-pill">' + escHtml(st.transcript) + '</span>'; }
+          html += '</div>';
+          return;
+        }
+        var tagClass = st.evid ? "evid" : (st.exec ? "tool" : (st.tag.indexOf("LLM") === 0 ? "llm" : "tool"));
+        html += '<div class="trace-row">';
+        html += '<span class="row-tag ' + tagClass + '">' + escHtml(st.tag) + '</span>';
+        html += '<div class="row-body">';
+        html += '<div class="row-call">' + callHtml(st.call[0], st.call[1]) + '</div>';
+        if (st.result) { html += '<div class="row-result">' + escHtml(st.result) + '</div>'; }
+        if (st.dep) { html += '<div class="row-note dep">&#8627; ' + escHtml(st.dep) + '</div>'; }
+        if (st.bind) { html += '<div class="row-note dep">&#8627; ' + escHtml(st.bind) + '</div>'; }
+        html += '</div>';
+        if (st.transcript) { html += '<span class="transcript-pill">' + escHtml(st.transcript) + '</span>'; }
+        html += '</div>';
+      });
+      html += '</div>';
+    } else if (s.kind === "dag") {
+      html += '<div class="dag-rounds">';
+      s.rounds.forEach(function (r, ri) {
+        html += '<div class="dag-round ' + (ri === 1 ? "r2" : "r1") + '">';
+        html += '<div class="dag-round-head">' + escHtml(r.name) + '<span class="badge">' + escHtml(r.badge) + '</span></div>';
+        html += '<div class="dag-nodes">';
+        r.nodes.forEach(function (n) {
+          html += '<div class="dag-node">';
+          html += '<div class="nid">' + escHtml(n.id) + '</div>';
+          html += '<div class="ncall">' + callHtml(n.call[0], n.call[1]) + '</div>';
+          if (n.dep) { html += '<div class="ndep">&#8627; ' + escHtml(n.dep) + '</div>'; }
+          html += '</div>';
+        });
+        html += '</div></div>';
+      });
+      html += '</div>';
+      html += '<div class="dag-depth-note">three independent nodes finish in round 1; only <strong>E2 -&gt; E3</strong> forces round 2, so <strong>critical-path depth = 2</strong> against 4 tool calls.</div>';
+    }
+    html += '<div class="caption" style="margin-top:14px;"><strong>Result:</strong> ' + escHtml(s.footer) + '</div>';
+    return html;
+  }
+
+  /* ---- metrics readout ---- */
+  function setMetric(metricEl, valEl, subEl, value, sub, tone) {
+    metricEl.classList.remove("is-win", "is-cost");
+    if (tone === "win") metricEl.classList.add("is-win");
+    else if (tone === "cost") metricEl.classList.add("is-cost");
+    valEl.textContent = value;
+    if (subEl) subEl.textContent = sub;
+  }
+
+  function render() {
+    var s = STRATEGIES[current];
+
+    setMetric(document.getElementById("metric-llm"),
+      document.getElementById("val-llm"),
+      document.getElementById("sub-llm"),
+      s.llm, s.llmSub, s.llmTone);
+    setMetric(document.getElementById("metric-depth"),
+      document.getElementById("val-depth"),
+      document.getElementById("sub-depth"),
+      s.depth, s.depthSub, s.depthTone);
+    document.getElementById("val-tools").textContent = s.tools;
+
+    document.getElementById("strategy-blurb").innerHTML = s.blurb;
+    document.getElementById("trace-area").innerHTML = renderTrace(s);
+
+    STRATEGIES.forEach(function (_, i) {
+      document.getElementById("btn-mode-" + i)
+        .setAttribute("aria-pressed", i === current ? "true" : "false");
+    });
+
+    // scoreboard active row
+    var rows = document.querySelectorAll("#scoreboard-body tr");
+    rows.forEach(function (r, i) {
+      r.classList.toggle("is-active", i === current);
+    });
+
+    // announce
+    document.getElementById("mode-announcer").textContent =
+      s.label + ": " + s.llm + " LLM calls, " + s.tools + " tool calls, critical-path depth " + s.depth + ".";
+  }
+
+  function setMode(i) {
+    current = i;
+    render();
+  }
+
+  /* build the scoreboard once */
+  (function buildScoreboard() {
+    var body = document.getElementById("scoreboard-body");
+    var html = "";
+    STRATEGIES.forEach(function (s) {
+      var llmCls = s.llmTone === "cost" ? "score-cost" : (s.llmTone === "win" ? "score-win" : "");
+      var depthCls = s.depthTone === "win" ? "score-win" : (s.depthTone === "cost" ? "score-cost" : "");
+      html += '<tr>';
+      html += '<td>' + escHtml(s.label) + '</td>';
+      html += '<td class="' + llmCls + '">' + s.llm + '</td>';
+      html += '<td>' + s.tools + '</td>';
+      html += '<td class="' + depthCls + '">' + s.depth + '</td>';
+      html += '</tr>';
+    });
+    body.innerHTML = html;
+  })();
+
+  STRATEGIES.forEach(function (_, i) {
+    document.getElementById("btn-mode-" + i).addEventListener("click", function () {
+      setMode(i);
+    });
+  });
+
+  // keyboard: left/right cycle strategies when focus is in the toggle group
+  document.querySelector(".toggle-group").addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight") {
+      setMode((current + 1) % STRATEGIES.length);
+      document.getElementById("btn-mode-" + current).focus();
+      e.preventDefault();
+    } else if (e.key === "ArrowLeft") {
+      setMode((current - 1 + STRATEGIES.length) % STRATEGIES.length);
+      document.getElementById("btn-mode-" + current).focus();
+      e.preventDefault();
+    }
+  });
+
+  setMode(0);
+})();
+</script>
+</body>
+</html>
