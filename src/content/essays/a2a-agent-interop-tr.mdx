@@ -1,0 +1,160 @@
+---
+title: "Ajandan Ajana"
+description: "Bir handoff process sınırında durur; başka bir takıma ait bir billing ajanına ulaşılamaz. A2A Agent Card'ları, JSON-RPC delegation'ı ve bir trust allowlist'i bu sınırı aşar."
+date: 2026-07-11
+tags: ["Agents","A2A","Interop","Protocols","Trust","AI"]
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-15-a2a-agent-interop"
+lang: "tr"
+translationSlug: "a2a-agent-interop"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+[Part 14](/essays/supervisor-and-handoffs-tr) bize **handoff**'u verdi: bir ajan kontrolü, ve canlı trace'i, bir uzmana transfer eder. Ama o uzman **aynı process içinde** yaşıyordu. Supervisor bir `billing-specialist`'e handoff edebiliyordu çünkü o uzman kendi kodu, aynı runtime'da erişilebilir bir şeydi. Gerçek organizasyonlar tek bir process değildir. Billing ajanı **başka bir takım** tarafından sahiplenilir, **başka bir host**'ta çalışır, **başka bir deploy** arkasındadır. Onu import edemezsin, ve bir handoff ona ulaşamaz. İhtiyacın olan şey, bir ajanın bir **organizasyonel sınır** boyunca bir peer ajanı **keşfetmesi** (discovery) ve ona **delegate** etmesi için bir yol, ve ona **güvenip güvenmeyeceğine** (trust) karar vermek için bir yoldur. **A2A** (Agent-to-Agent protokolü) işte bunun içindir, ve bu parça onun temellerini elle inşa eder. Dört parça var. İlki, **Agent Card**: bir peer'in well-known bir URL'de (`/.well-known/agent-card.json`) sunduğu, kendini, **skill**'lerini, konuştuğu input ve output mode'larını, ve nasıl **authenticate** edileceğini adlandıran public bir açıklama. Discovery, sadece o card'ı fetch etmektir. İkincisi, **JSON-RPC üzerinden delegation**: support ajanı billing ajanına bir task gönderir (`tasks/send`), submitted'dan working'e working'den completed'a giden bir **lifecycle** ile, ve sonucu bir **artifact** olarak geri alır, [Part 12](/essays/mcp-by-hand-tr)'nin transport'unu yeniden kullanarak. Üçüncüsü, support ajanının bir peer'in nerede yaşadığını bulabilmesi için küçük bir **registry**. Dördüncüsü, **trust ve bir allowlist**: bir peer'i keşfetmek ona güvenmek değildir, dolayısıyla support ajanı delegate etmeden önce peer'i bir allowlist'e karşı kontrol eder, listede olmayan bir peer'i **reddeder** (refuse), ve allowlist'in dışından gelen herhangi bir sonucu **untrusted** olarak etiketler. Bu son parçayı bilinçli olarak ince tutuyoruz; derin işleyiş [Part 16](/essays/securing-the-agent)'dadır.
+
+## Ön koşullar
+
+Temel Python ve JSON'a dair bir his lazım: bir object, bir list, bir string. Hepsi bu. Daha önceki iki parça yardımcı olur ama gerekli değildir. [Part 12](/essays/mcp-by-hand-tr) **transport**'tur: A2A o parçanın in-process JSON-RPC shim'ini yeniden kullanır, aynı `"jsonrpc": "2.0"` zarfını bir `id`, bir `method` ve `params` ile, yalnızca bir tool sunucusu yerine bir peer ajana yöneltilmiş hâlde. [Part 14](/essays/supervisor-and-handoffs-tr) **handoff**'tur: A2A, işi bir uzmana geçirmenin aynı fikridir, şimdi in-process handoff'un aşamadığı bir **sınırın ötesine** taşınmış hâlde. Ama yazı kendi içinde bütünlüklü: daha önceki bir fikre yaslandığı yerde onu tek bir cümleyle yeniden ifade eder ve yeniden türetmek yerine ona referans verir. Eşlik eden kod, [a2a_delegation.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-15-a2a-agent-interop), API anahtarı, ağ ve bağımlılık olmadan offline çalışır, böylece her satırı okuyup bu yazıdaki her JSON-RPC frame'ini kendiniz yeniden üretebilirsiniz. Varsayılan transport, gerçek protokol frame'leri yazdıran bir in-process shim'dir; gerçek bir ağ transport'u ve delegation kararlarını `generate()` üzerinden süren gerçek bir LLM, her biri tek bir adım uzaktadır.
+
+## Handoff'tan beri yeni olan ne
+
+Neyin yeni olduğu konusunda kesin olmak istiyorum, çünkü bu gerçekten yeni bir zemin. Şu ana kadarki her parça, RAG'in yirmi parçasına kadar geriye, **single-agent**'tı: bir controller bir problemi çalışıyordu, Part 14 o işi işbirliği yapan ajanlara böldüğünde bile o ajanların hepsi tek bir process ve tek bir takımın kodu içinde yaşıyordu. A2A, **bir organizasyonel sınır boyunca interoperasyon** ekler, ve neredeyse hepsi net-yenidir. **Agent Card**: bir peer'in public, fetch edilebilir bir açıklaması (adı, skill'leri, mode'ları ve auth'u) well-known bir URL'de sunulur. **Horizontal delegation**: sahip olmadığın ve import edemediğin bir ajana, kendi lifecycle'ı olan bir task göndermek. Bir **registry**: peer'lerin nerede yaşadığına bakmak için bir yer. Ve bir **cross-org trust sınırı**: delegate etmeden önce verilen, hangi peer'lere hiç güveneceğin kararı. Bir şey bilinçli olarak **yeniden inşa edilmez, yeniden kullanılır**: JSON-RPC transport'u Part 12'ninkidir, yeniden türetilmez, referans verilir. Ve bir framing tüm parçayı taşır. **MCP (Part 12) vertical'dir**: bir ajan tool'larına *aşağı doğru* uzanır. **A2A (bu parça) horizontal'dir**: bir ajan bir peer ajana *yana doğru* uzanır. Aynı plumbing, ters yön. Koşu bunu ilk satırda belirtir:
+
+```text
+[transport] in-process JSON-RPC shim (Part 12 reused). MCP = vertical (agent -> tools);
+A2A = horizontal (agent -> agent). Same plumbing, opposite direction.
+```
+
+## Agent Card
+
+Bir peer ajan, well-known bir URL'de, `/.well-known/agent-card.json`'da, tek bir doküman yayınlayarak kendini **discoverable** (keşfedilebilir) hâle getirir. Card, peer'in public yüzüdür: kim olduğu, ne yapabildiği, hangi formatları konuştuğu, ve ona karşı nasıl authenticate etmen beklendiği. İşte billing ajanının card'ı, kendi well-known URL'sinde sunulan hâliyle, artefaktın gerçek çıktısından alıntılanmış:
+
+```json
+{
+  "name": "billing-agent",
+  "description": "Issues refunds and credits for orders.",
+  "url": "https://billing.acme.example/a2a",
+  "version": "1.0.0",
+  "skills": [
+    {
+      "id": "process_refund",
+      "description": "Issue a refund for an order",
+      "inputModes": [
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json"
+      ]
+    }
+  ],
+  "capabilities": {
+    "streaming": false
+  },
+  "authentication": {
+    "schemes": [
+      "bearer"
+    ]
+  }
+}
+```
+
+Card'ı alan alan oku. `name` `billing-agent`'tır, ve `url`'si `https://billing.acme.example/a2a`'dır, bir çağıranın ona ulaşacağı endpoint. `skills` listesi tek bir skill tutar, `process_refund`, "Issue a refund for an order" olarak açıklanmış, `inputModes` ve `outputModes`'unu `application/json` olarak bildirir: bu peer JSON alır ve JSON geri verir. `capabilities` `streaming: false` der, ve `authentication` bloğu kabul ettiği şemaları adlandırır, burada `bearer`. O tek doküman, bir çağıranın bu ajanla konuşup konuşmamaya ve nasıl konuşacağına karar vermek için bilmesi gereken her şeydir. **Discovery, sadece onu fetch etmektir.** Support ajanı card'ı registry üzerinden bulur ve en çok önem taşıyan iki gerçeği okur, sunulan skill'ler ve gereken auth, koşudan alıntılanmış:
+
+```text
+    [support] discovered 'billing-agent' at https://billing.acme.example/a2a: skills=['process_refund'], auth=['bearer']
+```
+
+Support ajanı artık `billing-agent`'ın `skills=['process_refund']` sunduğunu ve `auth=['bearer']` beklediğini biliyor, tamamen yayınlanmış card'dan öğrenildi. Bu, MCP'nin `tools/list`'inin A2A karşılığıdır: MCP bir sunucunun *tool*'larını keşfederken, A2A bir peer'in *card*'ını keşfeder. Ne var ki onu keşfetmek, ona güvenmekle aynı şey değildir, aşağıda geri döneceğimiz bir ayrım.
+
+<Diagram number={1} caption="The Agent Card the billing agent publishes at its well-known URL, and discovery as fetching it. The card served at slash dot well-known slash agent-card dot json names the agent billing-agent, gives its endpoint url https colon slash slash billing dot acme dot example slash a2a, version 1.0.0, and lists one skill, process_refund, issue a refund for an order, with input and output modes both application slash json. The capabilities block says streaming false, and the authentication block names the accepted scheme, bearer. Below the card, the support agent discovers the peer by fetching the card through the registry and reads off the two facts that matter, that the peer offers skills process_refund and requires auth bearer. The figure shows that an Agent Card is a peer's public, fetchable self-description, that discovery is simply fetching it, and that this is the horizontal A2A analogue of MCP's vertical tools-list.">
+  <img src="/essays/a2a-agent-interop/part15-agent-card.svg" alt="A diagram of a single Agent Card document served at a well-known URL, with a discovery step below it. At the top, a labelled file card headed slash dot well-known slash agent-card dot json lists the fields of the billing agent: name billing-agent, description issues refunds and credits for orders, url https colon slash slash billing dot acme dot example slash a2a, version 1.0.0. A skills section inside the card shows one skill row, id process_refund, description issue a refund for an order, inputModes application slash json, outputModes application slash json. A capabilities row reads streaming false, and an authentication row reads schemes bearer. Below the card, a support-agent box reaches up to the card with a fetch arrow labelled discovery, and emits a summary line reading discovered billing-agent, skills process_refund, auth bearer. A caption strip reads: an Agent Card is a peer's public self-description at a well-known URL; discovery is just fetching it, the horizontal analogue of MCP's tools-list." class="w-full rounded-lg" />
+</Diagram>
+
+## JSON-RPC üzerinden delegation
+
+Card keşfedildikten sonra, support ajanı bir task'i **delegate** edebilir. Ama herhangi bir byte kabloya çıkmadan önce, tek bir şeyi kontrol eder: bu peer, güvendiğimiz ajanların **allowlist**'inde mi? `billing-agent` için öyle, dolayısıyla delegation ilerler. Delegation'ın kendisi bir JSON-RPC çağrısıdır, `tasks/send`, skill'i ve onun input'unu adlandırır, ve yanıt task'in lifecycle'ını ve sonucunu taşır. İşte trust kontrolü, request ve response frame'leri (`id` 1), ve support ajanının geri okuduğu şey, artefaktın gerçek çıktısından alıntılanmış:
+
+```text
+    [trust] 'billing-agent' is allowlisted -> delegating
+    --> {"jsonrpc": "2.0", "id": 1, "method": "tasks/send", "params": {"skill": "process_refund", "input": {"order_id": "ORD-3300", "amount": 180.0}}}
+    <-- {"jsonrpc": "2.0", "id": 1, "result": {"id": "task-1", "lifecycle": ["submitted", "working", "completed"], "status": {"state": "completed"}, "artifacts": [{"type": "text", "text": "refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)"}]}}
+    [support] task task-1 lifecycle: submitted -> working -> completed
+    [support] trusted result (from billing-agent): refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)
+```
+
+Onu yukarıdan oku. Trust kapısı önce ateşler: `'billing-agent' is allowlisted -> delegating`, dolayısıyla support ajanı bu peer'e iş göndermeye gönüllüdür. Request frame'i sade JSON-RPC'dir: `method: "tasks/send"`, `id` 1, ve `skill`'i (`process_refund`) ve onun `input`'unu (`order_id` `ORD-3300`, `amount` `180.0`) adlandıran `params`. Response `id` 1'i yansıtır ve bir **task**'i tarif eden bir `result` taşır: `task-1` `id`'sine, `["submitted", "working", "completed"]` `lifecycle`'ına, `completed` `status`'una, ve bir text artifact tutan bir `artifacts` dizisine sahiptir. O lifecycle, A2A delegation'ının kalbidir. Tek bir fonksiyon dönüşünün aksine, delegate edilmiş bir task **state**'lerden geçer: `submitted` (peer onu kabul etti), `working` (peer onu yapıyor), ve `completed` (peer bitti), ki support ajanı bunu `task task-1 lifecycle: submitted -> working -> completed` olarak geri yazdırır. İşin kendisi çıplak bir değer olarak değil, bir **artifact** olarak geri gelir, ve support ajanı onu trusted bir sonuç olarak okur çünkü peer allowlist'teydi: `refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)`. Delegation, production'da bir organizasyonel sınır olacak şeyin ötesinde başarılı oldu, ve onu aşan tek şey JSON-RPC idi. Aşağıdaki amiral figür tüm alışverişi adım adım gezer, trust kapısını, `tasks/send` frame'ini, lifecycle'ı, ve geri dönen artifact'i.
+
+<Diagram number={2} caption="The full A2A delegation, interactive, from the trust gate through the task lifecycle to the returned artifact. The support agent first checks the peer against its allowlist, billing-agent is allowlisted so delegation proceeds. It then sends a JSON-RPC request, method tasks slash send, id 1, naming the skill process_refund and the input order_id ORD-3300 and amount 180.0. The billing agent replies with a task that has an id of task-1, a lifecycle of submitted, working, completed, a status of completed, and an artifacts array holding one text artifact reading refund of 180 dollars 00 issued for ORD-3300, ref BILL-ORD-3300. The support agent prints the lifecycle as submitted then working then completed and reads the artifact as a trusted result because the peer was on the allowlist. The figure makes the central claim concrete, that a delegated A2A task is not a bare function return but a lifecycle with an artifact, carried over the same JSON-RPC envelope Part 12 used for tools, only now pointed horizontally at a peer agent.">
+  <IframeFigure src="/essays/a2a-agent-interop/part15-agent-card-delegation.html" title="Interactive A2A delegation walkthrough between a support agent and the billing agent over JSON-RPC. The view is a stepper. Step one, the trust gate, shows the support agent checking the peer name billing-agent against an allowlist and the result allowlisted, so delegation proceeds. Step two, the request, shows a request arrow from support to billing carrying jsonrpc 2.0, id 1, method tasks slash send, and params with skill process_refund and input order_id ORD-3300 and amount 180.0. Step three, the response, shows a response arrow back carrying jsonrpc 2.0, id 1, and a result describing a task with id task-1, a lifecycle array of submitted, working, completed, a status state completed, and an artifacts array with one text artifact reading refund of 180 dollars 00 issued for ORD-3300, ref BILL-ORD-3300. Step four, the readout, shows the support agent printing task task-1 lifecycle submitted then working then completed, and the trusted result line refund of 180 dollars 00 issued for ORD-3300, ref BILL-ORD-3300. A banner reads delegation is a JSON-RPC task with a submitted-to-working-to-completed lifecycle and a returned artifact, the same transport as MCP pointed horizontally at a peer agent." height={860} />
+</Diagram>
+
+## Discovery, trust değildir
+
+Billing ajanı çalıştı çünkü allowlist'teydi. Ama bir card sadece public bir dokümandır, ve herkes bir tane yayınlayabilir. İkinci bir peer, `refund-bot-9000`, **aynı skill**'i, `process_refund`, farklı bir URL'de reklam eder, ve auth'una dikkat et: `none`. Onu billing ajanını keşfettiğimiz gibi tam olarak **keşfedebiliriz**, card fetch edilebilir ve iyi biçimlidir, ama onu hiç vet (denetlemek) etmedik. İşte support ajanı onu keşfedip sonra delegate etmeye çalıştığında ne olduğu, artefaktın gerçek çıktısından alıntılanmış:
+
+```text
+    [support] discovered 'refund-bot-9000' at https://refunds-r-us.example/a2a: skills=['process_refund'], auth=['none']
+    [trust] 'refund-bot-9000' is NOT on the allowlist -> delegation REFUSED
+    -> delegation result: None  (refused; output never trusted)
+```
+
+Discovery başarılı olur: support ajanı `refund-bot-9000`'in card'ını okur ve onun `auth=['none']` ile `skills=['process_refund']` iddia ettiğini görür. Ama discovery, trust **değildir**. Allowlist yalnızca `billing-agent`'ı tutar, dolayısıyla support ajanı trust kapısına ulaştığında, `refund-bot-9000` orada başarısız olur: `'refund-bot-9000' is NOT on the allowlist -> delegation REFUSED`, ve delegation `None` döner, comment sonucu hecelerken, `(refused; output never trusted)`. Bu peer'e hiçbir `tasks/send` frame'i gitmez; reddetme, herhangi bir iş delegate edilmeden **önce** olur. Discovery'yi trust'tan ayırmanın bütün amacı budur: bir skill iddia eden bir peer'i *bulabilmek*, onun döndürdüğü şeye göre *aksiyon alıp almaman* gerektiği hakkında hiçbir şey söylemez. Koşu, prensibi ve derinliğin nerede yaşadığını belirtir:
+
+```text
+    Discovering a peer is not trusting it. Any result from outside the allowlist is
+    tagged UNTRUSTED. The deep treatment (injection via a delegated result, the lethal
+    trifecta) is Part 16.
+```
+
+Bu temas noktasını bilinçli olarak ince tutuyoruz. Buradaki kural basittir: allowlist'te olmayan bir peer reddedilir, ve allowlist'in dışından gelen herhangi bir çıktı **untrusted** olarak etiketlenir, böylece daha sonraki bir adım onu gerçek olarak değil şüpheli olarak ele alır. Gerçekten tehlikeli olan vaka, bir delegate edilmiş sonucun talimat olarak ele alındığı ve **injection**'ın onun üzerinden binip geldiği vaka, untrusted içerik ve sızdırma yolu olan bir tool-kullanan ajanın **lethal trifecta**'sı, [Part 16](/essays/securing-the-agent)'nın bütün konusudur. Burada yalnızca sınırı kuruyoruz; orada ona saldırıyoruz.
+
+## MCP vertical, A2A horizontal
+
+Bir adım geri çekil ve iki protokol temiz biçimde dizilir. MCP ve A2A **aynı transport**'a, JSON-RPC'ye, biner, ve **yönde** farklılaşır. MCP bir ajanı tool'larına *aşağı* yöneltir; A2A bir ajanı bir peer'e *yana* yöneltir. Koşu karşılaştırmayı doğrudan çizer, artefaktın gerçek çıktısından alıntılanmış:
+
+```text
+  MCP (Part 12): agent -> TOOLS      (vertical)   initialize / tools-list / tools-call
+  A2A (this part): agent -> AGENT    (horizontal) agent-card / tasks-send + a task lifecycle
+  Both ride JSON-RPC; A2A adds discovery via Agent Cards and a trust boundary between peers.
+```
+
+İki satırı birbirine karşı oku. **MCP** `agent -> TOOLS`'tur, **vertical**, ve method'ları `initialize`, `tools-list`, ve `tools-call`'dur: bir handshake, sonra tool'ları keşfet, sonra birini çağır. **A2A** `agent -> AGENT`'tır, **horizontal**, ve method'ları `agent-card` (peer'in card'ını fetch et) ve `tasks-send` (bir task delegate et)'dir, ikincisi çıplak bir dönüş yerine bir **task lifecycle** taşır. Kapanış satırı A2A'nın paylaşılan plumbing'in üstüne tam olarak ne eklediğini adlandırır: `Both ride JSON-RPC; A2A adds discovery via Agent Cards and a trust boundary between peers.` Tool'lar aynı şekilde bir trust sınırına ihtiyaç duymaz, onları sen bağladın, ama *sahip olmadığın bir peer ajan* duyar, allowlist'in A2A'nın çekirdeği ve MCP'de yok oluşunun sebebi budur. İki protokol birlikte kurulur (compose): tek bir ajan, aynı koşuda MCP tool'larına aşağı ve A2A peer'lerine yana uzanabilir, ve her iki alışveriş de kabloda JSON-RPC gibi görünür.
+
+<Diagram number={3} caption="MCP vertical versus A2A horizontal, two protocols on one transport. MCP, from Part 12, points an agent downward at its tools, the vertical direction, with the methods initialize, tools-list, and tools-call, a handshake then discover then call. A2A, this part, points an agent sideways at a peer agent, the horizontal direction, with the methods agent-card, fetch the peer's published card, and tasks-send, delegate a task that carries a submitted-to-working-to-completed lifecycle. Both ride the same JSON-RPC envelope. The figure shows the one thing A2A adds that MCP does not, discovery via Agent Cards plus a trust boundary between peers, because a peer agent you do not own must be checked against an allowlist while a tool you wired in need not be, and it shows that the two compose, since one agent can reach down to its tools and across to its peers in the same run.">
+  <img src="/essays/a2a-agent-interop/part15-mcp-vs-a2a.svg" alt="A diagram contrasting two protocols sharing one transport. In the centre sits a single agent box. A downward arrow from it, labelled MCP, vertical, Part 12, points to a tools layer below, with the method labels initialize, tools-list, tools-call, and a caption agent reaches down to its tools. A horizontal arrow from the agent, labelled A2A, horizontal, this part, points sideways to a peer-agent box, with the method labels agent-card and tasks-send, the latter annotated with a small lifecycle chip reading submitted, working, completed, and a caption agent reaches across to a peer. A trust gate icon, an allowlist, sits on the horizontal A2A arrow only, not on the vertical MCP arrow, marking that a peer must be vetted while a tool was wired in. Underneath both arrows runs a shared band labelled JSON-RPC, the same envelope for both directions. A caption strip reads: MCP is vertical, agent to tools; A2A is horizontal, agent to agent; both ride JSON-RPC, A2A adds Agent Cards and a peer trust boundary." class="w-full rounded-lg" />
+</Diagram>
+
+> 💡 **Deneyimden.** A2A ilk kez ekmeğini kazandığında, kazanç bir tane *yazmak* yerine planlanmış bir entegrasyonu *silmem* oldu. İki takımın ajanının konuşması gerekiyordu: support ajanımızın billing takımının ajanına ait refund'ları tetiklemesi gerekiyordu, ve varsayılan plan her zamanki özel işti, kodumuza gömülmüş private bir HTTP client, billing'in argüman şekli bizimkine kopyalanmış, etrafta dolaştırılan bir shared secret, ve sonsuza dek senkronda tutulacak hafifçe ayrışan iki versiyon "billing'i nasıl çağırırsın". Bunun yerine billing well-known URL'lerinde bir Agent Card yayınladı, biz onu keşfettik, ve support ajanımız `tasks/send` üzerinden delegate etti. Contract tam olarak tek bir yerde yaşadı, billing'in card'ında, dolayısıyla ayrışamadı, ve billing sonradan bir skill eklediğinde o basitçe card'da belirdi. Diğer ders bir reddetmeydi, ve o sırada bir kazanç gibi hissettirmeyen türden bir reddetme. Bir peer temiz, profesyonel görünümlü bir card ile `process_refund` reklam ederek ortaya çıktı, ve biri onu hızlıca bağlamak istedi çünkü o "açıkça aynı şeyi yapıyordu". Allowlist'imizde değildi, ve kapı onu reddetti, bu parçadaki `'...' is NOT on the allowlist -> delegation REFUSED` satırı, neredeyse kelimesi kelimesine. Legitim görünüyordu; allowlist'in var olmasının sebebi tam olarak budur. Bir skill iddia eden bir peer'i keşfetmek, ona gerçek bir refund verip vermemen gerektiği hakkında sana hiçbir şey söylemez, ve bir card'ı discovery ve allowlist'i trust olarak ele almayı, ikisini ayrı kararlar olarak ele almayı öğrendiğim gün, A2A'nın beni korkutmayı bıraktığı gündü.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Özet / Çıkarımlar
+
+- Bir **handoff process sınırında durur**: Part 14'ün uzmanı yalnızca supervisor'ın kendi kodu olduğu için çalıştı. **Başka bir takıma** ait, **başka bir host**'taki, **başka bir deploy** arkasındaki bir billing ajanı import edilemez ya da ona handoff edilemez. A2A o çizgiyi discovery, delegation, bir registry, ve bir trust allowlist ile aşar.
+- **Agent Card**, bir peer'in `/.well-known/agent-card.json`'da sunulan public self-description'ıdır: `name`'i, `url`'si, `skills`'i, input ve output mode'ları, `capabilities`'i, ve `authentication`'ı. Billing ajanının card'ı `auth=['bearer']` ile `skills=['process_refund']` sunar, ve **discovery sadece onu fetch etmektir**, MCP'nin `tools/list`'inin horizontal karşılığı.
+- **Delegation, bir lifecycle'ı olan bir JSON-RPC task'idir.** `ORD-3300` üzerinde `180.0` için `process_refund`'a yapılan `tasks/send` (`id` 1), `submitted -> working -> completed` `lifecycle`'ı olan `task-1` task'ini ve bir **artifact**'i, `refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)`'ı, döner, çıplak bir dönüş değeri değil.
+- Bir **registry** peer'leri konumlandırır (her birinin nerede yaşadığı, well-known URL'siyle anahtarlanmış), ve bir **allowlist** hangisine güvenileceğine karar verir. İkisi ayrı işlerdir: bir peer'i bulmak, döndürdüğü şeye göre aksiyon almaya gönüllü olmakla aynı şey değildir.
+- **Discovery, trust değildir.** Sahte `refund-bot-9000` (auth `none`) keşfedilebilirdir ve aynı `process_refund` skill'ini iddia eder, ama o `NOT on the allowlist -> delegation REFUSED`'dur, hiçbir `tasks/send` gönderilmeden `None` döner; allowlist'in dışından gelen çıktı **untrusted** olarak etiketlenir. Bu burada ince kalır; **bir delegate edilmiş sonuç üzerinden injection ve lethal trifecta Part 16'dadır**.
+- **MCP vertical'dir** (`agent -> TOOLS`: `initialize / tools-list / tools-call`); **A2A horizontal'dir** (`agent -> AGENT`: `agent-card / tasks-send` artı bir task lifecycle). **İkisi de JSON-RPC'ye biner**; A2A, peer'ler arasında, tool'ların ihtiyaç duymadığı bir **trust sınırı** ve **Agent Card'lar** üzerinden discovery ekler.
+
+## Sözlük
+
+- **A2A (Agent-to-Agent protokolü)**: bir ajanın, import edemediği bir organizasyonel sınır boyunca bir peer ajanı **keşfetmesi** (discover) ve ona **delegate** etmesi için bir protokol. JSON-RPC'ye (Part 12'nin transport'una) biner ve üstüne Agent Card'lar ile bir peer trust sınırı ekler.
+- **Agent Card**: bir peer'in `/.well-known/agent-card.json`'da sunulan public, fetch edilebilir self-description'ı, ajanı, `url`'sini, `skills`'ini, konuştuğu input ve output mode'larını, `capabilities`'ini, ve `authentication` şemalarını adlandırır. Bir çağıranın peer ile konuşup konuşmamaya ve nasıl konuşacağına karar vermek için ihtiyaç duyduğu her şeydir.
+- **Skill**: bir peer'in card'ında reklam ettiği adlandırılmış bir yetenek (burada `process_refund`, "Issue a refund for an order"), bildirilmiş input ve output mode'larıyla. Bir MCP tool'unun A2A karşılığı, ama başka bir ajan tarafından sahiplenilir ve çalıştırılır.
+- **Discovery**: bir peer'in Agent Card'ını fetch etmek, burada registry üzerinden, skill'lerini ve auth'unu öğrenmek için (`discovered 'billing-agent' ... skills=['process_refund'], auth=['bearer']`). Discovery *bir peer'in ne iddia ettiğini* kurar, asla *ona güvenip güvenmeyeceğini* değil.
+- **Delegation**: bir peer'e JSON-RPC üzerinden `tasks/send` ile bir task göndermek, bir `skill`'i ve onun `input`'unu adlandırarak, ve sonucu almak. Part 14'ün handoff'unun horizontal muadili, şimdi in-process handoff'un aşamadığı bir sınırı geçen hâlde.
+- **Task lifecycle**: bir delegate edilmiş A2A task'inin geçtiği state'ler, `submitted -> working -> completed`, çıplak bir değer döndürmek yerine. Completed task sonucunu bir **artifact**'te taşır (burada bir text artifact, `refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)`).
+- **Registry**: peer'lerin nerede yaşadığının bir lookup'ı, well-known URL'leriyle anahtarlanmış, böylece support ajanı bir peer'in card'ını fetch edebilir ve endpoint'ine ulaşabilir. Peer'leri konumlandırır; trust'a karar vermez.
+- **Trust allowlist**: bu ajanın delegate etmeye gönüllü olduğu peer ajanların kümesi. Üzerinde olan bir peer'e delegate edilir (`'billing-agent' is allowlisted -> delegating`); üzerinde olmayan bir peer reddedilir (`'refund-bot-9000' is NOT on the allowlist -> delegation REFUSED`, sonuç `None`). Trust kapısı herhangi bir task gönderilmeden *önce* ateşler.
+- **Untrusted anotasyonu**: allowlist'in dışından gelen herhangi bir sonuca uygulanan etiket, onu şüpheli olarak işaretler, böylece daha sonraki bir adım onu talimat olarak değil veri olarak ele alır. Burada ince; derin işleyiş (bir delegate edilmiş sonuç üzerinden injection, lethal trifecta) Part 16'dadır.
+- **MCP vs A2A (vertical vs horizontal)**: MCP bir ajanı tool'larına *aşağı* yöneltir (`agent -> TOOLS`, `initialize / tools-list / tools-call`); A2A bir ajanı bir peer'e *yana* yöneltir (`agent -> AGENT`, `agent-card / tasks-send` artı bir lifecycle). İkisi de JSON-RPC'ye biner; yalnızca A2A bir trust sınırına ihtiyaç duyar, çünkü peer, sahip olmadığın bir ajandır.
+
+---
+
+Bu parçanın kuralı: bir handoff process sınırında durur, dolayısıyla onu bir protokol ile aş. Bir peer'in **skill**'lerini ve **auth**'unu reklam eden bir **Agent Card**'ı well-known bir URL'de **yayınlamasına** izin ver; **discovery**'yi o card'ı fetch etme eylemi yap; task'i bir **submitted'dan working'e working'den completed'a lifecycle**'ından geçen ve bir **artifact** döndüren bir JSON-RPC `tasks/send` ile **delegate** et; peer'leri bir **registry** ile konumlandır; ve her delegation'ı bir **trust allowlist** üzerinde kapıla, vet etmediğin peer'leri reddederek ve listenin dışından gelen her şeyi **untrusted** olarak etiketleyerek. Bu, in-process handoff'u bir cross-org delegation'a çevirir, MCP'nin tool'lar için yaptığı özel bir dictionary'den public bir protokole giden aynı adım, şimdi ajanlar için yapılmış. Ama tam olarak ne inşa ettiğimize bak: kod çalıştırabilen (Part 13), memory tutan (Part 6), MCP üzerinden gerçek tool'lara aşağı uzanan (Part 12), ve şimdi A2A üzerinden sahip olmadığı peer'lerden sonuçlar çeken bir ajan. Bunların her biri güçtür, ve her biri aynı zamanda bir **açıklıktır**. Bir delegate edilmiş sonucun, ya da bir tool çıktısının, ya da bir fetch edilmiş dokümanın veri yerine talimat olarak ele alındığı an, bir saldırgan ajanı kendi yetenekleri üzerinden yönlendirebilir. **Part 16, Securing the Agent**, burada ince tuttuğumuz trust temas noktasını alır ve sonuna kadar gider: untrusted içerik üzerinden prompt injection, private veri artı untrusted input artı sızdırma yolunun **lethal trifecta**'sı, ve gerçek tool'ları, gerçek memory'si, kod çalıştırması ve untrusted içeriği olan bir ajanı, hizmet ettiği kişinin aleyhine çevrilmekten korumak için aslında ne gerektiği.
