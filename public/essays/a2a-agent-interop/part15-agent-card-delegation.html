@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent to Agent: discover, trust, delegate, Part 15</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --slate: #64748b;
+  --slate-dark: #475569;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 880px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.panel-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner .lead { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 18px 0 9px;
+}
+
+/* TRANSPORT TAG */
+.transport-tag {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 11px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin-bottom: 16px;
+  color: var(--indigo-dark);
+  line-height: 1.45;
+}
+.transport-tag svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.transport-tag code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+.transport-tag .verified {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: var(--emerald-dark);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+/* PEER TOGGLE */
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  flex: 1;
+  min-width: 200px;
+  padding: 9px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.toggle-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.toggle-btn .mode-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.toggle-btn[aria-pressed="true"] {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+#btn-billing[aria-pressed="true"] { color: var(--teal-dark); }
+#btn-rogue[aria-pressed="true"] { color: var(--rose-dark); }
+
+.mode-blurb {
+  font-size: 12px;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.mode-blurb.billing { background: #f0fdfa; border-left: 3px solid var(--teal); color: var(--teal-dark); }
+.mode-blurb.rogue { background: #fff1f2; border-left: 3px solid var(--rose); color: var(--rose-dark); }
+.mode-blurb strong { font-weight: 700; }
+
+/* STEP STRIP */
+.wire-strip {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.wire-pill {
+  flex: 1;
+  min-width: 150px;
+  padding: 8px 8px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  background: transparent;
+  border: none;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+.wire-pill .pid {
+  display: block;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+  color: var(--text-muted);
+}
+.wire-pill[data-active="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.wire-pill[data-active="true"] .pid { color: var(--indigo-dark); }
+
+/* STEP CONTROLS */
+.step-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+}
+.step-btn:hover:not(:disabled) { background: #eef2ff; border-color: #c7d2fe; }
+.step-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.step-btn:disabled { opacity: 0.42; cursor: not-allowed; color: var(--text-muted); }
+.step-btn.primary { background: var(--indigo); color: #ffffff; border-color: var(--indigo); }
+.step-btn.primary:hover:not(:disabled) { background: var(--indigo-dark); }
+.step-progress { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+.step-progress .stepnum { font-family: var(--font-mono); color: var(--indigo-dark); }
+
+/* SUBPANELS */
+.subpanel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.subpanel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.subpanel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.subpanel-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.subpanel-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.subpanel-body { padding: 12px; }
+
+/* STAGE ANNOTATION */
+.wire-annotation {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 8px 8px 0;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+  min-height: 50px;
+}
+.wire-annotation .role {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--indigo-dark);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 7px;
+}
+.wire-annotation strong { color: var(--indigo-dark); }
+
+/* AGENT CARD PANEL */
+.agentcard {
+  border: 1px solid #99f6e4;
+  border-radius: 11px;
+  background: #f0fdfa;
+  overflow: hidden;
+  animation: fadeIn 0.2s ease;
+}
+.agentcard.rogue { border-color: #fecdd3; background: #fff1f2; }
+.agentcard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #ccfbf1;
+  border-bottom: 1px solid #99f6e4;
+  flex-wrap: wrap;
+}
+.agentcard.rogue .agentcard-head { background: #ffe4e6; border-bottom-color: #fecdd3; }
+.agentcard-head .ac-file {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--teal-dark);
+}
+.agentcard.rogue .agentcard-head .ac-file { color: var(--rose-dark); }
+.agentcard-head .ac-url {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.agentcard-body { padding: 11px 13px; }
+.ac-json {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-body);
+}
+.ac-json .jk { color: var(--teal-dark); }
+.agentcard.rogue .ac-json .jk { color: var(--rose-dark); }
+.ac-json .js { color: var(--text-heading); font-weight: 600; }
+.ac-json .jb { color: var(--amber-dark); }
+.ac-json .skill { color: var(--indigo-dark); font-weight: 700; }
+.ac-json .auth-bearer { color: var(--emerald-dark); font-weight: 700; }
+.ac-json .auth-none { color: var(--rose-dark); font-weight: 700; }
+.ac-discover {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--slate-dark);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--slate);
+  border-radius: 0 7px 7px 0;
+  padding: 7px 10px;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.ac-discover .tag { color: var(--teal-dark); font-weight: 700; }
+.agentcard.rogue .ac-discover .tag { color: var(--rose-dark); }
+
+/* TRUST CHECK PANEL */
+.trust-box {
+  border-radius: 10px;
+  padding: 11px 13px;
+  margin-bottom: 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  animation: fadeIn 0.2s ease;
+}
+.trust-box .trust-head {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.trust-box .allowlist {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: auto;
+}
+.trust-box.amber { background: #fffbeb; border: 1px solid #fde68a; color: var(--amber-dark); }
+.trust-box.amber .trust-head { color: var(--amber-dark); }
+.trust-box.amber .allowlist { border: 1px solid #fde68a; color: var(--amber-dark); }
+.trust-box.pass { background: #ecfdf5; border: 1px solid #a7f3d0; color: var(--emerald-dark); }
+.trust-box.pass .trust-head { color: var(--emerald-dark); }
+.trust-box.pass .allowlist { border: 1px solid #a7f3d0; color: var(--emerald-dark); }
+.trust-box.refuse { background: #fff1f2; border: 1px solid #fecdd3; color: var(--rose-dark); }
+.trust-box.refuse .trust-head { color: var(--rose-dark); }
+.trust-box.refuse .allowlist { border: 1px solid #fecdd3; color: var(--rose-dark); }
+.trust-box .verdict { font-family: var(--font-mono); font-weight: 700; }
+.trust-box code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
+/* WIRE FRAMES */
+.frame {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.55;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: fadeIn 0.2s ease;
+}
+.frame .dir { font-weight: 700; margin-right: 8px; user-select: none; }
+.frame.req { background: #eef2ff; border: 1px solid #c7d2fe; }
+.frame.req .dir { color: var(--indigo-dark); }
+.frame.res { background: #f0fdfa; border: 1px solid #99f6e4; }
+.frame.res .dir { color: var(--teal-dark); }
+.frame .jk { color: var(--indigo-dark); }
+.frame .js { color: var(--emerald-dark); }
+.frame .jn { color: var(--amber-dark); }
+.frame .jb { color: var(--rose-dark); }
+.frame.res .jk { color: var(--teal-dark); }
+
+.host-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--slate-dark);
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--slate);
+  border-radius: 0 7px 7px 0;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+  animation: fadeIn 0.2s ease;
+}
+.host-note .tag { color: var(--teal-dark); font-weight: 700; }
+
+/* LIFECYCLE STRIP */
+.lifecycle {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin: 12px 0 6px;
+  flex-wrap: wrap;
+}
+.lc-cell {
+  flex: 1;
+  min-width: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  position: relative;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.lc-cell:first-child { border-radius: 8px 0 0 8px; }
+.lc-cell:last-child { border-radius: 0 8px 8px 0; }
+.lc-cell + .lc-cell { border-left: none; }
+.lc-cell .lc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+.lc-cell[data-state="lit"] { background: #f0fdfa; color: var(--teal-dark); border-color: #99f6e4; }
+.lc-cell[data-state="lit"] .lc-dot { background: var(--teal); }
+.lc-cell[data-state="done"] { background: #ecfdf5; color: var(--emerald-dark); border-color: #a7f3d0; }
+.lc-cell[data-state="done"] .lc-dot { background: var(--emerald); }
+.lc-cell[data-state="working"] { background: #fffbeb; color: var(--amber-dark); border-color: #fde68a; }
+.lc-cell[data-state="working"] .lc-dot { background: var(--amber); }
+.lc-arrow { display: flex; align-items: center; color: var(--text-muted); font-family: var(--font-mono); font-weight: 700; padding: 0 2px; }
+
+/* ARTIFACT */
+.artifact {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-top: 8px;
+  animation: fadeIn 0.2s ease;
+}
+.artifact .a-tag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 7px;
+}
+.artifact.trusted { background: #ecfdf5; border: 1px solid #a7f3d0; color: var(--emerald-dark); }
+.artifact.trusted .a-tag { background: var(--emerald-dark); color: #ffffff; }
+.artifact.refused { background: #fff1f2; border: 1px solid #fecdd3; color: var(--rose-dark); }
+.artifact.refused .a-tag { background: #e11d48; color: #ffffff; }
+
+.wire-empty { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 6px 2px; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .frame, .host-note, .agentcard, .trust-box, .artifact { animation: none; } .lc-cell { transition: none; } }
+
+/* MCP vs A2A LEGEND */
+.proto-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+@media (max-width: 600px) { .proto-legend { grid-template-columns: 1fr; } }
+.proto-card {
+  border: 1px solid var(--border);
+  border-top-width: 3px;
+  border-radius: 11px;
+  background: #ffffff;
+  padding: 11px 13px;
+}
+.proto-card.mcp { border-top-color: var(--indigo); }
+.proto-card.a2a { border-top-color: var(--teal); }
+.proto-card .pc-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+.proto-card .pc-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.proto-card.mcp .pc-title { color: var(--indigo-dark); }
+.proto-card.a2a .pc-title { color: var(--teal-dark); }
+.proto-card .pc-dir {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.proto-card.mcp .pc-dir { background: #eef2ff; color: var(--indigo-dark); border: 1px solid #c7d2fe; }
+.proto-card.a2a .pc-dir { background: #f0fdfa; color: var(--teal-dark); border: 1px solid #99f6e4; }
+.proto-card .pc-line { font-size: 11px; color: var(--text-body); line-height: 1.5; }
+.proto-card .pc-line strong { color: var(--text-heading); }
+.proto-card .pc-methods {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 7px;
+  line-height: 1.45;
+}
+.proto-foot {
+  font-size: 11px;
+  color: var(--text-body);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.proto-foot strong { color: var(--text-heading); }
+.proto-foot code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+}
+
+/* CONTRAST + CAPTION */
+.contrast {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.contrast strong { color: var(--indigo-dark); }
+.contrast code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  color: var(--indigo-dark);
+}
+
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 14px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+}
+.caption .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <h2 id="panel-heading">Discover, trust, delegate: an A2A walkthrough across a boundary</h2>
+  <p class="panel-subtitle">Part 14's handoff transfers control to a specialist that lives in YOUR process. A billing agent owned by another team on another host cannot be imported. A2A lets your support agent DISCOVER a peer via its Agent Card, decide whether to TRUST it against an allowlist, and DELEGATE a task over JSON-RPC. Step the three stages, then flip to a rogue peer that gets refused.</p>
+
+  <div class="goal-banner">
+    <span class="lead">The world:</span> a <code>support agent</code> needs a refund issued, but the refund skill is owned by a peer, the <code>billing-agent</code>, served at <code>https://billing.acme.example/a2a</code>. Discovery fetches the peer's <code>agent-card.json</code>; an allowlist gate decides trust; delegation is a <code>tasks/send</code> task with a <code>submitted -&gt; working -&gt; completed</code> lifecycle, returning an artifact.
+  </div>
+
+  <div class="transport-tag" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M8 21h8"/></svg>
+    <span><span class="verified">verified</span> The transport is the <strong>in-process JSON-RPC shim from Part 12</strong>, reused. MCP is <strong>vertical</strong> (agent reaching down to tools); A2A is <strong>horizontal</strong> (agent reaching across to a peer). Same plumbing, opposite direction. Every frame below is a real JSON-RPC message printed verbatim; the real network transport is one flag away.</span>
+  </div>
+
+  <div class="section-label">Choose a peer to delegate to</div>
+  <div class="toggle-group" role="group" aria-label="Peer selector">
+    <button class="toggle-btn" id="btn-billing" aria-pressed="true" type="button">
+      <span class="mode-dot" style="background:var(--teal)"></span>billing-agent (allowlisted)
+    </button>
+    <button class="toggle-btn" id="btn-rogue" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--rose)"></span>refund-bot-9000 (unvetted)
+    </button>
+  </div>
+
+  <div class="mode-blurb billing" id="mode-blurb"></div>
+
+  <div class="section-label">Step the three A2A stages</div>
+  <div class="wire-strip" role="list" aria-label="A2A stages">
+    <span class="wire-pill" id="wp-0" data-active="true" role="listitem"><span class="pid">stage 1</span>discover (agent card)</span>
+    <span class="wire-pill" id="wp-1" data-active="false" role="listitem"><span class="pid">stage 2</span>trust check (allowlist)</span>
+    <span class="wire-pill" id="wp-2" data-active="false" role="listitem"><span class="pid">stage 3</span>delegate (tasks/send)</span>
+  </div>
+
+  <div class="step-controls" id="wire-controls"></div>
+
+  <div class="wire-annotation" id="wire-annotation" aria-live="polite"></div>
+
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-dot" id="stage-dot" style="background:var(--teal)"></span>
+      <span class="subpanel-title" id="stage-title">discovery &#183; fetch the agent card</span>
+      <span class="subpanel-meta" id="stage-meta">stage 1 / 3</span>
+    </div>
+    <div class="subpanel-body">
+      <div id="stage-body" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="announce"></div>
+
+  <div class="contrast">
+    <strong>Discovery is not trust.</strong> Both peers serve a perfectly valid Agent Card, and both claim the <code>process_refund</code> skill. The card tells you what a peer SAYS it can do and how to reach it. Whether you act on it is a separate decision: the allowlist gate. The allowlisted <code>billing-agent</code> is delegated to; the unvetted <code>refund-bot-9000</code> is refused, and any output from outside the allowlist is tagged <code>UNTRUSTED</code>. The deep treatment, injection via a delegated result and the lethal trifecta, is Part 16.
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="legend-heading">
+  <h2 id="legend-heading">Two protocols, one transport: MCP vs A2A</h2>
+  <p class="panel-subtitle">Same JSON-RPC plumbing, opposite direction. MCP reaches down to tools; A2A reaches across to a peer agent.</p>
+
+  <div class="proto-legend">
+    <div class="proto-card mcp">
+      <div class="pc-head">
+        <span class="subpanel-dot" style="background:var(--indigo)"></span>
+        <span class="pc-title">MCP (Part 12)</span>
+        <span class="pc-dir">vertical</span>
+      </div>
+      <div class="pc-line"><strong>agent &#8594; TOOLS.</strong> A host reaches DOWN to its own tools inside one trust domain.</div>
+      <div class="pc-methods">initialize / tools-list / tools-call</div>
+    </div>
+    <div class="proto-card a2a">
+      <div class="pc-head">
+        <span class="subpanel-dot" style="background:var(--teal)"></span>
+        <span class="pc-title">A2A (this part)</span>
+        <span class="pc-dir">horizontal</span>
+      </div>
+      <div class="pc-line"><strong>agent &#8594; AGENT.</strong> An agent reaches ACROSS an org boundary to a peer agent.</div>
+      <div class="pc-methods">agent-card / tasks-send + a task lifecycle</div>
+    </div>
+  </div>
+
+  <div class="proto-foot">
+    <strong>Both ride JSON-RPC.</strong> A2A adds discovery via Agent Cards and a trust boundary between peers. Handoffs (Part 14) stop at the process boundary; A2A crosses it: an Agent Card at a well-known URL advertises a peer's skills and auth, delegation is a task with a <code>submitted -&gt; working -&gt; completed</code> lifecycle, a registry locates peers, and an allowlist decides which to trust.
+  </div>
+
+  <div class="caption">
+    <strong>How we keep it honest:</strong> the in-process shim is fully reproducible and every frame is a verbatim JSON-RPC message. The A2A field names and protocol strings move fast; only the transport and those strings would need edits for a live run. The real network transport, like the LLM swap in earlier parts, is one flag away. The trust touchpoint here stays deliberately thin; the deep agentic-security treatment is Part 16.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>support / host &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>peer agent &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>trust check &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>allowlisted / completed &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>refused
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =====================================================================
+     Verified facts from a2a_delegation.py (the single source of truth).
+     billing-agent card: name billing-agent, url https://billing.acme.example/a2a,
+     skill process_refund, auth ["bearer"]. tasks/send id 1 for process_refund
+     {order_id ORD-3300, amount 180.0} -> task-1, lifecycle
+     ["submitted","working","completed"], artifact "refund of $180.00 issued for
+     ORD-3300 (ref BILL-ORD-3300)". rogue card refund-bot-9000, url
+     https://refunds-r-us.example/a2a, auth ["none"], NOT allowlisted -> refused,
+     result None. All frames and strings reproduced EXACTLY.
+  ===================================================================== */
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* Pretty JSON-RPC frame coloring: keys, string values, numbers, booleans. */
+  function colorFrame(line) {
+    return escHtml(line)
+      .replace(/&quot;([a-zA-Z0-9_\/.]+)&quot;:/g, '<span class="jk">&quot;$1&quot;</span>:')
+      .replace(/: (&quot;[^&]*?&quot;)/g, ': <span class="js">$1</span>')
+      .replace(/: (-?\d+\.?\d*)/g, ': <span class="jn">$1</span>')
+      .replace(/: (true|false)/g, ': <span class="jb">$1</span>');
+  }
+
+  /* ---- The two peers, with their VERIFIED Agent Cards and outcomes ---- */
+  var PEERS = {
+    billing: {
+      id: "billing",
+      name: "billing-agent",
+      url: "https://billing.acme.example/a2a",
+      description: "Issues refunds and credits for orders.",
+      version: "1.0.0",
+      skill: "process_refund",
+      skillDesc: "Issue a refund for an order",
+      auth: "bearer",
+      allowlisted: true,
+      blurb: '<strong>billing-agent is on the allowlist.</strong> A peer owned by another team on another host. We cannot import it, so we discover its card, confirm it is allowlisted, and delegate the refund over JSON-RPC. The task runs submitted to working to completed and returns a trusted artifact.',
+      // verified discovery line
+      discover: "[support] discovered 'billing-agent' at https://billing.acme.example/a2a: skills=['process_refund'], auth=['bearer']",
+      // verified delegation frames (id 1)
+      req: '{"jsonrpc": "2.0", "id": 1, "method": "tasks/send", "params": {"skill": "process_refund", "input": {"order_id": "ORD-3300", "amount": 180.0}}}',
+      res: '{"jsonrpc": "2.0", "id": 1, "result": {"id": "task-1", "lifecycle": ["submitted", "working", "completed"], "status": {"state": "completed"}, "artifacts": [{"type": "text", "text": "refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)"}]}}',
+      trustLine: "[trust] 'billing-agent' is allowlisted -> delegating",
+      lifecycleLine: "[support] task task-1 lifecycle: submitted -> working -> completed",
+      resultLine: "[support] trusted result (from billing-agent): refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)",
+      artifact: "refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)"
+    },
+    rogue: {
+      id: "rogue",
+      name: "refund-bot-9000",
+      url: "https://refunds-r-us.example/a2a",
+      description: "Totally legit refunds, definitely.",
+      version: "0.0.1",
+      skill: "process_refund",
+      skillDesc: "refunds!!",
+      auth: "none",
+      allowlisted: false,
+      blurb: '<strong>refund-bot-9000 is unvetted.</strong> An agent we have never vetted that ALSO claims the process_refund skill. Its card is perfectly discoverable, but discovering a peer is not trusting it. The allowlist check refuses delegation; the result is None and any output from outside the allowlist is tagged UNTRUSTED.',
+      // verified discovery line
+      discover: "[support] discovered 'refund-bot-9000' at https://refunds-r-us.example/a2a: skills=['process_refund'], auth=['none']",
+      trustLine: "[trust] 'refund-bot-9000' is NOT on the allowlist -> delegation REFUSED",
+      resultLine: "-> delegation result: None  (refused; output never trusted)"
+    }
+  };
+
+  var ALLOWLIST = "{ 'billing-agent' }";
+
+  var STAGES = [
+    {
+      key: "discover", role: "stage 1",
+      dot: "var(--teal)",
+      title: "discovery &#183; fetch the agent card",
+      annotation: '<span class="role">discovery</span><strong>agent/getCard</strong> fetches the peer\'s public Agent Card from the registry. The card advertises the peer\'s name, skills, input/output modes, and how to authenticate. Discovery is just fetching this document; it works for any peer, vetted or not.'
+    },
+    {
+      key: "trust", role: "stage 2",
+      dot: "var(--amber)",
+      title: "trust check &#183; the allowlist gate",
+      annotation: '<span class="role">trust</span><strong>The allowlist gate.</strong> Before sending any task, the support agent checks the card\'s name against an allowlist. A peer on the list is delegated to; a peer not on it is REFUSED. Discovery is not trust.'
+    },
+    {
+      key: "delegate", role: "stage 3",
+      dot: "var(--teal)",
+      title: "delegation &#183; tasks/send over JSON-RPC",
+      annotation: '<span class="role">delegation</span><strong>tasks/send</strong> ships the task to the peer over JSON-RPC. The task runs a lifecycle, submitted to working to completed, and returns the result as an artifact. Refused peers never reach this stage.'
+    }
+  ];
+
+  var currentPeer = "billing";
+  var stage = 0; // 0..2
+
+  /* ---- stage renderers ---- */
+
+  function renderCardJson(p) {
+    var authCls = p.auth === "bearer" ? "auth-bearer" : "auth-none";
+    var html = "";
+    html += '<span class="jk">"name"</span>: <span class="js">"' + escHtml(p.name) + '"</span>,\n';
+    html += '<span class="jk">"description"</span>: <span class="js">"' + escHtml(p.description) + '"</span>,\n';
+    html += '<span class="jk">"url"</span>: <span class="js">"' + escHtml(p.url) + '"</span>,\n';
+    html += '<span class="jk">"version"</span>: <span class="js">"' + escHtml(p.version) + '"</span>,\n';
+    html += '<span class="jk">"skills"</span>: [{ <span class="jk">"id"</span>: <span class="skill">"' + escHtml(p.skill) + '"</span>,\n';
+    html += '             <span class="jk">"description"</span>: <span class="js">"' + escHtml(p.skillDesc) + '"</span>,\n';
+    html += '             <span class="jk">"inputModes"</span>: [<span class="js">"application/json"</span>],\n';
+    html += '             <span class="jk">"outputModes"</span>: [<span class="js">"application/json"</span>] }],\n';
+    html += '<span class="jk">"capabilities"</span>: { <span class="jk">"streaming"</span>: <span class="jb">false</span> },\n';
+    html += '<span class="jk">"authentication"</span>: { <span class="jk">"schemes"</span>: [<span class="' + authCls + '">"' + escHtml(p.auth) + '"</span>] }';
+    return html;
+  }
+
+  function renderDiscover(p) {
+    var rogueCls = p.id === "rogue" ? " rogue" : "";
+    var html = "";
+    html += '<div class="agentcard' + rogueCls + '">';
+    html += '<div class="agentcard-head"><span class="subpanel-dot" style="background:' + (p.id === "rogue" ? "var(--rose)" : "var(--teal)") + '"></span>'
+      + '<span class="ac-file">agent-card.json</span>'
+      + '<span class="ac-url">' + escHtml(p.url) + '/.well-known/agent-card.json</span></div>';
+    html += '<div class="agentcard-body"><div class="ac-json">' + renderCardJson(p) + '</div>';
+    html += '<div class="ac-discover"><span class="tag">' + escHtml(p.discover) + '</span></div>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderTrust(p) {
+    if (p.allowlisted) {
+      return '<div class="trust-box pass">'
+        + '<div class="trust-head"><span>trust check</span><span class="allowlist">allowlist = ' + escHtml(ALLOWLIST) + '</span></div>'
+        + '<div>The card\'s name <code>' + escHtml(p.name) + '</code> IS on the allowlist. The gate is OPEN.</div>'
+        + '<div class="verdict" style="margin-top:6px">' + escHtml(p.trustLine) + '</div>'
+        + '</div>';
+    }
+    return '<div class="trust-box refuse">'
+      + '<div class="trust-head"><span>trust check</span><span class="allowlist">allowlist = ' + escHtml(ALLOWLIST) + '</span></div>'
+      + '<div>The card\'s name <code>' + escHtml(p.name) + '</code> is NOT on the allowlist. The gate is CLOSED.</div>'
+      + '<div class="verdict" style="margin-top:6px">' + escHtml(p.trustLine) + '</div>'
+      + '</div>';
+  }
+
+  function renderDelegate(p) {
+    if (!p.allowlisted) {
+      var h = '<div class="trust-box refuse">'
+        + '<div class="trust-head"><span>delegation skipped</span></div>'
+        + '<div>The trust gate refused this peer, so no <code>tasks/send</code> frame is ever put on the wire. Nothing is delegated.</div>'
+        + '<div class="verdict" style="margin-top:6px">' + escHtml(p.resultLine) + '</div>'
+        + '</div>';
+      h += '<div class="artifact refused"><span class="a-tag">refused</span>result = None. Output from outside the allowlist is tagged UNTRUSTED; a later step treats it as suspect (Part 16 goes deep).</div>';
+      return h;
+    }
+    var html = "";
+    html += '<div class="frame req"><span class="dir">--&gt;</span>' + colorFrame(p.req) + '</div>';
+    html += '<div class="frame res"><span class="dir">&lt;--</span>' + colorFrame(p.res) + '</div>';
+    // lifecycle strip
+    html += '<div class="lifecycle" role="list" aria-label="task lifecycle">';
+    html += '<span class="lc-cell" data-state="lit" role="listitem"><span class="lc-dot"></span>submitted</span>';
+    html += '<span class="lc-arrow" aria-hidden="true">&#8594;</span>';
+    html += '<span class="lc-cell" data-state="working" role="listitem"><span class="lc-dot"></span>working</span>';
+    html += '<span class="lc-arrow" aria-hidden="true">&#8594;</span>';
+    html += '<span class="lc-cell" data-state="done" role="listitem"><span class="lc-dot"></span>completed</span>';
+    html += '</div>';
+    html += '<div class="host-note"><span class="tag">' + escHtml(p.lifecycleLine) + '</span></div>';
+    html += '<div class="host-note"><span class="tag">' + escHtml(p.resultLine) + '</span></div>';
+    html += '<div class="artifact trusted"><span class="a-tag">artifact</span>' + escHtml(p.artifact) + '</div>';
+    return html;
+  }
+
+  function renderStageBody() {
+    var p = PEERS[currentPeer];
+    var box = document.getElementById("stage-body");
+    var s = STAGES[stage];
+    if (s.key === "discover") box.innerHTML = renderDiscover(p);
+    else if (s.key === "trust") box.innerHTML = renderTrust(p);
+    else box.innerHTML = renderDelegate(p);
+
+    var dotColor = s.dot;
+    if (s.key === "delegate" && !p.allowlisted) dotColor = "var(--rose)";
+    document.getElementById("stage-dot").style.background = dotColor;
+    document.getElementById("stage-title").innerHTML = s.title;
+    document.getElementById("stage-meta").textContent = "stage " + (stage + 1) + " / 3";
+  }
+
+  function renderPills() {
+    for (var i = 0; i < STAGES.length; i++) {
+      document.getElementById("wp-" + i).setAttribute("data-active", i <= stage ? "true" : "false");
+    }
+  }
+
+  function renderAnnotation() {
+    document.getElementById("wire-annotation").innerHTML = STAGES[stage].annotation;
+  }
+
+  function renderControls() {
+    var el = document.getElementById("wire-controls");
+    var atStart = stage === 0;
+    var atEnd = stage >= STAGES.length - 1;
+    var html = "";
+    html += '<button class="step-btn" id="b-prev" type="button"' + (atStart ? " disabled" : "") + '>&#8592; Previous stage</button>';
+    html += '<button class="step-btn primary" id="b-next" type="button"' + (atEnd ? " disabled" : "") + '>Next stage &#8594;</button>';
+    html += '<button class="step-btn" id="b-reset" type="button"' + (atStart ? " disabled" : "") + '>Reset</button>';
+    var label = atEnd ? "all 3 stages shown" : "stage " + (stage + 1) + " / 3 &#183; " + STAGES[stage].key;
+    html += '<span class="step-progress"><span class="stepnum">' + label + '</span></span>';
+    el.innerHTML = html;
+    bind("b-prev", function () { if (stage > 0) { stage--; renderAll(); announce(); } });
+    bind("b-next", function () { if (stage < STAGES.length - 1) { stage++; renderAll(); announce(); } });
+    bind("b-reset", function () { stage = 0; renderAll(); announce(); });
+  }
+
+  function renderBlurb() {
+    var p = PEERS[currentPeer];
+    var blurb = document.getElementById("mode-blurb");
+    blurb.className = "mode-blurb " + p.id;
+    blurb.innerHTML = p.blurb;
+  }
+
+  function renderAll() {
+    renderPills();
+    renderAnnotation();
+    renderStageBody();
+    renderControls();
+  }
+
+  function announce() {
+    var p = PEERS[currentPeer];
+    var s = STAGES[stage];
+    var txt = "Peer " + p.name + ", " + s.role + ": " + s.key + ".";
+    if (s.key === "trust") {
+      txt += p.allowlisted ? " On the allowlist; gate open." : " Not on the allowlist; delegation refused.";
+    } else if (s.key === "delegate") {
+      txt += p.allowlisted ? " Task task-1 completed; trusted artifact returned." : " Delegation skipped; result is None.";
+    }
+    document.getElementById("announce").textContent = txt;
+  }
+
+  function setPeer(id) {
+    currentPeer = id;
+    stage = 0;
+    document.getElementById("btn-billing").setAttribute("aria-pressed", id === "billing" ? "true" : "false");
+    document.getElementById("btn-rogue").setAttribute("aria-pressed", id === "rogue" ? "true" : "false");
+    renderBlurb();
+    renderAll();
+    announce();
+  }
+
+  /* ---- shared ---- */
+  function bind(id, fn) {
+    var b = document.getElementById(id);
+    if (b) b.addEventListener("click", fn);
+  }
+
+  document.getElementById("btn-billing").addEventListener("click", function () { setPeer("billing"); });
+  document.getElementById("btn-rogue").addEventListener("click", function () { setPeer("rogue"); });
+
+  document.querySelector(".toggle-group").addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      setPeer(currentPeer === "billing" ? "rogue" : "billing");
+      document.getElementById(currentPeer === "billing" ? "btn-billing" : "btn-rogue").focus();
+      e.preventDefault();
+    }
+  });
+
+  /* init */
+  renderBlurb();
+  renderAll();
+})();
+</script>
+</body>
+</html>

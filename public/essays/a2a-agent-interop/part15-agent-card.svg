@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="100%" style="height:auto" role="img" aria-label="The Agent Card: a public description a peer agent serves at /.well-known/agent-card.json. The card document on the left shows its fields: name billing-agent; description Issues refunds and credits for orders; url https://billing.acme.example/a2a; version 1.0.0; a skills list with one skill, id process_refund, description Issue a refund for an order, input modes application/json, output modes application/json; capabilities streaming false; authentication schemes bearer. On the right, a discovery arrow shows the support agent fetching the card with the JSON-RPC method agent/getCard, learning skills process_refund and auth bearer. Below that an allowlist gate decides trust: if the card name is on the allowlist the gate is OPEN and delegation proceeds; billing-agent is allowlisted, so delegation proceeds. A second, rogue card refund-bot-9000 with auth none is also discoverable, but it is NOT on the allowlist, so the gate is CLOSED and delegation is REFUSED. Discovering a peer is not trusting it.">
+  <title>The Agent Card at /.well-known/agent-card.json: discovery fetches it; an allowlist gate decides trust before delegation.</title>
+
+  <defs>
+    <marker id="arrIndigo" markerWidth="12" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0 0, 12 5, 0 10" fill="#6366f1"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#14b8a6"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#10b981"/>
+    </marker>
+    <marker id="arrRose" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#f43f5e"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="760" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#94a3b8">Part 15, agent to agent (A2A)</text>
+
+  <!-- Title -->
+  <text x="40" y="34" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="18" font-weight="700" fill="#0f172a">The Agent Card: a peer publishes what it offers; discovery is not trust</text>
+  <text x="40" y="54" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#64748b">A public card at /.well-known/agent-card.json advertises skills + auth. An allowlist gate decides who you actually delegate to.</text>
+
+  <!-- ============================ LEFT: THE AGENT CARD DOCUMENT ============================ -->
+  <text x="40" y="92" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#0d9488" letter-spacing="0.04em">THE AGENT CARD (served at /.well-known/agent-card.json)</text>
+
+  <!-- card document with a folded corner -->
+  <rect x="40" y="104" width="480" height="560" rx="13" fill="#ffffff" stroke="#99f6e4" stroke-width="1.8"/>
+  <rect x="40" y="104" width="480" height="36" rx="13" fill="#ccfbf1"/>
+  <rect x="40" y="122" width="480" height="18" fill="#ccfbf1"/>
+  <circle cx="62" cy="122" r="4.5" fill="#0d9488"/>
+  <text x="76" y="127" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0d9488">agent-card.json</text>
+  <text x="500" y="127" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#0f766e">application/json</text>
+
+  <!-- field: name -->
+  <text x="64" y="170" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#0d9488">"name":</text>
+  <text x="158" y="170" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0f172a">"billing-agent"</text>
+
+  <!-- field: description -->
+  <text x="64" y="194" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#0d9488">"description":</text>
+  <text x="64" y="210" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#334155">"Issues refunds and credits for orders."</text>
+
+  <!-- field: url -->
+  <text x="64" y="234" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#0d9488">"url":</text>
+  <text x="64" y="250" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#334155">"https://billing.acme.example/a2a"</text>
+
+  <!-- field: version -->
+  <text x="64" y="274" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#0d9488">"version":</text>
+  <text x="158" y="274" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#334155">"1.0.0"</text>
+
+  <line x1="64" y1="290" x2="496" y2="290" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- field: skills (a nested box) -->
+  <text x="64" y="312" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#0d9488">"skills": [</text>
+  <rect x="80" y="320" width="416" height="116" rx="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.3"/>
+  <text x="96" y="342" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#0d9488">"id":</text>
+  <text x="158" y="342" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">"process_refund"</text>
+  <text x="96" y="362" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#0d9488">"description":</text>
+  <text x="96" y="378" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#334155">"Issue a refund for an order"</text>
+  <text x="96" y="400" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#0d9488">"inputModes":</text>
+  <text x="226" y="400" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#334155">["application/json"]</text>
+  <text x="96" y="420" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#0d9488">"outputModes":</text>
+  <text x="226" y="420" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#334155">["application/json"]</text>
+  <text x="64" y="456" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#0d9488">]</text>
+
+  <line x1="64" y1="472" x2="496" y2="472" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- field: capabilities -->
+  <text x="64" y="494" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#0d9488">"capabilities":</text>
+  <text x="200" y="494" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#334155">{ "streaming": false }</text>
+
+  <!-- field: authentication (highlighted, amber, trust-relevant) -->
+  <rect x="56" y="510" width="440" height="56" rx="9" fill="#fffbeb" stroke="#fde68a" stroke-width="1.4"/>
+  <text x="72" y="532" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#b45309">"authentication":</text>
+  <text x="216" y="532" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#92400e">{ "schemes": ["bearer"] }</text>
+  <text x="72" y="552" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#b45309">How a caller authenticates. The card advertises auth; it does NOT confer trust.</text>
+
+  <!-- footer note -->
+  <rect x="56" y="582" width="440" height="62" rx="9" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="72" y="604" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">The card is just data. Anyone can serve one and claim any skill. It tells</text>
+  <text x="72" y="620" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">you what a peer SAYS it can do and how to reach it. Whether you act on</text>
+  <text x="72" y="636" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">that is a separate decision, made by the allowlist gate on the right.</text>
+
+  <!-- ============================ DISCOVERY ARROW ============================ -->
+  <line x1="524" y1="200" x2="592" y2="200" stroke="#14b8a6" stroke-width="2.6" marker-end="url(#arrTeal)"/>
+  <text x="558" y="184" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#0d9488">fetch</text>
+  <text x="558" y="220" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#0f766e">agent/getCard</text>
+
+  <!-- ============================ RIGHT: SUPPORT AGENT + ALLOWLIST GATE ============================ -->
+  <!-- support agent box -->
+  <rect x="600" y="104" width="560" height="92" rx="12" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.8"/>
+  <rect x="600" y="104" width="6" height="92" rx="3" fill="#4f46e5"/>
+  <text x="624" y="132" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#4f46e5">support agent (the A2A client)</text>
+  <text x="624" y="154" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#3730a3">Discovers the card from the registry:</text>
+  <text x="624" y="174" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#475569">discovered 'billing-agent': skills=['process_refund'], auth=['bearer']</text>
+
+  <!-- arrow down into the gate -->
+  <line x1="880" y1="196" x2="880" y2="232" stroke="#6366f1" stroke-width="2.2" marker-end="url(#arrIndigo)"/>
+
+  <!-- allowlist gate -->
+  <rect x="600" y="236" width="560" height="160" rx="12" fill="#fffbeb" stroke="#fde68a" stroke-width="1.8"/>
+  <rect x="600" y="236" width="6" height="160" rx="3" fill="#f59e0b"/>
+  <text x="624" y="262" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#b45309">ALLOWLIST GATE</text>
+  <text x="624" y="280" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#92400e">Is the card's name on the allowlist? Discovery is not trust.</text>
+  <rect x="624" y="294" width="512" height="26" rx="6" fill="#ffffff" stroke="#fde68a" stroke-width="1.2"/>
+  <text x="638" y="311" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#b45309">allowlist = { "billing-agent" }</text>
+  <text x="624" y="344" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#92400e">if card.name in allowlist:  gate OPEN &#8594; delegate (tasks/send)</text>
+  <text x="624" y="364" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#92400e">else:  gate CLOSED &#8594; delegation REFUSED, result tagged UNTRUSTED</text>
+  <text x="624" y="386" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#b45309">The deep treatment (injection via a delegated result, the lethal trifecta) is Part 16.</text>
+
+  <!-- two outcomes -->
+  <!-- allowed: billing-agent -->
+  <line x1="744" y1="396" x2="744" y2="432" stroke="#10b981" stroke-width="2.2" marker-end="url(#arrEmerald)"/>
+  <rect x="600" y="436" width="270" height="208" rx="12" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.6"/>
+  <rect x="600" y="436" width="270" height="32" rx="12" fill="#d1fae5"/>
+  <rect x="600" y="452" width="270" height="16" fill="#d1fae5"/>
+  <text x="620" y="457" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#047857">GATE OPEN: billing-agent</text>
+  <text x="620" y="490" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#047857">'billing-agent' is allowlisted.</text>
+  <rect x="620" y="500" width="230" height="24" rx="6" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.1"/>
+  <text x="632" y="516" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#047857">tasks/send process_refund</text>
+  <text x="620" y="544" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#047857">Task runs submitted &#8594; working</text>
+  <text x="620" y="558" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#047857">&#8594; completed; returns an artifact.</text>
+  <rect x="620" y="570" width="230" height="56" rx="7" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.1"/>
+  <text x="632" y="588" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#047857">artifact (TRUSTED):</text>
+  <text x="632" y="604" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#065f46">refund of $180.00 issued for</text>
+  <text x="632" y="618" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#065f46">ORD-3300 (ref BILL-ORD-3300)</text>
+
+  <!-- refused: refund-bot-9000 -->
+  <line x1="1016" y1="396" x2="1016" y2="432" stroke="#f43f5e" stroke-width="2.2" marker-end="url(#arrRose)"/>
+  <rect x="890" y="436" width="270" height="208" rx="12" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.6"/>
+  <rect x="890" y="436" width="270" height="32" rx="12" fill="#ffe4e6"/>
+  <rect x="890" y="452" width="270" height="16" fill="#ffe4e6"/>
+  <text x="910" y="457" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#9f1239">GATE CLOSED: refund-bot-9000</text>
+  <text x="910" y="490" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#be123c">card discoverable, auth=['none']</text>
+  <rect x="910" y="500" width="230" height="40" rx="6" fill="#ffffff" stroke="#fecdd3" stroke-width="1.1"/>
+  <text x="922" y="517" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#9f1239">"name": "refund-bot-9000"</text>
+  <text x="922" y="531" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#9f1239">claims skill: process_refund</text>
+  <text x="910" y="560" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">NOT on the allowlist &#8594; delegation</text>
+  <text x="910" y="574" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" font-weight="700" fill="#9f1239">REFUSED. result = None.</text>
+  <rect x="910" y="584" width="230" height="42" rx="7" fill="#ffffff" stroke="#fecdd3" stroke-width="1.1"/>
+  <text x="922" y="602" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#9f1239">output from outside the allowlist</text>
+  <text x="922" y="617" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" font-weight="700" fill="#9f1239">is tagged UNTRUSTED</text>
+
+  <!-- ====================== bottom takeaway ====================== -->
+  <rect x="40" y="684" width="1120" height="44" rx="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="60" y="705" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#0d9488">An Agent Card advertises a peer's skills + auth at a well-known URL; discovery is just fetching it. Discovery is NOT trust:</text>
+  <text x="60" y="721" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#0d9488">an allowlist gate decides who you delegate to, refuses unvetted peers, and tags any outside output UNTRUSTED.</text>
+
+  <!-- legend -->
+  <g font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">
+    <rect x="40" y="92" width="11" height="11" rx="2" fill="#14b8a6"/>
+    <text x="56" y="101" opacity="0"> </text>
+  </g>
+
+</svg>

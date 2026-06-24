@@ -1,0 +1,161 @@
+---
+title: "Agent to Agent"
+description: "A handoff stops at the process boundary; a billing agent owned by another team is unreachable. A2A Agent Cards, JSON-RPC delegation, and a trust allowlist cross it."
+date: 2026-07-11
+tags: ["Agents","A2A","Interop","Protocols","Trust","AI"]
+seriesOrder: 15
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-15-a2a-agent-interop"
+lang: "en"
+translationSlug: "a2a-agent-interop-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+[Part 14](/essays/supervisor-and-handoffs) gave us the **handoff**: one agent transfers control, and the live trace, to a specialist. But that specialist lived **in the same process**. The supervisor could hand off to a `billing-specialist` only because that specialist was its own code, reachable in the same runtime. Real organizations are not one process. The billing agent is owned by **another team**, runs on **another host**, behind **another deploy**. You cannot import it, and a handoff cannot reach it. What you need is a way for one agent to **discover** and **delegate** to a peer agent across an **organizational boundary**, and a way to decide whether to **trust** it. That is what **A2A** (the Agent-to-Agent protocol) is for, and this part builds its essentials by hand. There are four pieces. First, the **Agent Card**: a public description a peer serves at a well-known URL (`/.well-known/agent-card.json`), naming itself, its **skills**, the input and output modes it speaks, and how to **authenticate**. Discovery is just fetching that card. Second, **delegation over JSON-RPC**: the support agent sends the billing agent a task (`tasks/send`) with a **lifecycle**, submitted to working to completed, and gets the result back as an **artifact**, reusing [Part 12](/essays/mcp-by-hand)'s transport. Third, a tiny **registry** so the support agent can find where a peer lives. Fourth, **trust and an allowlist**: discovering a peer is not trusting it, so the support agent checks the peer against an allowlist before delegating, **refuses** a peer that is not on it, and tags any result from outside the allowlist **untrusted**. We keep that last piece deliberately thin; the deep treatment is [Part 16](/essays/securing-the-agent).
+
+## Prerequisites
+
+You need basic Python and a feel for JSON: an object, a list, a string. That is all. Two earlier parts help but are not required. [Part 12](/essays/mcp-by-hand) is the **transport**: A2A reuses that part's in-process JSON-RPC shim, the same `"jsonrpc": "2.0"` envelope with an `id`, a `method`, and `params`, only pointed at a peer agent instead of a tool server. [Part 14](/essays/supervisor-and-handoffs) is the **handoff**: A2A is the same idea of passing work to a specialist, now carried **across a boundary** the in-process handoff could not cross. But the essay is self-contained: where it leans on an earlier idea it restates it in a sentence and references it rather than re-deriving it. The companion code, [a2a_delegation.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-15-a2a-agent-interop), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every JSON-RPC frame in this essay yourself. The default transport is an in-process shim that prints real protocol frames; a real network transport, and a real LLM driving the delegation decisions through `generate()`, are each one step away.
+
+## What is new since the handoff
+
+I want to be precise about what is new, because this is genuinely new ground. Every part so far, all the way back through the twenty parts of RAG, was **single-agent**: one controller working a problem, even when Part 14 split that work across cooperating agents, those agents all lived inside one process and one team's code. A2A adds **interoperation across an organizational boundary**, and almost all of it is net-new. The **Agent Card**: a public, fetchable description of a peer (its name, skills, modes, and auth) served at a well-known URL. **Horizontal delegation**: sending a task to an agent you do not own and cannot import, with its own lifecycle. A **registry**: a place to look up where peers live. And a **cross-org trust boundary**: the decision, made before you delegate, of which peers you will trust at all. One thing is deliberately **reused, not rebuilt**: the JSON-RPC transport is Part 12's, referenced not re-derived. And one framing carries the whole part. **MCP (Part 12) is vertical**: an agent reaching *down* to its tools. **A2A (this part) is horizontal**: an agent reaching *across* to a peer agent. Same plumbing, opposite direction. The run states it on the first line:
+
+```text
+[transport] in-process JSON-RPC shim (Part 12 reused). MCP = vertical (agent -> tools);
+A2A = horizontal (agent -> agent). Same plumbing, opposite direction.
+```
+
+## The Agent Card
+
+A peer agent makes itself **discoverable** by publishing one document at a well-known URL, `/.well-known/agent-card.json`. The card is the peer's public face: who it is, what it can do, what formats it speaks, and how you are expected to authenticate to it. Here is the billing agent's card, served at its well-known URL, quoted from the artifact's real output:
+
+```json
+{
+  "name": "billing-agent",
+  "description": "Issues refunds and credits for orders.",
+  "url": "https://billing.acme.example/a2a",
+  "version": "1.0.0",
+  "skills": [
+    {
+      "id": "process_refund",
+      "description": "Issue a refund for an order",
+      "inputModes": [
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json"
+      ]
+    }
+  ],
+  "capabilities": {
+    "streaming": false
+  },
+  "authentication": {
+    "schemes": [
+      "bearer"
+    ]
+  }
+}
+```
+
+Read the card field by field. The `name` is `billing-agent`, and its `url` is `https://billing.acme.example/a2a`, the endpoint a caller will reach it at. Its `skills` list holds one skill, `process_refund`, described as "Issue a refund for an order," declaring `inputModes` and `outputModes` of `application/json`: this peer takes JSON in and hands JSON back. The `capabilities` say `streaming: false`, and the `authentication` block names the schemes it accepts, here `bearer`. That single document is everything a caller needs to know to decide whether and how to talk to this agent. **Discovery is just fetching it.** The support agent looks the card up through the registry and reads off the two facts that matter most, the skills on offer and the auth required, quoted from the run:
+
+```text
+    [support] discovered 'billing-agent' at https://billing.acme.example/a2a: skills=['process_refund'], auth=['bearer']
+```
+
+The support agent now knows that `billing-agent` offers `skills=['process_refund']` and expects `auth=['bearer']`, learned entirely from the published card. This is the A2A analogue of MCP's `tools/list`: where MCP discovers a server's *tools*, A2A discovers a peer's *card*. Discovering it, though, is not the same as trusting it, a distinction we come back to below.
+
+<Diagram number={1} caption="The Agent Card the billing agent publishes at its well-known URL, and discovery as fetching it. The card served at slash dot well-known slash agent-card dot json names the agent billing-agent, gives its endpoint url https colon slash slash billing dot acme dot example slash a2a, version 1.0.0, and lists one skill, process_refund, issue a refund for an order, with input and output modes both application slash json. The capabilities block says streaming false, and the authentication block names the accepted scheme, bearer. Below the card, the support agent discovers the peer by fetching the card through the registry and reads off the two facts that matter, that the peer offers skills process_refund and requires auth bearer. The figure shows that an Agent Card is a peer's public, fetchable self-description, that discovery is simply fetching it, and that this is the horizontal A2A analogue of MCP's vertical tools-list.">
+  <img src="/essays/a2a-agent-interop/part15-agent-card.svg" alt="A diagram of a single Agent Card document served at a well-known URL, with a discovery step below it. At the top, a labelled file card headed slash dot well-known slash agent-card dot json lists the fields of the billing agent: name billing-agent, description issues refunds and credits for orders, url https colon slash slash billing dot acme dot example slash a2a, version 1.0.0. A skills section inside the card shows one skill row, id process_refund, description issue a refund for an order, inputModes application slash json, outputModes application slash json. A capabilities row reads streaming false, and an authentication row reads schemes bearer. Below the card, a support-agent box reaches up to the card with a fetch arrow labelled discovery, and emits a summary line reading discovered billing-agent, skills process_refund, auth bearer. A caption strip reads: an Agent Card is a peer's public self-description at a well-known URL; discovery is just fetching it, the horizontal analogue of MCP's tools-list." class="w-full rounded-lg" />
+</Diagram>
+
+## Delegation over JSON-RPC
+
+With the card discovered, the support agent can **delegate** a task. But before any bytes go on the wire, it checks one thing: is this peer on the **allowlist** of agents we trust? For `billing-agent` it is, so the delegation proceeds. The delegation itself is a JSON-RPC call, `tasks/send`, naming the skill and its input, and the reply carries the task's lifecycle and result. Here is the trust check, the request and response frames (`id` 1), and what the support agent reads back, quoted from the artifact's real output:
+
+```text
+    [trust] 'billing-agent' is allowlisted -> delegating
+    --> {"jsonrpc": "2.0", "id": 1, "method": "tasks/send", "params": {"skill": "process_refund", "input": {"order_id": "ORD-3300", "amount": 180.0}}}
+    <-- {"jsonrpc": "2.0", "id": 1, "result": {"id": "task-1", "lifecycle": ["submitted", "working", "completed"], "status": {"state": "completed"}, "artifacts": [{"type": "text", "text": "refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)"}]}}
+    [support] task task-1 lifecycle: submitted -> working -> completed
+    [support] trusted result (from billing-agent): refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)
+```
+
+Read it from the top. The trust gate fires first: `'billing-agent' is allowlisted -> delegating`, so the support agent is willing to send work to this peer. The request frame is plain JSON-RPC: `method: "tasks/send"`, `id` 1, and `params` naming the `skill` (`process_refund`) and its `input` (`order_id` `ORD-3300`, `amount` `180.0`). The response echoes `id` 1 and carries a `result` describing a **task**: it has an `id` of `task-1`, a `lifecycle` of `["submitted", "working", "completed"]`, a `status` of `completed`, and an `artifacts` array holding one text artifact. That lifecycle is the heart of A2A delegation. Unlike a single function return, a delegated task moves through **states**: `submitted` (the peer accepted it), `working` (the peer is doing it), and `completed` (the peer is done), which the support agent prints back as `task task-1 lifecycle: submitted -> working -> completed`. The work itself comes back as an **artifact**, not a bare value, and the support agent reads it off as a trusted result because the peer was allowlisted: `refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)`. The delegation succeeded across what would, in production, be an organizational boundary, and the only thing that crossed it was JSON-RPC. The flagship figure below steps through the whole exchange, the trust gate, the `tasks/send` frame, the lifecycle, and the returned artifact.
+
+<Diagram number={2} caption="The full A2A delegation, interactive, from the trust gate through the task lifecycle to the returned artifact. The support agent first checks the peer against its allowlist, billing-agent is allowlisted so delegation proceeds. It then sends a JSON-RPC request, method tasks slash send, id 1, naming the skill process_refund and the input order_id ORD-3300 and amount 180.0. The billing agent replies with a task that has an id of task-1, a lifecycle of submitted, working, completed, a status of completed, and an artifacts array holding one text artifact reading refund of 180 dollars 00 issued for ORD-3300, ref BILL-ORD-3300. The support agent prints the lifecycle as submitted then working then completed and reads the artifact as a trusted result because the peer was on the allowlist. The figure makes the central claim concrete, that a delegated A2A task is not a bare function return but a lifecycle with an artifact, carried over the same JSON-RPC envelope Part 12 used for tools, only now pointed horizontally at a peer agent.">
+  <IframeFigure src="/essays/a2a-agent-interop/part15-agent-card-delegation.html" title="Interactive A2A delegation walkthrough between a support agent and the billing agent over JSON-RPC. The view is a stepper. Step one, the trust gate, shows the support agent checking the peer name billing-agent against an allowlist and the result allowlisted, so delegation proceeds. Step two, the request, shows a request arrow from support to billing carrying jsonrpc 2.0, id 1, method tasks slash send, and params with skill process_refund and input order_id ORD-3300 and amount 180.0. Step three, the response, shows a response arrow back carrying jsonrpc 2.0, id 1, and a result describing a task with id task-1, a lifecycle array of submitted, working, completed, a status state completed, and an artifacts array with one text artifact reading refund of 180 dollars 00 issued for ORD-3300, ref BILL-ORD-3300. Step four, the readout, shows the support agent printing task task-1 lifecycle submitted then working then completed, and the trusted result line refund of 180 dollars 00 issued for ORD-3300, ref BILL-ORD-3300. A banner reads delegation is a JSON-RPC task with a submitted-to-working-to-completed lifecycle and a returned artifact, the same transport as MCP pointed horizontally at a peer agent." height={860} />
+</Diagram>
+
+## Discovery is not trust
+
+The billing agent worked because it was on the allowlist. But a card is just a public document, and anyone can publish one. A second peer, `refund-bot-9000`, advertises the **same skill**, `process_refund`, at a different URL, and notice its auth: `none`. We can **discover** it exactly as we discovered the billing agent, the card is fetchable and well-formed, but we have never vetted it. Here is what happens when the support agent discovers it and then tries to delegate, quoted from the artifact's real output:
+
+```text
+    [support] discovered 'refund-bot-9000' at https://refunds-r-us.example/a2a: skills=['process_refund'], auth=['none']
+    [trust] 'refund-bot-9000' is NOT on the allowlist -> delegation REFUSED
+    -> delegation result: None  (refused; output never trusted)
+```
+
+Discovery succeeds: the support agent reads `refund-bot-9000`'s card and sees it claims `skills=['process_refund']` with `auth=['none']`. But discovery is **not** trust. The allowlist holds only `billing-agent`, so when the support agent reaches the trust gate, `refund-bot-9000` fails it: `'refund-bot-9000' is NOT on the allowlist -> delegation REFUSED`, and the delegation returns `None`, the comment spelling out the consequence, `(refused; output never trusted)`. No `tasks/send` frame ever goes to this peer; the refusal happens **before** any work is delegated. That is the whole point of separating discovery from trust: the ability to *find* a peer that claims a skill says nothing about whether you should *act on* what it returns. The run states the principle, and where the depth lives:
+
+```text
+    Discovering a peer is not trusting it. Any result from outside the allowlist is
+    tagged UNTRUSTED. The deep treatment (injection via a delegated result, the lethal
+    trifecta) is Part 16.
+```
+
+We keep this touchpoint thin on purpose. The rule here is simple: a peer not on the allowlist is refused, and any output that did come from outside the allowlist is tagged **untrusted** so a later step treats it as suspect rather than as fact. The genuinely dangerous case, where a delegated result is treated as instructions and **injection** rides in through it, the **lethal trifecta** of a tool-using agent with untrusted content and a way to exfiltrate, is [Part 16](/essays/securing-the-agent)'s entire subject. Here we only establish the boundary; there we attack it.
+
+## MCP vertical, A2A horizontal
+
+Step back and the two protocols line up cleanly. MCP and A2A ride the **same transport**, JSON-RPC, and differ in **direction**. MCP points an agent *down* at its tools; A2A points an agent *across* at a peer. The run draws the comparison directly, quoted from the artifact's real output:
+
+```text
+  MCP (Part 12): agent -> TOOLS      (vertical)   initialize / tools-list / tools-call
+  A2A (this part): agent -> AGENT    (horizontal) agent-card / tasks-send + a task lifecycle
+  Both ride JSON-RPC; A2A adds discovery via Agent Cards and a trust boundary between peers.
+```
+
+Read the two rows against each other. **MCP** is `agent -> TOOLS`, **vertical**, and its methods are `initialize`, `tools-list`, and `tools-call`: a handshake, then discover the tools, then call one. **A2A** is `agent -> AGENT`, **horizontal**, and its methods are `agent-card` (fetch the peer's card) and `tasks-send` (delegate a task), the latter carrying a **task lifecycle** rather than a bare return. The closing line names exactly what A2A adds on top of the shared plumbing: `Both ride JSON-RPC; A2A adds discovery via Agent Cards and a trust boundary between peers.` Tools do not need a trust boundary in the same way, you wired them in, but a *peer agent you do not own* does, which is why the allowlist is core to A2A and absent from MCP. The two protocols compose: a single agent can reach down to its MCP tools and across to its A2A peers in the same run, and both exchanges look like JSON-RPC on the wire.
+
+<Diagram number={3} caption="MCP vertical versus A2A horizontal, two protocols on one transport. MCP, from Part 12, points an agent downward at its tools, the vertical direction, with the methods initialize, tools-list, and tools-call, a handshake then discover then call. A2A, this part, points an agent sideways at a peer agent, the horizontal direction, with the methods agent-card, fetch the peer's published card, and tasks-send, delegate a task that carries a submitted-to-working-to-completed lifecycle. Both ride the same JSON-RPC envelope. The figure shows the one thing A2A adds that MCP does not, discovery via Agent Cards plus a trust boundary between peers, because a peer agent you do not own must be checked against an allowlist while a tool you wired in need not be, and it shows that the two compose, since one agent can reach down to its tools and across to its peers in the same run.">
+  <img src="/essays/a2a-agent-interop/part15-mcp-vs-a2a.svg" alt="A diagram contrasting two protocols sharing one transport. In the centre sits a single agent box. A downward arrow from it, labelled MCP, vertical, Part 12, points to a tools layer below, with the method labels initialize, tools-list, tools-call, and a caption agent reaches down to its tools. A horizontal arrow from the agent, labelled A2A, horizontal, this part, points sideways to a peer-agent box, with the method labels agent-card and tasks-send, the latter annotated with a small lifecycle chip reading submitted, working, completed, and a caption agent reaches across to a peer. A trust gate icon, an allowlist, sits on the horizontal A2A arrow only, not on the vertical MCP arrow, marking that a peer must be vetted while a tool was wired in. Underneath both arrows runs a shared band labelled JSON-RPC, the same envelope for both directions. A caption strip reads: MCP is vertical, agent to tools; A2A is horizontal, agent to agent; both ride JSON-RPC, A2A adds Agent Cards and a peer trust boundary." class="w-full rounded-lg" />
+</Diagram>
+
+> 💡 **From experience.** The first time A2A earned its keep, the win was that I *deleted* a planned integration rather than wrote one. Two teams' agents needed to talk: our support agent had to trigger refunds owned by the billing team's agent, and the default plan was the usual bespoke job, a private HTTP client baked into our code, billing's argument shape copied into ours, a shared secret passed around, and two slightly drifting versions of "how you call billing" to keep in sync forever. Instead billing published an Agent Card at their well-known URL, we discovered it, and our support agent delegated over `tasks/send`. The contract lived in exactly one place, billing's card, so it could not drift, and when billing later added a skill it simply appeared on the card. The other lesson was a refusal, and it was the kind that does not feel like a win at the time. A peer turned up advertising `process_refund` with a clean, professional-looking card, and someone wanted to wire it in fast because it "obviously did the same thing." It was not on our allowlist, and the gate refused it, the `'...' is NOT on the allowlist -> delegation REFUSED` line in this part, almost word for word. It looked legitimate; that is precisely why the allowlist exists. Discovering a peer that claims a skill tells you nothing about whether you should hand it a real refund, and the day I learned to treat a card as discovery and the allowlist as trust, the two as separate decisions, was the day A2A stopped scaring me.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- A **handoff stops at the process boundary**: Part 14's specialist worked only because it was the supervisor's own code. A billing agent owned by **another team**, on **another host**, behind **another deploy**, cannot be imported or handed off to. A2A crosses that line with discovery, delegation, a registry, and a trust allowlist.
+- The **Agent Card** is a peer's public self-description served at `/.well-known/agent-card.json`: its `name`, `url`, `skills`, input and output modes, `capabilities`, and `authentication`. The billing agent's card offers `skills=['process_refund']` with `auth=['bearer']`, and **discovery is just fetching it**, the horizontal analogue of MCP's `tools/list`.
+- **Delegation is a JSON-RPC task with a lifecycle.** `tasks/send` (`id` 1) for `process_refund` on `ORD-3300` for `180.0` returns task `task-1` with a `lifecycle` of `submitted -> working -> completed` and an **artifact**, `refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)`, not a bare return value.
+- A **registry** locates peers (where each lives, keyed by its well-known URL), and an **allowlist** decides which to trust. The two are separate jobs: finding a peer is not the same as being willing to act on what it returns.
+- **Discovery is not trust.** The rogue `refund-bot-9000` (auth `none`) is discoverable and claims the same `process_refund` skill, but it is `NOT on the allowlist -> delegation REFUSED`, returning `None` with no `tasks/send` ever sent; output from outside the allowlist is tagged **untrusted**. This stays thin here; **injection via a delegated result and the lethal trifecta are Part 16**.
+- **MCP is vertical** (`agent -> TOOLS`: `initialize / tools-list / tools-call`); **A2A is horizontal** (`agent -> AGENT`: `agent-card / tasks-send` plus a task lifecycle). **Both ride JSON-RPC**; A2A adds discovery via **Agent Cards** and a **trust boundary** between peers that tools do not need.
+
+## Glossary
+
+- **A2A (Agent-to-Agent protocol)**: a protocol for one agent to **discover** and **delegate** to a peer agent across an organizational boundary it cannot import. It rides JSON-RPC (Part 12's transport) and adds Agent Cards and a peer trust boundary on top.
+- **Agent Card**: a peer's public, fetchable self-description served at `/.well-known/agent-card.json`, naming the agent, its `url`, its `skills`, the input and output modes it speaks, its `capabilities`, and its `authentication` schemes. It is everything a caller needs to decide whether and how to talk to the peer.
+- **Skill**: a named capability a peer advertises in its card (here `process_refund`, "Issue a refund for an order"), with declared input and output modes. The A2A analogue of an MCP tool, but owned and executed by another agent.
+- **Discovery**: fetching a peer's Agent Card, here through the registry, to learn its skills and auth (`discovered 'billing-agent' ... skills=['process_refund'], auth=['bearer']`). Discovery establishes *what a peer claims*, never *whether to trust it*.
+- **Delegation**: sending a peer a task with `tasks/send` over JSON-RPC, naming a `skill` and its `input`, and receiving the result. The horizontal counterpart of Part 14's handoff, now crossing a boundary the in-process handoff could not.
+- **Task lifecycle**: the states a delegated A2A task moves through, `submitted -> working -> completed`, rather than returning a bare value. The completed task carries its result in an **artifact** (here a text artifact, `refund of $180.00 issued for ORD-3300 (ref BILL-ORD-3300)`).
+- **Registry**: a lookup of where peers live, keyed by their well-known URL, so the support agent can fetch a peer's card and reach its endpoint. It locates peers; it does not decide trust.
+- **Trust allowlist**: the set of peer agents this agent is willing to delegate to. A peer on it is delegated to (`'billing-agent' is allowlisted -> delegating`); a peer not on it is refused (`'refund-bot-9000' is NOT on the allowlist -> delegation REFUSED`, result `None`). The trust gate fires *before* any task is sent.
+- **Untrusted annotation**: the tag applied to any result that came from outside the allowlist, marking it suspect so a later step treats it as data rather than instruction. Thin here; the deep treatment (injection through a delegated result, the lethal trifecta) is Part 16.
+- **MCP vs A2A (vertical vs horizontal)**: MCP points an agent *down* at its tools (`agent -> TOOLS`, `initialize / tools-list / tools-call`); A2A points an agent *across* at a peer (`agent -> AGENT`, `agent-card / tasks-send` plus a lifecycle). Both ride JSON-RPC; only A2A needs a trust boundary, because the peer is an agent you do not own.
+
+---
+
+The rule from this part: a handoff stops at the process boundary, so cross it with a protocol. Let a peer **publish an Agent Card** at a well-known URL that advertises its **skills** and **auth**; make **discovery** the act of fetching that card; **delegate** with a JSON-RPC `tasks/send` whose task moves through a **submitted to working to completed lifecycle** and returns an **artifact**; locate peers with a **registry**; and gate every delegation on a **trust allowlist**, refusing peers you have not vetted and tagging anything from outside the list as **untrusted**. That turns the in-process handoff into a cross-org delegation, the same step from a private dictionary to a public protocol that MCP made for tools, now made for agents. But look at what we just built: an agent that can run code (Part 13), holds memory (Part 6), reaches down to real tools over MCP (Part 12), and now pulls in results from peers it does not own over A2A. Every one of those is power, and every one is also an **opening**. The moment a delegated result, or a tool output, or a fetched document is treated as instructions rather than data, an attacker can steer the agent through its own capabilities. **Part 16, Securing the Agent**, takes the trust touchpoint we kept thin here and goes all the way: prompt injection through untrusted content, the **lethal trifecta** of private data plus untrusted input plus a way to exfiltrate, and what it actually takes to keep an agent with real tools, real memory, code execution, and untrusted content from being turned against the very person it serves.
