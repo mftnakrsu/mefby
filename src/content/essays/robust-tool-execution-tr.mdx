@@ -1,0 +1,162 @@
+---
+title: "Araçlar Başarısız Olduğunda"
+description: "Şema-geçerli bir araç çağrısı run time'da yine de hata fırlatabilir, zaman aşımına uğrayabilir ya da çöp döndürebilir. Çözüm bir dayanıklılık katmanıdır: bir hata taksonomisi, sınırlı retry'lar ve idempotent bir iade aracı."
+date: 2026-06-28
+tags: ["Agents","Tool Use","Reliability","Retries","Idempotency","AI"]
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-02-robust-tool-execution"
+lang: "tr"
+translationSlug: "robust-tool-execution"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Part 1 her araca bir sözleşme verdi: tipli bir şema ve bilinmeyen bir aracı ya da hatalı biçimlendirilmiş bir argümanı, çağrı daha ateşlenmeden reddeden bir validator. Bu, kağıt üzerinde yanlış olan çağrılara kapıyı kapatır. Kağıt üzerinde doğru olup yine de run time'da ters giden çağrı hakkında ise hiçbir şey yapmaz. Şema-geçerli bir araç yine de hata fırlatabilir (bir ağ kesintisi, bir 500, bir rate limit, aracın kendisindeki bir bug), zaman aşımına uğrayabilir (bağımlılık ayakta ama deadline'ınızdan yavaş), ve çöp döndürebilir (boş bir sonuç, ya da her tip kontrolünden geçip yine de "hiçbir şey bulamadım" anlamına gelen bir payload). RAG serisinin Part 19'u ve buradaki Part 1, ikisi de sessizce her aracın başarılı olduğunu varsaydı: döngü, bir aracın döndürdüğü her şeyi mutlak gerçek olarak aldı ve ilerledi. Tek bir hata fırlatma ve bütün koşu bir stack trace'e döner; tek bir boş sonuç ve yanıt sessizce zehirlenir. Bu parça araç yürütmesini başarısızlığı bekleyen bir katmana sarar. Üç şey inşa edeceksin. Birincisi, bir **hata taksonomisi (failure taxonomy)**: beş tür başarısızlık, her birinin tek bir kurtarma politikasıyla, böylece sistem "tekrar dene" ile "denemeyi bırak" arasındaki farkı bilir. İkincisi, **exponential backoff ve bir deadline ile sınırlı retry'lar**, yalnızca gerçekten düzelebilecek başarısızlıklara uygulanır. Üçüncüsü, serinin ilk **side-effecting tool'u**, gerçek para hareket ettiren bir iade, ve bir **idempotency guard** ile bir retry müşteriyi asla iki kere ücretlendirmez. Sonunda başarısız bir araç çağrısı, koşuyu bitiren bir çökme değil, controller'ın okuduğu bir Observation olur.
+
+## Ön koşullar
+
+Temel Python yeterli: fonksiyonlar, sözlükler (dictionary), exception'lar ve küçük bir döngüyü okuyabilmek. Hepsi bu. [Part 1](/essays/augmented-llm-loop)'i bitirmek yardımcı olur, çünkü bu parça doğrudan onun tool sözleşmesi ve validator'ı üzerine inşa ediliyor ve aynı dünyayı yeniden kullanıyoruz (iade politikası, E-4042 hatası, Acme'den Globex'e satın alma). Ama bu parça kendi içinde bütünlüklü: bir Part 1 fikrine dayandığı yerde, onu tek bir cümleyle yeniden ifade ediyor. Eşlik eden kod, [robust_execution.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-02-robust-tool-execution), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz. Controller varsayılan olarak okunabilir, deterministik bir kural politikasıdır, gerçek LLM yolu tek bir ortam bayrağı uzaklıkta, tam olarak Part 1'deki gibi.
+
+## Part 1'den bu yana yeni olan ne
+
+Neyin yeni olduğu konusunda kesin olmak istiyorum, çünkü döngünün kendisi yeni değil. RAG Part 19 read-only araçlar ve düz bir adım bütçesiyle gerçek bir reason/act/observe döngüsü kurdu, ve Part 1 tipli tool sözleşmesini, validator'ı, genişletilmiş-LLM ilkelini ve gerçekten-bir-agent'a-ihtiyacın-var-mı merdivenini ekledi. Bunların hiçbirini yeniden türetmiyorum. O parçaların ikisinin de varsaydığı, ve bu parçanın varsaymayı bıraktığı şey, doğrulamadan geçen bir araç çağrısının ardından başarılı olacağıdır. Çoğu zaman olmaz. Yani buradaki yeni olan her şey, "çağrı iyi biçimlendirilmiş" ile "çağrı kullanılabilir bir sonuç döndürdü" arasındaki boşlukta yaşar: çalışma-zamanı hata yönetimi, neyin ters gittiğini sınıflandıran taksonomi, backoff ve timeout ile retry'lar, başarısızlığı bir Observation'a çeviren yeniden çerçeveleme, ve dünyayı gerçekten değiştiren ilk araç. Satır-satır ReAct mekaniğini ya da şema validator'ını istiyorsan, onlar Part 19 ve Part 1'de; bu parça, döngü ile araçları arasında duran dayanıklılık katmanı.
+
+## Hata taksonomisi
+
+Bu parçanın çekirdek fikri "retry" değil. **Sınıflandır, sonra sınıfa göre davran.** Her başarısızlık aynı değildir, ve doğru tepki türüne bağlıdır. Aşırı yüklenmiş bir upstream'den gelen bir 503, bir saniye bekleyip tekrar denerseniz düzelebilir. Var olmayan bir indekse karşı bir 404 ise sonsuza dek 404 döndürür; onu retry etmek yalnızca zamanı, parayı ve kotayı yakar, ve rate-limit'li bir API'de sizi doğruca daha fazla başarısızlığa savurabilir. Bu ikisini birbirinden ayıran tek şey bir sınıflandırma adımıdır. Yani katman her araç çağrısını beş kategoriden birine çözer, her birinin tam olarak bir kurtarma politikasıyla. İşte artefaktın bastığı taksonomi bloğu, kelimesi kelimesine:
+
+```text
+  transient     temporary; might succeed if tried again   -> RETRY (bounded, backoff)
+  permanent     will never succeed; a retry only wastes    -> FEED BACK to the model
+  empty-result  the call worked but found nothing useful   -> FEED BACK to the model
+  malformed     arguments fail the schema (Part 1)         -> FEED BACK to the model
+  unknown-tool  not in the action space (Part 1)           -> FEED BACK to the model
+  "Feed back" = turn the failure into an Observation the controller reads, not a crash.
+```
+
+Sağdaki sütunu okuyun, çünkü tasarımın tamamı odur. Beş kategoriden yalnızca biri retry edilir: **transient**, bir dahaki sefere düzelebilecek başarısızlık. Diğer dördü, tekrar denenerek değil, başarısızlığı modele bir Observation olarak geri besleyerek ele alınır. Bir **permanent** hata (bir 404, bir bad request, bir auth hatası) asla düzelmeyecek, dolayısıyla bir retry saf israftır. Bir **empty-result**, başarılı olan ama hiçbir işe yarar şey bulamayan bir çağrıdır; aynı çağrıyı tekrar denemek aynı hiçliği bulur, dolayısıyla modelin "o boş çıktı" duyup farklı bir yaklaşım seçmesi gerekir. **Malformed** ve **unknown-tool** iki Part 1 vakasıdır: validator onları zaten herhangi bir şey çalışmadan önce yakaladı, ve tam olarak aynı kötü çağrıyı yeniden çalıştırmak aynı şekilde başarısız olur, dolayısıyla onlar da hemen geri beslenir. Kodda, retry-edilebilir ile değil iki ailesi, bir aracın fırlattığı exception tipleri olarak görünür: "düzelebilir" için `TransientError`, "düzelmeyecek" için `PermanentError`, ve `ToolTimeout` belirli bir tür transient olarak modellenir (bağımlılık ayakta, sadece çok yavaş). Wrapper, gerçek kodun bir HTTP statüsünü ya da bir sürücü hata kodunu okuyup "bunu retry et" ile "bundan vazgeç" arasında karar vermesi gibi, tipi okur. Diagram 1 beş kategoriyi politikalarının yanına serer.
+
+<Diagram number={1} caption="The failure taxonomy: five kinds of failure, one recovery policy each. A schema-valid tool call enters the wrapper and is resolved into exactly one category. Only transient failures (a 503, a rate limit, a timeout) are retried, with bounded exponential backoff. The other four (permanent, empty-result, malformed, unknown-tool) are fed back to the model as an Observation rather than retried, because re-running them would fail identically and waste time and money. The taxonomy is the part of the system that tells 'try again' apart from 'stop trying': retrying a permanent error is the classic way to turn one failure into a rate-limit spiral.">
+  <img src="/essays/robust-tool-execution/part2-failure-taxonomy.svg" alt="A diagram of a single tool call entering a classifier box, which routes it into one of five labelled lanes. The first lane, transient (temporary; a 503, rate limit, or timeout), in teal, flows to a RETRY box marked bounded, exponential backoff, then a loop arrow back into the call. The other four lanes all flow to one shared FEED BACK box on the right: permanent (a 404 or auth failure; will never clear) in rose, empty-result (the call worked but found nothing) in amber, malformed (arguments fail the schema, caught in Part 1) in violet, and unknown-tool (not in the action space, caught in Part 1) in violet. The FEED BACK box is labelled turn the failure into an Observation the controller reads, not a crash, and an arrow leads from it back up into the agent loop. A caption strip reads: classify first, then act on the class; only transients are retried." class="w-full rounded-lg" />
+</Diagram>
+
+## Retry'lar, backoff ve bir deadline
+
+Bir başarısızlık transient olarak sınıflandırıldığında, wrapper onu retry eder, ama körlemesine değil ve sonsuza dek değil. İki sınır, bir retry'ın kendi başına bir soruna dönüşmesini engeller. Birincisi **bounded exponential backoff**: her retry bir öncekinden daha uzun bekler, burada ilk retry'dan önce `0.5s` ve ikinciden önce `1.0s`, her seferinde ikiye katlanarak, küçük sabit bir retry sayısıyla sınırlanmış (iki, yani toplam üç deneme). Backoff önemlidir çünkü bir transient başarısızlığın yaygın nedeni aşırı yüklenmiş bir bağımlılıktır, ve aşırı yüklenmiş bir servisi anlık retry'larla dövmek, onu aşırı yüklü tutmanın yoludur. İkinci sınır bir **timeout**, çağrı başına bir deadline: ayakta ama patolojik biçimde yavaş bir araç, çökmüş bir araç kadar işe yaramazdır, dolayısıyla wrapper her denemeye sabit bir bütçe verir (burada `2.0s`) ve onu aşmayı bir transient timeout olarak ele alır. Flaky vakanın düzelmesini ve timeout vakanın pes etmesini izleyin, ikisi de artefaktın gerçek çıktısından:
+
+```text
+  SCENARIO: flaky-then-succeeds (transient that clears on retry)
+    call: flaky_lookup({"query": "today's order count"})
+    attempt 1 -> TransientError: temporary upstream failure (HTTP 503)
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> TransientError: temporary upstream failure (HTTP 503)
+      transient -> retry 2/2 after 1.0s backoff
+    attempt 3 -> OK: the dependency recovered and returned the data (score=0.91)
+    disposition: RECOVERED, usable result after 3 attempt(s)  [category: ok]
+
+  SCENARIO: timeout (slower than the deadline, every attempt)
+    call: slow_lookup({"query": "today's order count"})
+    attempt 1 -> ToolTimeout: exceeded the 2.0s deadline (simulated latency ~5.0s)
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> ToolTimeout: exceeded the 2.0s deadline (simulated latency ~5.0s)
+      transient -> retry 2/2 after 1.0s backoff
+    attempt 3 -> ToolTimeout: exceeded the 2.0s deadline (simulated latency ~5.0s)
+      transient -> retries exhausted (2); give up and feed back as an Observation
+    disposition: GAVE UP gracefully after 3 attempts; error fed back as an Observation  [category: transient]
+```
+
+Bunlar bounded retry'ın iki yüzü. Flaky lookup üçüncü denemede düzelir, dolayısıyla disposition `RECOVERED` olur ve döngü, sanki hiçbir şey ters gitmemiş gibi kullanılabilir bir sonuç alır. Slow lookup deadline'ını asla yenemez, dolayısıyla retry'lar tükendikten sonra wrapper çökmez; zarafetle pes eder ve timeout'u bir Observation olarak geri besler, ki bu da sınırın işini yapmasıdır. "Bounded" tüm meseledir: asla düzelmeyecek bir araçta sınırsız bir retry, yalnızca yavaş bir takılmadır. Backoff sayılarının, `0.5s` ve `1.0s`, beklendiği değil basıldığı dikkatinizi çeksin. Offline'da wrapper planlanan backoff'u basar ve aslında uyumaz, böylece demo hızlı ve trace'ler yeniden üretilebilir olur. Gerçek kod orada biraz rastgele **jitter** ile `time.sleep(delay)` yapardı (böylece bir istemci filosu hep aynı anda retry etmez), ve simüle edilmiş bir latency okumak yerine, aracı bir thread ya da future'da çalıştırıp timeout'ta iptal ederek deadline'ı gerçekten uygulardı.
+
+## Observation olarak hatalar
+
+İşte taksonomiyi döngüye bağlayan yeniden çerçeveleme. Part 19 ve Part 1'de, bir araç bir sonuç döndürürdü ve döngü onu bir Observation olarak okurdu. Bu parçadaki hamle, bir *başarısızlığı* da aynı biçimde döndürmek: başarısız bir araç çağrısı da bir Observation'a çözülür, sadece metni neyin ters gittiğini ve hangi kategoriye düştüğünü söyleyen bir Observation. Wrapper döngüye asla hata fırlatmaz. Dönüş değeri her zaman controller'ın okuyabileceği bir `ToolOutcome`'dur: bir kategori, bir observation string'i, bir deneme sayısı ve bir "usable" bayrağı. O tek karar, döngüyü dayanıklı yapan şeydir. Controller bir Observation'ı okumayı ve bir sonraki adıma karar vermeyi zaten biliyor; şimdi bunu, araç başarılı olsa da, hiçbir şey bulamasa da, bir duvara çarpsa da, ya da hiç gerçek bir araç olmasa da yapar. Bir permanent hata `[permanent] 404: index 'archive' does not exist` olur, ki modeli bunu okur ve başka bir yaklaşım denemek için kullanır. Bir empty sonuç `[empty-result] the call succeeded but found nothing useful` olur. Döngü, kötü bir araç çağrısından, iyi birinden sağ çıktığı gibi sağ çıkar, çünkü döngü onu gördüğü anda kötü çağrı, iyi bir çağrıyla aynı tiptedir. Aşağıdaki interaktif figür, her tür başarısızlığı açıp wrapper'ın onu sınıflandırmasını, retry etmesini ya da etmemesini ve Observation'ı geri vermesini izlemenizi sağlar.
+
+<Diagram number={2} caption="Fault injection, interactive. Toggle each of the five failure kinds (transient, timeout, permanent, empty-result, malformed/unknown-tool) and watch the same execute_tool wrapper classify the call, run the retry ladder for transients (attempt 1, backoff, attempt 2, backoff, attempt 3), and resolve every outcome into a disposition: RECOVERED, GAVE UP gracefully, or fed back as an Observation. The deadline is 2.0s, up to 2 retries, backoff times 2. A separate idempotency mini-panel runs the side-effecting refund twice (the post-then-timeout transient) with the guard off and on, showing $160 double-refund versus $80 exactly once. The figure's point: in every branch the wrapper returns an Observation the loop can read, never a crash.">
+  <IframeFigure src="/essays/robust-tool-execution/part2-fault-injection.html" title="Interactive fault-injection player for the robust tool wrapper. Five toggles select a failure kind: transient (clears on retry), timeout (slower than the 2.0s deadline every attempt), permanent (a 404 that retrying cannot fix), empty-result (the call succeeds but finds nothing), and malformed or unknown-tool (caught pre-flight by the Part 1 validator). For each, the panel shows the attempt ladder: transient and timeout run attempt 1, then a 0.5s backoff, attempt 2, a 1.0s backoff, and attempt 3; the transient case ends RECOVERED with a usable result while the timeout case ends GAVE UP gracefully with the error fed back as an Observation. Permanent, empty-result, malformed, and unknown-tool are not retried and are fed straight back as an Observation. A separate idempotency mini-panel runs process_refund for the same order twice under a post-then-timeout transient: with no guard the ledger shows two refunds totalling 160 dollars (double refund), and with the guard the ledger shows one refund of 80 dollars (exactly once), because the retry hits the guard and skips re-acting." height={780} />
+</Diagram>
+
+## Eyleme geçen ilk araç: iadeler ve idempotency
+
+Buraya kadarki her şey işliyor çünkü bir read-only araç bedavaya retry edilebilir. Aynı indekste iki kere arama yapın, en kötü ihtimal boşa giden bir çağrıdır. Bir araç **eyleme geçtiği** an, bu artık doğru olmaktan çıkar. Bu parça serinin ilk **side-effecting tool'unu**, `process_refund(order_id, amount)`'ı tanıtıyor, ve o gerçek para hareket ettiriyor. Simüle ettiğimiz başarısızlık gerçekçi ve sinsi olanı: iade ödeme gateway'ine post edilir, ve sonra biz geri yanıt almadan önce konfirmasyon zaman aşımına uğrar. Wrapper'ın bakış açısından bu bir transient hatadır, dolayısıyla retry eder, tıpkı bir read-only araç için yapması gerektiği gibi. Ama iade zaten gerçekleşti. Kör bir retry onu tekrar post eder. İşte iki ledger, yan yana, artefaktın gerçek çıktısından: önce guard'sız unsafe araç, sonra guard'lı olan, ikisi de aynı post-sonra-timeout transient'ine çarpmış:
+
+```text
+  NO GUARD  process_refund_unsafe(ORD-5510, $80.00):
+    attempt 1 -> TransientError: refund posted to the gateway, but the confirmation timed out
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> OK: refunded $80.00 to ORD-5510
+    ledger: 2 refunds posted for ORD-5510 -> $160.00 charged back. DOUBLE REFUND.
+
+  GUARDED   process_refund(ORD-5510, $80.00):
+    attempt 1 -> TransientError: refund posted to the gateway, but the confirmation timed out
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> OK: already refunded $80.00 to ORD-5510 (idempotent skip; no double-charge)
+    ledger: 1 refund recorded for ORD-5510 -> $80.00. Exactly once.
+```
+
+Aynı araç, aynı başarısızlık, aynı retry, müşterinin kartı için tamamen farklı iki sonuç. Guard olmadan retry ikinci bir `$80` iade post eder ve ledger `$160` geri ödendiğini gösterir. Guard'la birlikte retry tekrar eyleme geçmek yerine ilk sonucu döndürür, ve ledger bir `$80` iade gösterir, tam olarak bir kere. Guard küçük bir şeydir: `order_id` ile anahtarlanan bir **idempotency guard**. Araç, başarısız olabileceği noktadan önce etkiyi kaydeder (bu sipariş bu tutar için iade edildi), böylece aynı sipariş için bir retry onu tanır, kaydedilmiş sonucu döndürür ve tekrar eyleme geçmeyi atlar. "İki kere denendi" ile "iki kere ücretlendirildi" arasındaki fark budur. Kapsam hakkında bir dürüstlük cümlesi: bu guard yerel, in-memory bir sözlüktür. Sizi tek bir process içindeki bir retry'a karşı korur, ki bu parçanın konusu olan başarısızlık odur, ama process'in çökmesinden ve isteğin upstream'deki bir şey tarafından yeniden oynatılmasından sağ çıkmaz. Bu **seed**'dir. Part 9 onu, bir çökmeden ve bir replay'den sağ çıkan durable idempotency key'lere **hardenler**, size bütün sistem genelinde effectively-once semantiği verir. Şimdi seed, sonra harden; biçim aynı, depolama ciddileşir.
+
+## Dayanıklı agent
+
+Şimdi katmanı tekrar döngünün içine koyun. Hedef tek bir side-effecting görev: `ORD-7788` siparişi için onaylanmış bir `$49.99` iadeyi işle. Önce naive baseline, araca doğrudan, etrafında hiçbir wrapper olmadan yapılan Part 1 tarzı bir çağrı:
+
+```text
+  Naive baseline (Part 1 style: call the tool directly, no wrapper):
+    process_refund(...) raised TransientError: refund posted to the gateway, but the confirmation timed out
+    -> uncaught, the whole run dies on the first transient blip.
+```
+
+Tek bir transient kesinti ve bütün koşu bir stack trace. Bu parçanın başladığı dünya budur. Şimdi dayanıklı döngü, her araç çağrısı `execute_tool`'dan geçerek, artefaktın gerçek trace'inden:
+
+```text
+  Robust loop (every call through execute_tool):
+  Step 1
+    Thought: Before moving money, confirm refunds are allowed by policy.
+    Action: search_policy({"query": "refund window 30 days"})
+    attempt 1 -> OK: Refunds are accepted within 30 days of purchase, provided the item is...
+    Observation: Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging. (score=0.43)
+  Step 2
+    Thought: Policy allows the refund; issue it for ORD-7788.
+    Action: process_refund({"order_id": "ORD-7788", "amount": 49.99})
+    attempt 1 -> TransientError: refund posted to the gateway, but the confirmation timed out
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> OK: already refunded $49.99 to ORD-7788 (idempotent skip; no double-charge)
+    Observation: already refunded $49.99 to ORD-7788 (idempotent skip; no double-charge)  (resolved after 2 attempts)
+  Step 3
+    Thought: The refund is recorded exactly once; finish.
+    Action: finish({"answer": "Refund of $49.99 for ORD-7788 is complete (processed once, despite a transient gateway timeout)."})
+  ANSWER: Refund of $49.99 for ORD-7788 is complete (processed once, despite a transient gateway timeout).
+```
+
+Step 2'de ne olduğunu okuyun, çünkü tek bir trace'te bütün parça odur. Controller önce politikayı teyit eder, sonra iadeyi yapar. İlk deneme iadeyi post eder ve sonra onay üzerinde zaman aşımına uğrar, tam olarak guard'sız ledger'ı iki kere ücretlendiren başarısızlık. Wrapper onu transient olarak sınıflandırır ve backoff'tan sonra retry eder. Retry, `ORD-7788`'in zaten iade edildiğini tanıyan ve tekrar post etmek yerine kaydedilmiş sonucu döndüren idempotency guard'a çarpar. Observation bunu söyler, controller onu okur, ve koşu ledger'da tam olarak bir iade ile biter. Bunun güvenli olması için üç şeyin işbirliği yapması gerekiyordu: taksonomi bunun bir retry olduğuna karar verdi, guard retry'ı güvenli yaptı, ve Observation-olarak-hata yeniden çerçevelemesi döngünün devam etmesini sağladı. Herhangi birini düşürün ve naive baseline'ı elde edersiniz: bir çökme, bir çift ücretlendirme ya da ölü bir koşu.
+
+> 💡 **Deneyimden.** Sevkettiğim en pahalı bug bir retry'dı. Hesap kredileri veren bir aracımız vardı ve bu, yıllar önce mantıklı birinin read çağrıları için eklediği "5xx'te retry et" politikalı genel bir HTTP client'ın arkasında oturuyordu. Bir öğleden sonra kredi servisi yavaş bir yolda 504'ler döndürmeye başladı: krediyi gayet iyi uyguluyor, sonra yanıtta zaman aşımına uğruyordu. Retry politikası tam olarak söyleneni yaptı ve tekrar ateşledi. Ve tekrar. Birisi ledger'ı fark etmeden önce bir avuç hesabı üç dört kere iade ettik. Düzeltme "retry'ları kapat" değildi, çünkü transient gerçekten transient'ti ve kredilerin sonunda geçmesi gerçekten gerekiyordu. Düzeltme bu parçadaki iki fikirdi: başarısızlığı sınıflandırarak yalnızca retry etmesi güvenli olanı retry etmek, ve her krediye bir idempotency key koyarak zaten-kredilendirilmiş bir hesaba düşen bir retry'ın yeni bir tane vermek yerine orijinal sonucu döndürmesini sağlamak. Idempotency key'i eklediğimiz gün, aynı 504 fırtınası sıfır çift-kredi üretti. Tehlike retry'lar değil. İdempotency guard olmadan bir side-effecting çağrıyı retry etmek tehlikedir, ve taksonomi, hiçbir zaman retry etmemeniz gereken şeyleri retry etmenizi durduran şeydir.
+
+{/* yazar: daha iyi bir hikayeniz varsa yukarıdakini kendi birinci-tekil hikayenizle değiştirin */}
+
+## Özet / Çıkarımlar
+
+- Şema-geçerli bir araç çağrısı (Part 1'in sözleşmesi) run time'da yine de başarısız olabilir: **hata fırlatabilir**, **zaman aşımına uğrayabilir** ya da her tip kontrolünden geçen **çöp döndürebilir**. Part 19 ve Part 1 araçların başarılı olduğunu varsaydı; bu katman bunu varsaymayı bırakır.
+- Sınıflandır, sonra sınıfa göre davran. **Hata taksonomisinin** beş kategorisi var, her birinin tek bir kurtarma politikasıyla: **transient** retry edilir; **permanent**, **empty-result**, **malformed** ve **unknown-tool** modele geri beslenir. Taksonomi, "tekrar dene" ile "denemeyi bırak"ı ayıran şeydir, ve bir permanent hatayı retry etmek, bir başarısızlığın bir rate-limit sarmalına dönüşme yoludur.
+- Yalnızca transient'leri retry edin, ve sınırlayın: **exponential backoff** (0.5s, 1.0s, ikiye katlanarak) ki aşırı yüklenmiş bir bağımlılığı dövmeyin, artı çağrı başına bir **timeout/deadline** ki çok-yavaş bir araç takılıp kalmak yerine zarafetle pes etsin. Offline'da backoff basılır, beklenilmez; gerçek kod jitter'la uyur ve deadline'da iptal eder.
+- **Hatalar observation'dır.** Wrapper döngüye asla hata fırlatmaz; metni neyin ters gittiğini söyleyen bir `ToolOutcome` döndürür. Controller bir başarısızlığı, bir başarıyı okuduğu gibi okur, böylece döngü kötü bir araç çağrısından sağ çıkar.
+- İlk **side-effecting tool** (`process_refund`) bedavaya retry edilemez: eğer iade post edilir ve onay zaman aşımına uğrarsa, kör bir retry iki kere iade eder ($80 yerine $160). `order_id` ile anahtarlanan bir **idempotency guard** etkiyi kaydeder, böylece bir retry tekrar eyleme geçmek yerine ilk sonucu döndürür, tam olarak bir kere.
+- Bu guard **seed**'dir: in-process bir retry'a karşı koruyan yerel, in-memory bir kayıt. Part 9 onu, bir çökmeden ve bir replay'den sağ çıkan durable idempotency key'lere hardenler, bütün sistem genelinde effectively-once için.
+
+## Sözlük
+
+- **Hata taksonomisi (failure taxonomy)**: bir araç başarısızlığının sabit bir kategori kümesine (burada transient, permanent, empty-result, malformed, unknown-tool) sınıflandırılması, her birinin tek bir tanımlı kurtarma politikasıyla, böylece sistem tüm başarısızlıklara aynı muameleyi yapmak yerine başarısızlığın türüne tepki verir.
+- **Transient vs permanent**: bir transient başarısızlık geçicidir ve bir retry'da düzelebilir (bir 503, bir rate limit, bir timeout); bir permanent başarısızlık bu çağrı için asla düzelmez (bir 404, bir bad request, bir auth hatası), dolayısıyla onu retry etmek yalnızca zamanı ve kotayı boşa harcar.
+- **Exponential backoff**: her ardışık retry'ın bir öncekinden daha uzun beklediği bir retry çizelgesi (burada 0.5s, sonra 1.0s, ikiye katlanarak), genellikle rastgele jitter ile, böylece retry'lar zaten aşırı yüklenmiş bir bağımlılığa yığılmaz ya da istemciler arasında aynı anda ateşlenmez.
+- **Timeout / deadline**: çağrı başına bir zaman bütçesi; ayakta ama deadline'dan yavaş olan bir araç bir transient timeout olarak ele alınır ve terk edilir, çünkü patolojik biçimde yavaş bir araç, çökmüş bir araç kadar işe yaramazdır.
+- **Error-as-observation**: başarısız bir araç çağrısının, hata fırlatıp koşuyu çökertmek yerine, başarılı olan biriyle aynı biçimi, controller'ın okuduğu bir Observation'ı döndürdüğü yeniden çerçeveleme; döngünün kötü bir araç çağrısından sağ çıkmasını sağlayan şey budur.
+- **Side-effecting tool**: agent'ın dışındaki dünyayı değiştiren bir araç (bir iade yapar, bir e-posta gönderir, bir kayıt yazar), read-only bir aracın aksine; bedavaya güvenle retry edilemez, çünkü ikinci bir koşu etkiyi tekrarlar.
+- **Idempotency / idempotency guard**: bir işlemi birden fazla kere yapmanın, onu bir kere yapmakla aynı sonucu vermesi özelliği; buradaki guard, `order_id` ile anahtarlanan bir kayıttır, ki bir retry'ın zaten-gerçekleştirilmiş bir etkiyi tanıyıp tekrar eyleme geçmek yerine orijinal sonucu döndürmesini sağlar.
+- **Effectively-once** (ileri referans): bir yan etkinin, bir process çökmesi ve bir replay genelinde bile tam olarak bir kere gerçekleştiği daha güçlü garanti, durable idempotency key'lerle elde edilir; bu parça onu in-memory bir guard'la seed eder, ve Part 9 onu hardenler.
+
+---
+
+Artık başarısız olan bir araçtan sağ çıkabiliyoruz: onu sınıflandır, yalnızca retry etmesi güvenli olanı retry et, ve bir side-effecting çağrıyı asla iki kere ücretlendirme. Ama döngü hâlâ ne yapacağına bir seferde bir hop karar veriyor, her adımda sıfırdan yeniden akıl yürütüyor. Birçok bağımsız çağrısı olan bir görevde bu yavaş ve pahalı olur, ve fatura şişer çünkü model her hop'u yeniden karara bağlar. **Part 3, Planning the Work**, o bir sonraki katman hakkında: plan-and-execute, ReWOO ve tool DAG'i, böylece agent rotayı bir kere serip bağımsız parçaları her birini yeniden karara bağlamadan çalıştırabilir.
