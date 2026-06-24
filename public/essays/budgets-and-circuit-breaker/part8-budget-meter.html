@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Budgets and the Circuit Breaker, Part 8</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --slate: #64748b;
+  --slate-dark: #475569;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 820px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner .lead { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+/* SEGMENTED TOGGLE */
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  flex: 1;
+  min-width: 150px;
+  padding: 8px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.toggle-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.toggle-btn[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.toggle-btn .mode-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* SCENARIO ROW (which agent is misbehaving) */
+.scenario-row {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.scenario-btn {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  outline: none;
+  text-align: left;
+  line-height: 1.35;
+}
+.scenario-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.scenario-btn[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--text-heading);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.scenario-btn .sb-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* STEP CONTROLS */
+.step-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+}
+.step-btn:hover:not(:disabled) { background: #eef2ff; border-color: #c7d2fe; }
+.step-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.step-btn:disabled { opacity: 0.45; cursor: not-allowed; color: var(--text-muted); }
+.step-btn.primary { background: var(--indigo); color: #ffffff; border-color: var(--indigo); }
+.step-btn.primary:hover:not(:disabled) { background: var(--indigo-dark); }
+.step-progress { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+.step-progress .stepnum { font-family: var(--font-mono); color: var(--indigo-dark); }
+
+.strategy-blurb {
+  font-size: 12px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.strategy-blurb strong { color: var(--indigo-dark); }
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 16px 0 9px;
+}
+
+/* ===== THE FOUR GAUGES ===== */
+.gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .gauges { grid-template-columns: 1fr; } }
+
+.gauge {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 12px 13px 13px;
+  border-left-width: 3px;
+}
+.gauge.dim-steps  { border-left-color: var(--teal); }
+.gauge.dim-tokens { border-left-color: var(--indigo); }
+.gauge.dim-cost   { border-left-color: var(--amber); }
+.gauge.dim-time   { border-left-color: var(--slate); }
+
+.gauge-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; flex-wrap: wrap; }
+.gauge-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.gauge-count {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+.gauge.dim-steps  .gauge-count { color: var(--teal-dark); }
+.gauge.dim-tokens .gauge-count { color: var(--indigo-dark); }
+.gauge.dim-cost   .gauge-count { color: var(--amber-dark); }
+.gauge.dim-time   .gauge-count { color: var(--slate-dark); }
+.gauge-count .budget { color: var(--text-muted); font-weight: 600; font-size: 11px; }
+
+.gauge-state {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+.gauge-state.under   { background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0; }
+.gauge-state.tripped { background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3; }
+
+.gauge-track {
+  position: relative;
+  height: 18px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.gauge-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  border-radius: 5px 0 0 5px;
+  transition: width 0.4s cubic-bezier(.4,0,.2,1), background 0.3s;
+}
+.gauge.dim-steps  .gauge-fill { background: var(--teal); }
+.gauge.dim-tokens .gauge-fill { background: var(--indigo); }
+.gauge.dim-cost   .gauge-fill { background: var(--amber); }
+.gauge.dim-time   .gauge-fill { background: var(--slate); }
+.gauge-fill.over { background: var(--rose) !important; }
+@media (prefers-reduced-motion: reduce) {
+  .gauge-fill { transition: none; }
+  .trace-row, .breaker-card { animation: none; }
+}
+
+/* ceiling slider */
+.gauge-ceiling { display: flex; align-items: center; gap: 9px; }
+.gauge-ceiling label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.gauge-ceiling input[type="range"] {
+  flex: 1;
+  min-width: 70px;
+  height: 18px;
+  cursor: pointer;
+}
+.gauge.dim-steps  input[type="range"] { accent-color: var(--teal); }
+.gauge.dim-tokens input[type="range"] { accent-color: var(--indigo); }
+.gauge.dim-cost   input[type="range"] { accent-color: var(--amber); }
+.gauge.dim-time   input[type="range"] { accent-color: var(--slate); }
+.gauge-ceiling input[type="range"]:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; border-radius: 4px; }
+.gauge-ceiling .cval {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-heading);
+  min-width: 56px;
+  text-align: right;
+}
+
+/* ===== CIRCUIT BREAKER STRIP ===== */
+.breaker-card {
+  margin-top: 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+  animation: fadeIn 0.22s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.breaker-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.breaker-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.breaker-states { display: flex; align-items: center; gap: 7px; margin-left: auto; flex-wrap: wrap; }
+.bstate {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  background: var(--chip-bg);
+  color: var(--text-muted);
+}
+.bstate.active.closed   { background: #ecfdf5; color: var(--emerald-dark); border-color: #a7f3d0; }
+.bstate.active.tripped  { background: #fff1f2; color: var(--rose-dark); border-color: #fecdd3; }
+.bstate.active.graceful { background: #eef2ff; color: var(--indigo-dark); border-color: #c7d2fe; }
+.bstate-arrow { color: var(--text-muted); font-size: 11px; }
+
+.breaker-body { padding: 12px 13px; }
+.breaker-reason {
+  font-size: 11.5px;
+  border-radius: 8px;
+  padding: 9px 11px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  display: none;
+}
+.breaker-reason.show { display: block; }
+.breaker-reason.runaway {
+  background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3;
+}
+.breaker-reason.tripped {
+  background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3;
+}
+.breaker-reason .br-tag {
+  font-family: var(--font-mono);
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  background: var(--rose); color: #ffffff;
+  border-radius: 4px; padding: 1px 6px; margin-right: 7px;
+}
+.breaker-reason .dim-name { font-family: var(--font-mono); font-weight: 700; }
+
+.partial-box {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 9px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  display: none;
+}
+.partial-box.show { display: block; }
+.partial-box.runaway { background: #fff1f2; border-color: #fecdd3; }
+.partial-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--indigo-dark);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.partial-box.runaway .partial-label { color: var(--rose-dark); }
+.partial-text { font-size: 12px; color: var(--text-body); }
+.partial-text .meter-line { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); display: block; margin-top: 6px; }
+
+/* ===== STEP TRACE ===== */
+.trace-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.trace-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  animation: fadeIn 0.18s ease;
+}
+.trace-row.is-loop { border-color: #fecdd3; background: #fff1f2; }
+.trace-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  background: #f0fdfa; color: var(--teal-dark); border: 1px solid #99f6e4;
+}
+.trace-body { flex: 1; min-width: 0; }
+.trace-call { font-family: var(--font-mono); font-size: 11px; color: var(--text-heading); word-break: break-word; }
+.trace-call .fn { color: var(--teal-dark); font-weight: 600; }
+.trace-call .arg { color: var(--amber-dark); }
+.trace-obs { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+.trace-rep {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--rose-dark);
+  margin-left: auto;
+  flex-shrink: 0;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 5px;
+  padding: 1px 7px;
+}
+.trace-snap { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); margin-top: 3px; }
+.trace-empty { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 2px; }
+
+/* CAPTION / LEGEND */
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption .swatch {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.contrast {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-left: 3px solid var(--teal);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-top: 14px;
+  line-height: 1.55;
+}
+.contrast strong { color: var(--teal-dark); }
+.contrast code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #99f6e4;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  color: var(--teal-dark);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <h2 id="panel-heading">Four budgets, one breaker: stopping the runaway agent</h2>
+  <p class="panel-subtitle">A controller that never calls finish() does not have to crash to hurt you. Step it forward and watch four gauges climb. With NO GUARDS the run only stops at a demo cap (RUNAWAY). With GUARDS ON the loop detector or the budget trips a circuit breaker that returns a graceful partial result. Drag a ceiling down to make a different dimension trip first.</p>
+
+  <div class="goal-banner">
+    <span class="lead">The world:</span> the same refund desk. Per step the meter charges <code>80 tokens</code>, <code>$0.0008</code>, and <code>~1.2s</code> simulated. Default ceilings: <code>4 steps</code>, <code>600 tokens</code>, <code>$0.02</code>, <code>12s</code>. Loop threshold: <code>3</code> identical actions.
+  </div>
+
+  <div class="section-label">Guard mode</div>
+  <div class="toggle-group" role="group" aria-label="Guard mode selector">
+    <button class="toggle-btn" id="btn-guards-off" aria-pressed="false" type="button">
+      <span class="mode-dot" style="background:var(--rose)"></span>No guards (runaway)
+    </button>
+    <button class="toggle-btn" id="btn-guards-on" aria-pressed="true" type="button">
+      <span class="mode-dot" style="background:var(--emerald)"></span>Guards on
+    </button>
+  </div>
+
+  <div class="section-label">Which agent is misbehaving</div>
+  <div class="scenario-row" role="group" aria-label="Failing agent selector">
+    <button class="scenario-btn" id="btn-stuck" aria-pressed="true" type="button">
+      <span class="sb-tag">stuck</span>re-issues the IDENTICAL search every step (the loop detector catches it)
+    </button>
+    <button class="scenario-btn" id="btn-wandering" aria-pressed="false" type="button">
+      <span class="sb-tag">wandering</span>a DIFFERENT plausible search every step (only the budget catches it)
+    </button>
+  </div>
+
+  <div class="strategy-blurb" id="blurb"></div>
+
+  <div class="step-controls">
+    <button class="step-btn" id="reset" type="button">Reset</button>
+    <button class="step-btn primary" id="step" type="button">Take next step &#8594;</button>
+    <button class="step-btn" id="runall" type="button">Run to stop &#187;</button>
+    <span class="step-progress" id="progress"></span>
+  </div>
+
+  <div class="section-label">The BudgetMeter: four dimensions, each checked before every step</div>
+  <div class="gauges">
+    <div class="gauge dim-steps">
+      <div class="gauge-top">
+        <span class="gauge-label">steps</span>
+        <span class="gauge-count"><span id="v-steps">0</span><span class="budget"> / <span id="c-steps-lbl">4</span></span></span>
+        <span class="gauge-state under" id="s-steps">within</span>
+      </div>
+      <div class="gauge-track"><div class="gauge-fill" id="f-steps" style="width:0%"></div></div>
+      <div class="gauge-ceiling">
+        <label for="c-steps">ceiling</label>
+        <input type="range" id="c-steps" min="1" max="10" step="1" value="4" aria-label="step ceiling" />
+        <span class="cval" id="c-steps-val">4 steps</span>
+      </div>
+    </div>
+
+    <div class="gauge dim-tokens">
+      <div class="gauge-top">
+        <span class="gauge-label">tokens</span>
+        <span class="gauge-count"><span id="v-tokens">0</span><span class="budget"> / <span id="c-tokens-lbl">600</span></span></span>
+        <span class="gauge-state under" id="s-tokens">within</span>
+      </div>
+      <div class="gauge-track"><div class="gauge-fill" id="f-tokens" style="width:0%"></div></div>
+      <div class="gauge-ceiling">
+        <label for="c-tokens">ceiling</label>
+        <input type="range" id="c-tokens" min="80" max="800" step="80" value="600" aria-label="token ceiling" />
+        <span class="cval" id="c-tokens-val">600 tok</span>
+      </div>
+    </div>
+
+    <div class="gauge dim-cost">
+      <div class="gauge-top">
+        <span class="gauge-label">cost</span>
+        <span class="gauge-count"><span id="v-cost">$0.0000</span><span class="budget"> / <span id="c-cost-lbl">$0.02</span></span></span>
+        <span class="gauge-state under" id="s-cost">within</span>
+      </div>
+      <div class="gauge-track"><div class="gauge-fill" id="f-cost" style="width:0%"></div></div>
+      <div class="gauge-ceiling">
+        <label for="c-cost">ceiling</label>
+        <input type="range" id="c-cost" min="0.0008" max="0.02" step="0.0008" value="0.02" aria-label="cost ceiling in dollars" />
+        <span class="cval" id="c-cost-val">$0.0200</span>
+      </div>
+    </div>
+
+    <div class="gauge dim-time">
+      <div class="gauge-top">
+        <span class="gauge-label">wall-clock (sim)</span>
+        <span class="gauge-count"><span id="v-time">~0.0s</span><span class="budget"> / <span id="c-time-lbl">12s</span></span></span>
+        <span class="gauge-state under" id="s-time">within</span>
+      </div>
+      <div class="gauge-track"><div class="gauge-fill" id="f-time" style="width:0%"></div></div>
+      <div class="gauge-ceiling">
+        <label for="c-time">ceiling</label>
+        <input type="range" id="c-time" min="1.2" max="24" step="1.2" value="12" aria-label="wall-clock ceiling in seconds" />
+        <span class="cval" id="c-time-val">12s</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CIRCUIT BREAKER -->
+  <div class="breaker-card">
+    <div class="breaker-head">
+      <span class="breaker-title">circuit breaker</span>
+      <div class="breaker-states">
+        <span class="bstate closed active" id="bs-closed">closed</span>
+        <span class="bstate-arrow">&#8594;</span>
+        <span class="bstate tripped" id="bs-tripped">tripped</span>
+        <span class="bstate-arrow">&#8594;</span>
+        <span class="bstate graceful" id="bs-graceful">graceful finish</span>
+      </div>
+    </div>
+    <div class="breaker-body">
+      <div class="breaker-reason" id="breaker-reason"></div>
+      <div class="partial-box" id="partial-box">
+        <div class="partial-label" id="partial-label"></div>
+        <div class="partial-text" id="partial-text"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">Step trace</div>
+  <div class="trace-list" id="trace"></div>
+
+  <div class="sr-only" aria-live="polite" id="announce"></div>
+
+  <div class="contrast">
+    <strong>Generalizes RAG Part 19.</strong> P19 had a single <code>max_steps</code> cap and an informal note ("if the agent runs the same search twice, stop"). Here that one number becomes a four-dimensional budget (steps, tokens, cost, time), the informal note becomes a real <code>(action, args)</code> loop detector, and "stop" becomes a graceful partial exit instead of a crash or a spin.
+  </div>
+
+  <div class="caption">
+    <strong>How we keep it honest:</strong> wall-clock is <em>simulated</em> (a fixed ~1.2s per step, not measured) so the run is reproducible; the cost numbers are <em>illustrative</em> per-token estimates, not a real price sheet. The runaway risk is general: there are documented incidents of unbounded agent loops burning a serious amount of money before anyone noticed.
+    <br /><br />
+    <span class="swatch" style="background:var(--teal)"></span>steps &nbsp;
+    <span class="swatch" style="background:var(--indigo)"></span>tokens &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>cost &nbsp;
+    <span class="swatch" style="background:var(--slate)"></span>time &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>tripped / runaway &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>within budget
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---- verified per-step charges (from the source) ---- */
+  var TOKENS_PER_STEP = 80;
+  var USD_PER_STEP = 0.0008;     // 80 tokens * 0.00001 USD/token
+  var WALL_PER_STEP = 1.2;       // simulated seconds
+  var DEMO_CAP = 8;              // unguarded demo cut-off
+  var LOOP_THRESHOLD = 3;        // identical actions
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* ---- the two non-converging controllers (mirror the source) ---- */
+  function stuckAction(n) {
+    return { tool: "search_policy", arg: "discount code for ORD-9999",
+             obs: "(no discount code on file)" };
+  }
+  function wanderingAction(n) {
+    return { tool: "search_policy", arg: "policy clause " + n,
+             obs: "clause text for 'policy clause " + n + "'" };
+  }
+
+  /* ---- live state ---- */
+  var guards = true;        // true = guards on, false = runaway
+  var scenario = "stuck";   // "stuck" | "wandering"
+
+  var ceilings = { steps: 4, tokens: 600, cost: 0.02, time: 12.0 };
+
+  var run = null;           // built lazily: { steps:[], stopped, reason, kind }
+
+  /* Build / reset the run state. */
+  function freshRun() {
+    run = { steps: [], stopped: false, reason: null, kind: null, loopCount: {} };
+  }
+  freshRun();
+
+  /* Meter totals after k charged steps. */
+  function meterAfter(k) {
+    return {
+      steps: k,
+      tokens: k * TOKENS_PER_STEP,
+      cost: k * USD_PER_STEP,
+      time: k * WALL_PER_STEP
+    };
+  }
+
+  /* Which dimension (if any) is at/over its ceiling at meter m. Order matches
+     the source exceeded(): steps, tokens, cost, time. Returns null or a name. */
+  function firstExceeded(m) {
+    if (m.steps >= ceilings.steps) return { dim: "steps", label: "step budget (" + ceilings.steps + ")" };
+    if (m.tokens >= ceilings.tokens) return { dim: "tokens", label: "token budget (" + ceilings.tokens + ")" };
+    if (m.cost >= ceilings.cost) return { dim: "cost", label: "cost budget ($" + ceilings.cost.toFixed(2) + ")" };
+    if (m.time >= ceilings.time) return { dim: "time", label: "time budget (" + Math.round(ceilings.time) + "s)" };
+    return null;
+  }
+
+  /* Attempt one more step of the run, honouring the active mode. Mutates run. */
+  function advance() {
+    if (run.stopped) return;
+
+    var k = run.steps.length;               // steps already charged
+
+    if (guards) {
+      // pre-step budget guard: check BEFORE charging the next step
+      var m = meterAfter(k);
+      var over = firstExceeded(m);
+      if (over) {
+        run.stopped = true;
+        run.kind = "budget";
+        run.reason = over;
+        return;
+      }
+    } else {
+      // unguarded: only the demo cap stops it
+      if (k >= DEMO_CAP) {
+        run.stopped = true;
+        run.kind = "runaway";
+        run.reason = null;
+        return;
+      }
+    }
+
+    // choose the next action
+    var n = k + 1;
+    var act = (scenario === "stuck") ? stuckAction(n) : wanderingAction(n);
+    var key = act.tool + "|" + act.arg;
+    var count = (run.loopCount[key] || 0) + 1;
+    run.loopCount[key] = count;
+
+    // charge and record
+    var m2 = meterAfter(n);
+    run.steps.push({ n: n, tool: act.tool, arg: act.arg, obs: act.obs, count: count, meter: m2, loop: false });
+
+    // post-action loop detection (only when guarded)
+    if (guards && count >= LOOP_THRESHOLD) {
+      run.steps[run.steps.length - 1].loop = true;
+      run.stopped = true;
+      run.kind = "loop";
+      run.reason = { dim: null, label: "loop detected: identical action repeated " + count + " times" };
+    }
+  }
+
+  function runToStop() {
+    var safety = 0;
+    while (!run.stopped && safety < 50) { advance(); safety++; }
+    render();
+  }
+
+  /* ---- rendering ---- */
+  function fmtCost(x) { return "$" + x.toFixed(4); }
+  function fmtTime(x) { return "~" + x.toFixed(1) + "s"; }
+
+  function setGauge(dim, value, ceiling, displayValue, displayCeiling, tripped) {
+    var pct = ceiling > 0 ? Math.min(100, (value / ceiling) * 100) : 0;
+    var fill = document.getElementById("f-" + dim);
+    fill.style.width = pct.toFixed(1) + "%";
+    fill.classList.toggle("over", tripped);
+    document.getElementById("v-" + dim).textContent = displayValue;
+    document.getElementById("c-" + dim + "-lbl").textContent = displayCeiling;
+    var st = document.getElementById("s-" + dim);
+    if (tripped) { st.className = "gauge-state tripped"; st.textContent = "tripped"; }
+    else { st.className = "gauge-state under"; st.textContent = "within"; }
+  }
+
+  function render() {
+    var done = run.stopped;
+    var lastMeter = meterAfter(run.steps.length);
+
+    // which dimension actually tripped (only meaningful for a budget stop under guards)
+    var trippedDim = (done && run.kind === "budget" && run.reason) ? run.reason.dim : null;
+
+    // gauges
+    setGauge("steps",  lastMeter.steps,  ceilings.steps,  String(lastMeter.steps),
+             String(ceilings.steps), trippedDim === "steps");
+    setGauge("tokens", lastMeter.tokens, ceilings.tokens, String(lastMeter.tokens),
+             String(ceilings.tokens), trippedDim === "tokens");
+    setGauge("cost",   lastMeter.cost,   ceilings.cost,   fmtCost(lastMeter.cost),
+             "$" + ceilings.cost.toFixed(2), trippedDim === "cost");
+    setGauge("time",   lastMeter.time,   ceilings.time,   fmtTime(lastMeter.time),
+             Math.round(ceilings.time) + "s", trippedDim === "time");
+
+    // breaker states
+    var bsClosed = document.getElementById("bs-closed");
+    var bsTripped = document.getElementById("bs-tripped");
+    var bsGraceful = document.getElementById("bs-graceful");
+    bsClosed.classList.remove("active");
+    bsTripped.classList.remove("active");
+    bsGraceful.classList.remove("active");
+
+    var reasonEl = document.getElementById("breaker-reason");
+    var partialBox = document.getElementById("partial-box");
+    var partialLabel = document.getElementById("partial-label");
+    var partialText = document.getElementById("partial-text");
+
+    var snapStr = "steps " + lastMeter.steps + " | tokens " + lastMeter.tokens
+      + " | " + fmtCost(lastMeter.cost) + " | " + fmtTime(lastMeter.time);
+
+    if (!done) {
+      bsClosed.classList.add("active");
+      reasonEl.className = "breaker-reason";
+      reasonEl.innerHTML = "";
+      partialBox.className = "partial-box";
+    } else if (run.kind === "runaway") {
+      // unguarded: breaker never trips; the demo cap cut it off
+      bsClosed.classList.add("active");
+      reasonEl.className = "breaker-reason show runaway";
+      reasonEl.innerHTML = '<span class="br-tag">runaway</span>No guard fired. The breaker stayed <strong>closed</strong>; the run only stopped at the demo cap of ' + DEMO_CAP + ' steps. An unguarded agent would not stop on its own.';
+      partialBox.className = "partial-box show runaway";
+      partialLabel.innerHTML = '&#9888; No useful exit';
+      partialText.innerHTML = 'RUNAWAY (no guards): ' + lastMeter.steps + ' steps and still not done.'
+        + '<span class="meter-line">final meter: ' + snapStr + '</span>';
+    } else {
+      // guarded stop: breaker tripped -> graceful finish
+      bsTripped.classList.add("active");
+      bsGraceful.classList.add("active");
+      reasonEl.className = "breaker-reason show tripped";
+      var reasonHtml;
+      if (run.kind === "loop") {
+        reasonHtml = '<span class="br-tag">tripped</span>The <strong>loop detector</strong> fired: <span class="dim-name">' + escHtml(run.reason.label) + '</span>. Re-running the same search cannot help, so the breaker stops it.';
+      } else {
+        reasonHtml = '<span class="br-tag">tripped</span>The <strong>budget</strong> was exceeded before the next step: <span class="dim-name">' + escHtml(run.reason.label) + ' reached</span>. The first dimension over its ceiling stops the run.';
+      }
+      reasonEl.innerHTML = reasonHtml;
+
+      partialBox.className = "partial-box show";
+      partialLabel.innerHTML = '&#10003; Graceful partial result (not a crash)';
+      var goal = (scenario === "stuck") ? "Find a discount code for ORD-9999" : "Audit every policy clause";
+      partialText.innerHTML = 'Stopped gracefully after ' + lastMeter.steps + ' steps ('
+        + escHtml(run.reason.label) + '). Partial result: could not complete &#39;' + escHtml(goal)
+        + '&#39;; returning what was gathered instead of looping or crashing.'
+        + '<span class="meter-line">final meter: ' + snapStr + '</span>';
+    }
+
+    // trace
+    var traceEl = document.getElementById("trace");
+    if (run.steps.length === 0) {
+      traceEl.innerHTML = '<div class="trace-empty">No steps yet. Press <strong>Take next step</strong> or <strong>Run to stop</strong>.</div>';
+    } else {
+      traceEl.innerHTML = run.steps.map(function (s) {
+        var rep = s.count > 1 ? '<span class="trace-rep">x' + s.count + '</span>' : '';
+        var sm = "steps " + s.meter.steps + " | tokens " + s.meter.tokens
+          + " | " + fmtCost(s.meter.cost) + " | " + fmtTime(s.meter.time);
+        return '<div class="trace-row' + (s.loop ? ' is-loop' : '') + '">'
+          + '<span class="trace-tag">step ' + s.n + '</span>'
+          + '<div class="trace-body">'
+          + '<div class="trace-call"><span class="fn">' + escHtml(s.tool) + '</span>(<span class="arg">&#39;' + escHtml(s.arg) + '&#39;</span>) &#8594; ' + escHtml(s.obs) + '</div>'
+          + '<div class="trace-snap">[' + sm + ']</div>'
+          + '</div>' + rep + '</div>';
+      }).join("");
+    }
+
+    // controls
+    document.getElementById("step").disabled = run.stopped;
+    document.getElementById("runall").disabled = run.stopped;
+    var prog = document.getElementById("progress");
+    if (run.stopped) {
+      prog.innerHTML = 'stopped at <span class="stepnum">' + run.steps.length + '</span> step(s)';
+    } else {
+      prog.innerHTML = '<span class="stepnum">' + run.steps.length + '</span> step(s) so far';
+    }
+
+    // blurb
+    updateBlurb();
+
+    // announce
+    var ann = document.getElementById("announce");
+    if (!done) {
+      ann.textContent = run.steps.length + " steps. " + snapStr.replace(/\|/g, ",") + ". Breaker closed.";
+    } else if (run.kind === "runaway") {
+      ann.textContent = "Runaway: cut off at the demo cap of " + DEMO_CAP + " steps. Breaker never tripped. Final meter " + snapStr.replace(/\|/g, ",") + ".";
+    } else {
+      ann.textContent = "Breaker tripped: " + run.reason.label + ". Graceful partial result after " + run.steps.length + " steps. Final meter " + snapStr.replace(/\|/g, ",") + ".";
+    }
+  }
+
+  function updateBlurb() {
+    var el = document.getElementById("blurb");
+    var s, w;
+    if (!guards) {
+      if (scenario === "stuck") {
+        el.innerHTML = '<strong>No guards, stuck agent.</strong> It re-issues the same search forever. Nothing checks the budget, so it runs to the demo cap of ' + DEMO_CAP + ' steps and is labeled RUNAWAY. The final meter shows the bill the guards would have prevented.';
+      } else {
+        el.innerHTML = '<strong>No guards, wandering agent.</strong> Each step is a plausible new search, so progress looks real, but it never finishes. With no budget it runs to the demo cap of ' + DEMO_CAP + ' steps: RUNAWAY.';
+      }
+    } else {
+      if (scenario === "stuck") {
+        el.innerHTML = '<strong>Guards on, stuck agent.</strong> The loop detector counts the identical <code style="font-family:var(--font-mono)">(action, args)</code>. At the threshold of ' + LOOP_THRESHOLD + ' it trips the breaker (well under budget), and a graceful partial result is returned. Lower a ceiling below the step-3 mark to make the budget trip first instead.';
+      } else {
+        el.innerHTML = '<strong>Guards on, wandering agent.</strong> No action repeats, so the loop detector never fires. Instead the budget catches it: at the default ceilings the <strong>step budget</strong> trips before step 5. Drag the token, cost, or time ceiling down to make a different dimension trip first.';
+      }
+    }
+  }
+
+  /* ---- ceiling sliders ---- */
+  function bindSlider(id, dim, fmt) {
+    var el = document.getElementById(id);
+    el.addEventListener("input", function () {
+      ceilings[dim] = parseFloat(this.value);
+      document.getElementById(id + "-val").textContent = fmt(ceilings[dim]);
+      // re-evaluate the existing run against the new ceiling (replay deterministically)
+      replay();
+    });
+  }
+
+  /* Replay the run from scratch under current mode/scenario/ceilings, preserving
+     how far the user had stepped (or to the natural stop if they had run to stop). */
+  var userStepTarget = 0;   // how many steps the user has explicitly taken
+  var ranToStop = false;
+
+  function replay() {
+    freshRun();
+    if (ranToStop) {
+      runToStopInternal();
+    } else {
+      var target = userStepTarget;
+      var safety = 0;
+      while (run.steps.length < target && !run.stopped && safety < 50) { advance(); safety++; }
+    }
+    render();
+  }
+
+  function runToStopInternal() {
+    var safety = 0;
+    while (!run.stopped && safety < 50) { advance(); safety++; }
+  }
+
+  /* ---- buttons ---- */
+  document.getElementById("step").addEventListener("click", function () {
+    advance();
+    if (!run.stopped) { userStepTarget = run.steps.length; }
+    else { userStepTarget = run.steps.length; }
+    render();
+  });
+  document.getElementById("runall").addEventListener("click", function () {
+    ranToStop = true;
+    runToStop();
+    userStepTarget = run.steps.length;
+  });
+  document.getElementById("reset").addEventListener("click", function () {
+    freshRun();
+    userStepTarget = 0;
+    ranToStop = false;
+    render();
+  });
+
+  function setGuards(on) {
+    guards = on;
+    document.getElementById("btn-guards-on").setAttribute("aria-pressed", on ? "true" : "false");
+    document.getElementById("btn-guards-off").setAttribute("aria-pressed", on ? "false" : "true");
+    freshRun(); userStepTarget = 0; ranToStop = false;
+    render();
+  }
+  function setScenario(name) {
+    scenario = name;
+    document.getElementById("btn-stuck").setAttribute("aria-pressed", name === "stuck" ? "true" : "false");
+    document.getElementById("btn-wandering").setAttribute("aria-pressed", name === "wandering" ? "true" : "false");
+    freshRun(); userStepTarget = 0; ranToStop = false;
+    render();
+  }
+
+  document.getElementById("btn-guards-on").addEventListener("click", function () { setGuards(true); });
+  document.getElementById("btn-guards-off").addEventListener("click", function () { setGuards(false); });
+  document.getElementById("btn-stuck").addEventListener("click", function () { setScenario("stuck"); });
+  document.getElementById("btn-wandering").addEventListener("click", function () { setScenario("wandering"); });
+
+  bindSlider("c-steps", "steps", function (v) { return Math.round(v) + " steps"; });
+  bindSlider("c-tokens", "tokens", function (v) { return Math.round(v) + " tok"; });
+  bindSlider("c-cost", "cost", function (v) { return "$" + v.toFixed(4); });
+  bindSlider("c-time", "time", function (v) { return v.toFixed(1) + "s"; });
+
+  // initial slider value labels
+  document.getElementById("c-steps-val").textContent = "4 steps";
+  document.getElementById("c-tokens-val").textContent = "600 tok";
+  document.getElementById("c-cost-val").textContent = "$0.0200";
+  document.getElementById("c-time-val").textContent = "12.0s";
+
+  render();
+})();
+</script>
+</body>
+</html>

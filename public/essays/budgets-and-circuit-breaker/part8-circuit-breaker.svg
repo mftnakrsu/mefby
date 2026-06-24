@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" style="height:auto" role="img" aria-label="The circuit breaker state machine. Two trip triggers feed in on the left. First, the BudgetMeter with four dimensions, steps, tokens, cost, and simulated time, each with a ceiling; its exceeded check returns the first dimension over its limit. Second, the loop detector, which flags an identical action repeated at the threshold of 3. Either trigger trips the breaker. The breaker has three states: CLOSED, the normal stepping state; TRIPPED, entered on budget-exceeded or loop-detected, recording the reason; and GRACEFUL-FINISH, which returns the best partial result plus the reason it stopped, never a crash. The output is a graceful partial result, for example stopped gracefully after 4 steps because the step budget of 4 was reached, returning what was gathered.">
+  <title>The circuit breaker: closed to tripped to graceful-finish, on budget-exceeded or loop-detected</title>
+
+  <defs>
+    <marker id="arrSlate" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#64748b"/>
+    </marker>
+    <marker id="arrRose" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#f43f5e"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#10b981"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#14b8a6"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="660" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 8, the circuit breaker</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">The circuit breaker: trip on budget or loop, then finish gracefully</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">Two triggers, three states. Tripping does not raise: it returns the best partial result plus the reason it stopped, so the caller gets something useful.</text>
+
+  <!-- ============ TRIGGERS (left column) ============ -->
+  <text x="40" y="96"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.04em">TWO TRIP TRIGGERS, CHECKED EACH STEP</text>
+
+  <!-- Trigger A: BudgetMeter (4 dimensions) -->
+  <rect x="40" y="110" width="320" height="226" rx="13" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <rect x="40" y="110" width="320" height="28" rx="13" fill="#f59e0b"/>
+  <rect x="40" y="124" width="320" height="14" fill="#f59e0b"/>
+  <text x="58" y="129" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">1 &#183; BUDGETMETER</text>
+  <text x="342" y="129" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#ffffff">checked BEFORE every step</text>
+
+  <text x="58" y="158" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#78350f">exceeded() returns the FIRST dimension over its ceiling</text>
+
+  <!-- 4 dimension rows -->
+  <rect x="58" y="170" width="284" height="30" rx="7" fill="#ffffff" stroke="#99f6e4" stroke-width="1.2"/>
+  <rect x="58" y="170" width="6" height="30" rx="3" fill="#14b8a6"/>
+  <text x="74" y="189" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" font-weight="600" fill="#0d9488">steps</text>
+  <text x="330" y="189" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#475569">ceiling 4</text>
+
+  <rect x="58" y="206" width="284" height="30" rx="7" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <rect x="58" y="206" width="6" height="30" rx="3" fill="#6366f1"/>
+  <text x="74" y="225" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" font-weight="600" fill="#4f46e5">tokens</text>
+  <text x="330" y="225" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#475569">ceiling 600</text>
+
+  <rect x="58" y="242" width="284" height="30" rx="7" fill="#ffffff" stroke="#fde68a" stroke-width="1.2"/>
+  <rect x="58" y="242" width="6" height="30" rx="3" fill="#f59e0b"/>
+  <text x="74" y="261" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" font-weight="600" fill="#b45309">cost</text>
+  <text x="330" y="261" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#475569">ceiling $0.02</text>
+
+  <rect x="58" y="278" width="284" height="30" rx="7" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+  <rect x="58" y="278" width="6" height="30" rx="3" fill="#64748b"/>
+  <text x="74" y="297" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" font-weight="600" fill="#475569">wall-clock (simulated)</text>
+  <text x="330" y="297" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#475569">ceiling 12s</text>
+
+  <text x="58" y="326" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#b45309">One number ("max steps") cannot express "too costly."</text>
+
+  <!-- Trigger B: Loop detector -->
+  <rect x="40" y="350" width="320" height="118" rx="13" fill="#fff1f2" stroke="#f43f5e" stroke-width="2"/>
+  <rect x="40" y="350" width="320" height="28" rx="13" fill="#f43f5e"/>
+  <rect x="40" y="364" width="320" height="14" fill="#f43f5e"/>
+  <text x="58" y="369" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">2 &#183; LOOP DETECTOR</text>
+  <text x="342" y="369" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#ffffff">checked after each action</text>
+  <text x="58" y="398" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#9f1239">count identical (action, args); flag at the threshold</text>
+  <rect x="58" y="410" width="284" height="30" rx="7" fill="#ffffff" stroke="#fecdd3" stroke-width="1.2"/>
+  <text x="74" y="429" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#9f1239">threshold = 3 identical actions</text>
+  <text x="58" y="458" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#9f1239">Catches the stuck agent the step cap cannot tell from progress.</text>
+
+  <!-- arrows: triggers -> breaker -->
+  <line x1="360" y1="223" x2="446" y2="280" stroke="#f59e0b" stroke-width="2.4" marker-end="url(#arrRose)"/>
+  <line x1="360" y1="410" x2="446" y2="330" stroke="#f43f5e" stroke-width="2.4" marker-end="url(#arrRose)"/>
+  <text x="404" y="240" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="700" fill="#b45309">budget</text>
+  <text x="404" y="252" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="700" fill="#b45309">exceeded</text>
+  <text x="404" y="378" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="700" fill="#9f1239">loop</text>
+  <text x="404" y="390" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="700" fill="#9f1239">detected</text>
+
+  <!-- ============ STATE MACHINE (center) ============ -->
+  <text x="460" y="96"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.04em">THE BREAKER: THREE STATES</text>
+
+  <!-- CLOSED -->
+  <rect x="460" y="110" width="280" height="92" rx="13" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <circle cx="486" cy="140" r="7" fill="#10b981"/>
+  <text x="504" y="145" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="700" fill="#047857">CLOSED</text>
+  <text x="722" y="145" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#047857">state = "closed"</text>
+  <text x="480" y="170" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#065f46">Normal stepping. The loop runs, the meter charges,</text>
+  <text x="480" y="186" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#065f46">each step checks both triggers.</text>
+
+  <!-- arrow closed -> tripped -->
+  <line x1="600" y1="202" x2="600" y2="242" stroke="#f43f5e" stroke-width="2.6" marker-end="url(#arrRose)"/>
+  <rect x="470" y="208" width="262" height="28" rx="8" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.1"/>
+  <text x="601" y="226" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#9f1239">on budget-exceeded OR loop-detected</text>
+
+  <!-- TRIPPED -->
+  <rect x="460" y="246" width="280" height="98" rx="13" fill="#fff1f2" stroke="#f43f5e" stroke-width="2"/>
+  <circle cx="486" cy="276" r="7" fill="#f43f5e"/>
+  <text x="504" y="281" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="700" fill="#9f1239">TRIPPED</text>
+  <text x="722" y="281" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#9f1239">state = "tripped"</text>
+  <text x="480" y="306" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#9f1239">Record WHY and stop. It does NOT raise.</text>
+  <rect x="480" y="316" width="244" height="22" rx="6" fill="#ffffff" stroke="#fecdd3" stroke-width="1.1"/>
+  <text x="492" y="331" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#9f1239">trip(reason): self.reason = reason</text>
+
+  <!-- arrow tripped -> graceful -->
+  <line x1="600" y1="344" x2="600" y2="384" stroke="#6366f1" stroke-width="2.6" marker-end="url(#arrIndigo)"/>
+  <rect x="478" y="350" width="246" height="28" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.1"/>
+  <text x="601" y="368" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#4f46e5">return best partial + reason</text>
+
+  <!-- GRACEFUL FINISH -->
+  <rect x="460" y="388" width="280" height="98" rx="13" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <circle cx="486" cy="418" r="7" fill="#6366f1"/>
+  <text x="504" y="423" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="700" fill="#4f46e5">GRACEFUL-FINISH</text>
+  <text x="480" y="448" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#3730a3">Return the best result the agent gathered, plus the</text>
+  <text x="480" y="464" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#3730a3">reason it stopped. Never a crash, never a spin.</text>
+  <text x="480" y="480" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#6366f1">The caller gets something useful and an explanation.</text>
+
+  <!-- ============ OUTPUT (right) ============ -->
+  <text x="770" y="96"
+    font-family="Inter, ui-sans-serif, system-ui, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.04em">THE OUTPUT: A GRACEFUL PARTIAL RESULT</text>
+
+  <!-- arrow graceful -> output -->
+  <line x1="740" y1="437" x2="770" y2="437" stroke="#6366f1" stroke-width="2.4" marker-end="url(#arrIndigo)"/>
+
+  <!-- Example: budget trip (wandering agent) -->
+  <rect x="770" y="110" width="390" height="156" rx="13" fill="#ffffff" stroke="#fde68a" stroke-width="1.6"/>
+  <rect x="770" y="110" width="390" height="26" rx="13" fill="#fffbeb"/>
+  <rect x="770" y="124" width="390" height="12" fill="#fffbeb"/>
+  <text x="786" y="128" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#b45309">example A: the budget trips (wandering agent)</text>
+  <text x="786" y="156" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#9f1239">reason: step budget (4) reached</text>
+  <rect x="786" y="166" width="358" height="40" rx="7" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.1"/>
+  <text x="798" y="182" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">Stopped gracefully after 4 steps. Partial result:</text>
+  <text x="798" y="196" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">returning what was gathered, not looping or crashing.</text>
+  <text x="786" y="226" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#64748b">final meter: steps 4 | tokens 320 | $0.0032 | ~4.8s</text>
+  <text x="786" y="248" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#b45309">no action repeated, so the budget caught it, not the loop</text>
+
+  <!-- Example: loop trip (stuck agent) -->
+  <rect x="770" y="282" width="390" height="156" rx="13" fill="#ffffff" stroke="#fecdd3" stroke-width="1.6"/>
+  <rect x="770" y="282" width="390" height="26" rx="13" fill="#fff1f2"/>
+  <rect x="770" y="296" width="390" height="12" fill="#fff1f2"/>
+  <text x="786" y="300" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#9f1239">example B: the loop trips (stuck agent)</text>
+  <text x="786" y="328" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#9f1239">reason: loop detected: identical action x3</text>
+  <rect x="786" y="338" width="358" height="40" rx="7" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.1"/>
+  <text x="798" y="354" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">Stopped gracefully after 3 steps. Partial result:</text>
+  <text x="798" y="368" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">returning what was gathered, not looping or crashing.</text>
+  <text x="786" y="398" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#64748b">final meter: steps 3 | tokens 240 | $0.0024 | ~3.6s</text>
+  <text x="786" y="420" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#9f1239">well under budget; the loop caught it first</text>
+
+  <!-- contrast: a crash, ruled out -->
+  <rect x="770" y="452" width="390" height="60" rx="11" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <text x="790" y="476" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#475569">what it is NOT</text>
+  <text x="790" y="496" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#64748b">not a raised exception, not a silent spin, not an empty result.</text>
+
+  <!-- ============ FOOTER + REUSE NOTE ============ -->
+  <rect x="40" y="500" width="700" height="120" rx="13" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.4"/>
+  <text x="60" y="528" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#4f46e5">A single max_steps cap cannot tell a stuck run from an expensive one</text>
+  <text x="60" y="552" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#3730a3">A multi-dimensional budget stops the first dimension to cross. A loop detector catches the identical-action signature.</text>
+  <text x="60" y="570" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#3730a3">A circuit breaker turns either into a graceful partial result, never a crash or a spin.</text>
+  <rect x="60" y="582" width="660" height="26" rx="7" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.1"/>
+  <text x="74" y="599" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#4f46e5">Owned here, reused later: the BudgetMeter caps a sandbox in Part 13; the breaker stops a runaway supervisor in Part 14.</text>
+
+  <text x="770" y="540" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#94a3b8">Wall-clock is simulated (~1.2s per step,</text>
+  <text x="770" y="554" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#94a3b8">not measured); cost is an illustrative</text>
+  <text x="770" y="568" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#94a3b8">per-token estimate, not a real price sheet.</text>
+
+</svg>
