@@ -8,9 +8,11 @@ import { fmtMaybe } from '../lib/essayMeta';
 const allEssays = (await getCollection('essays', ({ data }) => !data.draft && !data.isTranslation))
   .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 
-// The RAG series is surfaced as a single "course" card, so the date-sorted
-// preview shows the standalone essays instead of the course's last few chapters.
-const seriesCount = allEssays.filter((e) => e.data.seriesOrder != null).length;
+// Each numbered series is surfaced as a single "course" card, so the date-sorted
+// preview shows the standalone essays instead of a course's last few chapters.
+const seriesEssays = allEssays.filter((e) => e.data.seriesOrder != null);
+const ragCount = seriesEssays.filter((e) => e.data.series === 'rag').length;
+const agentsCount = seriesEssays.filter((e) => e.data.series === 'agents').length;
 const standalone = allEssays.filter((e) => e.data.seriesOrder == null);
 const ESSAY_PREVIEW = 4;
 const essays = standalone.slice(0, ESSAY_PREVIEW);
@@ -107,14 +109,26 @@ const elsewhere = WRITING.filter((p) => p.url).slice(0, ELSEWHERE_PREVIEW);
       <section class="mb-20" aria-labelledby="writing-heading">
         <h2 id="writing-heading" class="text-xs font-medium text-zinc-600 uppercase tracking-widest mb-8">Writing</h2>
 
-        {/* RAG series surfaced as one course, with a start-here on-ramp */}
-        {seriesCount > 0 && (
+        {/* Numbered series surfaced as course cards, each with a start-here on-ramp */}
+        {ragCount > 0 && (
           <a
             href="/essays/rag"
             class="group mb-8 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-3 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
           >
             <span class="text-[13px] text-zinc-600">
-              <span class="font-medium text-zinc-900">RAG from First Principles</span> &mdash; a {seriesCount}-part build-it-from-scratch course
+              <span class="font-medium text-zinc-900">RAG from First Principles</span> &mdash; a {ragCount}-part build-it-from-scratch course
+            </span>
+            <span class="shrink-0 text-[11px] font-mono text-zinc-500 group-hover:text-emerald-600">Start at Part 1 &rarr;</span>
+          </a>
+        )}
+
+        {agentsCount > 0 && (
+          <a
+            href="/essays/agents"
+            class="group mb-8 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-3 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+          >
+            <span class="text-[13px] text-zinc-600">
+              <span class="font-medium text-zinc-900">Agents from First Principles</span> &mdash; a {agentsCount}-part build-it-from-scratch course
             </span>
             <span class="shrink-0 text-[11px] font-mono text-zinc-500 group-hover:text-emerald-600">Start at Part 1 &rarr;</span>
           </a>
