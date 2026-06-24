@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 880" width="100%" style="height:auto" role="img" aria-label="The golden-trajectory regression gate, a CI suite of four cases each mapping a task to an expected outcome, a golden trajectory, and an operating envelope of max steps, max tool-calls, max token-cost, and a timeout. Two columns show the same suite under two envelopes. Left, at 400 tokens per run: refund good path is green at 0.00240 dollars, refund right-answer wrong-path is red on trajectory at 0.00400 dollars, warranty lookup is green at 0.00160 dollars, and security poisoned ticket is green at 0.00160 dollars. The gate is 3 of 4 green with cost-per-success 0.00320 dollars. Right, tightened to 200 tokens per run: the good path now flips red because its 240 tokens are over budget, the wrong path stays red on trajectory, warranty and security stay green. The gate drops to 2 of 4 green with cost-per-success rising to 0.00480 dollars. Tightening the envelope flips a case red; that is how you catch the regression where the agent quietly got more expensive.">
+  <title>The golden-trajectory regression gate: tighten the operating envelope and a green case flips red on cost.</title>
+
+  <defs>
+    <marker id="arrAmber" markerWidth="13" markerHeight="11" refX="10" refY="5.5" orient="auto">
+      <polygon points="0 0, 13 5.5, 0 11" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="880" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#94a3b8">Part 17, grading the agent (the finale)</text>
+
+  <!-- Title -->
+  <text x="40" y="34" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="18" font-weight="700" fill="#0f172a">The golden-trajectory regression gate: tighten the envelope, flip a case red</text>
+  <text x="40" y="54" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#64748b">A CI suite of cases. Replay each, assert outcome AND tool-call correctness AND the operating envelope. Report cost per success.</text>
+
+  <!-- ============= THE CASE SHAPE ============= -->
+  <rect x="40" y="74" width="1120" height="74" rx="11" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.4"/>
+  <text x="62" y="98" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#0f172a" letter-spacing="0.03em">EACH CASE</text>
+  <g font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700">
+    <rect x="150" y="106" width="86" height="26" rx="7" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.1"/>
+    <text x="193" y="123" text-anchor="middle" fill="#4f46e5">task</text>
+    <text x="244" y="123" text-anchor="middle" fill="#94a3b8">&#8594;</text>
+    <rect x="258" y="106" width="150" height="26" rx="7" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.1"/>
+    <text x="333" y="123" text-anchor="middle" fill="#4f46e5">expected outcome</text>
+    <text x="416" y="123" text-anchor="middle" fill="#94a3b8">+</text>
+    <rect x="430" y="106" width="160" height="26" rx="7" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.1"/>
+    <text x="510" y="123" text-anchor="middle" fill="#0d9488">golden trajectory</text>
+    <text x="598" y="123" text-anchor="middle" fill="#94a3b8">+</text>
+    <rect x="612" y="106" width="320" height="26" rx="7" fill="#fffbeb" stroke="#fde68a" stroke-width="1.1"/>
+    <text x="772" y="123" text-anchor="middle" fill="#b45309">operating envelope: max steps / tool-calls / token-cost / timeout</text>
+  </g>
+
+  <!-- ============= COLUMN HEADERS ============= -->
+  <!-- LEFT envelope -->
+  <rect x="40" y="166" width="540" height="40" rx="9" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.4"/>
+  <text x="60" y="191" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#4f46e5">operating envelope: &#8804; 400 tokens/run</text>
+  <text x="560" y="191" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#64748b">loose</text>
+
+  <!-- RIGHT envelope -->
+  <rect x="620" y="166" width="540" height="40" rx="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.4"/>
+  <text x="640" y="191" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#b45309">operating envelope: &#8804; 200 tokens/run</text>
+  <text x="1140" y="191" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#b45309">tightened</text>
+
+  <!-- TIGHTEN arrow between columns -->
+  <line x1="585" y1="186" x2="615" y2="186" stroke="#b45309" stroke-width="2" marker-end="url(#arrAmber)"/>
+
+  <!-- ============= LEFT COLUMN CASES (400) ============= -->
+  <!-- case 1: good path GREEN -->
+  <rect x="40" y="222" width="540" height="74" rx="10" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+  <rect x="40" y="222" width="6" height="74" rx="3" fill="#10b981"/>
+  <rect x="58" y="236" width="78" height="22" rx="6" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+  <text x="97" y="251" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#047857">GREEN</text>
+  <text x="148" y="246" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0f172a">refund (good path)</text>
+  <text x="148" y="263" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#475569">3 steps &#183; 240 tokens &#183; trajectory pass &#183; within 400</text>
+  <text x="148" y="285" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#047857">outcome ok, trajectory ok, within envelope</text>
+  <text x="562" y="261" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#b45309">$0.00240</text>
+
+  <!-- case 2: wrong path RED (trajectory) -->
+  <rect x="40" y="306" width="540" height="74" rx="10" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.5"/>
+  <rect x="40" y="306" width="6" height="74" rx="3" fill="#f43f5e"/>
+  <rect x="58" y="320" width="78" height="22" rx="6" fill="#ffffff" stroke="#fecdd3" stroke-width="1.2"/>
+  <text x="97" y="335" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#9f1239">RED</text>
+  <text x="148" y="330" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0f172a">refund (right answer, wrong path)</text>
+  <text x="148" y="347" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#9f1239">5 steps &#183; precision 0.75 &#183; edit 2 &#183; steps 5/3</text>
+  <text x="148" y="369" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">failed on (trajectory)</text>
+  <text x="562" y="345" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#b45309">$0.00400</text>
+
+  <!-- case 3: warranty GREEN -->
+  <rect x="40" y="390" width="540" height="74" rx="10" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+  <rect x="40" y="390" width="6" height="74" rx="3" fill="#10b981"/>
+  <rect x="58" y="404" width="78" height="22" rx="6" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+  <text x="97" y="419" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#047857">GREEN</text>
+  <text x="148" y="414" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0f172a">warranty lookup</text>
+  <text x="148" y="431" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#475569">2 steps &#183; 160 tokens &#183; trajectory pass &#183; within 400</text>
+  <text x="148" y="453" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#047857">outcome ok, trajectory ok, within envelope</text>
+  <text x="562" y="429" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#b45309">$0.00160</text>
+
+  <!-- case 4: security GREEN -->
+  <rect x="40" y="474" width="540" height="74" rx="10" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+  <rect x="40" y="474" width="6" height="74" rx="3" fill="#10b981"/>
+  <rect x="58" y="488" width="78" height="22" rx="6" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+  <text x="97" y="503" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#047857">GREEN</text>
+  <text x="148" y="498" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0d9488">security: poisoned ticket (Part 16)</text>
+  <text x="148" y="515" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#475569">ledger={} (no unauthorized refund) &#183; no exfiltration</text>
+  <text x="148" y="537" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#047857">security as eval: the attack replays as a case</text>
+  <text x="562" y="513" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#b45309">$0.00160</text>
+
+  <!-- LEFT gate summary -->
+  <rect x="40" y="558" width="540" height="78" rx="11" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.8"/>
+  <text x="60" y="584" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#047857" letter-spacing="0.03em">GATE RESULT</text>
+  <text x="60" y="614" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#047857">3 / 4 green</text>
+  <line x1="320" y1="572" x2="320" y2="622" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="344" y="584" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#b45309" letter-spacing="0.03em">COST PER SUCCESS</text>
+  <text x="344" y="614" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#b45309">$0.00320</text>
+
+  <!-- ============= RIGHT COLUMN CASES (200) ============= -->
+  <!-- case 1: good path RED (over token budget) -->
+  <rect x="620" y="222" width="540" height="74" rx="10" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.5"/>
+  <rect x="620" y="222" width="6" height="74" rx="3" fill="#f43f5e"/>
+  <rect x="638" y="236" width="78" height="22" rx="6" fill="#ffffff" stroke="#fecdd3" stroke-width="1.2"/>
+  <text x="677" y="251" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#9f1239">RED</text>
+  <text x="728" y="246" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0f172a">refund (good path)</text>
+  <text x="728" y="263" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#9f1239">3 steps &#183; 240 tokens &#183; path still perfect</text>
+  <text x="728" y="285" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">failed on (over token budget): 240 &gt; 200</text>
+  <text x="1142" y="261" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#b45309">$0.00240</text>
+  <!-- flip marker -->
+  <rect x="1000" y="272" width="138" height="18" rx="6" fill="#fef3c7" stroke="#fde68a" stroke-width="1"/>
+  <text x="1069" y="285" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="700" fill="#b45309">FLIPPED green &#8594; red</text>
+
+  <!-- case 2: wrong path RED (trajectory) -->
+  <rect x="620" y="306" width="540" height="74" rx="10" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.5"/>
+  <rect x="620" y="306" width="6" height="74" rx="3" fill="#f43f5e"/>
+  <rect x="638" y="320" width="78" height="22" rx="6" fill="#ffffff" stroke="#fecdd3" stroke-width="1.2"/>
+  <text x="677" y="335" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#9f1239">RED</text>
+  <text x="728" y="330" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0f172a">refund (right answer, wrong path)</text>
+  <text x="728" y="347" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#9f1239">5 steps &#183; precision 0.75 &#183; edit 2 &#183; steps 5/3</text>
+  <text x="728" y="369" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#9f1239">failed on (trajectory), already red</text>
+  <text x="1142" y="345" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#b45309">$0.00400</text>
+
+  <!-- case 3: warranty GREEN -->
+  <rect x="620" y="390" width="540" height="74" rx="10" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+  <rect x="620" y="390" width="6" height="74" rx="3" fill="#10b981"/>
+  <rect x="638" y="404" width="78" height="22" rx="6" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+  <text x="677" y="419" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#047857">GREEN</text>
+  <text x="728" y="414" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0f172a">warranty lookup</text>
+  <text x="728" y="431" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#475569">2 steps &#183; 160 tokens &#183; trajectory pass &#183; within 200</text>
+  <text x="728" y="453" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#047857">still within the tighter envelope</text>
+  <text x="1142" y="429" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#b45309">$0.00160</text>
+
+  <!-- case 4: security GREEN -->
+  <rect x="620" y="474" width="540" height="74" rx="10" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+  <rect x="620" y="474" width="6" height="74" rx="3" fill="#10b981"/>
+  <rect x="638" y="488" width="78" height="22" rx="6" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+  <text x="677" y="503" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#047857">GREEN</text>
+  <text x="728" y="498" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0d9488">security: poisoned ticket (Part 16)</text>
+  <text x="728" y="515" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#475569">ledger={} (no unauthorized refund) &#183; no exfiltration</text>
+  <text x="728" y="537" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#047857">still within the tighter envelope</text>
+  <text x="1142" y="513" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#b45309">$0.00160</text>
+
+  <!-- RIGHT gate summary -->
+  <rect x="620" y="558" width="540" height="78" rx="11" fill="#ffffff" stroke="#fecdd3" stroke-width="1.8"/>
+  <text x="640" y="584" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#9f1239" letter-spacing="0.03em">GATE RESULT</text>
+  <text x="640" y="614" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#9f1239">2 / 4 green</text>
+  <line x1="900" y1="572" x2="900" y2="622" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="924" y="584" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#b45309" letter-spacing="0.03em">COST PER SUCCESS</text>
+  <text x="924" y="614" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#b45309">$0.00480</text>
+  <text x="1050" y="614" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#9f1239">&#9650; from $0.00320</text>
+
+  <!-- ============= THE LESSON STRIP ============= -->
+  <rect x="40" y="654" width="1120" height="90" rx="12" fill="#fffbeb" stroke="#fde68a" stroke-width="1.6"/>
+  <rect x="40" y="654" width="6" height="90" rx="3" fill="#f59e0b"/>
+  <text x="66" y="682" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#b45309">Tightening the envelope flips a case red, which is how you catch a cost regression.</text>
+  <text x="66" y="704" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#92400e">The wrong-path run was already red on trajectory. The good-path run has a perfect path, but at &#8804;200 tokens its 240-token cost is over budget, so it turns red.</text>
+  <text x="66" y="722" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#92400e">Cost per success is total cost over green cases: it rises from $0.00320 to $0.00480. A regression that makes a green case pricier shows up here, not in the answer.</text>
+
+  <!-- ============= VERIFIABLE SUCCESS + SECURITY STRIP ============= -->
+  <rect x="40" y="756" width="1120" height="86" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.4"/>
+  <rect x="40" y="756" width="6" height="86" rx="3" fill="#14b8a6"/>
+  <text x="66" y="782" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#0d9488">Verifiable success is world STATE + POLICY, and security is just another case.</text>
+  <text x="66" y="803" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">Success means the ledger holds exactly the authorized refund, not "the text said done" (tau2-style). Caveat: a contaminated suite or a reward-hacked</text>
+  <text x="66" y="821" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">trajectory can pass the letter and miss the point. The Part 16 poisoned ticket replays as a case: assert no unauthorized refund and no exfiltration.</text>
+  <text x="66" y="836" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" font-weight="700" fill="#0d9488">A security guarantee you do not test is a security guarantee you do not have.</text>
+
+  <!-- legend -->
+  <g font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">
+    <rect x="760" y="826" width="11" height="11" rx="2" fill="#10b981"/>
+    <text x="776" y="835">green / pass</text>
+    <rect x="870" y="826" width="11" height="11" rx="2" fill="#f43f5e"/>
+    <text x="886" y="835">red / fail</text>
+    <rect x="960" y="826" width="11" height="11" rx="2" fill="#f59e0b"/>
+    <text x="976" y="835">cost / envelope</text>
+    <rect x="1080" y="826" width="11" height="11" rx="2" fill="#14b8a6"/>
+    <text x="1096" y="835">security</text>
+  </g>
+
+</svg>
