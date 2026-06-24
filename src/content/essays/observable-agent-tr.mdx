@@ -1,0 +1,173 @@
+---
+title: "Sahaya Çıkarmak"
+description: "İçini göremediğin bir durable ajan undebuggable'dır. Aynı journal'ı OTel şeklindeki span'lere fold et: trajectory, cost, latency ve cost-per-success için."
+date: 2026-07-07
+tags: ["Agents","Observability","OpenTelemetry","Cost","Tracing","AI"]
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-11-observable-agent"
+lang: "tr"
+translationSlug: "observable-agent"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bu core track'in son parçası, ve her önceki parçanın sessizce açık bıraktığı bir boşluğu kapatıyor. Ajan plan yapabiliyor, kötü bir step'ten toparlanabiliyor, koşular arasında hatırlayabiliyor, spirale girmeden önce kendini durdurabiliyor, bir crash'ten sağ çıkabiliyor ve bir insan için duraklayabiliyor. Makul her ölçüye göre gerçek bir ajan. Yine de onu sahaya çıkaramazsın, çünkü içini göremiyorsun. İçini göremediğin bir durable ajan **undebuggable ve unaccountable**'dır: yavaş olduğunda hangi step'in zamanı yediğini bilmezsin, pahalı olduğunda hangi call'un faturayı şişirdiğini bilmezsin, ve "çalıştığında" doğru sebeplerle ya da herhangi birinin onaylayacağı bir maliyetle çalıştığını kanıtlayamazsın. "Testte iyi görünüyordu" senin on-call ekibinin, finans ekibinin ya da bir auditor'ın kabul edeceği bir cevap değil. İyi haber, zor kısmın çoktan yapılmış olması. Daha [Part 9](/essays/durable-agent-tr)'da her step'i append-only bir journal'a bir event yazdırmıştık, ve o journal koşunun eksiksiz, sıralı bir kaydı. **Observability ikinci bir sistem değil; aynı log'un ikinci bir GÖRÜNÜMÜ.** Bu parça journal'ı üç şeye fold ediyor. İlki bir **span tree**, OpenTelemetry-GenAI şeklinde ve SDK olmadan elle inşa edilmiş: her `llm` kararı ve her `execute_tool` call'u için bir child span'in üzerinde tek bir kök `invoke_agent` span'i, her biri `gen_ai.*`-style attribute'lar taşıyor (operation name, model, token'lar, latency), JSONL olarak emit ediliyor. İkincisi o span'lerden **yeniden inşa edilen metrikler**: trajectory, LLM call sayısı, token'lar, cost, step başına latency, ve sahaya çıkarmaya değip değmeyeceğine karar veren tek sayı, **cost-per-success**. Üçüncüsü **core capstone**: çıplak LLM'in üzerine eklediğimiz her ring'in Part 1'den Part 11'e bir checklist'i, ve gerçek bir production durability backend'inin neye benzediğine dair dürüst bir tur.
+
+## Ön koşullar
+
+Temel Python yeterli: fonksiyonlar, bir dictionary, bir liste ve bir loop. Hepsi bu. [Part 9](/essays/durable-agent-tr) ve [Part 10](/essays/pause-approve-resume-tr) yardımcı olur, çünkü bu parça onların inşa ettiği journal'dan okuyor, ama yazı kendi içinde bütünlüklü. O parçalara yaslandığı yerde fikri tek bir cümleyle yeniden ifade eder ve ReAct loop'unu, journal'ın event şeklini ya da tool contract'ını yeniden öğretmez; bunlar Part 1, 9 ve 10'a aittir ve burada referans verilir. Eşlik eden kod, [observable_agent.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-11-observable-agent), API anahtarı, ağ ve bağımlılık olmadan offline çalışır, böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz. Timing'ler ve token sayıları donduruludur, dolayısıyla span'ler byte-reproducible'dır, gerçek LLM path'i (`generate()`) ve gerçek bir OTLP exporter her biri tek bir satır uzaklıkta, tam olarak Part 1'den 10'a kadarki gibi. Anahtar olmadan çalıştırdığınızda `[trace] no OPENAI_API_KEY; folding the frozen journal into spans (offline default)` satırını yazdırır ve tamamen offline ilerler.
+
+## Durable ajandan beri yeni olan ne
+
+Neyin yeni olduğu konusunda kesin olmak istiyorum, çünkü bir ajanı trace etmek kendi tuzaklarıyla kendi disiplinidir. Part 9 ve 10 durability ve bir insan pause'u ekledi; bu parça **observability** ekliyor, ve onu tek bir yeni bağımlılık eklemeden ekliyor. Fark edilecek en önemli şey, **yapmadığı** şey: ajanın kenarına ayrı bir metrics pipeline cıvatalamıyor. Zaten var olan journal'ı okuyor. Tüm hikaye bu, ve açıkça söylemeye değer çünkü yanlış yapmak kolay: ekipler rutin olarak gerçek execution'dan sapan ikinci bir logging sistemi inşa ederler, böylece trace bir şey söylerken koşu başka bir şey yapmış olur. Burada trace ve koşu aynı byte'lar, dolayısıyla anlaşmazlığa düşemezler.
+
+Bunu önceki serideki en yakın şeyden ayırmaya da değer. RAG Part 12 bir retrieval **servisinin** latency ve cost'unu ölçtü, bir query endpoint'ini enstrümante ederek elde ettiğin türden sayılar. Burada yeni olan **step başına agent span'leri**: her LLM kararının ve her tool call'unun kendi token'ları ve timing'iyle kendi node'u olduğu bir tree, böylece koşunun yalnızca bir aggregate'ini değil, *şeklini* görebilirsin. Yeni olan bir diğer şey **cost-per-success**, ki bu agent-seviyesinde bir sayıdır (tek bir retrieval call'u ya döner ya dönmez; bir agent koşusu bütün olarak başarabilen ya da başarısız olabilen çok-step'li bir trajectory'dir). Ve yeni olan, bunların hepsinin **journal'dan türemiş** olması. Span'ler loop boyunca dağılmış enstrümante edilmiş code path'lerce emit edilmez; sonradan journal'dan *fold edilirler*, bu yüzden offline trace reproducible'dır ve bu yüzden gerçek bir OTLP exporter bir yeniden yazım değil, tek satırlık bir takastır. OTel şeklindeki JSONL'i tam olarak, tüm bu serinin bağlı kaldığı offline çıtayı kıracak SDK bağımlılığından kaçınmak için elle inşa ediyoruz.
+
+## Tek log, iki görünüm
+
+İddiadan başla, sonra kanıtla: ajanı durable kılan journal, byte byte, onu observable kılan veridir. İşte refund koşusu `run-bb11` için Part 9 journal'ı, artefaktın gerçek çıktısından alıntılanmış:
+
+```text
+    {"data": {"goal": "refund ORD-3300", "run_id": "run-bb11"}, "seq": 0, "type": "run_started"}
+    {"data": {"in": 40, "ms": 180, "out": 12, "tool": "search_policy"}, "seq": 1, "type": "llm_decided"}
+    {"data": {"ms": 60, "result": "refunds after the window: 10% restocking fee", "tool": "search_policy"}, "seq": 2, "type": "tool_result"}
+    {"data": {"in": 70, "ms": 210, "out": 15, "tool": "process_refund"}, "seq": 3, "type": "llm_decided"}
+    {"data": {"ms": 90, "result": "refunded $180.00 to ORD-3300", "tool": "process_refund"}, "seq": 4, "type": "tool_result"}
+    {"data": {"in": 95, "ms": 150, "out": 20, "tool": "finish"}, "seq": 5, "type": "llm_decided"}
+    {"data": {"answer": "Refund of $180.00 for ORD-3300 is complete."}, "seq": 6, "type": "finished"}
+```
+
+Bu Part 9 ve 10'daki aynı tür journal, bir span'in ihtiyaç duyduğu iki annotation ile: her `llm_decided` event'i artık token sayıları (`in`, `out`) ve bir latency (`ms`) taşıyor, ve her `tool_result` kendi latency'sini taşıyor. Yukarıdan aşağı oku, koşunun ta kendisi: başladı, search'e karar verdi, policy'yi aldı, refund'a karar verdi, refund etti, finish'e karar verdi, bitti. Şimdi **aynı event'leri** bir span tree olarak oku, artefaktın gerçek çıktısından alıntılanmış:
+
+```text
+  invoke_agent  [0-690ms]  in=205 out=47 $0.00252
+  ├─ llm           [0-180ms]  decide search_policy  in=40 out=12
+  ├─ execute_tool  [180-240ms]  search_policy
+  ├─ llm           [240-450ms]  decide process_refund  in=70 out=15
+  ├─ execute_tool  [450-540ms]  process_refund
+  └─ llm           [540-690ms]  decide finish  in=95 out=20
+```
+
+Bunu üretmek için hiçbir şey yeniden enstrümante edilmedi. Her `llm_decided` event'i bir `llm` span'i oldu, her `tool_result` bir `execute_tool` span'i oldu, ve clock onlar boyunca biriktirilerek her span'e bir başlangıç ve bir bitiş verildi. Kök `invoke_agent` span'i tüm koşuyu kapsar, `[0-690ms]`, ve token toplamları (`in=205 out=47`) ile cost'u (`$0.00252`) yalnızca child'larının üzerindeki toplamlar. Journal'ı bir process'e replay et, **resume** alırsın (Part 9); bir ekrana replay et, bir **stream** alırsın (Part 10); span'lere fold et, bir **trace** alırsın. Tek log, üç şekilde okunmuş. Her step'i bir kez yazmanın anlamı, üçünü de bedavaya elde etmen.
+
+<Diagram number={1} caption="One log, two views. The append-only journal from Part 9 (left) is the durability artifact: seven events for run run-bb11, each a sequence number, a type, and a data payload, where the llm_decided events now carry token counts and a latency and the tool_result events carry a latency. The exact same events, folded by a clock that accumulates each latency, become the observability artifact (right): a span tree with one root invoke_agent over child llm and execute_tool spans. No code was re-instrumented to produce the tree; every span is derived from a journal event. The root's tokens and cost are sums over its children. The figure makes the central claim concrete, that durability and observability are the same bytes read two ways, so the trace and the run can never disagree.">
+  <img src="/essays/observable-agent/part11-spans-from-journal.svg" alt="A diagram split into two columns over a shared dashed bracket labelled the same bytes. The left column, headed JOURNAL (durability), shows seven stacked event rows for run-bb11: seq 0 run_started with goal refund ORD-3300, seq 1 llm_decided tool search_policy with in 40 out 12 ms 180, seq 2 tool_result search_policy ms 60 result refunds after the window 10 percent restocking fee, seq 3 llm_decided tool process_refund in 70 out 15 ms 210, seq 4 tool_result process_refund ms 90 result refunded 180 dollars to ORD-3300, seq 5 llm_decided tool finish in 95 out 20 ms 150, seq 6 finished answer Refund of 180 dollars for ORD-3300 is complete. Curved arrows labelled fold cross to the right column, headed SPAN TREE (observability), which shows a root box invoke_agent 0 to 690 ms in 205 out 47 cost 0.00252 dollars, with five indented child branches: llm 0 to 180 ms decide search_policy in 40 out 12, execute_tool 180 to 240 ms search_policy, llm 240 to 450 ms decide process_refund in 70 out 15, execute_tool 450 to 540 ms process_refund, and llm 540 to 690 ms decide finish in 95 out 20. A caption strip reads: durability and observability are one log read two ways, the trace cannot disagree with the run." class="w-full rounded-lg" />
+</Diagram>
+
+## Elle bir span tree
+
+Şimdi fold'un kendisi, çünkü mekanikleri basit ve mesele de bu. Bir **span** bir adı, bir başlangıcı, bir bitişi ve bir attribute torbası olan tek bir iş biriminin kaydıdır, ve bir **span tree** `parent_id` ile bir hiyerarşiye bağlanmış span'lerdir. Tree'yi OpenTelemetry SDK olmadan, sadece düz dict'lerle inşa ediyoruz: kök `invoke_agent` `parent_id: null` ve taze bir span id `s0` alır, ve her child kendi `parent_id`'sini `s0`'a işaret ettirir. Her `llm_decided` event'i `operation.name` `chat` olan bir `llm` span'i olur; her `tool_result` bir `execute_tool` span'i olur. Span'ler sadece dict olduğundan, onları JSONL olarak emit edebiliriz, ki bu tam olarak gerçek bir exporter'ın gönderdiği satır-yönelimli şekildir. İşte o span'ler hat üzerinde neye benziyor, artefaktın gerçek çıktısından alıntılanmış:
+
+```text
+    {"attributes": {"gen_ai.cost_usd": 0.00252, "gen_ai.operation.name": "invoke_agent", "gen_ai.usage.input_tokens": 205, "gen_ai.usage.output_tokens": 47}, "end_ms": 690, "name": "invoke_agent", "parent_id": null, "span_id": "s0", "start_ms": 0}
+    {"attributes": {"decided.tool": "search_policy", "gen_ai.operation.name": "chat", "gen_ai.request.model": "deterministic-rule-controller", "gen_ai.usage.input_tokens": 40, "gen_ai.usage.output_tokens": 12}, "end_ms": 180, "name": "llm", "parent_id": "s0", "span_id": "s1", "start_ms": 0}
+    {"attributes": {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": "search_policy"}, "end_ms": 240, "name": "execute_tool", "parent_id": "s0", "span_id": "s2", "start_ms": 180}
+```
+
+Attribute adlarını oku. Onlar `gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.tool.name` ve benzeri, ki bu **OpenTelemetry GenAI semantic conventions** şeklidir. Onları bilerek `gen_ai.*`-**style** olarak hedge ettim, çünkü o convention'lar hâlâ hareket halinde: tam attribute key'leri release'ler boyunca değişti ve yine değişecek, dolayısıyla buradaki adları dondurulmuş bir spec değil, doğru *şekil* olarak ele al. Bu şeklin cazip yanı vendor-neutral olması. Herhangi bir OTel-uyumlu backend (Jaeger, Tempo, Honeycomb, bir OTLP collector) bu attribute'larla bir span tree'yi anlar, dolayısıyla tek bir observability vendor'ına kilitlenmezsin. Ve span'ler sadece dict olduğundan, bu offline trace'i canlı bir export'a çevirmek tek satırlık bir takas, `generate()` ile aynı pattern. Dosyadaki yorum satırına alınmış exporter tam olarak şu:
+
+```python
+# from opentelemetry import trace; tracer.start_span("invoke_agent", ...)
+```
+
+O tek satır, elle inşa edilmiş JSONL'den bir production tracing pipeline'ına giden tüm köprüdür. Aşağıdaki figür aynı span tree'yi interaktif bir Gantt-tarzı görünüm olarak render eder, böylece span'leri gerçek bir timeline üzerinde yerleşmiş görebilir ve her step'in latency'sini izleyebilirsin.
+
+<Diagram number={2} caption="The span tree for run run-bb11 as an interactive timeline. The root invoke_agent span runs the full 0 to 690 milliseconds, with five child spans laid out left to right on a shared clock: an llm chat span deciding search_policy from 0 to 180, an execute_tool span running search_policy from 180 to 240, an llm chat span deciding process_refund from 240 to 450, an execute_tool span running process_refund from 450 to 540, and an llm chat span deciding finish from 540 to 690. Each llm span shows its gen_ai-style attributes, the model deterministic-rule-controller and its input and output token counts, and each execute_tool span shows its tool name. The figure makes per-step latency and per-call tokens legible at a glance, which is exactly what a hand-rolled OpenTelemetry-GenAI-shaped trace buys you, with a real OTLP exporter one commented line away.">
+  <IframeFigure src="/essays/observable-agent/part11-span-tree.html" title="Interactive span-tree timeline for the refund run run-bb11, rendered as a Gantt-style chart on a shared millisecond clock from 0 to 690. A top bar represents the root span invoke_agent spanning the full 0 to 690 milliseconds, annotated with gen_ai-style attributes input tokens 205, output tokens 47, and cost 0.00252 dollars. Below it, five child bars are positioned by their start and end times. The first child is an llm span with operation chat from 0 to 180 milliseconds, labelled decide search_policy, model deterministic-rule-controller, input tokens 40, output tokens 12. The second is an execute_tool span from 180 to 240 milliseconds running search_policy. The third is an llm chat span from 240 to 450 milliseconds, decide process_refund, input tokens 70, output tokens 15. The fourth is an execute_tool span from 450 to 540 milliseconds running process_refund. The fifth is an llm chat span from 540 to 690 milliseconds, decide finish, input tokens 95, output tokens 20. The view shows that the input tokens grow 40, 70, 95 across the three llm spans because the agent re-sends a growing transcript, and that each span is folded directly from a journal event with no separate instrumentation. A note states the timings and token counts are frozen so the trace is reproducible, and that a real OTLP exporter is one commented line away." height={860} />
+</Diagram>
+
+## Span'lerden metrikler
+
+Span'lerin olduğunda, önemli olan metrikler yalnızca onların üzerindeki fold'lardır, bir side channel'dan değil, bir backend'e göndereceğin aynı veriden hesaplanmış. İşte readout, artefaktın gerçek çıktısından alıntılanmış:
+
+```text
+  trajectory   : search_policy -> process_refund
+  llm calls    : 3
+  tokens       : in=205 out=47 (input grew 40 -> 70 -> 95: the re-sent transcript is the dominant cost)
+  cost         : $0.00252
+  latency      : 690ms (sum of per-span latencies)
+```
+
+Her satırı oku. **Trajectory** `search_policy -> process_refund`, ajanın gerçekten çağırdığı tool'ların dizisi. `finish`'in içinde olmadığına dikkat et: `finish` bir `llm` kararı, bir `execute_tool` call'u değil, dolayısıyla trajectory tam olarak iki side-effect üreten step'tir, ki "bu koşu *ne yaptı*?" diye sorarken istediğin de budur. **LLM call sayısı** `3`'tür (search, refund, finish üç controller turn'üdür), **token'lar** `in=205 out=47`, **cost** `$0.00252`, ve **latency** `690ms`. Bunların her biri ayrı ölçülmüş değil, az önce emit ettiğimiz span'lerden yeniden inşa edilmiştir.
+
+> ### Kenar notu: transcript economics
+>
+> Token satırına dikkatle bak: `input grew 40 -> 70 -> 95`. Bunlar üç `llm` span'inin input token'ları, ve her step'te tırmanıyorlar. Bu gürültü değil, neredeyse her ajanın baskın cost lever'ı. Ajan her turn'de büyüyen transcript'ini modele yeniden gönderir, dolayısıyla step üç, step bir ve iki için baştan ödeme yapar. Output token'lar (`12 -> 15 -> 20`) neredeyse kıpırdamaz; compound eden şey **yeniden gönderilen input**'tur. Uzun süren ajanların insanları şaşırtan bir şekilde pahalılaşmasının nedeni budur: fatura kabaca step sayısında karesel artar, çünkü her step kendinden önceki tüm step'ler için yeniden öder. Geri dönüş lever'ı **prompt / KV caching**: provider transcript'in değişmeyen prefix'ini cache'lediğinde, her turn'de yalnızca yeni token'lar için tam fiyat ödersin, ki bu uzun bir koşuda input cost'unu çarpıcı biçimde kısabilir. Ama bunun gibi bir trace sana paranın tool call'larında değil, input token'larında gittiğini gösterene kadar o lever'a uzanamazsın.
+
+> ### Kenar notu: controller bir prompt + bir model'dir
+>
+> Daha [Part 1](/essays/augmented-llm-loop-tr)'de kenar notu controller'ın bir system prompt artı bir model'den başka bir şey olmadığını ve bunun observability'de karşılığını vereceğini vaat etmişti. İşte karşılığı, `llm` span'inde oturuyor: `gen_ai.request.model` ve `gen_ai.usage.input_tokens` / `output_tokens`. O üç attribute tam olarak model seçiminin ve thinking budget'ının faturada ortaya çıktığı yerdir. Reasoning yapmayan bir modeli reasoning yapan biriyle değiştir, her `llm` span'indeki output token'lar zıplar, çünkü model gizli deliberation token'ları harcıyordur; thinking budget'ını genişlet, yine zıplarlar. Part 1'in iki düğmesi, hangi model ve ne kadar düşünmesine izin verildiği, artık soyut değil. Onlar `llm` span'i üzerinde line item'lar, ve trace onları okuduğun yer.
+
+## Cost per success
+
+İşte sahaya çıkarıp çıkarmayacağına karar veren sayı. `$0.00252`'lik bir koşu başına cost harika görünüyor, ama bu *başaran* bir koşunun cost'u. Production yalnızca kazançlarını saymaya hak kazanmaz. Hiç başaramayan ucuz bir ajan ucuz değildir, çünkü başarısızlıklar için de ödersin: hiçbir şeyle biten bir koşunun token'ları, latency'si, tool call'ları hâlâ faturana çarpar. Dolayısıyla dürüst metrik **cost-per-success**: tüm koşular boyunca toplam cost bölü başarı sayısı. İşte üç koşu üzerinde, artefaktın gerçek çıktısından alıntılanmış:
+
+```text
+  task                            success        cost
+  -------------------------------------------------
+  refund ORD-3300                     yes    $0.00252
+  warranty lookup                     yes    $0.00180
+  find a nonexistent discount          no    $0.00320
+  -------------------------------------------------
+  total cost across 3 runs: $0.00752; successes: 2
+  COST PER SUCCESS: $0.00376  (worse than one happy run's $0.00252: the failed run still cost money)
+```
+
+Tabloyu oku. İki koşu başardı (refund `$0.00252`'de ve bir warranty lookup `$0.00180`'de) ve biri başarısız oldu: var olmayan bir discount araması ki `$0.00320` harcadıktan sonra [Part 8](/essays/budgets-and-circuit-breaker-tr) circuit breaker'ını tripledi ve pes etti. Toplam harcama `$0.00752`'ydi, `2` başarı boyunca, dolayısıyla **cost-per-success `$0.00376`**. Bu production sayısı, ve bir happy run'ın cost'undan `%49` daha yüksek, tam olarak başarısız discount aramasının **üç koşunun en pahalısı** olması ve hiçbir şey üretmemesi yüzünden. Tuzak tek bir satırda: başarısız koşu en çoğa mal oldu ve en azı başardı. Happy-path sayısına karşı bütçelersen, başarısızlık oranı çarpı ortalama başarısızlık cost'u kadar yanılırsın, ve başarısızlıklar genellikle *pahalı* koşulardır çünkü pes etmeden önce thrash ederler. Cost-per-success bir finance review'la temasta hayatta kalan metriktir, ve onu yalnızca span'ler sana koşu başına cost'u verdiği ve ajanın `finish`'i sana hangi koşuların başardığını söylediği için hesaplayabilirsin.
+
+## Core capstone
+
+Core track'in sonuna geldik. İşte inşa ettiğimiz her şey, Part 1'in çıplak augmented LLM'inin üzerine eklediğimiz her ring, artefaktın gerçek çıktısından alıntılanmış:
+
+```text
+    1  augmented-LLM loop with typed, validated tools
+    2  robust execution: failure taxonomy, retries, idempotency (seed)
+    3  planning: plan-and-execute / ReWOO / tool DAG (LLM-call + depth accounting)
+    4  critic + error-triggered replanning over the DAG
+    5  reflection + cross-trial Reflexion
+    6  four typed memories the agent edits itself
+    7  compaction + forgetting for the long haul
+    8  budgets + loop detector + circuit breaker
+    9  durable event journal + replay + effectively-once
+    10 pause / approve / resume / steer (human-in-the-loop)
+    11 observability: spans, cost-per-success  <- you are here
+```
+
+Onu olduğu yay olarak oku. Bir [çıplak loop ve bir tool contract](/essays/augmented-llm-loop-tr) ile başladık (Part 1), sonra execution'ı sertleştirdik (Part 2), ajana [plan yapmayı](/essays/planning-and-the-tool-dag-tr) öğrettik (Part 3 ve 4), trial'lar boyunca [reflect ve öğrenmeyi](/essays/reflection-and-reflexion-tr) (Part 5), [hatırlamayı ve unutmayı](/essays/four-memories-self-editing-tr) (Part 6 ve 7), [kendini durdurmayı](/essays/budgets-and-circuit-breaker-tr) (Part 8), [bir crash'ten sağ çıkmayı](/essays/durable-agent-tr) (Part 9), [bir insan için duraklamayı](/essays/pause-approve-resume-tr) (Part 10), ve nihayet, burada, içine bakılabilir olmayı. Bu production-şeklinde bir core ajan, her katmanı elle inşa edilmiş ve açıklanmış.
+
+Storage hakkında dürüst bir not. Bu parçadaki her şey `~60 satır` kod olan bir journal üzerinde çalışıyor: bir JSONL dosyası ya da küçük bir SQLite tablosu her iki görünümün ihtiyaç duyduğu tüm durability'dir, ve bu gerçekten öğrenmek için ve küçük bir sistemi sahaya çıkarmak için yeterli. Ama gerçek production durability için bir framework'e uzanırsın, ve seçeneklerin gerçek trade-off'ları vardır. **Temporal** sana deterministic replay ile savaşta test edilmiş durable execution verir, bir cluster çalıştırma ve kodunu onun workflow modeli içinde yazma karşılığında. **DBOS** durable workflow'ları Postgres üzerine koyar, daha hafif ama o database'e bağlı. **Vercel Workflow DevKit** sana serverless deployment'lara uyan crash-safe, step-tabanlı workflow'lar verir, daha yeni ve platform-şeklinde. **LangGraph** kullandığımız agent soyutlamalarına yakın checkpointing ve human-in-the-loop primitive'leri sunar, bir framework'ün dünya görüşünü satın almanın her zamanki caveat'ıyla. Hiçbiri bedava değil; her biri `~60 satır`ı operasyonel özellikler için takas eder, ve doğru karar zaten neyi çalıştırdığına bağlı. İleri taşınacak şey, önemli olanın *pattern* olduğu: bir journal, replay, idempotency, ve aynı log'dan fold edilmiş span'ler. Framework o pattern'in bir implementasyonudur, onu anlamanın bir ikamesi değil.
+
+<Diagram number={3} caption="The core capstone: every ring we added to the bare augmented LLM across Parts 1 to 11, drawn as concentric layers. At the center is the Part 1 augmented-LLM loop with typed validated tools. Around it, in order: robust execution with a failure taxonomy and idempotency seed (Part 2), planning over a tool DAG (Part 3), a critic and error-triggered replanning (Part 4), reflection and cross-trial Reflexion (Part 5), four typed self-edited memories (Part 6), compaction and forgetting (Part 7), budgets and a circuit breaker (Part 8), a durable event journal with replay and effectively-once (Part 9), pause approve resume steer for human-in-the-loop (Part 10), and the outermost ring, observability with spans and cost-per-success (Part 11), marked you are here. A side panel notes that the storage under all of this is about 60 lines of JSONL or SQLite, and that production durability frameworks Temporal, DBOS, the Vercel Workflow DevKit, and LangGraph each implement this same pattern with their own trade-offs. The figure summarizes the whole core track as one layered agent.">
+  <img src="/essays/observable-agent/part11-core-capstone.svg" alt="A diagram of eleven concentric rings forming a single agent, each ring labelled with a part number and its contribution. The innermost core, ring 1, reads augmented-LLM loop, typed validated tools. Moving outward: ring 2 robust execution, failure taxonomy, retries, idempotency seed; ring 3 planning, plan-and-execute, ReWOO, tool DAG; ring 4 critic plus error-triggered replanning; ring 5 reflection plus cross-trial Reflexion; ring 6 four typed memories the agent edits itself; ring 7 compaction plus forgetting; ring 8 budgets plus loop detector plus circuit breaker; ring 9 durable event journal, replay, effectively-once; ring 10 pause, approve, resume, steer, human-in-the-loop; and the outermost ring 11 observability, spans, cost-per-success, marked with a YOU ARE HERE pin. To the right, a panel headed STORAGE reads about 60 lines, a JSONL file or SQLite, with a sub-panel headed PRODUCTION listing Temporal durable execution, DBOS workflows on Postgres, Vercel Workflow DevKit serverless steps, and LangGraph checkpointing plus human-in-the-loop, each tagged same pattern, different trade-offs. A caption strip reads: every ring is a part, the whole stack is one production-shaped core agent." class="w-full rounded-lg" />
+</Diagram>
+
+> 💡 **Deneyimden.** Bana bir dashboard yerine cost-per-success'e güvenmeyi öğreten ajan, mükemmel görünen biriydi. Ona fırlattığımız her göz testini geçti, demo koşuları çevikti ve ucuzdu, ve log'lardaki koşu başına cost bir kuruşun küçük bir parçasıydı, dolayısıyla onu sahaya çıkardık ve devam ettik. İki hafta sonra finans, line item'ın projekte ettiğimizin kabaca beş katı neden olduğunu sordu. Kimse başarısızlıkları enstrümante etmemişti. Sonunda production journal'ını span'lere fold edip mean-cost-per-run yerine cost-per-success hesapladığımda, tablo açık ve çirkindi: koşuların anlamlı bir dilimi belirli bir input sınıfında başarısız oluyordu, ve başarısız olan koşular ucuz değil, *en* pahalı koşulardı, çünkü ajan thrash eder, retry eder, şişen bir transcript'i yeniden gönderir ve ancak temiz bir başarının hiç harcamadığı kadar çok token yaktıktan sonra pes ederdi. Karşı çıktığımız happy-path sayısı, acıtan koşuları basitçe saymayan bir fanteziydi. Aynı span tree farklı bir ajanda ikinci bir şeyi yakaladı: anlık olduğunu varsaydığımız bir external lookup tool'u, her koşunun wall-clock zamanının yüzde altmışını yiyordu, trace'te en uzun bar olarak orada oturuyordu. Bunların hiçbiri "iyi görünüyordu"dan görünür değildi. İkisi de journal bir trace olduğu anda apaçıktı. Tekrar tekrar öğrendiğim ders, içini göremediğin bir ajanın körlemesine uçtuğun biri olduğu, ve trace'in ucuz olduğu çünkü journal zaten var.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Özet / Çıkarımlar
+
+- Plan yapabilen, toparlanabilen, hatırlayabilen, durabilen, bir crash'ten sağ çıkabilen ve bir insan için duraklayabilen bir ajan, **içini göremiyorsan hâlâ sahaya çıkarılamaz**: hangi step'in yavaş olduğunu, hangi call'un pahalı olduğunu ya da bir "success"in kabul edilebilir bir tutara mal olup olmadığını söyleyemezsin. Observability core track'in son ring'i.
+- **Observability Part 9 journal'ının ikinci bir görünümü, ikinci bir sistem değil.** Ajanı durable kılan aynı event'ler, bir clock ile fold edilince bir span tree olur. Trace ve koşu aynı byte'lar, dolayısıyla anlaşmazlığa düşemezler.
+- **Elle bir span tree** SDK gerektirmez: child `llm` (operation `chat`) ve `execute_tool` span'lerinin üzerinde bir kök `invoke_agent` span'i, her biri `gen_ai.*`-style attribute'lar taşıyor (`operation.name`, `request.model`, `usage.input_tokens`, `tool.name`), JSONL olarak emit edilmiş. Adlar hedge edilmiş çünkü GenAI convention'ları hâlâ hareket halinde, ve gerçek bir OTLP exporter tek bir yorum satırı.
+- **Metrikler span'lerin üzerindeki fold'lardır**: trajectory `search_policy -> process_refund` (`finish` bir LLM kararı, bir tool değil), `llm calls: 3`, `tokens in=205 out=47`, `cost $0.00252`, `latency 690ms`. Input token'lar `40 -> 70 -> 95` büyür çünkü ajan şişen bir transcript'i yeniden gönderir, ki bu baskın cost lever'ı; prompt/KV caching geri dönüş lever'ı. Model seçimi ve thinking budget doğrudan `llm` span'inde ortaya çıkar.
+- **Cost-per-success production sayısıdır.** Üç koşu boyunca toplam `$0.00752`'ydi, `2` başarı için, dolayısıyla cost-per-success `$0.00376`, bir happy run'ın `$0.00252`'sinden kötü çünkü başarısız discount araması en çoğa mal oldu ve hiçbir şey üretmedi. Başarısızlıklar için de ödersin; happy path'e değil, bu sayıya karşı bütçele.
+- **Capstone** çıplak bir LLM üzerinde on bir ring, Part 1'den 11'e. Altındaki storage `~60 satır` JSONL ya da SQLite; production için Temporal, DBOS, Vercel Workflow DevKit ve LangGraph her biri aynı pattern'i (journal, replay, idempotency, span'ler) kendi trade-off'larıyla implemente eder. Framework pattern'in bir implementasyonudur, onu anlamanın bir ikamesi değil.
+
+## Sözlük
+
+- **Span**: bir adı, bir başlangıç zamanı, bir bitiş zamanı ve bir attribute torbası olan tek bir iş biriminin kaydı; burada, bir LLM kararı ya da bir tool call'u. Bir **span tree** span'leri `parent_id` ile bir hiyerarşiye bağlar, child'larının üzerinde bir kök (`invoke_agent`) ile.
+- **OTel-GenAI semantic conventions (`gen_ai.*`-style)**: OpenTelemetry'nin LLM ve agent span'leri üzerindeki attribute'ları adlandırmaya yönelik evrilen standardı (`gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.tool.name`). Burada `-style` olarak hedge edilmiş çünkü tam key'ler release'ler boyunca hâlâ değişiyor; onları dondurulmuş bir spec değil, doğru şekil olarak ele al.
+- **`invoke_agent` / `execute_tool` / `llm` span'leri**: burada kullanılan üç span adı. `invoke_agent` tüm koşu için kök span'dir; her `llm` span'i (operation `chat`) token ve model taşıyan bir controller kararıdır; her `execute_tool` span'i tool adını ve latency'sini taşıyan bir tool call'udur.
+- **Cost-per-success**: tüm koşular boyunca toplam cost bölü başarılı koşu sayısı; her zaman tek bir happy run'ın cost'undan kötüdür, çünkü başarısızlıklar için de ödersin, ve başarısızlıklar genellikle en pahalı koşulardır. Sahaya çıkarmaya değip değmeyeceğine karar veren metrik.
+- **One log, two views**: durability artefaktının (journal) ve observability artefaktının (span tree) iki şekilde okunan aynı byte'lar olduğu ilkesi, böylece trace gerçek execution'dan asla sapamaz.
+- **Transcript economics**: bir ajanın input token'larının her step'te büyüdüğü gözlemi çünkü şişen bir transcript'i yeniden gönderir, yeniden gönderilen input'u (tool call'ları değil) baskın cost lever'ı yapar; yalnızca yeni token'lar için tam fiyat alan prompt/KV caching geri dönüş lever'ıdır.
+- **Sırada ne var**: core track burada biter. **Frontier track** (Part 12'den 17'ye) bu kendi içinde bütünlüklü ajanı protocol wire'ına ve multi-agent sistemlere açar, tool'ları bir protocol olarak ile başlayarak.
+
+---
+
+Bu parçanın kuralı: içini göremediğin bir durable ajan undebuggable ve unaccountable'dır, dolayısıyla ikinci bir logging sistemi inşa etme, zaten sahip olduğun journal'ı span'lere fold et. Trace'i durability log'unun ikinci bir görünümü yap (`gen_ai.*`-style attribute'larla `llm` ve `execute_tool` child'larının üzerinde tek bir kök `invoke_agent` span'i, JSONL olarak emit edilmiş), metriklerini bir side channel yerine o span'lerden yeniden inşa et (trajectory, token'lar, latency), ve happy-path cost'u yerine **cost-per-success** ölç, çünkü başarısızlıklar için de ödersin. Bu core track'i kapatır: çıplak bir LLM üzerinde on bir ring, plan yapabileceğin, toparlanabileceğin, hatırlayabileceğin, sınırlayabileceğin, kalıcı kılabileceğin, duraklatabileceğin ve artık operate edebileceğin production-şeklinde bir ajan. Ama Part 1'den beri tutan ve hiç sorgulanmamış tek varsayıma dikkat et: tool'lar ajanın içindeki hardcoded bir dictionary. Başka bir host'la paylaşılamaz, runtime'da keşfedilemez ya da ajanın kendi kodunu düzenlemeden takas edilemezler. Ajanın çağırdığı her tool elle wire edilmişti. **Part 12, Tools as a Protocol**, frontier track'i elle minimal bir Model Context Protocol server ve host inşa ederek açar, o özel tool dictionary'sini herhangi bir host'un bağlanabileceği, keşfedebileceği ve bir wire üzerinden çağırabileceği bir şeye dönüştürerek.

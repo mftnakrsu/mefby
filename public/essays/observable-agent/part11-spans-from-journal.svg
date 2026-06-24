@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="100%" style="height:auto" role="img" aria-label="One log, two views. On the left, the Part 9 event journal for run run-bb11: an append-only list of JSONL events. seq 0 run_started with goal refund ORD-3300. seq 1 llm_decided search_policy with in 40 out 12 and 180 milliseconds. seq 2 tool_result for search_policy, 60 milliseconds. seq 3 llm_decided process_refund with in 70 out 15 and 210 milliseconds. seq 4 tool_result for process_refund, 90 milliseconds. seq 5 llm_decided finish with in 95 out 20 and 150 milliseconds. seq 6 finished. A fold arrow in the middle reads the SAME BYTES and folds them into the OTel-GenAI-shaped span tree on the right, with no otel SDK. The span tree has one root span invoke_agent from 0 to 690 milliseconds carrying gen_ai.operation.name invoke_agent, gen_ai.usage.input_tokens 205, output_tokens 47, and gen_ai.cost_usd 0.00252. Under it, five sibling child spans: an llm chat span from 0 to 180 deciding search_policy, an execute_tool span for search_policy from 180 to 240, an llm chat span from 240 to 450 deciding process_refund, an execute_tool span for process_refund from 450 to 540, and an llm chat span from 540 to 690 deciding finish. The llm spans carry gen_ai.request.model deterministic-rule-controller and token usage. The point is that the durability journal and the observability span tree are the same bytes read two ways.">
+  <title>One log, two views: the Part 9 journal folded into an OTel-GenAI-shaped span tree, same bytes, no otel SDK</title>
+
+  <defs>
+    <marker id="arrIndigo" markerWidth="12" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0 0, 12 5, 0 10" fill="#6366f1"/>
+    </marker>
+    <marker id="arrSlate" markerWidth="11" markerHeight="9" refX="9" refY="4.5" orient="auto">
+      <polygon points="0 0, 11 4.5, 0 9" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="720" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#94a3b8">Part 11, the observable agent</text>
+
+  <!-- Title -->
+  <text x="40" y="34" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="18" font-weight="700" fill="#0f172a">One log, two views: the durability journal folded into a span tree</text>
+  <text x="40" y="54" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#64748b">Run run-bb11. Observability is not a second system. The Part 9 event journal, read as spans, is the OTel-GenAI-shaped trace. Same bytes, no otel SDK.</text>
+
+  <!-- ====================== LEFT: THE JOURNAL (durability) ====================== -->
+  <text x="40" y="92" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.04em">VIEW 1: THE PART 9 EVENT JOURNAL (DURABILITY)</text>
+  <rect x="40" y="104" width="430" height="556" rx="13" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.6"/>
+  <text x="60" y="128" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#334155">run-bb11 journal (append-only JSONL)</text>
+
+  <!-- seq 0 run_started -->
+  <rect x="60" y="140" width="390" height="40" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+  <rect x="60" y="140" width="5" height="40" rx="2.5" fill="#64748b"/>
+  <text x="74" y="157" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#475569">seq 0 &#183; run_started</text>
+  <text x="74" y="172" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#64748b">goal "refund ORD-3300" &#183; run_id "run-bb11"</text>
+
+  <!-- seq 1 llm_decided search_policy -->
+  <rect x="60" y="186" width="390" height="44" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <rect x="60" y="186" width="5" height="44" rx="2.5" fill="#6366f1"/>
+  <text x="74" y="203" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">seq 1 &#183; llm_decided</text>
+  <text x="74" y="218" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#3730a3">tool search_policy &#183; in 40 out 12 &#183; ms 180</text>
+
+  <!-- seq 2 tool_result search_policy -->
+  <rect x="60" y="236" width="390" height="44" rx="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.2"/>
+  <rect x="60" y="236" width="5" height="44" rx="2.5" fill="#14b8a6"/>
+  <text x="74" y="253" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">seq 2 &#183; tool_result</text>
+  <text x="74" y="268" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#64748b">tool search_policy &#183; ms 60 &#183; "10% restocking fee"</text>
+
+  <!-- seq 3 llm_decided process_refund -->
+  <rect x="60" y="286" width="390" height="44" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <rect x="60" y="286" width="5" height="44" rx="2.5" fill="#6366f1"/>
+  <text x="74" y="303" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">seq 3 &#183; llm_decided</text>
+  <text x="74" y="318" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#3730a3">tool process_refund &#183; in 70 out 15 &#183; ms 210</text>
+
+  <!-- seq 4 tool_result process_refund -->
+  <rect x="60" y="336" width="390" height="44" rx="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.2"/>
+  <rect x="60" y="336" width="5" height="44" rx="2.5" fill="#14b8a6"/>
+  <text x="74" y="353" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">seq 4 &#183; tool_result</text>
+  <text x="74" y="368" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#64748b">tool process_refund &#183; ms 90 &#183; "refunded $180.00"</text>
+
+  <!-- seq 5 llm_decided finish -->
+  <rect x="60" y="386" width="390" height="44" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <rect x="60" y="386" width="5" height="44" rx="2.5" fill="#6366f1"/>
+  <text x="74" y="403" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">seq 5 &#183; llm_decided</text>
+  <text x="74" y="418" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#3730a3">tool finish &#183; in 95 out 20 &#183; ms 150</text>
+
+  <!-- seq 6 finished -->
+  <rect x="60" y="436" width="390" height="44" rx="8" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.4"/>
+  <rect x="60" y="436" width="5" height="44" rx="2.5" fill="#10b981"/>
+  <text x="74" y="453" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#047857">seq 6 &#183; finished</text>
+  <text x="74" y="468" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#065f46">"Refund of $180.00 for ORD-3300 is complete."</text>
+
+  <!-- left footnote -->
+  <rect x="60" y="496" width="390" height="146" rx="9" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="76" y="518" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#334155">What the journal already carries</text>
+  <text x="76" y="536" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">Every llm_decided event records its token usage and latency;</text>
+  <text x="76" y="550" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">every tool_result records its latency. That is everything a span</text>
+  <text x="76" y="564" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">needs. No extra instrumentation was added for observability.</text>
+  <text x="76" y="586" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">Note the input tokens GROWING: 40 then 70 then 95. The agent</text>
+  <text x="76" y="600" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">re-sends a longer transcript every step. That growth, not the</text>
+  <text x="76" y="614" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">tool calls, is the dominant cost lever.</text>
+  <text x="76" y="634" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#b45309">in: 40 &#8594; 70 &#8594; 95</text>
+
+  <!-- ====================== CENTER: THE FOLD ====================== -->
+  <!-- big fold arrow -->
+  <line x1="478" y1="360" x2="556" y2="360" stroke="#6366f1" stroke-width="3" marker-end="url(#arrIndigo)"/>
+  <rect x="486" y="296" width="66" height="46" rx="9" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.4"/>
+  <text x="519" y="314" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#4f46e5">fold</text>
+  <text x="519" y="328" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8" fill="#4f46e5">build_spans</text>
+
+  <!-- SAME BYTES badge -->
+  <rect x="468" y="384" width="104" height="48" rx="9" fill="#fffbeb" stroke="#fde68a" stroke-width="1.4"/>
+  <text x="520" y="404" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#b45309">SAME BYTES</text>
+  <text x="520" y="420" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="8.5" fill="#92400e">two views</text>
+
+  <!-- NO otel SDK badge -->
+  <rect x="468" y="442" width="104" height="24" rx="6" fill="#0f172a"/>
+  <text x="520" y="458" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#ffffff">no otel SDK</text>
+
+  <!-- ====================== RIGHT: THE SPAN TREE (observability) ====================== -->
+  <text x="588" y="92" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.04em">VIEW 2: THE OTel-GenAI-SHAPED SPAN TREE (OBSERVABILITY)</text>
+  <rect x="588" y="104" width="572" height="556" rx="13" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.6"/>
+
+  <!-- ROOT span invoke_agent -->
+  <rect x="608" y="124" width="532" height="58" rx="9" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.6"/>
+  <rect x="608" y="124" width="6" height="58" rx="3" fill="#4f46e5"/>
+  <text x="628" y="144" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#4f46e5">invoke_agent  [0-690ms]  (root span)</text>
+  <text x="628" y="160" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#3730a3">gen_ai.operation.name "invoke_agent"</text>
+  <text x="628" y="174" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#b45309">gen_ai.usage.input_tokens 205 &#183; output_tokens 47 &#183; cost_usd 0.00252</text>
+
+  <!-- tree spine -->
+  <line x1="624" y1="182" x2="624" y2="612" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <!-- child s1: llm chat search_policy -->
+  <line x1="624" y1="218" x2="648" y2="218" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="648" y="196" width="492" height="46" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <rect x="648" y="196" width="5" height="46" rx="2.5" fill="#6366f1"/>
+  <text x="664" y="214" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">llm  [0-180ms]  operation "chat"  decide search_policy</text>
+  <text x="664" y="230" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#3730a3">gen_ai.request.model "deterministic-rule-controller" &#183; in 40 out 12</text>
+
+  <!-- child s2: execute_tool search_policy -->
+  <line x1="624" y1="278" x2="648" y2="278" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="648" y="256" width="492" height="46" rx="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.2"/>
+  <rect x="648" y="256" width="5" height="46" rx="2.5" fill="#14b8a6"/>
+  <text x="664" y="274" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">execute_tool  [180-240ms]  search_policy</text>
+  <text x="664" y="290" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#0f766e">gen_ai.operation.name "execute_tool" &#183; gen_ai.tool.name "search_policy"</text>
+
+  <!-- child s3: llm chat process_refund -->
+  <line x1="624" y1="338" x2="648" y2="338" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="648" y="316" width="492" height="46" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <rect x="648" y="316" width="5" height="46" rx="2.5" fill="#6366f1"/>
+  <text x="664" y="334" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">llm  [240-450ms]  operation "chat"  decide process_refund</text>
+  <text x="664" y="350" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#3730a3">gen_ai.request.model "deterministic-rule-controller" &#183; in 70 out 15</text>
+
+  <!-- child s4: execute_tool process_refund -->
+  <line x1="624" y1="398" x2="648" y2="398" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="648" y="376" width="492" height="46" rx="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.2"/>
+  <rect x="648" y="376" width="5" height="46" rx="2.5" fill="#14b8a6"/>
+  <text x="664" y="394" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#0d9488">execute_tool  [450-540ms]  process_refund</text>
+  <text x="664" y="410" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#0f766e">gen_ai.operation.name "execute_tool" &#183; gen_ai.tool.name "process_refund"</text>
+
+  <!-- child s5: llm chat finish -->
+  <line x1="624" y1="458" x2="648" y2="458" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="648" y="436" width="492" height="46" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <rect x="648" y="436" width="5" height="46" rx="2.5" fill="#6366f1"/>
+  <text x="664" y="454" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#4f46e5">llm  [540-690ms]  operation "chat"  decide finish</text>
+  <text x="664" y="470" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#3730a3">gen_ai.request.model "deterministic-rule-controller" &#183; in 95 out 20</text>
+
+  <!-- right footnote -->
+  <rect x="608" y="500" width="532" height="142" rx="9" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="624" y="522" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10" font-weight="700" fill="#334155">How the fold maps events to spans</text>
+  <text x="624" y="540" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">Each llm_decided becomes an llm (chat) span; each tool_result becomes</text>
+  <text x="624" y="554" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">an execute_tool span. All five are SIBLINGS under the single root</text>
+  <text x="624" y="568" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">invoke_agent span. start_ms and end_ms come straight from the recorded</text>
+  <text x="624" y="582" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">latencies. Attribute names are hedged as gen_ai.*-STYLE: the GenAI</text>
+  <text x="624" y="596" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">semantic conventions are still moving.</text>
+  <text x="624" y="618" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">The spans are plain dicts emitted as JSONL. A real OTLP exporter would</text>
+  <text x="624" y="632" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">ship them: a commented one-liner, the same swap-in pattern as generate().</text>
+
+  <!-- ====================== bottom takeaway ====================== -->
+  <rect x="40" y="676" width="838" height="30" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.1"/>
+  <text x="56" y="695" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#4f46e5">The durability artifact and the observability artifact are the SAME BYTES read two ways. The journal that lets the agent survive a crash, read as spans, makes it debuggable and accountable.</text>
+
+  <!-- legend bottom-right -->
+  <g font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">
+    <rect x="900" y="678" width="11" height="11" rx="2" fill="#6366f1"/>
+    <text x="916" y="687">invoke_agent / llm</text>
+    <rect x="900" y="694" width="11" height="11" rx="2" fill="#14b8a6"/>
+    <text x="916" y="703">execute_tool</text>
+    <rect x="1040" y="678" width="11" height="11" rx="2" fill="#f59e0b"/>
+    <text x="1056" y="687">tokens / cost</text>
+    <rect x="1040" y="694" width="11" height="11" rx="2" fill="#10b981"/>
+    <text x="1056" y="703">finished</text>
+  </g>
+
+</svg>
