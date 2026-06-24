@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" width="100%" style="height:auto" role="img" aria-label="The agent's attack surface across the series, drawn as four vectors entering the agent from the outside, each met by the layered defense that contains it. At the center is the agent with its tools, memory, and code. Vector one is indirect prompt injection arriving inside a tool result, contained by quarantine plus provenance, capability scoping, and the approval gate. Vector two is an untrusted MCP tool description from Part 12, contained by treating descriptions as untrusted and an allowlist, plus tool-output validation. Vector three is a confused-deputy delegation over A2A from Part 15, contained by a peer allowlist and capability scoping that refuses out-of-scope requests. Vector four is untrusted code aimed at the Part 13 exec tool, contained by the sandbox boundary, which is OS-level in production. The closing line states the same principles defeat all of them.">
+  <title>The agent's attack surface: four vectors across the series, each met by its layered defense.</title>
+
+  <defs>
+    <marker id="arrRose2" markerWidth="13" markerHeight="11" refX="11" refY="5.5" orient="auto">
+      <polygon points="0 0, 13 5.5, 0 11" fill="#f43f5e"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="860" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#94a3b8">Part 16, securing the agent</text>
+
+  <!-- Title -->
+  <text x="40" y="34" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="18" font-weight="700" fill="#0f172a">The agent's attack surface: four vectors, four layered defenses</text>
+  <text x="40" y="54" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#64748b">Every capability we built across the series is also a way in. Each untrusted input meets a layer that contains it; the same principles defeat all of them.</text>
+
+  <!-- ================= CENTER: THE AGENT ================= -->
+  <rect x="470" y="360" width="260" height="148" rx="16" fill="#eef2ff" stroke="#6366f1" stroke-width="2.6"/>
+  <rect x="470" y="360" width="260" height="38" rx="16" fill="#6366f1"/>
+  <rect x="470" y="380" width="260" height="18" fill="#6366f1"/>
+  <text x="600" y="385" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#ffffff">THE AGENT</text>
+  <text x="600" y="424" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#4f46e5">real tools &#183; memory &#183; code execution</text>
+  <text x="600" y="442" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#4f46e5">and the ability to ACT on the world</text>
+  <rect x="492" y="458" width="216" height="34" rx="8" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <text x="600" y="480" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#475569">acting is what makes injection dangerous</text>
+
+  <!-- ================= VECTOR 1 (top-left): tool-result injection ================= -->
+  <rect x="40" y="92" width="380" height="150" rx="12" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.6"/>
+  <rect x="40" y="92" width="6" height="150" rx="3" fill="#f43f5e"/>
+  <circle cx="66" cy="116" r="6" fill="#f43f5e"/>
+  <text x="82" y="120" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12.5" font-weight="700" fill="#9f1239">1  indirect prompt injection</text>
+  <text x="60" y="142" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">A buried command inside a TOOL RESULT (a support</text>
+  <text x="60" y="159" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">ticket) tells the agent to refund + exfiltrate.</text>
+  <rect x="60" y="170" width="340" height="58" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.3"/>
+  <text x="72" y="188" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" font-weight="700" fill="#0d9488">CONTAINED BY (layers):</text>
+  <text x="72" y="204" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">quarantine + provenance (data, not commands)</text>
+  <text x="72" y="219" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">+ capability scoping + approval gate (Part 10)</text>
+
+  <!-- ================= VECTOR 2 (top-right): MCP tool description ================= -->
+  <rect x="780" y="92" width="380" height="150" rx="12" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.6"/>
+  <rect x="780" y="92" width="6" height="150" rx="3" fill="#f43f5e"/>
+  <circle cx="806" cy="116" r="6" fill="#f43f5e"/>
+  <text x="822" y="120" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12.5" font-weight="700" fill="#9f1239">2  untrusted MCP tool description</text>
+  <text x="800" y="142" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">A server's tool DESCRIPTION (Part 12) carries an</text>
+  <text x="800" y="159" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">injection that tries to rewrite your instructions.</text>
+  <rect x="800" y="170" width="340" height="58" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.3"/>
+  <text x="812" y="188" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" font-weight="700" fill="#0d9488">CONTAINED BY (layers):</text>
+  <text x="812" y="204" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">treat descriptions as untrusted + server allowlist</text>
+  <text x="812" y="219" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">+ tool-output validation</text>
+
+  <!-- ================= VECTOR 3 (bottom-left): A2A confused deputy ================= -->
+  <rect x="40" y="618" width="380" height="150" rx="12" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.6"/>
+  <rect x="40" y="618" width="6" height="150" rx="3" fill="#f43f5e"/>
+  <circle cx="66" cy="642" r="6" fill="#f43f5e"/>
+  <text x="82" y="646" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12.5" font-weight="700" fill="#9f1239">3  confused deputy over A2A</text>
+  <text x="60" y="668" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">A peer (Part 15) asks your agent to use ITS</text>
+  <text x="60" y="685" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">authority for the peer's benefit.</text>
+  <rect x="60" y="696" width="340" height="58" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.3"/>
+  <text x="72" y="714" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" font-weight="700" fill="#0d9488">CONTAINED BY (layers):</text>
+  <text x="72" y="730" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">peer allowlist + capability scoping</text>
+  <text x="72" y="745" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">refuse out-of-scope requests (output untrusted)</text>
+
+  <!-- ================= VECTOR 4 (bottom-right): untrusted code at exec tool ================= -->
+  <rect x="780" y="618" width="380" height="150" rx="12" fill="#fff1f2" stroke="#fecdd3" stroke-width="1.6"/>
+  <rect x="780" y="618" width="6" height="150" rx="3" fill="#f43f5e"/>
+  <circle cx="806" cy="642" r="6" fill="#f43f5e"/>
+  <text x="822" y="646" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12.5" font-weight="700" fill="#9f1239">4  untrusted code at the exec tool</text>
+  <text x="800" y="668" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">Code aimed at the Part 13 exec tool tries to read</text>
+  <text x="800" y="685" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#334155">secrets, delete files, or call out to the network.</text>
+  <rect x="800" y="696" width="340" height="58" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.3"/>
+  <text x="812" y="714" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" font-weight="700" fill="#0d9488">CONTAINED BY (layers):</text>
+  <text x="812" y="730" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">the sandbox boundary (allowlist + no-network)</text>
+  <text x="812" y="745" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" fill="#475569">a real sandbox is OS-level (gVisor / Firecracker)</text>
+
+  <!-- ================= ARROWS from each vector toward the agent ================= -->
+  <line x1="424" y1="200" x2="494" y2="372" stroke="#f43f5e" stroke-width="2.6" marker-end="url(#arrRose2)"/>
+  <line x1="776" y1="200" x2="706" y2="372" stroke="#f43f5e" stroke-width="2.6" marker-end="url(#arrRose2)"/>
+  <line x1="424" y1="660" x2="494" y2="498" stroke="#f43f5e" stroke-width="2.6" marker-end="url(#arrRose2)"/>
+  <line x1="776" y1="660" x2="706" y2="498" stroke="#f43f5e" stroke-width="2.6" marker-end="url(#arrRose2)"/>
+
+  <!-- defense ring annotations on the arrows -->
+  <rect x="430" y="276" width="120" height="20" rx="6" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="490" y="290" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" font-weight="700" fill="#0d9488">quarantine</text>
+  <rect x="650" y="276" width="120" height="20" rx="6" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="710" y="290" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" font-weight="700" fill="#0d9488">allowlist</text>
+  <rect x="430" y="572" width="120" height="20" rx="6" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="490" y="586" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" font-weight="700" fill="#0d9488">scoping</text>
+  <rect x="650" y="572" width="120" height="20" rx="6" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.1"/>
+  <text x="710" y="586" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="8.5" font-weight="700" fill="#0d9488">sandbox</text>
+
+  <!-- ================= THE SHARED-PRINCIPLES STRIP ================= -->
+  <rect x="40" y="794" width="1120" height="48" rx="11" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.6"/>
+  <rect x="40" y="794" width="7" height="48" rx="3.5" fill="#10b981"/>
+  <text x="66" y="814" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#047857">Same principles defeat all four:</text>
+  <text x="290" y="814" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#0d9488">untrusted content is data not commands &#183; least privilege &#183; gate effectful actions &#183; validate outputs &#183; defense in depth.</text>
+  <text x="66" y="832" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#0d9488">RAG Part 17 secured retrieved documents in a single-shot pipeline; this secures the agent's ACTION SPACE.</text>
+
+  <!-- legend (placed above center to avoid the bottom strip) -->
+  <g font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9.5" fill="#64748b">
+    <rect x="470" y="318" width="11" height="11" rx="2" fill="#f43f5e"/>
+    <text x="486" y="327">untrusted input / attack</text>
+    <rect x="640" y="318" width="11" height="11" rx="2" fill="#14b8a6"/>
+    <text x="656" y="327">layered defense</text>
+  </g>
+
+</svg>
