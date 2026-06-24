@@ -1,0 +1,163 @@
+---
+title: "When Tools Fail"
+description: "A schema-valid tool call can still throw, time out, or return garbage at run time. The fix is a robustness layer: a failure taxonomy, bounded retries, and an idempotent refund tool."
+date: 2026-06-28
+tags: ["Agents","Tool Use","Reliability","Retries","Idempotency","AI"]
+seriesOrder: 2
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-02-robust-tool-execution"
+lang: "en"
+translationSlug: "robust-tool-execution-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 1 gave every tool a contract: a typed schema and a validator that rejects an unknown tool or a malformed argument before the call ever fires. That closes the door on calls that are wrong on paper. It does nothing about the call that is right on paper and still goes wrong at run time. A schema-valid tool can still throw (a network blip, a 500, a rate limit, a bug in the tool itself), it can time out (the dependency is up but slower than your deadline), and it can return garbage (an empty result, or a payload that passes every type check and still means "I found nothing"). Part 19 of the RAG series, and Part 1 here, both quietly assumed every tool succeeds: the loop took whatever a tool returned as ground truth and marched on. One throw and the whole run is a stack trace; one empty result silently poisons the answer. This part wraps tool execution in a layer that expects failure. You will build three things. First, a **failure taxonomy**: five kinds of failure, each with one recovery policy, so the system knows the difference between "try again" and "stop trying." Second, **bounded retries with exponential backoff and a deadline**, applied only to the failures that can actually clear. Third, the series' first **side-effecting tool**, a refund that moves real money, with an **idempotency guard** so a retry never charges the customer twice. By the end a failed tool call is an Observation the controller reads, not a crash that ends the run.
+
+## Prerequisites
+
+You need basic Python: functions, dictionaries, exceptions, and reading a small loop. That is all. Finishing [Part 1](/essays/augmented-llm-loop) helps, because this part builds directly on its tool contract and its validator, and we reuse the same world (the refund policy, the E-4042 error, the Acme-to-Globex acquisition). But this part is self-contained: where it leans on a Part 1 idea, it restates it in a sentence. The companion code, [robust_execution.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-02-robust-tool-execution), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every trace in this essay yourself. The controller is a readable deterministic rule policy by default, with the real LLM path one environment flag away, exactly as in Part 1.
+
+## What is new since Part 1
+
+I want to be precise about what is new, because the loop itself is not. RAG Part 19 built a real reason/act/observe loop with read-only tools and a flat step budget, and Part 1 added the typed tool contract, the validator, the augmented-LLM primitive, and the do-you-even-need-an-agent ladder. I am not re-deriving any of that. What both of those parts assumed, and what this part stops assuming, is that a tool call that passes validation will then succeed. It often will not. So everything new here lives in the gap between "the call is well-formed" and "the call returned a usable result": runtime error handling, the taxonomy that classifies what went wrong, retries with backoff and a timeout, the reframe that turns a failure into an Observation, and the first tool that actually changes the world. If you want the line-by-line ReAct mechanics or the schema validator, those are Part 19 and Part 1; this part is the robustness layer that sits between the loop and its tools.
+
+## The failure taxonomy
+
+The core idea of this part is not "retry." It is **classify, then act on the class.** Not every failure is the same, and the right response depends on the kind. A 503 from an overloaded upstream might clear if you wait a second and try again. A 404 against an index that does not exist will return 404 forever; retrying it just burns time, money, and quota, and on a rate-limited API it can spiral you straight into more failures. The only thing that tells those two apart is a classification step. So the layer resolves every tool call into one of five categories, each with exactly one recovery policy. Here is the taxonomy block the artifact prints, verbatim:
+
+```text
+  transient     temporary; might succeed if tried again   -> RETRY (bounded, backoff)
+  permanent     will never succeed; a retry only wastes    -> FEED BACK to the model
+  empty-result  the call worked but found nothing useful   -> FEED BACK to the model
+  malformed     arguments fail the schema (Part 1)         -> FEED BACK to the model
+  unknown-tool  not in the action space (Part 1)           -> FEED BACK to the model
+  "Feed back" = turn the failure into an Observation the controller reads, not a crash.
+```
+
+Read the right-hand column, because it is the whole design. Only one of the five categories gets retried: **transient**, the failure that might clear next time. The other four are handled by feeding the failure back to the model as an Observation, not by trying again. A **permanent** error (a 404, a bad request, an auth failure) will never clear, so a retry is pure waste. An **empty-result** is a call that succeeded but found nothing useful; trying the identical call again finds the same nothing, so the model needs to hear "that turned up empty" and pick a different approach. **Malformed** and **unknown-tool** are the two Part 1 cases: the validator already caught them before anything ran, and re-running the exact same bad call would fail identically, so they too are fed back at once. In code, the two retryable-versus-not families show up as exception types a tool raises: `TransientError` for "might clear," `PermanentError` for "will not," with `ToolTimeout` modeled as a particular kind of transient (the dependency is up, just too slow). The wrapper reads the type the same way real code reads an HTTP status or a driver error code and decides "retry this" versus "give up on this." Diagram 1 lays the five categories out next to their policies.
+
+<Diagram number={1} caption="The failure taxonomy: five kinds of failure, one recovery policy each. A schema-valid tool call enters the wrapper and is resolved into exactly one category. Only transient failures (a 503, a rate limit, a timeout) are retried, with bounded exponential backoff. The other four (permanent, empty-result, malformed, unknown-tool) are fed back to the model as an Observation rather than retried, because re-running them would fail identically and waste time and money. The taxonomy is the part of the system that tells 'try again' apart from 'stop trying': retrying a permanent error is the classic way to turn one failure into a rate-limit spiral.">
+  <img src="/essays/robust-tool-execution/part2-failure-taxonomy.svg" alt="A diagram of a single tool call entering a classifier box, which routes it into one of five labelled lanes. The first lane, transient (temporary; a 503, rate limit, or timeout), in teal, flows to a RETRY box marked bounded, exponential backoff, then a loop arrow back into the call. The other four lanes all flow to one shared FEED BACK box on the right: permanent (a 404 or auth failure; will never clear) in rose, empty-result (the call worked but found nothing) in amber, malformed (arguments fail the schema, caught in Part 1) in violet, and unknown-tool (not in the action space, caught in Part 1) in violet. The FEED BACK box is labelled turn the failure into an Observation the controller reads, not a crash, and an arrow leads from it back up into the agent loop. A caption strip reads: classify first, then act on the class; only transients are retried." class="w-full rounded-lg" />
+</Diagram>
+
+## Retries, backoff, and a deadline
+
+Once a failure is classified as transient, the wrapper retries it, but not blindly and not forever. Two limits keep a retry from becoming its own problem. The first is **bounded exponential backoff**: each retry waits longer than the last, here `0.5s` before the first retry and `1.0s` before the second, doubling each time, capped at a small fixed number of retries (two, so three attempts total). Backing off matters because the common cause of a transient failure is an overloaded dependency, and hammering an overloaded service with instant retries is how you keep it overloaded. The second limit is a **timeout**, a per-call deadline: a tool that is up but pathologically slow is just as useless as one that is down, so the wrapper gives each attempt a fixed budget (`2.0s` here) and treats blowing it as a transient timeout. Watch the flaky case clear and the timeout case give up, both from the artifact's real output:
+
+```text
+  SCENARIO: flaky-then-succeeds (transient that clears on retry)
+    call: flaky_lookup({"query": "today's order count"})
+    attempt 1 -> TransientError: temporary upstream failure (HTTP 503)
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> TransientError: temporary upstream failure (HTTP 503)
+      transient -> retry 2/2 after 1.0s backoff
+    attempt 3 -> OK: the dependency recovered and returned the data (score=0.91)
+    disposition: RECOVERED, usable result after 3 attempt(s)  [category: ok]
+
+  SCENARIO: timeout (slower than the deadline, every attempt)
+    call: slow_lookup({"query": "today's order count"})
+    attempt 1 -> ToolTimeout: exceeded the 2.0s deadline (simulated latency ~5.0s)
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> ToolTimeout: exceeded the 2.0s deadline (simulated latency ~5.0s)
+      transient -> retry 2/2 after 1.0s backoff
+    attempt 3 -> ToolTimeout: exceeded the 2.0s deadline (simulated latency ~5.0s)
+      transient -> retries exhausted (2); give up and feed back as an Observation
+    disposition: GAVE UP gracefully after 3 attempts; error fed back as an Observation  [category: transient]
+```
+
+These are the two faces of bounded retry. The flaky lookup recovers on the third attempt, so the disposition is `RECOVERED` and the loop gets a usable result, as if nothing had gone wrong. The slow lookup never beats its deadline, so after the retries are exhausted the wrapper does not crash; it gives up gracefully and feeds the timeout back as an Observation, which is the bound doing its job. "Bounded" is the whole point: an unbounded retry on a tool that will never recover is just a slow hang. Note the backoff numbers, `0.5s` and `1.0s`, are printed, not waited. Offline the wrapper prints the planned backoff and does not actually sleep, so the demo is fast and the traces are reproducible. Real code would `time.sleep(delay)` there with a little random **jitter** (so a fleet of clients does not all retry in lockstep), and it would enforce the deadline for real by running the tool in a thread or future and cancelling it at the timeout, instead of reading a simulated latency.
+
+## Errors as observations
+
+Here is the reframe that ties the taxonomy to the loop. In Part 19 and Part 1, a tool returned a result and the loop read it as an Observation. The move in this part is to make a *failure* return the same shape: a failed tool call resolves to an Observation too, just one whose text says what went wrong and which category it landed in. The wrapper never raises back into the loop. Its return value is always a `ToolOutcome` the controller can read: a category, an observation string, an attempt count, and a "usable" flag. That single decision is what makes the loop robust. The controller already knows how to read an Observation and decide the next step; now it does that whether the tool succeeded, found nothing, hit a wall, or was never a real tool. A permanent error becomes `[permanent] 404: index 'archive' does not exist`, which the model reads and uses to try another approach. An empty result becomes `[empty-result] the call succeeded but found nothing useful`. The loop survives a bad tool call the way it survives a good one, because by the time the loop sees it, the bad call has the same type as a good one. The interactive figure below lets you flip each kind of failure on and watch the wrapper classify it, retry it or not, and hand back the Observation.
+
+<Diagram number={2} caption="Fault injection, interactive. Toggle each of the five failure kinds (transient, timeout, permanent, empty-result, malformed/unknown-tool) and watch the same execute_tool wrapper classify the call, run the retry ladder for transients (attempt 1, backoff, attempt 2, backoff, attempt 3), and resolve every outcome into a disposition: RECOVERED, GAVE UP gracefully, or fed back as an Observation. The deadline is 2.0s, up to 2 retries, backoff times 2. A separate idempotency mini-panel runs the side-effecting refund twice (the post-then-timeout transient) with the guard off and on, showing $160 double-refund versus $80 exactly once. The figure's point: in every branch the wrapper returns an Observation the loop can read, never a crash.">
+  <IframeFigure src="/essays/robust-tool-execution/part2-fault-injection.html" title="Interactive fault-injection player for the robust tool wrapper. Five toggles select a failure kind: transient (clears on retry), timeout (slower than the 2.0s deadline every attempt), permanent (a 404 that retrying cannot fix), empty-result (the call succeeds but finds nothing), and malformed or unknown-tool (caught pre-flight by the Part 1 validator). For each, the panel shows the attempt ladder: transient and timeout run attempt 1, then a 0.5s backoff, attempt 2, a 1.0s backoff, and attempt 3; the transient case ends RECOVERED with a usable result while the timeout case ends GAVE UP gracefully with the error fed back as an Observation. Permanent, empty-result, malformed, and unknown-tool are not retried and are fed straight back as an Observation. A separate idempotency mini-panel runs process_refund for the same order twice under a post-then-timeout transient: with no guard the ledger shows two refunds totalling 160 dollars (double refund), and with the guard the ledger shows one refund of 80 dollars (exactly once), because the retry hits the guard and skips re-acting." height={780} />
+</Diagram>
+
+## The first tool that acts: refunds and idempotency
+
+Everything so far works because a read-only tool can be retried for free. Search the same index twice and the worst case is a wasted call. The moment a tool **acts**, that stops being true. This part introduces the series' first **side-effecting tool**, `process_refund(order_id, amount)`, and it moves real money. The failure we simulate is the realistic and nasty one: the refund posts to the payment gateway, and then the confirmation times out before we hear back. From the wrapper's point of view that is a transient error, so it retries, exactly as it should for a read-only tool. But the refund already happened. A blind retry posts it again. Here are the two ledgers, side by side, from the artifact's real output: the unsafe tool with no guard, then the guarded one, both hit by the same post-then-timeout transient:
+
+```text
+  NO GUARD  process_refund_unsafe(ORD-5510, $80.00):
+    attempt 1 -> TransientError: refund posted to the gateway, but the confirmation timed out
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> OK: refunded $80.00 to ORD-5510
+    ledger: 2 refunds posted for ORD-5510 -> $160.00 charged back. DOUBLE REFUND.
+
+  GUARDED   process_refund(ORD-5510, $80.00):
+    attempt 1 -> TransientError: refund posted to the gateway, but the confirmation timed out
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> OK: already refunded $80.00 to ORD-5510 (idempotent skip; no double-charge)
+    ledger: 1 refund recorded for ORD-5510 -> $80.00. Exactly once.
+```
+
+Same tool, same failure, same retry, two completely different outcomes for the customer's card. Without a guard the retry posts a second `$80` refund and the ledger shows `$160` charged back. With the guard the retry returns the first result instead of acting again, and the ledger shows one `$80` refund, exactly once. The guard is a small thing: an **idempotency guard** keyed by `order_id`. The tool records the effect (this order was refunded for this amount) before the point where it can fail, so a retry for the same order recognizes it, returns the recorded result, and skips re-acting. That is the difference between "tried twice" and "charged twice." One word of honesty about scope: this guard is a local in-memory dictionary. It protects you against a retry inside one process, which is the failure this part is about, but it would not survive the process crashing and the request being replayed by something upstream. This is the **seed**. Part 9 **hardens** it into durable idempotency keys that survive a crash and a replay, giving you effectively-once semantics across the whole system. Seed now, harden later; the shape is the same, the storage gets serious.
+
+## The robust agent
+
+Now put the layer back inside the loop. The goal is a single side-effecting task: process an approved `$49.99` refund for order `ORD-7788`. First, the naive baseline, a Part 1-style call straight to the tool with no wrapper around it:
+
+```text
+  Naive baseline (Part 1 style: call the tool directly, no wrapper):
+    process_refund(...) raised TransientError: refund posted to the gateway, but the confirmation timed out
+    -> uncaught, the whole run dies on the first transient blip.
+```
+
+One transient blip and the entire run is a stack trace. That is the world this part started in. Now the robust loop, with every tool call going through `execute_tool`, from the artifact's real trace:
+
+```text
+  Robust loop (every call through execute_tool):
+  Step 1
+    Thought: Before moving money, confirm refunds are allowed by policy.
+    Action: search_policy({"query": "refund window 30 days"})
+    attempt 1 -> OK: Refunds are accepted within 30 days of purchase, provided the item is...
+    Observation: Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging. (score=0.43)
+  Step 2
+    Thought: Policy allows the refund; issue it for ORD-7788.
+    Action: process_refund({"order_id": "ORD-7788", "amount": 49.99})
+    attempt 1 -> TransientError: refund posted to the gateway, but the confirmation timed out
+      transient -> retry 1/2 after 0.5s backoff
+    attempt 2 -> OK: already refunded $49.99 to ORD-7788 (idempotent skip; no double-charge)
+    Observation: already refunded $49.99 to ORD-7788 (idempotent skip; no double-charge)  (resolved after 2 attempts)
+  Step 3
+    Thought: The refund is recorded exactly once; finish.
+    Action: finish({"answer": "Refund of $49.99 for ORD-7788 is complete (processed once, despite a transient gateway timeout)."})
+  ANSWER: Refund of $49.99 for ORD-7788 is complete (processed once, despite a transient gateway timeout).
+```
+
+Read what happened at Step 2, because it is the whole part in one trace. The controller confirms the policy first, then issues the refund. The first attempt posts the refund and then times out on the acknowledgement, exactly the failure that double-charged the unguarded ledger. The wrapper classifies it as transient and retries after backoff. The retry hits the idempotency guard, which recognizes `ORD-7788` is already refunded and returns the recorded result instead of posting again. The Observation says so, the controller reads it, and the run finishes with exactly one refund on the ledger. Three things had to cooperate for that to be safe: the taxonomy decided this was a retry, the guard made the retry safe, and the error-as-observation reframe let the loop keep going. Drop any one and you get the naive baseline: a crash, a double charge, or a dead run.
+
+> 💡 **From experience.** The most expensive bug I ever shipped was a retry. We had a tool that issued account credits, and it sat behind a generic HTTP client with a "retry on 5xx" policy that some sensible person had added years earlier for read calls. One afternoon the credit service started returning 504s on a slow path: it was applying the credit fine, then timing out on the response. The retry policy did exactly what it was told and fired again. And again. We refunded a handful of accounts three and four times before someone noticed the ledger. The fix was not "turn off retries," because the transient really was transient and the credits did eventually need to go through. The fix was the two ideas in this part: classify the failure so we only retried what was safe to retry, and put an idempotency key on every credit so a retry that landed on an already-credited account returned the original result instead of issuing a new one. The day we added the idempotency key, the same 504 storm produced zero double-credits. Retries are not the danger. Retrying a side-effecting call with no idempotency guard is the danger, and the taxonomy is what stops you retrying the things you should never retry at all.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- A schema-valid tool call (Part 1's contract) can still fail at run time: it can **throw**, **time out**, or **return garbage** that passes every type check. Part 19 and Part 1 assumed tools succeed; this layer stops assuming that.
+- Classify, then act on the class. The **failure taxonomy** has five categories with one recovery policy each: **transient** retries; **permanent**, **empty-result**, **malformed**, and **unknown-tool** are fed back to the model. The taxonomy is what tells "try again" from "stop trying," and retrying a permanent error is how one failure becomes a rate-limit spiral.
+- Retry only transients, and bound it: **exponential backoff** (0.5s, 1.0s, doubling) so you do not hammer an overloaded dependency, plus a per-call **timeout/deadline** so a too-slow tool gives up gracefully instead of hanging. Offline the backoff is printed, not slept; real code sleeps with jitter and cancels at the deadline.
+- **Errors are observations.** The wrapper never raises into the loop; it returns a `ToolOutcome` whose text says what went wrong. The controller reads a failure the same way it reads a success, so the loop survives a bad tool call.
+- The first **side-effecting tool** (`process_refund`) cannot be retried for free: if the refund posts and the ack times out, a blind retry refunds twice ($160 instead of $80). An **idempotency guard** keyed by `order_id` records the effect so a retry returns the first result instead of acting again, exactly once.
+- This guard is the **seed**: a local in-memory record that protects against an in-process retry. Part 9 hardens it into durable idempotency keys that survive a crash and a replay, for effectively-once across the whole system.
+
+## Glossary
+
+- **Failure taxonomy**: the classification of a tool failure into a fixed set of categories (here transient, permanent, empty-result, malformed, unknown-tool), each with one defined recovery policy, so the system reacts to the kind of failure rather than treating all failures alike.
+- **Transient vs permanent**: a transient failure is temporary and might clear on a retry (a 503, a rate limit, a timeout); a permanent failure will never clear for this call (a 404, a bad request, an auth error), so retrying it only wastes time and quota.
+- **Exponential backoff**: a retry schedule in which each successive retry waits longer than the last (here 0.5s, then 1.0s, doubling), usually with random jitter, so retries do not pile onto an already-overloaded dependency or fire in lockstep across clients.
+- **Timeout / deadline**: a per-call time budget; a tool that is up but slower than the deadline is treated as a transient timeout and abandoned, because a pathologically slow tool is as useless as a down one.
+- **Error-as-observation**: the reframe in which a failed tool call returns the same shape as a successful one, an Observation the controller reads, instead of raising and crashing the run; this is what lets the loop survive a bad tool call.
+- **Side-effecting tool**: a tool that changes the world outside the agent (issues a refund, sends an email, writes a record), as opposed to a read-only tool; it cannot be safely retried for free, because a second run repeats the effect.
+- **Idempotency / idempotency guard**: the property that doing an operation more than once has the same result as doing it once; the guard here is a record keyed by `order_id` that lets a retry recognize an already-performed effect and return the original result instead of acting again.
+- **Effectively-once** (forward reference): the stronger guarantee that a side effect happens exactly once even across a process crash and a replay, achieved with durable idempotency keys; this part seeds it with an in-memory guard, and Part 9 hardens it.
+
+---
+
+We can now survive a tool that fails: classify it, retry only what is safe to retry, and never double-charge a side-effecting call. But the loop is still deciding what to do one hop at a time, re-reasoning from scratch at every step. On a task with many independent calls that gets slow and expensive, and the bill balloons because the model re-decides every hop. **Part 3, Planning the Work**, is about that next layer: plan-and-execute, ReWOO, and the tool DAG, so the agent can lay out the route once and run the independent pieces without re-deciding each one.
