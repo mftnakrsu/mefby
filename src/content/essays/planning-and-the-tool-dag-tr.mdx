@@ -1,0 +1,165 @@
+---
+title: "İşi Planlamak"
+description: "ReAct her hop'ta bir LLM call öder, dolayısıyla fatura şişer ve plan her adımda yeniden türetilir. Plan'ı first-class bir artefakta dönüştürmek (plan-and-execute, ReWOO, tool DAG) hem LLM call'ları hem de critical-path depth'i kısar."
+date: 2026-06-29
+tags: ["Agents","Planning","ReAct","ReWOO","Tool DAG","AI"]
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-03-planning-and-the-tool-dag"
+lang: "tr"
+translationSlug: "planning-and-the-tool-dag"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Part 1 ve Part 2'deki agent bir ReAct loop'u: bir adıma karar verir, onu çalıştırır, sonucu okur, ve ancak ondan sonra bir sonraki adıma karar verir. Bu onun gücüdür, çünkü gördüğü şeye tepki verebilir, ve aynı zamanda onun faturasıdır. Her hop taze bir LLM call'dır, ve her call o ana kadarki bütün transcript'i yeniden gönderir. Dört aramalı bir görevde bu beş LLM call eder, her biri bir öncekinden uzun, ve model planı her adımda sıfırdan yeniden türetir, dolayısıyla yalpalar. Bu parça bunu, **plan'ı first-class bir artefakta** dönüştürerek düzeltir: bütün rotayı bir kere yazıp sonra onu yürütmek, planı call'lar arasında modelin kafasında bırakmak yerine. Tek bir görevde üç planner inşa edeceksin, her biri bir öncekinden ya daha ucuz ya daha paralel. **Plan-and-execute** sıralı bir planı bir kere yazar ve modele tekrar sormadan onu çalıştırır, hop başına bir yerine iki LLM call. **ReWOO** planı evidence variable'larla (#E1, #E2) yazar, böylece sonraki bir adım daha önceki bir sonucu daha o sonuç var olmadan adlandırabilir, ve tek bir solver call doldurulmuş çalışma kağıdını okur. **Tool DAG** bir bağımlılık grafiği üretir ve onu topological level'a göre çalıştırır, böylece bağımsız adımlar bir round'u paylaşır. Boyunca, iki dürüst sayıyla ölçeceksin: **LLM-call sayısı** (baskın maliyet kolu) ve **critical-path depth** (birbirine bağımlı adımların en uzun zinciri). Uydurma bir wall-clock basmayacağız.
+
+## Ön koşullar
+
+Temel Python yeterli: fonksiyonlar, sözlükler (dictionary), küçük bir döngü ve bir liste okuyabilmek. Hepsi bu. [Part 1](/essays/augmented-llm-loop) ve [Part 2](/essays/robust-tool-execution)'yi bitirmek yardımcı olur, çünkü onların dünyasını yeniden kullanıyoruz (iade politikası, Acme'den Globex'e satın alma, calculator) ve onların ReAct loop'unu yenmeye çalıştığımız baseline olarak ele alıyoruz. Ama bu parça kendi içinde bütünlüklü: daha önceki bir fikre dayandığı yerde, onu tek bir cümleyle yeniden ifade ediyor. Eşlik eden kod, [planners.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-03-planning-and-the-tool-dag), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz. Deterministik bir kural planner'ı ve controller varsayılan olarak source of truth'tur, gerçek LLM yolu (`generate()`) tek bir ortam bayrağı uzaklıkta, tam olarak Part 1 ve Part 2'deki gibi.
+
+## Part 1 ve Part 2'den bu yana yeni olan ne
+
+Neyin yeni olduğu konusunda kesin olmak istiyorum, çünkü çoğu şey değil. Yirmi parça boyunca RAG serisinin hiç bir plan nesnesi yoktu: bir pipeline bir sorguyu embed eder, bir store'da arar ve bir yanıtı topraklardı (ground), ve RAG Part 19'un agent'ı bile bir seferde bir hop'a karar veriyordu, hiçbir şey yazılı değildi. Buradaki Part 1 ve Part 2, ReAct loop'una, tipli tool sözleşmesine, validator'a ve dayanıklılık katmanına (retry'lar, hata taksonomisi, idempotency) sahip. Bunların hiçbirini yeniden türetmiyorum, ve ReAct'i yeniden öğretmiyorum; o, yenilen baseline. Bu parçada gerçekten yeni olan **planner-executor ailesi**: plan-and-execute, ReWOO ve tool DAG, artı onların mümkün kıldığı iki şey, **evidence-variable binding** (bir sonucu var olmadan adlandırmak) ve **topological-level execution** (bağımsız adımları tek bir round'da çalıştırmak). Ve onlarla birlikte karşılaştırmayı dürüst kılan muhasebe yeni: açık **LLM-call sayımı** ve **critical-path depth**. Loop zaten inşa ettiğimiz loop; değişen şey, planın artık call'lar arasında yalnızca modelin kafasında yaşamayı bırakması.
+
+## Bir seferde bir adıma karar vermenin maliyeti
+
+Baseline ile başlayın. Görev, farklar görünsün diye kuruldu: bir gerçek bağımlılık zinciri ve iki bağımsız dalı var.
+
+```text
+GOAL: Build a refund summary: the refund window from policy, the warranty on the earbuds made by the company that acquired Acme, and 18% tax on a $250 order.
+Four tool calls, one dependency chain (acquirer -> warranty), two independent
+branches (policy, tax). Same correct answer every way; only cost and depth differ.
+```
+
+ReAct bir seferde bir adıma karar verir. Her adım bütün transcript'i yeniden okuyan taze bir LLM call'dır, ve hiçbir zaman bir plan yazılmaz. İşte gerçek trace ve onun scoreboard satırı:
+
+```text
+  ReAct decides one step at a time; each step is a fresh LLM call that
+  re-reads the whole transcript. No plan is ever written down.
+    step 1: LLM picks search_policy('refund window 30 days') -> Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging. (score=0.43)
+    step 2: LLM picks search_products('who acquired Acme') -> Acme Corp was acquired by Globex in 2024. (score=0.58)
+    step 3: LLM picks search_products('Globex earbuds warranty') -> Globex-branded wireless earbuds carry a 2-year limited warranty. (score=0.58)
+    step 4: LLM picks calculator('0.18 * 250') -> 45.0
+    step 5: LLM reads the full transcript and writes the answer.
+    -> 5 LLM calls, 4 tool calls, depth 4 (serial). Transcript re-sent: ~1077 chars total.
+```
+
+Call'ları sayın: dört hop artı bir final synthesis, dört tool call için **5 LLM call** eder, ve her hop kendinden öncekini beklediği için **critical-path depth 4**, tamamen seri. O dört aramadan ikisinin hiçbir şeyi beklemesi gerekmiyordu (politika penceresi ile vergi, acquirer zincirinden bağımsız), yine de ReAct onları gene de sırayla çalıştırdı, çünkü bunu görmenin bir yolu yok. Her hop'un taze ve sürekli büyüyen bir call olmasının nedeni yapısal: controller'ın adımlar arasındaki tek hafızası yeniden gönderdiği transcript, dolayısıyla step 4 step 1'den 3'e kadar üretilen her şeyi taşır, ve model "sırada ne var"ı her seferinde sıfırdan yeniden türetir. O yeniden gönderilen bağlam gerçek para (trace toplamda `~1077 chars` yeniden gönderildiğini sayar), ve kendi başına bir konu: onu burada işaretliyoruz ve transcript ekonomisini tam olarak Part 11'de geliştiriyoruz. Bu parça için mesele daha basit. Plan var, ama yalnızca modelin kafasının içinde, her hop'ta yeniden ödeniyor. Onu bir kere yazın ve o fatura biçim değiştirir.
+
+## Plan ve execute
+
+İlk hamle apaçık olan: bir planner'a sıralı planı bir kere yazdırın, sonra bir executor'a adımları modele tekrar danışmadan çalıştırtın, ve synthesize etmek için modeli son bir kere çağırın. İşte artefaktın bastığı plan ve onun satırı:
+
+```text
+  Plan (written once, then executed without consulting the model):
+    E1: search_policy('refund window 30 days')
+    E2: search_products('who acquired Acme')
+    E3: search_products('#E2 earbuds warranty') [needs E2]
+    E4: calculator('0.18 * 250')
+    -> 2 LLM calls, 4 tool calls, depth 4 (linear). The executor never called the model.
+```
+
+Bütün fikir bu: planın kaç tool içerdiğinden bağımsız olarak **2 LLM call** (biri planlamak, biri synthesize etmek için), çünkü ortadaki executor hiçbir zaman modeli çağırmaz. Dört tool call hâlâ gerçekleşir, ve executor onları sırayla çalıştırır, dolayısıyla depth burada hâlâ 4, ama model maliyeti artık tool sayısından ayrıştırılmış. Plan veridir, tek bir bildirilmiş bağımlılığı olan sıralı bir liste (`E3`'ün `E2`'ye ihtiyacı var), ve executor onu sadece adımlar. `E3`'te bir incelik fark edin: argümanı `'#E2 earbuds warranty'`, ki bu `E2`'nin sonucunu daha `E2` çalışmadan adlandırır. Executor o referansı oraya vardığında çözer, ki ReWOO'nun bir sonraki adımda dayandığı dikiş yeri tam olarak budur. Bu yapının size aldığı bir şey daha: plan açık bir nesne olduğu için, executor bir adımın sonucu kendisini şaşırttığında bunu fark edebilir ve kontrolü planner'a geri vererek **replan** edebilir, artık uymayan bir rotayla körlemesine ilerlemek yerine. O hook'u burada açık bırakıyoruz; önceden yapılmış bir planın, dünya katılmadığı anda bir yükümlülüğe dönüşmesi, Part 4'ün bütün konusu.
+
+## ReWOO ve evidence variable'lar
+
+Plan-and-execute zaten `E3`'ün `E2`'nin sonucunu adlandırmasına izin verdi. ReWOO, **Reasoning WithOut Observation**'ın kısaltması, bunu örgütleyici fikir haline getirir. Planner bütün planı önden bir **evidence variable** (#E1, #E2, ...) çalışma kağıdı olarak yazar, her biri bir tool'un dolduracağı bir slot, ve kritik olarak sonraki bir adım daha önceki bir variable'a herhangi bir tool çalışmadan önce başvurabilir. Model bir observation'a bakmak için koşu ortasında hiç duraklamaz, dolayısıyla "without observation": kör planlar, tool'lar slotları doldurur, ve sonunda tek bir solver call tamamlanmış çalışma kağıdını okur. İşte gerçek çalışma kağıdı ve binding satırı:
+
+```text
+  Worksheet (the planner names results as #E variables before they exist):
+    #E1 = search_policy['refund window 30 days']
+    #E2 = search_products['who acquired Acme']
+    #E3 = search_products['#E2 earbuds warranty']
+    #E4 = calculator['0.18 * 250']
+    bound E3: '#E2 earbuds warranty' -> 'Globex earbuds warranty'
+    -> 2 LLM calls, 4 tool calls, depth 4 (linear). One planner call, one solver call, no model calls in between.
+```
+
+Binding'i izleyin. `E3`'ün argümanı plan zamanında `'#E2 earbuds warranty'` olarak yazılır, kimsenin henüz hangi şirketi soracağını bilmediği bir anda. Tool'lar çalışır, `E2` "Acme Corp was acquired by Globex in 2024" döndürür, ve executor `#E2`'yi acquirer'a çözer, böylece `'#E2 earbuds warranty'`, `'Globex earbuds warranty'` olur ve ancak o zaman çalışır. Variable binding işini yapıyor: bir sonuç var olmadan adlandırılır, sonra doldurulur. Muhasebe plan-and-execute ile aynı, **2 LLM call** (biri planner, biri solver) ve **4 tool call**, açık kazanç şu ki aralarında hiç model call yok, hiç. ReWOO tasarımı gereği her koşu-ortası danışmasını kaldırır. Aşağıdaki figür çalışma kağıdını ve `#E2`'nin çözüldüğü anı gösterir.
+
+<Diagram number={1} caption="ReWOO evidence-variable binding. The planner writes a worksheet of four evidence variables before any tool runs: #E1 search_policy, #E2 search_products(who acquired Acme), #E3 search_products('#E2 earbuds warranty'), and #E4 calculator. E3's argument names #E2's result before it exists. When the tools run, #E2 returns that Globex acquired Acme, and the executor binds '#E2 earbuds warranty' into the concrete query 'Globex earbuds warranty', which only then runs. A single solver call reads the filled-in worksheet and composes the answer, with no model calls in between the plan and the solve.">
+  <img src="/essays/planning-and-the-tool-dag/part3-rewoo-binding.svg" alt="A diagram of a ReWOO worksheet as four stacked rows of evidence-variable slots labelled #E1 through #E4. #E1 is search_policy of refund window 30 days, #E2 is search_products of who acquired Acme, #E3 is search_products of the templated string hash-E2 earbuds warranty with hash-E2 highlighted as an unfilled placeholder, and #E4 is calculator of 0.18 times 250. An arrow from #E2's result box, reading Acme Corp was acquired by Globex in 2024, curves down to #E3 and rewrites the placeholder, showing hash-E2 earbuds warranty becoming Globex earbuds warranty with the substituted word Globex highlighted. Below the worksheet, a single solver node labelled one solver call reads all four filled slots and emits the composed answer. A side note reads no model calls between plan and solve." class="w-full rounded-lg" />
+</Diagram>
+
+## Tool DAG ve critical-path depth
+
+Plan-and-execute ile ReWOO ikisi de LLM call'ları ikiye indirdi, ama ikisi de dört tool'u hâlâ bir hat boyunca çalıştırdı, dolayısıyla depth 4'te kaldı. O hat, görev hakkında bir yalan. Dört aramadan üçü birbirine bağlı değil; yalnızca `E3` (warranty) `E2`'ye (acquirer) ihtiyaç duyuyor. Tool DAG, LLMCompiler tarzında, bağımlılıkları açık kılar ve planı **topological level**'a göre çalıştırır: bir node'un level'ı en derin bağımlılığından bir fazladır, aynı level'daki node'lar tek bir round'da çalışabilir, ve yalnızca gerçek bir bağımlılık yeni bir round'u zorlar. İşte gerçek katmanlama:
+
+```text
+  DAG by dependency level (nodes in the same round could run in parallel):
+    round 1 (parallel): E1, E2, E4
+    round 2 (single): E3
+    -> 2 LLM calls, 4 tool calls, critical-path depth 2 (E2 -> E3 is the only chain; E1, E2, E4 share round 1).
+```
+
+Üç bağımsız arama, `E1` (politika), `E2` (acquirer) ve `E4` (vergi), hepsi level 1'de oturur ve **round 1**'i paylaşır. Yalnızca `E3` bekler, çünkü `E2`'nin sonucuna ihtiyaç duyar, dolayısıyla **round 2**'de tek başına iner. Bu, hâlâ 4 tool call olmasına rağmen **critical-path depth'i 2** yapar, tek zincir `E2 -> E3`. Manşet sayı, sayı değil depth, çünkü depth gerçekten yeniden sıralanamayan adımların en uzun zinciridir.
+
+Şimdi dürüstlük disiplini, yüksek sesle. **Depth'i, yani sıralı round sayısını, rapor ediyoruz, wall-clock'u değil.** Offline runner her şeyi seri çalıştırır; `E1`, `E2` ve `E4`'ü gerçekten aynı anda çalıştırmaz. Buradaki "parallel" "aynı round'da çalışabilir" demek, ve depth tam olarak gerçek eşzamanlılığın kısaltacağı şeydir: round 1'i gerçekten paralel çalıştıran bir sistem dört yerine kabaca iki round'luk latency öderdi. Yapmadığımız ölçülmüş bir hızlanmayı basmak bir yalan olurdu, dolayısıyla basmıyoruz. Size yapısal sayıyı (depth 2) veriyoruz ve onun ne satın alacağını açıkça söylüyoruz. Figür DAG'ı ve onun iki round'unu gösterir, ve interaktif oynatıcı dört stratejiyi de aynı görevde çalıştırmanızı sağlar.
+
+<Diagram number={2} caption="The tool DAG and its critical path. Four task nodes (E1 policy, E2 acquirer, E3 warranty, E4 tax) with one dependency edge, E2 to E3. Topological layering puts the three independent nodes E1, E2, E4 at level 1 (round 1, which could run in parallel) and E3 alone at level 2 (round 2), because E3 needs E2's result to phrase its query. The critical-path depth is 2, the longest dependency chain (E2 to E3), even though there are four tool calls. The number reported is depth, the count of sequential rounds, not a measured wall-clock: the offline runner is sequential, and depth is what real concurrency would shrink.">
+  <img src="/essays/planning-and-the-tool-dag/part3-tool-dag.svg" alt="A directed acyclic graph of four task nodes arranged in two columns. The left column, labelled round 1 (parallel, level 1), holds three nodes stacked vertically: E1 search_policy (refund window), E2 search_products (who acquired Acme), and E4 calculator (0.18 times 250), each with no incoming edges. The right column, labelled round 2 (level 2), holds a single node E3 search_products (Globex earbuds warranty). One arrow runs from E2 to E3, labelled needs E2's acquirer; E1 and E4 have no outgoing edges. A highlighted path traces E2 to E3 and is labelled critical path, depth 2. A footnote strip reads four tool calls, depth 2; we report sequential rounds, not wall-clock." class="w-full rounded-lg" />
+</Diagram>
+
+<Diagram number={3} caption="Plan modes, interactive. Run the same refund-summary task under all four strategies and watch the two honest numbers move. ReAct decides one hop at a time (5 LLM calls, depth 4, transcript regrown each step). Plan-and-execute writes the ordered plan once and the executor runs it with no further model calls (2 LLM calls, depth 4). ReWOO binds #E evidence variables and reads the filled worksheet in one solver call (2 LLM calls, depth 4, the #E2 to Globex binding shown). The tool DAG runs by dependency level, collapsing E1, E2, E4 into round 1 and leaving E3 alone in round 2 (2 LLM calls, critical-path depth 2). Same answer every strategy; only cost and depth differ. Depth is sequential rounds, not measured wall-clock.">
+  <IframeFigure src="/essays/planning-and-the-tool-dag/part3-plan-modes.html" title="Interactive plan-modes player. A toggle switches the same refund-summary task (the refund window, the warranty on the earbuds made by the company that acquired Acme, and 18 percent tax on a 250 dollar order) across four strategies. ReAct runs five steps in a line: search_policy, search_products who acquired Acme, search_products Globex earbuds warranty, calculator 0.18 times 250, then a final synthesis call, tallying 5 LLM calls, 4 tool calls, depth 4, and a growing re-sent transcript. Plan-and-execute shows an ordered plan E1 to E4 with E3 needing E2, executed without model calls, tallying 2 LLM calls and depth 4. ReWOO shows a worksheet of evidence variables hash-E1 to hash-E4 with the binding of hash-E2 earbuds warranty into Globex earbuds warranty, solved in one call, tallying 2 LLM calls and depth 4. The tool DAG shows round 1 running E1, E2, E4 together and round 2 running E3 alone, tallying 2 LLM calls, 4 tool calls, and critical-path depth 2. Every strategy ends with the same answer; a note states depth is sequential rounds, not wall-clock." height={820} />
+</Diagram>
+
+## Scoreboard
+
+Dört stratejiyi tek bir tabloya koyun. LLM call'lar maliyet kolu; depth sıralı round sayısı.
+
+```text
+  strategy              LLM calls  tool calls   crit-path depth
+  -----------------------------------------------------------
+  ReAct                         5           4                 4
+  Plan-and-Execute              2           4                 4
+  ReWOO                         2           4                 4
+  Tool DAG                      2           4                 2
+```
+
+Okunuşu, doğrudan artefakttan:
+
+```text
+  - Writing the plan down once cuts LLM calls from 5 (one per hop) to 2
+    (plan + synthesize), and decouples model cost from the number of tools.
+  - ReWOO removes every mid-run model call via #E variable binding.
+  - The DAG additionally cuts critical-path depth from 4 to 2: the three
+    independent lookups collapse into one round; only acquirer -> warranty chains.
+  - We report depth, not wall-clock: the offline runner is sequential, and
+    depth is what real concurrency would shrink. (Transcript economics: Part 11.)
+```
+
+Ve tezi tek satırda. Her strateji aynı doğru yanıtı döndürür, "Refund window is 30 days from purchase. The earbuds (made by Globex, which acquired Acme) carry a 2-year limited warranty. Tax on a $250 order at 18% is $45.00." Yanıt hakkında hiçbir şey değişmedi. Değişen şey maliyet: planı bir kere yazmak LLM call'ları 5'ten 2'ye indirdi, ve bağımlılıkları bir DAG olarak modellemek critical-path depth'i 4'ten 2'ye indirdi. Aynı varış noktası, çok daha ucuz bir yol.
+
+> 💡 **Deneyimden.** Gerçek trafiğin önüne koyduğum ilk çok-adımlı agent saf bir ReAct loop'uydu, ve çalışıyordu, ki tam da bu yüzden bir süre kimse faturaya bakmadı. Sıkıntı, maliyetinin görevin zorluğuyla değil adım sayısıyla ölçeklenmesiydi. Basit bir ticket üç hop alabilir; çetin biri dokuz, ve her hop artık sekiz observation uzunluğunda bir transcript'i yeniden gönderiyordu, dolayısıyla dokuzuncu call devasaydı. Görev-başına maliyetimizin uzun, çirkin bir kuyruğu vardı, ve tamamen adım sayısı tarafından sürülüyordu. Sonunda bir transcript örneği çekince, utandırıcı bir şey fark ettim: adımların yarısı agent'ın sadece bir hat boyunca, birbiri ardına çalıştırdığı bağımsız aramalardı, "sırada ne var"ı her seferinde yeniden akıl yürüterek, gerçi yanıt her zaman "apaçık listedeki bir sonraki şey"di. Refactor, modele planı bir kere, önden yazdırmak, ve sonra onu execute etmekti. Fatura adım sayısını izlemeyi bırakıp görev karmaşıklığını izlemeye başladı, ve planı bir grafik olarak çizdiğimde bağımsız dalların seri olmaya hiç gerek duymadığı apaçıktı. İki değişiklik, plan-first ve dependency-aware, ve aynı yanıtlar call'ların bir kesri için geri geldi.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Özet / Çıkarımlar
+
+- ReAct'in faturası görevin zorluğuyla değil adım sayısıyla ölçeklenir: her hop, büyüyen bir transcript'i yeniden gönderen taze bir LLM call'dır (burada 4 tool için **5 call**), ve model planı her adımda sıfırdan yeniden türetir.
+- Çözüm, **plan'ı first-class bir artefakta** dönüştürmektir, call'lar arasında yalnızca modelin kafasında yaşamak yerine bir kere yazılmış. Bu tek başına LLM call'ları **5'ten 2'ye** indirir ve model maliyetini tool sayısından ayrıştırır.
+- **Plan-and-execute** sıralı bir plan yazar, onu modeli hiç çağırmayan bir executor ile çalıştırır, ve bir kere synthesize eder. Bir adım kendisini şaşırttığında **replan** da edebilir, ki bu Part 4'ün hook'u.
+- **ReWOO** (Reasoning WithOut Observation) planı bir **evidence variable** (#E1, #E2) çalışma kağıdı olarak yazar, böylece sonraki bir adım daha önceki bir sonucu var olmadan adlandırır. `'#E2 earbuds warranty' -> 'Globex earbuds warranty'` binding'i tool'lar tarafından doldurulur; tek bir solver call tamamlanmış kağıdı okur, aralarında hiç model call olmadan.
+- **Tool DAG** (LLMCompiler tarzı) bağımlılıkları açık kılar ve planı **topological level**'a göre çalıştırır, böylece üç bağımsız arama **round 1**'i paylaşır ve yalnızca `E3` **round 2**'de bekler. Bu, hâlâ 4 tool call olmasına rağmen **critical-path depth'i 4'ten 2'ye** indirir.
+- Dürüstçe ölçün: **LLM-call sayısını** (maliyet kolu) ve **critical-path depth'i** (sıralı round'lar) rapor edin, ve kasıtlı olarak wall-clock'u rapor **etmeyin**. Offline runner seri; "parallel" "aynı round'da çalışabilir" demek, ve depth gerçek eşzamanlılığın kısaltacağı şeydir.
+
+## Sözlük
+
+- **Plan as a first-class artifact**: rotanın bir kere veri olarak (sıralı bir liste ya da bir grafik) yazılması, her hop'ta modelin kafasının içinde yeniden türetilmesi yerine; bu parçanın merkezi yeniden çerçevelemesi.
+- **Plan-and-execute**: bir planner'ın tek bir LLM call'da sıralı bir plan ürettiği, bir executor'ın modeli çağırmadan her adımı çalıştırdığı, ve bir final call'ın yanıtı synthesize ettiği bir strateji; tool sayısından bağımsız olarak iki LLM call.
+- **ReWOO (Reasoning WithOut Observation)**: planner'ın bütün planı önden evidence variable'larla yazdığı, tool'ların variable'ları doldurduğu, ve tek bir solver call'ın tamamlanmış çalışma kağıdını okuduğu bir strateji, koşu ortasında hiç model call olmadan.
+- **Evidence variable (#E binding)**: bir adımın sonucu için, sonraki bir adımın o sonuç var olmadan başvurabileceği adlandırılmış bir slot (#E1, #E2, ...); tool'lar onu doldurur, ve `#E2` gibi bir referans run time'da somut bir değere bind edilir (burada `#E2`, acquirer Globex'e).
+- **Tool DAG**: planın, açık bağımlılık edge'leri olan bir task node'ları yönlü çevrimsiz grafiği (directed acyclic graph) olarak modellenmesi, böylece executor hangi adımların beklemesi gerektiğini ve hangilerinin birlikte çalışmakta serbest olduğunu söyleyebilir.
+- **Topological level**: bir node'un DAG'daki konumu, en derin bağımlılığından bir fazla; aynı level'daki bütün node'lar tek bir round'da çalışabilir.
+- **Critical-path depth**: birbirine bağımlı adımların en uzun zincirinin uzunluğu, planın gerektirdiği sıralı round sayısına eşit; paralellik için manşet metrik, toplam adım sayısından ayrı.
+- **LLM-call accounting**: modelin kaç kere çağrıldığını saymak, baskın maliyet kolu, ki planlama onu tool call sayısından ayrıştırır.
+- **Wall-clock (kasıtlı olarak rapor edilmiyor)**: gerçek geçen zaman; onu basmıyoruz, çünkü offline runner seri ve ölçülmüş bir hızlanma uydurma olurdu. Onun yerine depth'i rapor ediyoruz, ki o gerçek eşzamanlılığın kısaltacağı şeydir.
+
+---
+
+Planı bir kere yazmak agent'ı daha ucuz, ve bir DAG olarak, daha sığ yaptı. Ama önden bir plan, siz onu execute ederken dünyanın kıpırdamayacağına dair bir bahistir, ve dünya işbirliği yapmaz. **Part 4, Surviving a Broken Plan**, bir adım planla anlaşmazlığa düştüğü anda ne olduğu hakkında, örneğin koşu ortasında bir SKU'nun üretimden kalkması: her sonucu inceleyen bir critic, ve körlemesine ilerlemek yerine rotayı revize eden hata-tetikli **replanning**. Az önce first-class bir artefakta dönüştürdüğümüz plan, yanlış olduğu anda bir yükümlülüğe dönüşür, ve çözüm agent'ın bunu fark edip yeniden yazmasına izin vermektir.

@@ -1,0 +1,166 @@
+---
+title: "Planning the Work"
+description: "ReAct pays an LLM call per hop, so the bill balloons and the plan is re-derived every step. Making the plan a first-class artifact (plan-and-execute, ReWOO, the tool DAG) cuts LLM calls and critical-path depth."
+date: 2026-06-29
+tags: ["Agents","Planning","ReAct","ReWOO","Tool DAG","AI"]
+seriesOrder: 3
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-03-planning-and-the-tool-dag"
+lang: "en"
+translationSlug: "planning-and-the-tool-dag-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+The agent from Parts 1 and 2 is a ReAct loop: it decides one step, runs it, reads the result, and only then decides the next step. That is its strength, because it can react to what it sees, and it is its bill. Every hop is a fresh LLM call, and every call re-sends the whole transcript so far. On a task with four lookups that is five LLM calls, each one longer than the last, and the model re-derives the plan from scratch at every step, so it wanders. This part fixes that by making the **plan a first-class artifact**: write the whole route down once, then execute it, instead of leaving the plan in the model's head between calls. You will build three planners on one task, each cheaper or more parallel than the last. **Plan-and-execute** writes an ordered plan once and runs it without asking the model again, two LLM calls instead of one per hop. **ReWOO** writes the plan with evidence variables (#E1, #E2) so a later step can name an earlier result before it exists, and one solver call reads the filled worksheet. The **tool DAG** emits a dependency graph and runs it by topological level, so independent steps share a round. Throughout, you will measure with two honest numbers: **LLM-call count** (the dominant cost lever) and **critical-path depth** (the longest chain of dependent steps). We will not print a fabricated wall-clock.
+
+## Prerequisites
+
+You need basic Python: functions, dictionaries, a small loop, and reading a list. That is all. Finishing [Part 1](/essays/augmented-llm-loop) and [Part 2](/essays/robust-tool-execution) helps, because we reuse their world (the refund policy, the Acme-to-Globex acquisition, the calculator) and treat their ReAct loop as the baseline we are trying to beat. But this part is self-contained: where it leans on an earlier idea, it restates it in a sentence. The companion code, [planners.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-03-planning-and-the-tool-dag), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every trace in this essay yourself. A deterministic rule planner and controller is the source of truth by default, with the real LLM path (`generate()`) one environment flag away, exactly as in Parts 1 and 2.
+
+## What is new since Parts 1 and 2
+
+I want to be precise about what is new, because a lot is not. For twenty parts the RAG series had no plan object at all: a pipeline embedded a query, searched a store, and grounded an answer, and even RAG Part 19's agent decided one hop at a time with nothing written down. Parts 1 and 2 here own the ReAct loop, the typed tool contract, the validator, and the robustness layer (retries, the failure taxonomy, idempotency). I am not re-deriving any of that, and I am not re-teaching ReAct; it is the baseline being beaten. What is genuinely new in this part is the **planner-executor family**: plan-and-execute, ReWOO, and the tool DAG, plus the two things they make possible, **evidence-variable binding** (naming a result before it exists) and **topological-level execution** (running independent steps in one round). And new with them is the accounting that makes the comparison honest: explicit **LLM-call counting** and **critical-path depth**. The loop is the loop we already built; what changes is that the plan stops living only in the model's head between calls.
+
+## The cost of deciding one step at a time
+
+Start with the baseline. The task is built so the differences will show: it has one true dependency chain and two independent branches.
+
+```text
+GOAL: Build a refund summary: the refund window from policy, the warranty on the earbuds made by the company that acquired Acme, and 18% tax on a $250 order.
+Four tool calls, one dependency chain (acquirer -> warranty), two independent
+branches (policy, tax). Same correct answer every way; only cost and depth differ.
+```
+
+ReAct decides one step at a time. Each step is a fresh LLM call that re-reads the whole transcript, and no plan is ever written down. Here is the real trace and its scoreboard row:
+
+```text
+  ReAct decides one step at a time; each step is a fresh LLM call that
+  re-reads the whole transcript. No plan is ever written down.
+    step 1: LLM picks search_policy('refund window 30 days') -> Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging. (score=0.43)
+    step 2: LLM picks search_products('who acquired Acme') -> Acme Corp was acquired by Globex in 2024. (score=0.58)
+    step 3: LLM picks search_products('Globex earbuds warranty') -> Globex-branded wireless earbuds carry a 2-year limited warranty. (score=0.58)
+    step 4: LLM picks calculator('0.18 * 250') -> 45.0
+    step 5: LLM reads the full transcript and writes the answer.
+    -> 5 LLM calls, 4 tool calls, depth 4 (serial). Transcript re-sent: ~1077 chars total.
+```
+
+Count the calls: four hops plus one final synthesis is **5 LLM calls** for **4 tool calls**, and because each hop waits for the one before it the **critical-path depth is 4**, fully serial. Two of those four lookups did not need to wait for anything (the policy window and the tax are independent of the acquirer chain), yet ReAct ran them in line anyway, because it has no way to see that. The reason every hop is a fresh, ever-growing call is structural: the controller's only memory between steps is the transcript it re-sends, so step 4 carries everything steps 1 through 3 produced, and the model re-derives "what next" from scratch each time. That re-sent context is real money (the trace counts `~1077 chars` re-sent in total), and it is its own subject: we flag it here and develop transcript economics in full in Part 11. The point for this part is simpler. The plan exists, but only inside the model's head, paid for again at every hop. Write it down once and that bill changes shape.
+
+## Plan and execute
+
+The first move is the obvious one: have a planner write the ordered plan once, then have an executor run the steps without consulting the model again, and call the model one last time to synthesize. Here is the plan the artifact prints, and its row:
+
+```text
+  Plan (written once, then executed without consulting the model):
+    E1: search_policy('refund window 30 days')
+    E2: search_products('who acquired Acme')
+    E3: search_products('#E2 earbuds warranty') [needs E2]
+    E4: calculator('0.18 * 250')
+    -> 2 LLM calls, 4 tool calls, depth 4 (linear). The executor never called the model.
+```
+
+That is the whole idea: **2 LLM calls** (one to plan, one to synthesize) regardless of how many tools the plan contains, because the executor in the middle never calls the model. The four tool calls still happen, and the executor runs them in order, so the depth is still 4 here, but the model cost is now decoupled from the number of tools. The plan is data, an ordered list with one declared dependency (`E3` needs `E2`), and the executor just walks it. Notice one subtlety in `E3`: its argument is `'#E2 earbuds warranty'`, which names `E2`'s result before `E2` has run. The executor resolves that reference when it gets there, which is exactly the seam ReWOO leans on next. One more thing this structure buys you: because the plan is an explicit object, the executor can notice when a step's result surprises it and hand control back to the planner to **replan**, rather than barrelling on with a route that no longer fits. We leave that hook open here; an up-front plan becoming a liability the instant the world disagrees is the whole subject of Part 4.
+
+## ReWOO and evidence variables
+
+Plan-and-execute already let `E3` name `E2`'s result. ReWOO, short for **Reasoning WithOut Observation**, makes that the organizing idea. The planner writes the entire plan up front as a worksheet of **evidence variables** (#E1, #E2, ...), each one a slot a tool will fill, and crucially a later step can refer to an earlier variable before any tool has run. The model never pauses mid-run to look at an observation, hence "without observation": it plans blind, the tools fill the slots, and a single solver call at the end reads the completed worksheet. Here is the real worksheet and the binding line:
+
+```text
+  Worksheet (the planner names results as #E variables before they exist):
+    #E1 = search_policy['refund window 30 days']
+    #E2 = search_products['who acquired Acme']
+    #E3 = search_products['#E2 earbuds warranty']
+    #E4 = calculator['0.18 * 250']
+    bound E3: '#E2 earbuds warranty' -> 'Globex earbuds warranty'
+    -> 2 LLM calls, 4 tool calls, depth 4 (linear). One planner call, one solver call, no model calls in between.
+```
+
+Watch the binding. `E3`'s argument is written as `'#E2 earbuds warranty'` at plan time, when nobody yet knows which company to ask about. The tools run, `E2` returns "Acme Corp was acquired by Globex in 2024," and the executor resolves `#E2` to the acquirer, so `'#E2 earbuds warranty'` becomes `'Globex earbuds warranty'` and only then runs. That is the variable binding doing its job: a result is named before it exists, then filled in. The accounting is the same as plan-and-execute, **2 LLM calls** (one planner, one solver) and **4 tool calls**, with the explicit win that there are no model calls in between, none. ReWOO removes every mid-run consult by design. The figure below shows the worksheet and the moment `#E2` resolves.
+
+<Diagram number={1} caption="ReWOO evidence-variable binding. The planner writes a worksheet of four evidence variables before any tool runs: #E1 search_policy, #E2 search_products(who acquired Acme), #E3 search_products('#E2 earbuds warranty'), and #E4 calculator. E3's argument names #E2's result before it exists. When the tools run, #E2 returns that Globex acquired Acme, and the executor binds '#E2 earbuds warranty' into the concrete query 'Globex earbuds warranty', which only then runs. A single solver call reads the filled-in worksheet and composes the answer, with no model calls in between the plan and the solve.">
+  <img src="/essays/planning-and-the-tool-dag/part3-rewoo-binding.svg" alt="A diagram of a ReWOO worksheet as four stacked rows of evidence-variable slots labelled #E1 through #E4. #E1 is search_policy of refund window 30 days, #E2 is search_products of who acquired Acme, #E3 is search_products of the templated string hash-E2 earbuds warranty with hash-E2 highlighted as an unfilled placeholder, and #E4 is calculator of 0.18 times 250. An arrow from #E2's result box, reading Acme Corp was acquired by Globex in 2024, curves down to #E3 and rewrites the placeholder, showing hash-E2 earbuds warranty becoming Globex earbuds warranty with the substituted word Globex highlighted. Below the worksheet, a single solver node labelled one solver call reads all four filled slots and emits the composed answer. A side note reads no model calls between plan and solve." class="w-full rounded-lg" />
+</Diagram>
+
+## The tool DAG and critical-path depth
+
+Plan-and-execute and ReWOO both cut LLM calls to two, but both still ran the four tools in a line, so depth stayed 4. That line is a lie about the task. Three of the four lookups do not depend on each other; only `E3` (warranty) needs `E2` (acquirer). The tool DAG, in the LLMCompiler style, makes the dependencies explicit and runs the plan by **topological level**: a node's level is one more than its deepest dependency, nodes at the same level can run in one round, and only a real dependency forces a new round. Here is the real layering:
+
+```text
+  DAG by dependency level (nodes in the same round could run in parallel):
+    round 1 (parallel): E1, E2, E4
+    round 2 (single): E3
+    -> 2 LLM calls, 4 tool calls, critical-path depth 2 (E2 -> E3 is the only chain; E1, E2, E4 share round 1).
+```
+
+The three independent lookups, `E1` (policy), `E2` (acquirer), and `E4` (tax), all sit at level 1 and share **round 1**. Only `E3` waits, because it needs `E2`'s result, so it lands alone in **round 2**. That makes the **critical-path depth 2**, the single chain `E2 -> E3`, even though there are still 4 tool calls. Depth, not count, is the headline number, because depth is the longest chain of steps that genuinely cannot be reordered.
+
+Now the honesty discipline, said loudly. We report **depth, the number of sequential rounds, not wall-clock.** The offline runner executes everything sequentially; it does not actually run `E1`, `E2`, and `E4` at the same time. "Parallel" here means "could run in the same round," and the depth is exactly what real concurrency would shrink: a system that truly ran round 1 in parallel would pay roughly two rounds of latency instead of four. Printing a measured speedup we did not perform would be a lie, so we do not. We give you the structural number (depth 2) and tell you plainly what it would buy. The figure shows the DAG and its two rounds, and the interactive player lets you run all four strategies on the same task.
+
+<Diagram number={2} caption="The tool DAG and its critical path. Four task nodes (E1 policy, E2 acquirer, E3 warranty, E4 tax) with one dependency edge, E2 to E3. Topological layering puts the three independent nodes E1, E2, E4 at level 1 (round 1, which could run in parallel) and E3 alone at level 2 (round 2), because E3 needs E2's result to phrase its query. The critical-path depth is 2, the longest dependency chain (E2 to E3), even though there are four tool calls. The number reported is depth, the count of sequential rounds, not a measured wall-clock: the offline runner is sequential, and depth is what real concurrency would shrink.">
+  <img src="/essays/planning-and-the-tool-dag/part3-tool-dag.svg" alt="A directed acyclic graph of four task nodes arranged in two columns. The left column, labelled round 1 (parallel, level 1), holds three nodes stacked vertically: E1 search_policy (refund window), E2 search_products (who acquired Acme), and E4 calculator (0.18 times 250), each with no incoming edges. The right column, labelled round 2 (level 2), holds a single node E3 search_products (Globex earbuds warranty). One arrow runs from E2 to E3, labelled needs E2's acquirer; E1 and E4 have no outgoing edges. A highlighted path traces E2 to E3 and is labelled critical path, depth 2. A footnote strip reads four tool calls, depth 2; we report sequential rounds, not wall-clock." class="w-full rounded-lg" />
+</Diagram>
+
+<Diagram number={3} caption="Plan modes, interactive. Run the same refund-summary task under all four strategies and watch the two honest numbers move. ReAct decides one hop at a time (5 LLM calls, depth 4, transcript regrown each step). Plan-and-execute writes the ordered plan once and the executor runs it with no further model calls (2 LLM calls, depth 4). ReWOO binds #E evidence variables and reads the filled worksheet in one solver call (2 LLM calls, depth 4, the #E2 to Globex binding shown). The tool DAG runs by dependency level, collapsing E1, E2, E4 into round 1 and leaving E3 alone in round 2 (2 LLM calls, critical-path depth 2). Same answer every strategy; only cost and depth differ. Depth is sequential rounds, not measured wall-clock.">
+  <IframeFigure src="/essays/planning-and-the-tool-dag/part3-plan-modes.html" title="Interactive plan-modes player. A toggle switches the same refund-summary task (the refund window, the warranty on the earbuds made by the company that acquired Acme, and 18 percent tax on a 250 dollar order) across four strategies. ReAct runs five steps in a line: search_policy, search_products who acquired Acme, search_products Globex earbuds warranty, calculator 0.18 times 250, then a final synthesis call, tallying 5 LLM calls, 4 tool calls, depth 4, and a growing re-sent transcript. Plan-and-execute shows an ordered plan E1 to E4 with E3 needing E2, executed without model calls, tallying 2 LLM calls and depth 4. ReWOO shows a worksheet of evidence variables hash-E1 to hash-E4 with the binding of hash-E2 earbuds warranty into Globex earbuds warranty, solved in one call, tallying 2 LLM calls and depth 4. The tool DAG shows round 1 running E1, E2, E4 together and round 2 running E3 alone, tallying 2 LLM calls, 4 tool calls, and critical-path depth 2. Every strategy ends with the same answer; a note states depth is sequential rounds, not wall-clock." height={820} />
+</Diagram>
+
+## The scoreboard
+
+Put the four strategies on one board. LLM calls is the cost lever; depth is the number of sequential rounds.
+
+```text
+  strategy              LLM calls  tool calls   crit-path depth
+  -----------------------------------------------------------
+  ReAct                         5           4                 4
+  Plan-and-Execute              2           4                 4
+  ReWOO                         2           4                 4
+  Tool DAG                      2           4                 2
+```
+
+Reading it, straight from the artifact:
+
+```text
+  - Writing the plan down once cuts LLM calls from 5 (one per hop) to 2
+    (plan + synthesize), and decouples model cost from the number of tools.
+  - ReWOO removes every mid-run model call via #E variable binding.
+  - The DAG additionally cuts critical-path depth from 4 to 2: the three
+    independent lookups collapse into one round; only acquirer -> warranty chains.
+  - We report depth, not wall-clock: the offline runner is sequential, and
+    depth is what real concurrency would shrink. (Transcript economics: Part 11.)
+```
+
+And the thesis in one line. Every strategy returns the same correct answer, "Refund window is 30 days from purchase. The earbuds (made by Globex, which acquired Acme) carry a 2-year limited warranty. Tax on a $250 order at 18% is $45.00." Nothing about the answer changed. What changed is the cost: writing the plan down once cut LLM calls from 5 to 2, and modeling the dependencies as a DAG cut critical-path depth from 4 to 2. Same destination, a much cheaper road.
+
+> 💡 **From experience.** The first multi-step agent I put in front of real traffic was a pure ReAct loop, and it worked, which is exactly why nobody looked at the bill for a while. The trouble was that its cost scaled with the number of steps, not the difficulty of the task. A simple ticket might take three hops; a gnarly one took nine, and each hop re-sent a transcript that was now eight observations long, so the ninth call was enormous. Our per-task cost had a long, ugly tail, and it was driven entirely by step count. When I finally pulled a sample of transcripts, I noticed something embarrassing: half the steps were independent lookups the agent had simply run in a line, one after another, re-reasoning "what next" each time even though the answer was always "the next thing on the obvious list." The refactor was to have the model write the plan once, up front, and then execute it. The bill stopped tracking step count and started tracking task complexity, and when I drew the plan as a graph it was obvious that the independent branches never needed to be serial at all. Two changes, plan-first and dependency-aware, and the same answers came back for a fraction of the calls.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- ReAct's bill scales with step count, not task difficulty: every hop is a fresh LLM call (**5 calls** for 4 tools here) that re-sends a growing transcript, and the model re-derives the plan from scratch each step.
+- The fix is to make the **plan a first-class artifact**, written down once instead of living only in the model's head between calls. That alone cuts LLM calls from **5 to 2** and decouples model cost from the number of tools.
+- **Plan-and-execute** writes an ordered plan, runs it with an executor that never calls the model, and synthesizes once. It can also **replan** when a step surprises it, which is the hook for Part 4.
+- **ReWOO** (Reasoning WithOut Observation) writes the plan as a worksheet of **evidence variables** (#E1, #E2), so a later step names an earlier result before it exists. The binding `'#E2 earbuds warranty' -> 'Globex earbuds warranty'` is filled by the tools; one solver call reads the completed sheet, with no model calls in between.
+- The **tool DAG** (LLMCompiler-style) makes dependencies explicit and runs the plan by **topological level**, so the three independent lookups share **round 1** and only `E3` waits in **round 2**. That cuts **critical-path depth from 4 to 2**, even though there are still 4 tool calls.
+- Measure honestly: report **LLM-call count** (the cost lever) and **critical-path depth** (sequential rounds), and deliberately do **not** report wall-clock. The offline runner is sequential; "parallel" means "could run in the same round," and depth is what real concurrency would shrink.
+
+## Glossary
+
+- **Plan as a first-class artifact**: the route written down once as data (an ordered list or a graph), rather than re-derived inside the model's head at every hop; the central reframe of this part.
+- **Plan-and-execute**: a strategy in which a planner emits an ordered plan in one LLM call, an executor runs every step without calling the model, and one final call synthesizes the answer; two LLM calls regardless of tool count.
+- **ReWOO (Reasoning WithOut Observation)**: a strategy in which the planner writes the whole plan up front with evidence variables, the tools fill the variables, and one solver call reads the completed worksheet, with no model calls mid-run.
+- **Evidence variable (#E binding)**: a named slot (#E1, #E2, ...) for a step's result that a later step can reference before the result exists; the tools fill it, and a reference like `#E2` is bound into a concrete value at run time (here `#E2` to the acquirer Globex).
+- **Tool DAG**: the plan modeled as a directed acyclic graph of task nodes with explicit dependency edges, so the executor can tell which steps must wait and which are free to run together.
+- **Topological level**: a node's position in the DAG, one more than its deepest dependency; all nodes at the same level can run in a single round.
+- **Critical-path depth**: the length of the longest chain of dependent steps, equal to the number of sequential rounds the plan requires; the headline metric for parallelism, distinct from the total step count.
+- **LLM-call accounting**: counting the number of times the model is invoked, the dominant cost lever, which planning decouples from the number of tool calls.
+- **Wall-clock (deliberately not reported)**: real elapsed time; we do not print it, because the offline runner is sequential and a measured speedup would be fabricated. We report depth instead, which is what real concurrency would shrink.
+
+---
+
+Writing the plan down once made the agent cheaper and, as a DAG, shallower. But an up-front plan is a bet that the world will not move while you execute it, and the world does not cooperate. **Part 4, Surviving a Broken Plan**, is about what happens the instant a step disagrees with the plan, for example a SKU discontinued mid-run: a critic that inspects each result, and error-triggered **replanning** that revises the route rather than barrelling on. The plan we just made a first-class artifact becomes a liability the moment it is wrong, and the fix is to let the agent notice and rewrite it.

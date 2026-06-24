@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="100%" style="height:auto" role="img" aria-label="The tool DAG with dependency levels. Four tool nodes: E1 search_policy, E2 search_products for the acquirer, E3 search_products for the warranty, and E4 calculator. The only dependency edge runs from E2 to E3. E1, E2, and E4 sit in round 1 and could run in parallel; E3 sits in round 2 because it depends on E2. A synthesis join node depends on E1, E3, and E4. The critical-path depth is 2, the longest dependency chain, while there are still 4 tool calls.">
+  <title>The tool DAG: independent nodes share a round, so critical-path depth, not step count, sets the sequential rounds</title>
+
+  <defs>
+    <marker id="arrTeal" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#14b8a6"/>
+    </marker>
+    <marker id="arrIndigo" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#6366f1"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#10b981"/>
+    </marker>
+    <marker id="arrGray" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="700" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 3, the tool DAG and critical-path depth</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">The tool DAG: run by dependency level, count depth not steps</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">Independent nodes share a round; only a real dependency forces a new one. The longest chain (E2 -&gt; E3) is the critical path.</text>
+
+  <!-- ============ ROUND 1 LANE (teal) ============ -->
+  <rect x="40" y="92" width="520" height="380" rx="16" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6" stroke-dasharray="7 5"/>
+  <rect x="40" y="92" width="220" height="30" rx="12" fill="#14b8a6"/>
+  <text x="150" y="113" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">ROUND 1 (parallel)</text>
+  <text x="540" y="113" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#0d9488">three independent nodes, one round</text>
+
+  <!-- E1 node -->
+  <rect x="70" y="146" width="200" height="86" rx="12" fill="#ffffff" stroke="#14b8a6" stroke-width="2"/>
+  <rect x="70" y="146" width="200" height="26" rx="12" fill="#14b8a6"/>
+  <rect x="70" y="160" width="200" height="12" fill="#14b8a6"/>
+  <text x="86" y="164"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" font-weight="700" fill="#ffffff">E1</text>
+  <text x="170" y="164" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#ffffff">independent</text>
+  <text x="170" y="194" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#0f172a">search_policy</text>
+  <text x="170" y="214" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#64748b">refund window</text>
+
+  <!-- E2 node (source of the only edge) -->
+  <rect x="70" y="252" width="200" height="86" rx="12" fill="#ffffff" stroke="#14b8a6" stroke-width="2.4"/>
+  <rect x="70" y="252" width="200" height="26" rx="12" fill="#14b8a6"/>
+  <rect x="70" y="266" width="200" height="12" fill="#14b8a6"/>
+  <text x="86" y="270"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" font-weight="700" fill="#ffffff">E2</text>
+  <text x="170" y="270" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#ffffff">independent</text>
+  <text x="170" y="300" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#0f172a">search_products</text>
+  <text x="170" y="320" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#64748b">who acquired Acme</text>
+
+  <!-- E4 node -->
+  <rect x="70" y="358" width="200" height="86" rx="12" fill="#ffffff" stroke="#14b8a6" stroke-width="2"/>
+  <rect x="70" y="358" width="200" height="26" rx="12" fill="#14b8a6"/>
+  <rect x="70" y="372" width="200" height="12" fill="#14b8a6"/>
+  <text x="86" y="376"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" font-weight="700" fill="#ffffff">E4</text>
+  <text x="170" y="376" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#ffffff">independent</text>
+  <text x="170" y="406" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#0f172a">calculator</text>
+  <text x="170" y="426" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#64748b">0.18 * 250</text>
+
+  <!-- ============ ROUND 2 LANE (indigo) ============ -->
+  <rect x="600" y="92" width="280" height="380" rx="16" fill="#eef2ff" stroke="#6366f1" stroke-width="1.6" stroke-dasharray="7 5"/>
+  <rect x="600" y="92" width="200" height="30" rx="12" fill="#6366f1"/>
+  <text x="700" y="113" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">ROUND 2 (single)</text>
+  <text x="860" y="113" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#4f46e5">waits for E2</text>
+
+  <!-- E3 node (depends on E2) -->
+  <rect x="630" y="252" width="220" height="86" rx="12" fill="#ffffff" stroke="#6366f1" stroke-width="2.4"/>
+  <rect x="630" y="252" width="220" height="26" rx="12" fill="#6366f1"/>
+  <rect x="630" y="266" width="220" height="12" fill="#6366f1"/>
+  <text x="646" y="270"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" font-weight="700" fill="#ffffff">E3</text>
+  <text x="740" y="270" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#ffffff">depends on E2</text>
+  <text x="740" y="300" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#0f172a">search_products</text>
+  <text x="740" y="320" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#64748b">#E2 earbuds warranty</text>
+
+  <!-- ============ THE ONLY EDGE: E2 -> E3 ============ -->
+  <line x1="270" y1="295" x2="628" y2="295" stroke="#6366f1" stroke-width="2.6" marker-end="url(#arrIndigo)"/>
+  <rect x="368" y="270" width="160" height="24" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.4"/>
+  <text x="448" y="286" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#4f46e5">the only dependency: E2 -&gt; E3</text>
+
+  <!-- ============ SYNTH / JOIN NODE (emerald) ============ -->
+  <rect x="930" y="200" width="230" height="180" rx="14" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <rect x="930" y="200" width="230" height="30" rx="14" fill="#10b981"/>
+  <rect x="930" y="215" width="230" height="15" fill="#10b981"/>
+  <text x="1045" y="221" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">SYNTH (join)</text>
+  <text x="1045" y="252" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">joins E1, E3, E4 into</text>
+  <text x="1045" y="270" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#064e3b">the final answer</text>
+  <rect x="950" y="288" width="190" height="32" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.4"/>
+  <text x="1045" y="308" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#047857">depends on E1, E3, E4</text>
+  <text x="1045" y="344" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#059669">1 join call closes the run</text>
+  <text x="1045" y="362" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#059669">(plan + join = 2 LLM calls)</text>
+
+  <!-- join edges: E1 -> synth, E3 -> synth, E4 -> synth -->
+  <!-- E1 (from right edge ~270,189) to synth left edge (930,250) -->
+  <path d="M 270 189 C 600 150, 860 150, 928 252" fill="none" stroke="#10b981" stroke-width="1.8" marker-end="url(#arrEmerald)"/>
+  <!-- E3 (from right edge 850,295) to synth (930,290) -->
+  <line x1="850" y1="295" x2="928" y2="290" stroke="#10b981" stroke-width="1.8" marker-end="url(#arrEmerald)"/>
+  <!-- E4 (from right edge 270,401) to synth (930,330) -->
+  <path d="M 270 401 C 600 440, 860 440, 928 330" fill="none" stroke="#10b981" stroke-width="1.8" marker-end="url(#arrEmerald)"/>
+
+  <!-- ============ CRITICAL-PATH CALLOUT ============ -->
+  <rect x="40" y="500" width="560" height="86" rx="13" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
+  <text x="64" y="528"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#4f46e5">critical-path depth = 2</text>
+  <text x="64" y="550"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#475569">the longest dependency chain is E2 -&gt; E3 (two levels).</text>
+  <text x="64" y="568"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#475569">E1, E2, E4 share round 1, so depth is what concurrency would shrink.</text>
+
+  <rect x="620" y="500" width="260" height="86" rx="13" fill="#ffffff" stroke="#14b8a6" stroke-width="2"/>
+  <text x="644" y="528"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#0d9488">4 tool calls</text>
+  <text x="644" y="550"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#475569">the work itself does not shrink:</text>
+  <text x="644" y="568"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#475569">E1, E2, E3, E4 all still run.</text>
+
+  <rect x="900" y="500" width="260" height="86" rx="13" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="924" y="528"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#047857">depth 2, not 4</text>
+  <text x="924" y="550"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#065f46">the DAG halves the rounds the</text>
+  <text x="924" y="568"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#065f46">linear plans paid (depth 4).</text>
+
+  <!-- ============ BOTTOM CAPTION ============ -->
+  <rect x="40" y="606" width="1120" height="58" rx="12" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="600" y="632" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#475569">We report LLM calls and critical-path depth, never wall-clock. "Parallel" means "could run in the same round"; depth is the sequential rounds real concurrency would shrink.</text>
+  <text x="600" y="652" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#64748b">Same answer as ReAct, plan-and-execute, and ReWOO; the DAG just collapses the three independent lookups into one round.</text>
+
+</svg>
