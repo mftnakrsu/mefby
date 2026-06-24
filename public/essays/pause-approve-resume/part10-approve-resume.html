@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pause, Approve, Resume, Steer, Part 10</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --slate: #64748b;
+  --slate-dark: #475569;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 880px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner .lead { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 16px 0 9px;
+}
+
+/* PHASE STRIP */
+.phase-strip {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.phase-pill {
+  flex: 1;
+  min-width: 96px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  text-align: center;
+  background: transparent;
+  border: none;
+  white-space: nowrap;
+}
+.phase-pill[data-active="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.phase-pill[data-active="true"].pause { color: var(--amber-dark); }
+.phase-pill[data-active="true"].approve { color: var(--emerald-dark); }
+.phase-pill[data-active="true"].deny { color: var(--rose-dark); }
+.phase-pill[data-active="true"].steer { color: var(--amber-dark); }
+
+.strategy-blurb {
+  font-size: 12px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 9px 12px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  min-height: 54px;
+}
+.strategy-blurb strong { color: var(--indigo-dark); }
+.strategy-blurb code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+.strategy-blurb.pause { background: #fffbeb; border-left-color: var(--amber); }
+.strategy-blurb.pause strong { color: var(--amber-dark); }
+.strategy-blurb.pause code { border-color: #fde68a; }
+.strategy-blurb.approve { background: #ecfdf5; border-left-color: var(--emerald); }
+.strategy-blurb.approve strong { color: var(--emerald-dark); }
+.strategy-blurb.deny { background: #fff1f2; border-left-color: var(--rose); }
+.strategy-blurb.deny strong { color: var(--rose-dark); }
+.strategy-blurb.steer { background: #fffbeb; border-left-color: var(--amber); }
+.strategy-blurb.steer strong { color: var(--amber-dark); }
+
+/* STEP CONTROLS */
+.step-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+}
+.step-btn:hover:not(:disabled) { background: #eef2ff; border-color: #c7d2fe; }
+.step-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.step-btn:disabled { opacity: 0.42; cursor: not-allowed; color: var(--text-muted); }
+.step-btn.primary { background: var(--indigo); color: #ffffff; border-color: var(--indigo); }
+.step-btn.primary:hover:not(:disabled) { background: var(--indigo-dark); }
+.step-progress { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+.step-progress .stepnum { font-family: var(--font-mono); color: var(--indigo-dark); }
+
+/* DECISION BAR (the human-in-the-loop controls) */
+.decision-zone {
+  border: 1.5px dashed #fde68a;
+  background: #fffbeb;
+  border-radius: 12px;
+  padding: 13px 14px;
+  margin-bottom: 16px;
+  display: none;
+}
+.decision-zone.show { display: block; }
+.decision-zone[data-resolved="true"] { border-style: solid; }
+.decision-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.decision-icon { width: 16px; height: 16px; color: var(--amber-dark); flex-shrink: 0; }
+.decision-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--amber-dark);
+}
+.decision-token {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--amber-dark);
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+.decision-sub { font-size: 11.5px; color: var(--amber-dark); margin-bottom: 11px; line-height: 1.5; }
+.decision-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.action-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 9px 15px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.05s;
+  outline: none;
+}
+.action-btn:focus-visible { box-shadow: 0 0 0 2px var(--text-heading); }
+.action-btn:active:not(:disabled) { transform: translateY(1px); }
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.action-btn.approve { background: var(--emerald); color: #ffffff; border-color: var(--emerald); }
+.action-btn.approve:hover:not(:disabled) { background: var(--emerald-dark); border-color: var(--emerald-dark); }
+.action-btn.deny { background: var(--rose); color: #ffffff; border-color: var(--rose); }
+.action-btn.deny:hover:not(:disabled) { background: var(--rose-dark); border-color: var(--rose-dark); }
+.action-btn.steer { background: var(--amber); color: #ffffff; border-color: var(--amber); }
+.action-btn.steer:hover:not(:disabled) { background: var(--amber-dark); border-color: var(--amber-dark); }
+
+.steer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.steer-field label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--amber-dark);
+}
+.steer-input-row { display: flex; align-items: center; gap: 6px; }
+.steer-input-row .dollar { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--amber-dark); }
+.steer-input {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  width: 76px;
+  padding: 7px 8px;
+  border: 1px solid #fde68a;
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--text-heading);
+  outline: none;
+}
+.steer-input:focus-visible { box-shadow: 0 0 0 2px var(--amber); border-color: var(--amber); }
+.steer-presets { display: flex; gap: 5px; margin-top: 5px; }
+.preset-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid #fde68a;
+  background: #ffffff;
+  color: var(--amber-dark);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+  outline: none;
+}
+.preset-btn:hover { background: #fffbeb; }
+.preset-btn:focus-visible { box-shadow: 0 0 0 2px var(--amber); }
+.steer-warn {
+  font-size: 10px;
+  color: var(--rose-dark);
+  margin-top: 5px;
+  font-weight: 600;
+  display: none;
+}
+.steer-warn.show { display: block; }
+
+/* REPLAY BADGE */
+.replay-badge {
+  display: none;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 11px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  color: var(--indigo-dark);
+  line-height: 1.45;
+}
+.replay-badge.show { display: flex; }
+.replay-badge svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.replay-badge code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
+/* GRID */
+.stage { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; }
+@media (max-width: 700px) { .stage { grid-template-columns: 1fr; } }
+.col-side { display: flex; flex-direction: column; gap: 14px; }
+
+.subpanel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+}
+.subpanel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.subpanel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.subpanel-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.subpanel-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.subpanel-body { padding: 11px 12px; }
+
+/* JOURNAL */
+.journal-body { max-height: 420px; overflow-y: auto; }
+.journal-list { display: flex; flex-direction: column; gap: 6px; }
+.jrow {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fcfcfd;
+  padding: 7px 9px;
+  animation: fadeIn 0.18s ease;
+  border-left-width: 3px;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .jrow, .ledger-amount, .feed-row { animation: none; transition: none; } }
+.jrow.t-run_started { border-left-color: var(--slate); }
+.jrow.t-tool_result { border-left-color: var(--teal); }
+.jrow.t-pending_approval { border-left-color: var(--amber); }
+.jrow.t-approval_decision { border-left-color: var(--indigo); }
+.jrow.t-finished { border-left-color: var(--emerald); }
+.jrow.t-finished.is-deny { border-left-color: var(--rose); }
+.jrow.is-resume-new { background: #f5fbff; }
+.jrow-top { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; flex-wrap: wrap; }
+.jrow-seq {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.jrow-type { font-family: var(--font-mono); font-size: 10px; font-weight: 700; }
+.jrow.t-run_started .jrow-type { color: var(--slate-dark); }
+.jrow.t-tool_result .jrow-type { color: var(--teal-dark); }
+.jrow.t-pending_approval .jrow-type { color: var(--amber-dark); }
+.jrow.t-approval_decision .jrow-type { color: var(--indigo-dark); }
+.jrow.t-finished .jrow-type { color: var(--emerald-dark); }
+.jrow.t-finished.is-deny .jrow-type { color: var(--rose-dark); }
+.jrow-ts { margin-left: auto; font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
+.jrow-data { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-body); word-break: break-word; line-height: 1.45; }
+.jrow-data .k { color: var(--text-muted); }
+.jrow-data .arg { color: var(--amber-dark); }
+.jrow-data .txt { font-family: var(--font-sans); color: var(--slate-dark); }
+.jrow-flag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-top: 4px;
+}
+.jrow-flag.memo { background: #f0fdfa; color: var(--teal-dark); border: 1px solid #99f6e4; }
+.jrow-flag.once { background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0; }
+.jrow-flag.steer { background: #fffbeb; color: var(--amber-dark); border: 1px solid #fde68a; }
+.journal-empty { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 6px 2px; }
+
+/* PENDING placeholder gap in the journal */
+.jpending {
+  border: 1px dashed #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+  padding: 7px 9px;
+  font-size: 10px;
+  color: var(--amber-dark);
+  line-height: 1.45;
+  animation: fadeIn 0.18s ease;
+}
+.jpending .pend-tag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--amber); color: #ffffff;
+  border-radius: 4px; padding: 1px 6px; margin-right: 6px;
+}
+
+/* LEDGER */
+.ledger-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fcfcfd;
+  padding: 10px 12px;
+}
+.ledger-order { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text-heading); }
+.ledger-amount {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: color 0.3s;
+}
+.ledger-amount.paid { color: var(--emerald-dark); }
+.ledger-amount.steered { color: var(--amber-dark); }
+.ledger-amount.empty { color: var(--rose-dark); }
+.ledger-note {
+  font-size: 10.5px;
+  margin-top: 9px;
+  line-height: 1.5;
+  border-radius: 7px;
+  padding: 7px 9px;
+}
+.ledger-note.neutral { background: var(--chip-bg); border: 1px solid var(--border); color: var(--text-muted); }
+.ledger-note.paid { background: #ecfdf5; border: 1px solid #a7f3d0; color: var(--emerald-dark); }
+.ledger-note.steered { background: #fffbeb; border: 1px solid #fde68a; color: var(--amber-dark); }
+.ledger-note.empty { background: #fff1f2; border: 1px solid #fecdd3; color: var(--rose-dark); }
+.ledger-note strong { font-weight: 700; }
+
+/* RESULT */
+.result-line {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--chip-bg);
+  padding: 9px 11px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  transition: background 0.2s, border-color 0.2s;
+}
+.result-line.paid { background: #ecfdf5; border-color: #a7f3d0; color: var(--emerald-dark); }
+.result-line.steered { background: #fffbeb; border-color: #fde68a; color: var(--amber-dark); }
+.result-line.denied { background: #fff1f2; border-color: #fecdd3; color: var(--rose-dark); }
+.result-line.pending { background: #fffbeb; border-color: #fde68a; color: var(--amber-dark); }
+.result-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.result-line .answer { font-weight: 600; color: var(--text-heading); }
+.result-line.paid .answer { color: var(--emerald-dark); }
+.result-line.steered .answer { color: var(--amber-dark); }
+.result-line.denied .answer { color: var(--rose-dark); }
+
+/* STREAMING FEED */
+.feed-list { display: flex; flex-direction: column; gap: 5px; }
+.feed-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-body);
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+  animation: fadeIn 0.18s ease;
+  line-height: 1.45;
+}
+.feed-row .chev { color: var(--text-muted); font-weight: 700; flex-shrink: 0; }
+.feed-row.k-run .chev { color: var(--slate-dark); }
+.feed-row.k-done .chev { color: var(--teal-dark); }
+.feed-row.k-pause { background: #fffbeb; border-color: #fde68a; }
+.feed-row.k-pause .chev { color: var(--amber-dark); }
+.feed-row.k-decision { background: #eef2ff; border-color: #c7d2fe; }
+.feed-row.k-decision .chev { color: var(--indigo-dark); }
+.feed-row.k-finished { background: #ecfdf5; border-color: #a7f3d0; }
+.feed-row.k-finished .chev { color: var(--emerald-dark); }
+.feed-empty { font-size: 10.5px; color: var(--text-muted); font-style: italic; }
+
+/* CONTRAST + CAPTION */
+.contrast {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 3px solid var(--amber);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.contrast strong { color: var(--amber-dark); }
+.contrast code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  color: var(--amber-dark);
+}
+
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 14px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <h2 id="panel-heading">Pause at the gate, then approve, deny, or steer</h2>
+  <p class="panel-subtitle">The durable agent runs to an approval gate: a $180 refund over the $100 threshold. Instead of firing the tool it journals a pending_approval, raises a serializable PendingApproval (a token), and PAUSES. No money has moved. Then you, the human, decide. Each decision resumes by REPLAYING the same journal, never a fresh run.</p>
+
+  <div class="goal-banner">
+    <span class="lead">The world:</span> one run <code>run-aa10</code>, frozen timestamps <code>2026-07-06T09:00:NNZ</code> by seq, threshold <code>$100</code>. The gated refund keeps its idempotency key <code>ORD-3300:refund</code>, so an approved resume executes EXACTLY ONCE even if retried. State is the FOLD over the journal, the same spine as Part 9.
+  </div>
+
+  <div class="section-label">Where we are in the story</div>
+  <div class="phase-strip" role="list" aria-label="Story phase">
+    <span class="phase-pill" id="ph-run" data-active="true" role="listitem">1 &#183; run</span>
+    <span class="phase-pill pause" id="ph-pause" data-active="false" role="listitem">2 &#183; pause</span>
+    <span class="phase-pill" id="ph-decide" data-active="false" role="listitem">3 &#183; human decides</span>
+    <span class="phase-pill" id="ph-done" data-active="false" role="listitem">4 &#183; resume</span>
+  </div>
+
+  <div class="strategy-blurb" id="blurb"></div>
+
+  <div class="step-controls" id="controls"></div>
+
+  <!-- HUMAN DECISION ZONE -->
+  <div class="decision-zone" id="decision-zone" data-resolved="false" role="group" aria-labelledby="decision-title">
+    <div class="decision-head">
+      <svg class="decision-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+      <span class="decision-title" id="decision-title">Waiting for a human decision</span>
+      <span class="decision-token" id="decision-token">token appr-1</span>
+    </div>
+    <p class="decision-sub" id="decision-sub">The run is paused, not dead. The token and the pending action are persisted in the journal. Pick one of three first-class actions. STEER is more than a yes or no: it injects a correction.</p>
+    <div class="decision-actions">
+      <button class="action-btn approve" id="act-approve" type="button">Approve the $180.00 refund</button>
+      <button class="action-btn deny" id="act-deny" type="button">Deny</button>
+      <div class="steer-field">
+        <label for="steer-amount">Steer: lower the refund to</label>
+        <div class="steer-input-row">
+          <span class="dollar">$</span>
+          <input class="steer-input" id="steer-amount" type="number" min="0" max="999" step="1" value="90" inputmode="decimal" aria-describedby="steer-warn" />
+          <button class="action-btn steer" id="act-steer" type="button">Steer</button>
+        </div>
+        <div class="steer-presets" aria-label="Steer presets">
+          <button class="preset-btn" type="button" data-preset="90">$90</button>
+          <button class="preset-btn" type="button" data-preset="50">$50</button>
+          <button class="preset-btn" type="button" data-preset="99">$99</button>
+        </div>
+        <div class="steer-warn" id="steer-warn" role="alert">A steer to $100 or more is still over the threshold and would just pause again. Lower it under $100.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REPLAY HONESTY BADGE -->
+  <div class="replay-badge" id="replay-badge">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+    <span id="replay-text"></span>
+  </div>
+
+  <div class="section-label">The journal, the ledger, and a live feed read from the same log</div>
+  <div class="stage">
+    <!-- JOURNAL -->
+    <div class="subpanel">
+      <div class="subpanel-head">
+        <span class="subpanel-dot" style="background:var(--indigo)"></span>
+        <span class="subpanel-title">journal &#183; append-only events (JSONL)</span>
+        <span class="subpanel-meta" id="journal-meta">0 events</span>
+      </div>
+      <div class="subpanel-body journal-body">
+        <div class="journal-list" id="journal" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <div class="col-side">
+      <!-- LEDGER -->
+      <div class="subpanel">
+        <div class="subpanel-head">
+          <span class="subpanel-dot" style="background:var(--teal)"></span>
+          <span class="subpanel-title">ledger &#183; where money actually moves</span>
+        </div>
+        <div class="subpanel-body">
+          <div class="ledger-row">
+            <span class="ledger-order">ORD-3300</span>
+            <span class="ledger-amount empty" id="ledger-amount">$0.00</span>
+          </div>
+          <div class="ledger-note neutral" id="ledger-note">No money has moved yet. The gate held the refund.</div>
+        </div>
+      </div>
+
+      <!-- RESULT -->
+      <div class="subpanel">
+        <div class="subpanel-head">
+          <span class="subpanel-dot" style="background:var(--emerald)"></span>
+          <span class="subpanel-title">result</span>
+        </div>
+        <div class="subpanel-body">
+          <div class="result-line pending" id="result-line">
+            <div class="result-label" id="result-label">run status</div>
+            <span id="result-text">Not started.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STREAMING FEED -->
+  <div class="section-label">Streaming progress (a read over the journal events)</div>
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-dot" style="background:var(--indigo)"></span>
+      <span class="subpanel-title">live feed &#183; stream(journal)</span>
+      <span class="subpanel-meta" id="feed-meta">0 lines</span>
+    </div>
+    <div class="subpanel-body">
+      <div class="feed-list" id="feed" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="announce"></div>
+
+  <div class="contrast">
+    <strong>The decision is a first-class action, not a binary gate.</strong> APPROVE and DENY are a yes or no. STEER is different: the approver injects a correction (here, lowering the refund under the threshold) that changes what the agent does next, then the run continues. Answering a clarifying question back to the user is the same mechanism. And because the gated refund keeps its key <code>ORD-3300:refund</code>, an approved or steered resume moves money EXACTLY ONCE, even if resume is retried.
+  </div>
+
+  <div class="caption">
+    <strong>How we keep it honest:</strong> <code style="font-family:var(--font-mono)">interrupt()</code> raises a serializable <code style="font-family:var(--font-mono)">PendingApproval</code> caught at the top level, NOT <code style="font-family:var(--font-mono)">sys.exit</code>, so a notebook or server stays runnable; it persists the journal and returns the token. <code style="font-family:var(--font-mono)">resume()</code> then REPLAYS that journal (step 0 memoized) and acts on the recorded decision. A real deployment pauses in one process and resumes in another over the same persisted log; here both phases run over one journal.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>run / decision &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>pending / steer &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>tool result &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>approved / done &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>deny / blocked
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =====================================================================
+     Verified facts from pause_approve_resume.py (the single source of truth).
+     run_id run-aa10; ts = "2026-07-06T09:00:" + seq(2 digits) + "Z".
+     Threshold $100. The task is a $180.00 refund for ORD-3300 (over threshold).
+     Quoted strings below are reproduced EXACTLY from the source.
+  ===================================================================== */
+  var RUN_ID = "run-aa10";
+  var TS_BASE = "2026-07-06T09:00:";
+  var THRESHOLD = 100.0;
+  var GATED_AMOUNT = 180.0;
+  var TOKEN = "appr-1";
+  var POLICY = "Refunds after the window are refundable minus a 10% restocking fee.";
+
+  function ts(seq) { return TS_BASE + (seq < 10 ? "0" + seq : "" + seq) + "Z"; }
+  function fmt(x) { return "$" + Number(x).toFixed(2); }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* ---------------------------------------------------------------------
+     Live state. The journal is the ground truth; everything else is a read.
+  --------------------------------------------------------------------- */
+  // phase: "run" (nothing yet) | "paused" | "approve" | "deny" | "steer"
+  var phase = "run";
+  var journal = [];          // list of event objects, in seq order
+  var ledger = 0.0;          // ORD-3300 balance
+  var resolved = false;      // a decision has been made
+  var lastDecision = null;   // "approve" | "deny" | "steer"
+  var steerAmount = 90.0;    // the corrected amount on a steer
+
+  /* Append an event, assigning seq + frozen ts exactly like the source. */
+  function append(type, data, resumeNew) {
+    var seq = journal.length;
+    journal.push({ seq: seq, type: type, ts: ts(seq), data: data, resumeNew: !!resumeNew });
+  }
+
+  /* ---------------------------------------------------------------------
+     Build the paused journal (seq 0..2): run_started, the search tool_result,
+     and pending_approval carrying the token. No money has moved.
+  --------------------------------------------------------------------- */
+  function buildPaused() {
+    journal = [];
+    ledger = 0.0;
+    append("run_started", { run_id: RUN_ID });
+    append("tool_result", { idx: 0, tool: "search_policy", result: POLICY });
+    append("pending_approval", {
+      idx: 1, token: TOKEN, tool: "process_refund",
+      reason: "refund " + fmt(GATED_AMOUNT) + " exceeds the $100 threshold"
+    });
+    phase = "paused";
+    resolved = false;
+    lastDecision = null;
+  }
+
+  /* ---------------------------------------------------------------------
+     Resume: REPLAY the paused journal (step 0 memoized) and act on the
+     recorded decision. We append the resume tail (approval_decision, then
+     tool_result + finished, or just the deny pair). Money moves at most once.
+  --------------------------------------------------------------------- */
+  function resume(decision, correction) {
+    // step 0 is memoized on replay (its tool_result is already at seq 1).
+    append("approval_decision", { idx: 1, decision: decision, correction: correction != null ? correction : null }, true);
+
+    if (decision === "deny") {
+      append("tool_result", { idx: 1, tool: "process_refund", result: "DENIED by approver (no money moved)" }, true);
+      append("finished", { answer: "Refund denied by approver; no money moved.", deny: true }, true);
+      phase = "deny";
+      lastDecision = "deny";
+    } else if (decision === "steer") {
+      steerAmount = correction;
+      // the steer message, then the actual refund at the corrected amount
+      append("tool_result", {
+        idx: 1, tool: "process_refund", steer: true,
+        result: "STEERED by approver -> amount lowered to " + fmt(correction) + " (now under the $100 threshold)"
+      }, true);
+      ledger = correction;   // money moves once, at the corrected amount
+      append("tool_result", { idx: 1, tool: "process_refund", result: "refunded " + fmt(correction) + " to ORD-3300" }, true);
+      append("finished", { answer: "Refund of " + fmt(correction) + " for ORD-3300 is complete." }, true);
+      phase = "steer";
+      lastDecision = "steer";
+    } else { // approve
+      ledger = GATED_AMOUNT;  // money moves once, effectively-once via the key
+      append("tool_result", { idx: 1, tool: "process_refund", result: "refunded " + fmt(GATED_AMOUNT) + " to ORD-3300", once: true }, true);
+      append("finished", { answer: "Refund of " + fmt(GATED_AMOUNT) + " for ORD-3300 is complete." }, true);
+      phase = "approve";
+      lastDecision = "approve";
+    }
+    resolved = true;
+    render();
+  }
+
+  function reset() {
+    phase = "run";
+    journal = [];
+    ledger = 0.0;
+    resolved = false;
+    lastDecision = null;
+    render();
+  }
+
+  /* =====================================================================
+     Rendering.
+  ===================================================================== */
+  function setPhasePill() {
+    var map = { run: "ph-run", paused: "ph-pause", approve: "ph-done", deny: "ph-done", steer: "ph-done" };
+    ["ph-run", "ph-pause", "ph-decide", "ph-done"].forEach(function (id) {
+      document.getElementById(id).setAttribute("data-active", "false");
+    });
+    if (phase === "paused") {
+      document.getElementById("ph-decide").setAttribute("data-active", "true");
+    }
+    document.getElementById(map[phase]).setAttribute("data-active", "true");
+    var done = document.getElementById("ph-done");
+    done.classList.remove("approve", "deny", "steer");
+    if (phase === "approve") done.classList.add("approve");
+    if (phase === "deny") done.classList.add("deny");
+    if (phase === "steer") done.classList.add("steer");
+  }
+
+  function renderControls() {
+    var el = document.getElementById("controls");
+    var html = "";
+    if (phase === "run") {
+      html += '<button class="step-btn primary" id="b-run" type="button">Run to the approval gate &#8594;</button>';
+    } else if (phase === "paused") {
+      html += '<button class="step-btn" id="b-reset" type="button">Reset</button>';
+      html += '<span class="step-progress">paused at the gate &#183; <span class="stepnum">token ' + TOKEN + '</span></span>';
+    } else {
+      html += '<button class="step-btn" id="b-back" type="button">&#8592; Back to the pause</button>';
+      html += '<button class="step-btn" id="b-reset" type="button">Reset</button>';
+      var label = phase === "approve" ? "approved &#183; ledger $180.00"
+                : phase === "deny" ? "denied &#183; ledger empty"
+                : "steered &#183; ledger " + fmt(steerAmount);
+      html += '<span class="step-progress"><span class="stepnum">' + label + '</span></span>';
+    }
+    el.innerHTML = html;
+    bind("b-run", function () { buildPaused(); render(); });
+    bind("b-reset", reset);
+    bind("b-back", function () { buildPaused(); render(); });
+  }
+  function bind(id, fn) {
+    var b = document.getElementById(id);
+    if (b) b.addEventListener("click", fn);
+  }
+
+  function renderDecisionZone() {
+    var zone = document.getElementById("decision-zone");
+    var show = (phase === "paused");
+    zone.classList.toggle("show", show || resolved);
+    zone.setAttribute("data-resolved", resolved ? "true" : "false");
+
+    var title = document.getElementById("decision-title");
+    var sub = document.getElementById("decision-sub");
+    var aApprove = document.getElementById("act-approve");
+    var aDeny = document.getElementById("act-deny");
+    var aSteer = document.getElementById("act-steer");
+    var steerInput = document.getElementById("steer-amount");
+
+    var disabled = resolved || phase === "run";
+    aApprove.disabled = disabled;
+    aDeny.disabled = disabled;
+    aSteer.disabled = disabled;
+    steerInput.disabled = disabled;
+    document.querySelectorAll(".preset-btn").forEach(function (b) { b.disabled = disabled; });
+
+    if (phase === "run") {
+      zone.classList.remove("show");
+      return;
+    }
+    if (phase === "paused") {
+      title.textContent = "Waiting for a human decision";
+      sub.innerHTML = "The run is paused, not dead. The token and the pending action are persisted in the journal. Pick one of three first-class actions. STEER is more than a yes or no: it injects a correction.";
+    } else {
+      var verb = phase === "approve" ? "Approved" : phase === "deny" ? "Denied" : "Steered";
+      title.textContent = "Human decision: " + verb;
+      if (phase === "approve") {
+        sub.innerHTML = "You approved. resume() replayed the journal and executed the gated refund effectively-once via its key. Press <strong>Back to the pause</strong> to try a different decision.";
+      } else if (phase === "deny") {
+        sub.innerHTML = "You denied. resume() replayed the journal and finished with a refusal; no money moved. Press <strong>Back to the pause</strong> to try a different decision.";
+      } else {
+        sub.innerHTML = "You steered to " + fmt(steerAmount) + ", under the threshold. resume() replayed the journal, applied the correction, and executed the lowered refund once. Press <strong>Back to the pause</strong> to try again.";
+      }
+    }
+  }
+
+  function dataLine(e) {
+    var d = e.data;
+    if (e.type === "run_started") {
+      return '<span class="k">run_id:</span> "' + RUN_ID + '"';
+    }
+    if (e.type === "tool_result") {
+      var head = '<span class="k">idx</span> ' + d.idx + ' &#183; <span class="k">tool</span> ' + d.tool + '<br/>';
+      return head + '<span class="txt">' + escHtml(d.result) + '</span>';
+    }
+    if (e.type === "pending_approval") {
+      return '<span class="k">idx</span> ' + d.idx + ' &#183; <span class="k">token</span> <span class="arg">' + d.token + '</span><br/>'
+        + '<span class="txt">' + escHtml(d.reason) + '</span>';
+    }
+    if (e.type === "approval_decision") {
+      var c = (d.correction != null) ? ' &#183; <span class="k">correction</span> <span class="arg">' + fmt(d.correction) + '</span>' : '';
+      return '<span class="k">idx</span> ' + d.idx + ' &#183; <span class="k">decision</span> <span class="arg">' + d.decision + '</span>' + c;
+    }
+    if (e.type === "finished") {
+      return '<span class="k">answer:</span> <span class="txt">' + escHtml(d.answer) + '</span>';
+    }
+    return "";
+  }
+
+  function renderJournal() {
+    var list = document.getElementById("journal");
+    var meta = document.getElementById("journal-meta");
+    if (journal.length === 0) {
+      list.innerHTML = '<div class="journal-empty">No events yet. Press <strong>Run to the approval gate</strong> to start.</div>';
+      meta.textContent = "0 events";
+      return;
+    }
+    var html = "";
+    journal.forEach(function (e) {
+      var cls = "jrow t-" + e.type + (e.resumeNew ? " is-resume-new" : "");
+      if (e.type === "finished" && e.data.deny) cls += " is-deny";
+      html += '<div class="' + cls + '">';
+      html += '<div class="jrow-top">';
+      html += '<span class="jrow-seq">seq ' + e.seq + '</span>';
+      html += '<span class="jrow-type">' + e.type + '</span>';
+      html += '<span class="jrow-ts">' + e.ts + '</span>';
+      html += '</div>';
+      html += '<div class="jrow-data">' + dataLine(e) + '</div>';
+      // flags
+      if (e.type === "tool_result" && e.data.idx === 0) {
+        if (resolved) html += '<span class="jrow-flag memo">memoized on replay &#183; step 0 not re-run</span>';
+      }
+      if (e.type === "tool_result" && e.data.once) {
+        html += '<span class="jrow-flag once">effectively-once &#183; idempotency key honored</span>';
+      }
+      if (e.type === "tool_result" && e.data.steer) {
+        html += '<span class="jrow-flag steer">correction injected &#183; not just a yes or no</span>';
+      }
+      html += '</div>';
+      // after the pending_approval row, if not yet resolved, show the waiting gap
+      if (e.type === "pending_approval" && !resolved) {
+        html += '<div class="jpending"><span class="pend-tag">paused</span>'
+          + 'no <strong>tool_result</strong> for step 1 yet. interrupt() raised PendingApproval (token ' + TOKEN + '), caught at the top level, NOT sys.exit. The run is persisted, waiting for a human.'
+          + '</div>';
+      }
+    });
+    list.innerHTML = html;
+    meta.textContent = "seq 0.." + journal[journal.length - 1].seq + " &#183; " + journal.length + " events";
+    meta.innerHTML = "seq 0.." + journal[journal.length - 1].seq;
+  }
+
+  function renderLedger() {
+    var amt = document.getElementById("ledger-amount");
+    var note = document.getElementById("ledger-note");
+    amt.textContent = fmt(ledger);
+    var tone = "empty";
+    if (phase === "approve") tone = "paid";
+    else if (phase === "steer") tone = "steered";
+    else if (ledger === 0.0) tone = (phase === "deny") ? "empty" : "neutral";
+    amt.className = "ledger-amount " + tone;
+    note.className = "ledger-note " + tone;
+
+    if (phase === "run") {
+      amt.className = "ledger-amount empty";
+      note.className = "ledger-note neutral";
+      note.innerHTML = "Nothing has run yet.";
+    } else if (phase === "paused") {
+      amt.className = "ledger-amount empty";
+      note.className = "ledger-note neutral";
+      note.innerHTML = "<strong>No money has moved yet.</strong> The gate held the refund. The ledger stays empty while the run waits for approval.";
+    } else if (phase === "approve") {
+      note.innerHTML = "<strong>One refund: $180.00.</strong> Approved and executed once. A retried resume would return the stored result, never a second charge.";
+    } else if (phase === "deny") {
+      note.innerHTML = "<strong>Still empty.</strong> Denied by the approver; no money moved. The run finished with a refusal.";
+    } else if (phase === "steer") {
+      note.innerHTML = "<strong>One refund: " + fmt(steerAmount) + ".</strong> The approver lowered it under the threshold; the corrected refund executed once.";
+    }
+  }
+
+  function renderResult() {
+    var line = document.getElementById("result-line");
+    var label = document.getElementById("result-label");
+    var text = document.getElementById("result-text");
+    var tone = "pending", lbl = "run status", txt = "Not started.", isAnswer = false;
+
+    if (phase === "run") {
+      tone = ""; lbl = "run status"; txt = "Not started.";
+    } else if (phase === "paused") {
+      tone = "pending"; lbl = "paused for approval";
+      txt = "PAUSED: refund $180.00 exceeds the $100 threshold. Returned token " + TOKEN + "; the run is persisted, not dead.";
+    } else if (phase === "approve") {
+      tone = "paid"; lbl = "finished, approved"; isAnswer = true;
+      txt = "Refund of $180.00 for ORD-3300 is complete.";
+    } else if (phase === "deny") {
+      tone = "denied"; lbl = "finished, denied"; isAnswer = true;
+      txt = "DENIED by approver; no money moved.";
+    } else if (phase === "steer") {
+      tone = "steered"; lbl = "finished, steered"; isAnswer = true;
+      txt = "Refund of " + fmt(steerAmount) + " for ORD-3300 is complete.";
+    }
+    line.className = "result-line" + (tone ? " " + tone : "");
+    label.textContent = lbl;
+    text.innerHTML = isAnswer ? '<span class="answer">' + escHtml(txt) + '</span>' : escHtml(txt);
+  }
+
+  /* The live feed is literally stream(journal): a read over the journal events. */
+  function feedLineFor(e) {
+    var d = e.data;
+    if (e.type === "run_started") return { kind: "run", text: "run started" };
+    if (e.type === "tool_result") return { kind: "done", text: "done: " + d.result };
+    if (e.type === "pending_approval") return { kind: "pause", text: "PAUSED for approval (" + d.reason + "); token " + d.token };
+    if (e.type === "approval_decision") return { kind: "decision", text: "human decision: " + d.decision };
+    if (e.type === "finished") return { kind: "finished", text: "finished: " + d.answer };
+    return null;
+  }
+
+  function renderFeed() {
+    var feed = document.getElementById("feed");
+    var meta = document.getElementById("feed-meta");
+    var lines = [];
+    journal.forEach(function (e) {
+      var f = feedLineFor(e);
+      if (f) lines.push(f);
+    });
+    if (lines.length === 0) {
+      feed.innerHTML = '<div class="feed-empty">The feed reads from the journal. Run the agent to populate it.</div>';
+      meta.textContent = "0 lines";
+      return;
+    }
+    feed.innerHTML = lines.map(function (f) {
+      return '<div class="feed-row k-' + f.kind + '"><span class="chev">&gt;</span><span>' + escHtml(f.text) + '</span></div>';
+    }).join("");
+    meta.textContent = lines.length + " lines";
+  }
+
+  function renderReplayBadge() {
+    var b = document.getElementById("replay-badge");
+    var t = document.getElementById("replay-text");
+    var show = resolved;
+    b.classList.toggle("show", show);
+    if (!show) return;
+    if (phase === "approve") {
+      t.innerHTML = "<strong>This resume REPLAYED the journal, not a fresh run.</strong> Step 0 (search) was memoized from <code>seq 1</code>; only the tail re-ran. The refund posted via the key <code>ORD-3300:refund</code>, so even a retried resume is effectively-once.";
+    } else if (phase === "deny") {
+      t.innerHTML = "<strong>This resume REPLAYED the journal, not a fresh run.</strong> Step 0 was memoized; the recorded decision was DENY, so the tail finished with a refusal and no tool ever fired.";
+    } else {
+      t.innerHTML = "<strong>This resume REPLAYED the journal, not a fresh run.</strong> Step 0 was memoized; the recorded decision was STEER, so the tail applied the correction (" + fmt(steerAmount) + ") and executed the lowered refund once.";
+    }
+  }
+
+  function renderBlurb() {
+    var el = document.getElementById("blurb");
+    el.className = "strategy-blurb";
+    var html;
+    if (phase === "run") {
+      html = '<strong>A durable agent that can wait for a human.</strong> The task is a $180.00 refund for ORD-3300, over the $100 threshold. Run it: step 0 searches the policy, then the gated refund will not fire on its own.';
+    } else if (phase === "paused") {
+      el.className = "strategy-blurb pause";
+      html = '<strong>Paused at the gate.</strong> At the gated refund the agent journaled <code>pending_approval</code>, raised a serializable <code>PendingApproval</code> carrying token ' + TOKEN + ', and stopped. No money has moved. Now decide: approve, deny, or steer.';
+    } else if (phase === "approve") {
+      el.className = "strategy-blurb approve";
+      html = '<strong>Approved.</strong> resume() recorded the decision, replayed the journal, and executed the $180.00 refund. The idempotency key makes this effectively-once: a retried resume returns the stored result instead of charging again.';
+    } else if (phase === "deny") {
+      el.className = "strategy-blurb deny";
+      html = '<strong>Denied.</strong> resume() recorded the decision and finished with a refusal. No tool fired, no money moved. The ledger stays empty.';
+    } else if (phase === "steer") {
+      el.className = "strategy-blurb steer";
+      html = '<strong>Steered to ' + fmt(steerAmount) + '.</strong> The approver did more than approve or deny: it injected a correction lowering the refund under the threshold. resume() applied it and executed the lowered refund once. Same mechanism as answering a clarifying question.';
+    }
+    el.innerHTML = html;
+  }
+
+  function announce() {
+    var ann = document.getElementById("announce");
+    var t;
+    if (phase === "run") t = "Ready. The 180 dollar refund is over the 100 dollar threshold.";
+    else if (phase === "paused") t = "Paused at the approval gate. Token appr-1. No money has moved. Choose approve, deny, or steer.";
+    else if (phase === "approve") t = "Approved. The journal was replayed, step 0 memoized. Refunded 180 dollars to ORD-3300, effectively once. Ledger 180 dollars. Finished.";
+    else if (phase === "deny") t = "Denied. The journal was replayed. No money moved. Ledger empty. Finished with a refusal.";
+    else if (phase === "steer") t = "Steered to " + Number(steerAmount).toFixed(2) + " dollars, under the threshold. The journal was replayed and the corrected refund executed once. Ledger " + Number(steerAmount).toFixed(2) + " dollars. Finished.";
+    ann.textContent = t;
+  }
+
+  function render() {
+    setPhasePill();
+    renderControls();
+    renderDecisionZone();
+    renderReplayBadge();
+    renderJournal();
+    renderLedger();
+    renderResult();
+    renderFeed();
+    renderBlurb();
+    announce();
+  }
+
+  /* =====================================================================
+     Decision wiring (set up once; buttons live in static markup).
+  ===================================================================== */
+  function readSteer() {
+    var v = parseFloat(document.getElementById("steer-amount").value);
+    if (isNaN(v) || v < 0) v = 0;
+    return v;
+  }
+  function validateSteer() {
+    var warn = document.getElementById("steer-warn");
+    var v = readSteer();
+    var bad = v >= THRESHOLD;
+    warn.classList.toggle("show", bad);
+    return !bad;
+  }
+
+  document.getElementById("act-approve").addEventListener("click", function () {
+    if (phase !== "paused" || resolved) return;
+    resume("approve");
+  });
+  document.getElementById("act-deny").addEventListener("click", function () {
+    if (phase !== "paused" || resolved) return;
+    resume("deny");
+  });
+  document.getElementById("act-steer").addEventListener("click", function () {
+    if (phase !== "paused" || resolved) return;
+    if (!validateSteer()) { document.getElementById("steer-amount").focus(); return; }
+    resume("steer", readSteer());
+  });
+  document.getElementById("steer-amount").addEventListener("input", validateSteer);
+  document.querySelectorAll(".preset-btn").forEach(function (b) {
+    b.addEventListener("click", function () {
+      document.getElementById("steer-amount").value = b.getAttribute("data-preset");
+      validateSteer();
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
