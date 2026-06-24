@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Durable Agent, Part 9</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --slate: #64748b;
+  --slate-dark: #475569;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 860px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner .lead { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 16px 0 9px;
+}
+
+/* PHASE STRIP (where in the story we are) */
+.phase-strip {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.phase-pill {
+  flex: 1;
+  min-width: 110px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  text-align: center;
+  background: transparent;
+  border: none;
+  white-space: nowrap;
+}
+.phase-pill[data-active="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.phase-pill[data-active="true"].crash { color: var(--rose-dark); }
+.phase-pill[data-active="true"].naive { color: var(--rose-dark); }
+.phase-pill[data-active="true"].resume { color: var(--emerald-dark); }
+
+/* STEP CONTROLS */
+.step-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+}
+.step-btn:hover:not(:disabled) { background: #eef2ff; border-color: #c7d2fe; }
+.step-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.step-btn:disabled { opacity: 0.42; cursor: not-allowed; color: var(--text-muted); }
+.step-btn.primary { background: var(--indigo); color: #ffffff; border-color: var(--indigo); }
+.step-btn.primary:hover:not(:disabled) { background: var(--indigo-dark); }
+.step-btn.kill { background: var(--rose); color: #ffffff; border-color: var(--rose); }
+.step-btn.kill:hover:not(:disabled) { background: var(--rose-dark); border-color: var(--rose-dark); }
+.step-btn.naive { color: var(--rose-dark); }
+.step-btn.naive:hover:not(:disabled) { background: #fff1f2; border-color: #fecdd3; }
+.step-btn.resume { color: var(--emerald-dark); }
+.step-btn.resume:hover:not(:disabled) { background: #ecfdf5; border-color: #a7f3d0; }
+.step-progress { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+.step-progress .stepnum { font-family: var(--font-mono); color: var(--indigo-dark); }
+
+.strategy-blurb {
+  font-size: 12px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 9px 12px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  min-height: 56px;
+}
+.strategy-blurb strong { color: var(--indigo-dark); }
+.strategy-blurb.crash { background: #fff1f2; border-left-color: var(--rose); }
+.strategy-blurb.crash strong { color: var(--rose-dark); }
+.strategy-blurb.resume { background: #ecfdf5; border-left-color: var(--emerald); }
+.strategy-blurb.resume strong { color: var(--emerald-dark); }
+
+/* THREE-PANEL GRID */
+.stage { display: grid; grid-template-columns: 1.55fr 1fr; gap: 14px; }
+@media (max-width: 680px) { .stage { grid-template-columns: 1fr; } }
+
+.col-side { display: flex; flex-direction: column; gap: 14px; }
+
+.subpanel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+}
+.subpanel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.subpanel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.subpanel-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.subpanel-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.subpanel-body { padding: 11px 12px; }
+
+/* JOURNAL events */
+.journal-body { max-height: 360px; overflow-y: auto; }
+.journal-list { display: flex; flex-direction: column; gap: 6px; }
+.jrow {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fcfcfd;
+  padding: 7px 9px;
+  animation: fadeIn 0.18s ease;
+  border-left-width: 3px;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .jrow, .ledger-amount, .result-line { animation: none; transition: none; } }
+.jrow.t-run_started { border-left-color: var(--slate); }
+.jrow.t-llm_decided { border-left-color: var(--indigo); }
+.jrow.t-tool_result { border-left-color: var(--teal); }
+.jrow.t-finished    { border-left-color: var(--emerald); }
+.jrow.is-resume-new { background: #f5fbff; }
+.jrow-top { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; flex-wrap: wrap; }
+.jrow-seq {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.jrow-type {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+.jrow.t-run_started .jrow-type { color: var(--slate-dark); }
+.jrow.t-llm_decided .jrow-type { color: var(--indigo-dark); }
+.jrow.t-tool_result .jrow-type { color: var(--teal-dark); }
+.jrow.t-finished    .jrow-type { color: var(--emerald-dark); }
+.jrow-ts { margin-left: auto; font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
+.jrow-data { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-body); word-break: break-word; line-height: 1.45; }
+.jrow-data .k { color: var(--text-muted); }
+.jrow-data .arg { color: var(--amber-dark); }
+.jrow-flag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-top: 4px;
+}
+.jrow-flag.redecide { background: #eef2ff; color: var(--indigo-dark); border: 1px solid #c7d2fe; }
+.journal-empty { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 6px 2px; }
+
+/* the missing tool_result placeholder after the crash */
+.jgap {
+  border: 1px dashed #fecdd3;
+  border-radius: 8px;
+  background: #fff1f2;
+  padding: 7px 9px;
+  font-size: 10px;
+  color: var(--rose-dark);
+  line-height: 1.45;
+  animation: fadeIn 0.18s ease;
+}
+.jgap .gap-tag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--rose); color: #ffffff;
+  border-radius: 4px; padding: 1px 6px; margin-right: 6px;
+}
+
+/* LEDGER */
+.ledger-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fcfcfd;
+  padding: 10px 12px;
+}
+.ledger-order { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text-heading); }
+.ledger-amount {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--teal-dark);
+  transition: color 0.3s;
+}
+.ledger-amount.double { color: var(--rose-dark); }
+.ledger-amount.once { color: var(--emerald-dark); }
+.ledger-note {
+  font-size: 10.5px;
+  margin-top: 9px;
+  line-height: 1.5;
+  border-radius: 7px;
+  padding: 7px 9px;
+}
+.ledger-note.neutral { background: var(--chip-bg); border: 1px solid var(--border); color: var(--text-muted); }
+.ledger-note.double { background: #fff1f2; border: 1px solid #fecdd3; color: var(--rose-dark); }
+.ledger-note.once { background: #ecfdf5; border: 1px solid #a7f3d0; color: var(--emerald-dark); }
+.ledger-note strong { font-weight: 700; }
+
+/* KEYSTORE */
+.keystore-empty { font-size: 10.5px; color: var(--text-muted); font-style: italic; }
+.key-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  border-radius: 9px;
+  padding: 8px 10px;
+  animation: fadeIn 0.18s ease;
+}
+.key-icon {
+  width: 18px; height: 18px;
+  flex-shrink: 0;
+  color: var(--amber-dark);
+  margin-top: 1px;
+}
+.key-text { min-width: 0; }
+.key-name { font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--amber-dark); word-break: break-all; }
+.key-val { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); margin-top: 2px; word-break: break-word; }
+.key-hint { font-size: 10px; color: var(--amber-dark); margin-top: 7px; line-height: 1.45; }
+
+/* RESULT LINE */
+.result-line {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--chip-bg);
+  padding: 9px 11px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  transition: background 0.2s, border-color 0.2s;
+}
+.result-line.once { background: #ecfdf5; border-color: #a7f3d0; color: var(--emerald-dark); }
+.result-line.double { background: #fff1f2; border-color: #fecdd3; color: var(--rose-dark); }
+.result-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.result-line .answer { font-weight: 600; color: var(--text-heading); }
+.result-line.once .answer { color: var(--emerald-dark); }
+.result-line.double .answer { color: var(--rose-dark); }
+
+/* REPLAY HONESTY BADGE */
+.replay-badge {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin-bottom: 12px;
+  color: var(--indigo-dark);
+  line-height: 1.45;
+}
+.replay-badge.show { display: flex; }
+.replay-badge svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* CONTRAST + CAPTION */
+.contrast {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 3px solid var(--amber);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.contrast strong { color: var(--amber-dark); }
+.contrast code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  color: var(--amber-dark);
+}
+
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 14px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <h2 id="panel-heading">Crash mid-refund, then recover without charging twice</h2>
+  <p class="panel-subtitle">Build run 1 event by event. KILL the process at the worst moment: right after the refund posts, before its result is journaled. Then branch. A NAIVE RESTART re-runs everything and double-charges. A DURABLE RESUME replays the journal: step 0 is memoized, step 1 is re-attempted but the idempotency key is already honored, so the ledger stays at one refund.</p>
+
+  <div class="goal-banner">
+    <span class="lead">The world:</span> one run <code>run-7f3a</code>, frozen timestamps <code>2026-07-05T10:00:NNZ</code> by seq. Three durable artifacts must survive a crash: the <code>journal</code> (append-only events), the <code>keystore</code> (idempotency keys the provider honored), and the <code>ledger</code> (where money actually moved). State is the FOLD over the journal, never an in-memory variable.
+  </div>
+
+  <div class="section-label">Where we are in the story</div>
+  <div class="phase-strip" role="list" aria-label="Story phase">
+    <span class="phase-pill" id="ph-build" data-active="true" role="listitem">1 &#183; build run 1</span>
+    <span class="phase-pill crash" id="ph-crash" data-active="false" role="listitem">2 &#183; crash</span>
+    <span class="phase-pill" id="ph-branch" data-active="false" role="listitem">3 &#183; pick recovery</span>
+    <span class="phase-pill" id="ph-done" data-active="false" role="listitem">4 &#183; outcome</span>
+  </div>
+
+  <div class="strategy-blurb" id="blurb"></div>
+
+  <div class="step-controls" id="controls"></div>
+
+  <div class="replay-badge" id="replay-badge">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+    <span><strong>This is a faithful REPLAY of the journal, not a live process.</strong> Resume re-runs the same script over the same log. The decision for step 1 is re-made (you will see a second <code style="font-family:var(--font-mono)">llm_decided</code> for idx 1), but the refund EFFECT is not, because the provider already honored the key.</span>
+  </div>
+
+  <div class="section-label">The three durable artifacts</div>
+  <div class="stage">
+    <!-- JOURNAL -->
+    <div class="subpanel">
+      <div class="subpanel-head">
+        <span class="subpanel-dot" style="background:var(--indigo)"></span>
+        <span class="subpanel-title">journal &#183; append-only events (JSONL)</span>
+        <span class="subpanel-meta" id="journal-meta">0 events</span>
+      </div>
+      <div class="subpanel-body journal-body">
+        <div class="journal-list" id="journal" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <div class="col-side">
+      <!-- LEDGER -->
+      <div class="subpanel">
+        <div class="subpanel-head">
+          <span class="subpanel-dot" style="background:var(--teal)"></span>
+          <span class="subpanel-title">ledger &#183; the real side effect</span>
+        </div>
+        <div class="subpanel-body">
+          <div class="ledger-row">
+            <span class="ledger-order">ORD-3300</span>
+            <span class="ledger-amount" id="ledger-amount">$0.00</span>
+          </div>
+          <div class="ledger-note neutral" id="ledger-note">No money has moved yet.</div>
+        </div>
+      </div>
+
+      <!-- KEYSTORE -->
+      <div class="subpanel">
+        <div class="subpanel-head">
+          <span class="subpanel-dot" style="background:var(--amber)"></span>
+          <span class="subpanel-title">keystore &#183; provider's honored keys</span>
+        </div>
+        <div class="subpanel-body" id="keystore">
+          <div class="keystore-empty">empty &#8212; no idempotency key honored yet.</div>
+        </div>
+      </div>
+
+      <!-- RESULT -->
+      <div class="subpanel">
+        <div class="subpanel-head">
+          <span class="subpanel-dot" style="background:var(--emerald)"></span>
+          <span class="subpanel-title">result</span>
+        </div>
+        <div class="subpanel-body">
+          <div class="result-line" id="result-line">
+            <div class="result-label" id="result-label">run status</div>
+            <span id="result-text">Run not started.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="announce"></div>
+
+  <div class="contrast">
+    <strong>Memoization handles the easy crash; the idempotency key handles the hard one.</strong> If the crash had landed after the <code>tool_result</code> was journaled, replay would just memoize the recorded result and skip the tool. But the kill lands BEFORE that write, so the journal has no result for step 1 and memoization alone would re-run it. The stable key <code>ORD-3300:refund:180.00</code> is the only thing standing between resume and a second charge. This hardens Part 2's in-memory guard, which died with the process.
+  </div>
+
+  <div class="caption">
+    <strong>How we keep it honest:</strong> the journal here lives in a list and prints as JSONL; a real system appends to a file or SQLite so it outlives the process. The keystore models the payment provider's own idempotency, which is what makes effectively-once real in practice. Byte-reproducible replay holds only on this deterministic path; with a real LLM each decision is cached in the journal and replayed best-effort.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>journal / decision &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>tool result / ledger &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>idempotency key &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>effectively-once &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>crash / double charge
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =====================================================================
+     Verified facts from durable_agent.py (the single source of truth).
+     run_id run-7f3a; ts = "2026-07-05T10:00:" + seq(2 digits) + "Z".
+     Events are reproduced EXACTLY; only quoted strings are real.
+  ===================================================================== */
+  var RUN_ID = "run-7f3a";
+  var TS_BASE = "2026-07-05T10:00:";
+  function ts(seq) { return TS_BASE + (seq < 10 ? "0" + seq : "" + seq) + "Z"; }
+
+  var POLICY = "Refunds after the window are refundable minus a 10% restocking fee.";
+  var REFUND_RESULT = "refunded $180.00 to ORD-3300";
+  var KEY = "ORD-3300:refund:180.00";
+  var FINAL_ANSWER = "Refund of $180.00 for ORD-3300 is complete (processed exactly once).";
+
+  /* The seven canonical events, in seq order, exactly as the source emits them.
+     Each carries a renderer for its data line. */
+  function ev(seq, type, dataHtml, raw) {
+    return { seq: seq, type: type, ts: ts(seq), dataHtml: dataHtml, raw: raw };
+  }
+  var EVENTS = {
+    e0: ev(0, "run_started",
+      '<span class="k">run_id:</span> "run-7f3a"',
+      '{"data": {"run_id": "run-7f3a"}, "run_id": "run-7f3a", "seq": 0, "ts": "2026-07-05T10:00:00Z", "type": "run_started"}'),
+    e1: ev(1, "llm_decided",
+      '<span class="k">idx</span> 0 &#183; <span class="k">tool</span> search_policy &#183; <span class="k">args</span> {query: <span class="arg">"refund policy window"</span>}',
+      '{"data": {"args": {"query": "refund policy window"}, "idx": 0, "tool": "search_policy"}, "run_id": "run-7f3a", "seq": 1, "ts": "2026-07-05T10:00:01Z", "type": "llm_decided"}'),
+    e2: ev(2, "tool_result",
+      '<span class="k">idx</span> 0 &#183; <span class="k">tool</span> search_policy &#183; <span class="k">result</span> "' + POLICY + '"',
+      '{"data": {"idx": 0, "result": "' + POLICY + '", "tool": "search_policy"}, "run_id": "run-7f3a", "seq": 2, "ts": "2026-07-05T10:00:02Z", "type": "tool_result"}'),
+    e3: ev(3, "llm_decided",
+      '<span class="k">idx</span> 1 &#183; <span class="k">tool</span> process_refund &#183; <span class="k">args</span> {order_id: <span class="arg">"ORD-3300"</span>, amount: <span class="arg">180.0</span>}',
+      '{"data": {"args": {"amount": 180.0, "order_id": "ORD-3300"}, "idx": 1, "tool": "process_refund"}, "run_id": "run-7f3a", "seq": 3, "ts": "2026-07-05T10:00:03Z", "type": "llm_decided"}'),
+    // resume-only events (seq 4..6)
+    e4: ev(4, "llm_decided",
+      '<span class="k">idx</span> 1 &#183; <span class="k">tool</span> process_refund &#183; <span class="k">args</span> {order_id: <span class="arg">"ORD-3300"</span>, amount: <span class="arg">180.0</span>}',
+      '{"data": {"args": {"amount": 180.0, "order_id": "ORD-3300"}, "idx": 1, "tool": "process_refund"}, "run_id": "run-7f3a", "seq": 4, "ts": "2026-07-05T10:00:04Z", "type": "llm_decided"}'),
+    e5: ev(5, "tool_result",
+      '<span class="k">idx</span> 1 &#183; <span class="k">tool</span> process_refund &#183; <span class="k">result</span> "' + REFUND_RESULT + '"',
+      '{"data": {"idx": 1, "result": "' + REFUND_RESULT + '", "tool": "process_refund"}, "run_id": "run-7f3a", "seq": 5, "ts": "2026-07-05T10:00:05Z", "type": "tool_result"}'),
+    e6: ev(6, "finished",
+      '<span class="k">answer:</span> "' + FINAL_ANSWER + '"',
+      '{"data": {"answer": "' + FINAL_ANSWER + '"}, "run_id": "run-7f3a", "seq": 6, "ts": "2026-07-05T10:00:06Z", "type": "finished"}'),
+  };
+
+  /* =====================================================================
+     Build-phase script. Each entry appends a journal event and/or moves
+     the ledger / keystore, in the EXACT order the source produces them.
+  ===================================================================== */
+  // step ids during the "build run 1" phase
+  var BUILD = [
+    { id: "e0", journal: "e0", note: "Run begins. The first thing written is the run_started marker, keyed by the fixed run_id." },
+    { id: "e1", journal: "e1", note: "The controller decides step 0: search the policy. The decision is journaled BEFORE the tool runs." },
+    { id: "e2", journal: "e2", note: "search_policy is read-only. Its result is journaled. Step 0 is now durably complete." },
+    { id: "e3", journal: "e3", note: "The controller decides step 1: refund $180.00 to ORD-3300. Decision journaled; the tool has not run yet." },
+    // the refund EFFECT happens here, then the KILL button appears
+    { id: "effect", effect: true, note: "process_refund POSTS. The ledger moves to $180.00 and the provider records the key ORD-3300:refund:180.00 atomically with the charge. The tool_result is NOT journaled yet. This is the danger window." },
+  ];
+
+  /* =====================================================================
+     Live state.
+  ===================================================================== */
+  var phase = "build";      // build | crash | branch | naive | resume
+  var buildStep = 0;        // how many BUILD entries applied
+  var effectDone = false;   // refund posted in run 1
+  var crashed = false;
+
+  // journal is an ordered list of event-ids actually written
+  var journal = [];         // e.g. ["e0","e1","e2","e3"]
+  var showGap = false;      // show the "missing tool_result" placeholder
+  var ledger = 0.0;         // ORD-3300 balance
+  var keystore = {};        // key -> result
+  var resumeFlags = {};     // event-id -> { redecide: true } for badges
+  var newOnResume = {};     // event-id written during resume (highlight)
+  var ledgerTone = "";      // "", "double", "once"
+  var resultState = "";     // "", "double", "once"
+  var resultLabelText = "run status";
+  var resultText = "Run not started.";
+
+  /* ---------- helpers ---------- */
+  function setPhasePill() {
+    var map = { build: "ph-build", crash: "ph-crash", branch: "ph-branch", naive: "ph-done", resume: "ph-done" };
+    ["ph-build", "ph-crash", "ph-branch", "ph-done"].forEach(function (id) {
+      document.getElementById(id).setAttribute("data-active", "false");
+    });
+    document.getElementById(map[phase]).setAttribute("data-active", "true");
+    // colour the "outcome" pill by branch
+    var done = document.getElementById("ph-done");
+    done.classList.remove("naive", "resume");
+    if (phase === "naive") done.classList.add("naive");
+    if (phase === "resume") done.classList.add("resume");
+  }
+
+  function applyEffect() {
+    // the refund posts: ledger moves, key honored. Modeled as one atomic step.
+    ledger = 180.0;
+    keystore[KEY] = REFUND_RESULT;
+    effectDone = true;
+  }
+
+  /* =====================================================================
+     Phase transitions.
+  ===================================================================== */
+  function doBuildNext() {
+    if (buildStep >= BUILD.length) return;
+    var entry = BUILD[buildStep];
+    if (entry.journal) journal.push(entry.journal);
+    if (entry.effect) applyEffect();
+    buildStep++;
+    if (buildStep >= BUILD.length) {
+      // effect is done; we are now poised at the danger window
+      resultLabelText = "run 1 in flight";
+      resultText = "Refund posted to the provider. The tool_result has NOT been journaled. One KILL now and the journal will have no record that step 1 finished.";
+    }
+    render();
+  }
+
+  function doKill() {
+    crashed = true;
+    showGap = true;            // the missing tool_result placeholder
+    phase = "crash";
+    ledgerTone = "";
+    resultState = "double";    // visually flag danger (not yet doubled, but at risk)
+    resultLabelText = "process killed";
+    resultText = "PROCESS KILLED before the result was journaled. The journal stops at llm_decided idx 1 (seq 3). The ledger already shows $180.00. Memoization alone would re-run step 1, because no tool_result for it exists.";
+    render();
+  }
+
+  function gotoBranch() {
+    phase = "branch";
+    resultState = "";
+    resultLabelText = "post-crash state";
+    resultText = "This is what survived the crash: journal up to seq 3, ledger $180.00, key honored. Pick a recovery.";
+    render();
+  }
+
+  function doNaive() {
+    phase = "naive";
+    // Naive restart ignores the journal and idempotency: re-runs the whole plan.
+    // It does NOT touch the journal (it does not even read it); it just re-posts.
+    ledger = 360.0;
+    ledgerTone = "double";
+    resultState = "double";
+    resultLabelText = "double refund";
+    resultText = "NAIVE RESTART ran the plan from scratch with no idempotency check. process_refund posted a SECOND $180.00. Ledger ORD-3300 is now $360.00. This is the bug.";
+    render();
+  }
+
+  function doResume() {
+    phase = "resume";
+    // Durable resume: replay the journal. step 0 is memoized (idx 0 has a
+    // tool_result at seq 2). step 1 has NO tool_result, so it re-runs, but the
+    // key is already honored -> no second charge. Then it finishes.
+    // The journal grows: a SECOND llm_decided idx1 (seq4), tool_result idx1
+    // (seq5), finished (seq6). Ledger stays $180.00.
+    showGap = false;
+    journal.push("e4"); resumeFlags.e4 = { redecide: true }; newOnResume.e4 = true;
+    journal.push("e5"); newOnResume.e5 = true;
+    journal.push("e6"); newOnResume.e6 = true;
+    // ledger unchanged: exec_refund returns the stored result, no re-charge
+    ledgerTone = "once";
+    resultState = "once";
+    resultLabelText = "finished, effectively-once";
+    resultText = FINAL_ANSWER;
+    render();
+  }
+
+  function reset() {
+    phase = "build";
+    buildStep = 0; effectDone = false; crashed = false;
+    journal = []; showGap = false; ledger = 0.0; keystore = {};
+    resumeFlags = {}; newOnResume = {};
+    ledgerTone = ""; resultState = "";
+    resultLabelText = "run status"; resultText = "Run not started.";
+    render();
+  }
+
+  /* =====================================================================
+     Controls: which buttons exist depends on the phase.
+  ===================================================================== */
+  function renderControls() {
+    var el = document.getElementById("controls");
+    var html = "";
+    if (phase === "build") {
+      var atDanger = buildStep >= BUILD.length;
+      if (!atDanger) {
+        html += '<button class="step-btn primary" id="b-append" type="button">Append next event &#8594;</button>';
+        html += '<button class="step-btn" id="b-reset" type="button">Reset</button>';
+      } else {
+        html += '<button class="step-btn kill" id="b-kill" type="button">&#9888; KILL the process now</button>';
+        html += '<button class="step-btn" id="b-reset" type="button">Reset</button>';
+      }
+    } else if (phase === "crash") {
+      html += '<button class="step-btn primary" id="b-branch" type="button">Recover &#8594;</button>';
+      html += '<button class="step-btn" id="b-reset" type="button">Reset</button>';
+    } else if (phase === "branch") {
+      html += '<button class="step-btn naive" id="b-naive" type="button">Naive restart (re-run from scratch)</button>';
+      html += '<button class="step-btn resume" id="b-resume" type="button">Durable resume (replay the journal)</button>';
+      html += '<button class="step-btn" id="b-reset" type="button">Reset</button>';
+    } else { // naive or resume
+      html += '<button class="step-btn" id="b-rewind" type="button">&#8592; Back to the crash</button>';
+      html += '<button class="step-btn" id="b-reset" type="button">Reset</button>';
+    }
+    el.innerHTML = html;
+
+    var progress = '<span class="step-progress" id="progress"></span>';
+    el.insertAdjacentHTML("beforeend", progress);
+
+    bind("b-append", doBuildNext);
+    bind("b-kill", doKill);
+    bind("b-branch", gotoBranch);
+    bind("b-naive", doNaive);
+    bind("b-resume", doResume);
+    bind("b-rewind", gotoBranch);
+    bind("b-reset", reset);
+  }
+  function bind(id, fn) {
+    var b = document.getElementById(id);
+    if (b) b.addEventListener("click", fn);
+  }
+
+  /* =====================================================================
+     Render the journal, ledger, keystore, result, blurb.
+  ===================================================================== */
+  function keyIcon() {
+    return '<svg class="key-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>';
+  }
+
+  function renderJournal() {
+    var list = document.getElementById("journal");
+    var meta = document.getElementById("journal-meta");
+    if (journal.length === 0) {
+      list.innerHTML = '<div class="journal-empty">No events yet. Press <strong>Append next event</strong> to build run 1.</div>';
+      meta.textContent = "0 events";
+      return;
+    }
+    var html = "";
+    journal.forEach(function (eid, i) {
+      var e = EVENTS[eid];
+      var cls = "jrow t-" + e.type + (newOnResume[eid] ? " is-resume-new" : "");
+      html += '<div class="' + cls + '">';
+      html += '<div class="jrow-top">';
+      html += '<span class="jrow-seq">seq ' + e.seq + '</span>';
+      html += '<span class="jrow-type">' + e.type + '</span>';
+      html += '<span class="jrow-ts">' + e.ts + '</span>';
+      html += '</div>';
+      html += '<div class="jrow-data">' + e.dataHtml + '</div>';
+      if (resumeFlags[eid] && resumeFlags[eid].redecide) {
+        html += '<span class="jrow-flag redecide">re-decided on resume &#183; same decision, effect not repeated</span>';
+      }
+      html += '</div>';
+      // after seq 3 during/after the crash, show the missing tool_result gap
+      if (eid === "e3" && showGap) {
+        html += '<div class="jgap"><span class="gap-tag">missing</span>'
+          + 'no <strong>tool_result</strong> for step 1 (idx 1). The refund posted, but the process died before this line could be written. This gap is exactly why memoization alone is not enough.'
+          + '</div>';
+      }
+    });
+    list.innerHTML = html;
+    meta.textContent = "seq 0.." + EVENTS[journal[journal.length - 1]].seq + " &#183; " + journal.length + " events";
+    meta.innerHTML = "up to seq " + EVENTS[journal[journal.length - 1]].seq;
+  }
+
+  function renderLedger() {
+    var amt = document.getElementById("ledger-amount");
+    var note = document.getElementById("ledger-note");
+    amt.textContent = "$" + ledger.toFixed(2);
+    amt.className = "ledger-amount" + (ledgerTone ? " " + ledgerTone : "");
+    note.className = "ledger-note " + (ledgerTone || "neutral");
+    if (ledger === 0.0) {
+      note.innerHTML = "No money has moved yet.";
+    } else if (ledgerTone === "double") {
+      note.innerHTML = "<strong>DOUBLE REFUND.</strong> The same $180.00 posted twice. The customer was charged back twice for one return.";
+    } else if (ledgerTone === "once") {
+      note.innerHTML = "<strong>Still one refund.</strong> Resume re-attempted step 1, but the key was already honored, so no second charge. Effectively-once.";
+    } else {
+      note.innerHTML = "The refund DID post: $180.00 moved. The crash happened after this.";
+    }
+  }
+
+  function renderKeystore() {
+    var el = document.getElementById("keystore");
+    var keys = Object.keys(keystore);
+    if (keys.length === 0) {
+      el.innerHTML = '<div class="keystore-empty">empty &#8212; no idempotency key honored yet.</div>';
+      return;
+    }
+    var html = "";
+    keys.forEach(function (k) {
+      html += '<div class="key-chip">' + keyIcon()
+        + '<div class="key-text"><div class="key-name">' + k + '</div>'
+        + '<div class="key-val">&#8594; "' + keystore[k] + '"</div></div></div>';
+    });
+    var hint;
+    if (phase === "resume") {
+      hint = "Resume re-issued this SAME key. The provider recognized it and returned the stored result instead of charging again.";
+    } else if (phase === "naive") {
+      hint = "The naive restart never consulted this key, so it charged a second time anyway.";
+    } else {
+      hint = "Recorded atomically with the charge, so the key survives even a crash at the worst moment.";
+    }
+    html += '<div class="key-hint">' + hint + '</div>';
+    el.innerHTML = html;
+  }
+
+  function renderResult() {
+    var line = document.getElementById("result-line");
+    var label = document.getElementById("result-label");
+    var text = document.getElementById("result-text");
+    line.className = "result-line" + (resultState ? " " + resultState : "");
+    var prefix = "";
+    if (resultState === "once") prefix = '&#10003; ';
+    else if (resultState === "double") prefix = '&#9888; ';
+    label.innerHTML = prefix + resultLabelText;
+    if (phase === "resume") {
+      text.innerHTML = '<span class="answer">' + resultText + '</span>';
+    } else if (phase === "naive") {
+      text.innerHTML = '<span class="answer">' + resultText + '</span>';
+    } else {
+      text.textContent = resultText;
+    }
+  }
+
+  function renderBlurb() {
+    var el = document.getElementById("blurb");
+    el.className = "strategy-blurb";
+    var html;
+    if (phase === "build") {
+      if (buildStep < BUILD.length) {
+        var entry = BUILD[buildStep];
+        html = '<strong>Building run 1.</strong> ' + entry.note;
+      } else {
+        el.className = "strategy-blurb crash";
+        html = '<strong>The danger window.</strong> The refund effect is done and the ledger shows $180.00, but the <code style="font-family:var(--font-mono)">tool_result</code> for step 1 has not been journaled. Press KILL to crash here, the one spot memoization cannot cover.';
+      }
+    } else if (phase === "crash") {
+      el.className = "strategy-blurb crash";
+      html = '<strong>Crashed.</strong> What survives on disk: the journal up to seq 3, the ledger ($180.00), and the honored key. The journal has no tool_result for step 1. Now choose how to recover.';
+    } else if (phase === "branch") {
+      html = '<strong>Two recoveries, one safe.</strong> A naive restart ignores the journal and the key and simply re-runs the plan. A durable resume folds the journal, memoizes finished steps, and leans on the key for the side effect.';
+    } else if (phase === "naive") {
+      el.className = "strategy-blurb crash";
+      html = '<strong>Naive restart: the bug.</strong> With no journal and no idempotency check, step 1 posts a second $180.00. The ledger is now $360.00. The obvious recovery (just run it again) is the dangerous one.';
+    } else if (phase === "resume") {
+      el.className = "strategy-blurb resume";
+      html = '<strong>Durable resume: effectively-once.</strong> Folding the journal shows step 0 already finished, so it is memoized. Step 1 has no recorded result, so it re-runs, but the provider already honored the key and returns the original result. The ledger stays $180.00. The run finishes for real.';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderProgress() {
+    var prog = document.getElementById("progress");
+    if (!prog) return;
+    var lastSeq = journal.length ? EVENTS[journal[journal.length - 1]].seq : -1;
+    var txt;
+    if (phase === "build" && buildStep < BUILD.length) {
+      txt = '<span class="stepnum">' + journal.length + '</span> event(s) written';
+    } else if (phase === "build") {
+      txt = 'refund posted &#183; <span class="stepnum">' + journal.length + '</span> events';
+    } else if (phase === "crash") {
+      txt = 'journal frozen at <span class="stepnum">seq ' + lastSeq + '</span>';
+    } else if (phase === "branch") {
+      txt = 'recovering from <span class="stepnum">seq ' + lastSeq + '</span>';
+    } else if (phase === "naive") {
+      txt = 'ledger <span class="stepnum">$360.00</span>';
+    } else if (phase === "resume") {
+      txt = 'journal grows to <span class="stepnum">seq 6</span>';
+    }
+    prog.innerHTML = txt;
+  }
+
+  function renderReplayBadge() {
+    var b = document.getElementById("replay-badge");
+    b.classList.toggle("show", phase === "resume");
+  }
+
+  function announce() {
+    var ann = document.getElementById("announce");
+    var t;
+    if (phase === "naive") {
+      t = "Naive restart. Ledger ORD-3300 is now 360 dollars. Double refund.";
+    } else if (phase === "resume") {
+      t = "Durable resume. Step 0 memoized, step 1 idempotent, key already honored. Ledger stays 180 dollars. Finished, effectively once. Journal grew to seq 6.";
+    } else if (phase === "crash") {
+      t = "Process killed before the tool result for step 1 was journaled. Ledger 180 dollars. Journal frozen at seq 3.";
+    } else if (phase === "build" && buildStep >= BUILD.length) {
+      t = "Refund posted. Ledger 180 dollars. Tool result not yet journaled. Ready to kill.";
+    } else {
+      t = journal.length + " events in the journal.";
+    }
+    ann.textContent = t;
+  }
+
+  function render() {
+    setPhasePill();
+    renderControls();
+    renderJournal();
+    renderLedger();
+    renderKeystore();
+    renderResult();
+    renderBlurb();
+    renderProgress();
+    renderReplayBadge();
+    announce();
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
