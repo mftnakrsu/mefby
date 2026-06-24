@@ -1,0 +1,158 @@
+---
+title: "Dört Bellek"
+description: "Düz bir buffer ne olduğunu neyin doğru olduğundan bir görevin nasıl yapılacağından ayırt edemez, ve read-only tool'lar state'i güncelleyemez. Dört typed store artı self-editing memory bunu düzeltir."
+date: 2026-07-02
+tags: ["Agents","Memory","MemGPT","Self-Editing","Letta","AI"]
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-06-four-memories-self-editing"
+lang: "tr"
+translationSlug: "four-memories-self-editing"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Part 5, agent'a bir episodic buffer verdi: bir trial'ın yazıp bir sonrakinin okuduğu, sözel derslerden oluşan düz bir liste. Bu, bir tür bilgiyi koşular arasında taşımaya yetiyordu, ve hemen bir sonraki boşluğu açığa çıkarır. Düz bir liste üç farklı bilgi TÜRÜNÜ birbirinden ayırt edemez. Ne OLDUĞU (kullanıcı bugün erken saatlerde bir return açtı) bir event'tir. Neyin DOĞRU olduğu (kullanıcı Dana, email tercih ediyor) durable bir fact'tir. Bir görevin nasıl YAPILACAĞI (pencereden sonraki return'ler %10'luk bir fee taşır, 0.9 ile çarp) bir prosedürdür. Üçünü de tek bir listeye tıkıştırın, retrieval gürültülenir, fact'ler event'lerin altına gömülür, ve öğrenilmiş bir prosedür tek seferlik bir not gibi okunur. Daha kötüsü, agent'ın Part 5'e kadar sahip olduğu her tool READ-ONLY idi: RAG Part 19'un tool'ları yalnızca fetch ediyordu, ve agent kendi state'ini hiçbir zaman bilinçli olarak GÜNCELLEYEMİYORDU. Bu parça her ikisini de düzeltir. Önce, tuttukları bilginin türüne göre **dört typed memory**, MemGPT ve Letta'da kullanılan bir cognitive-science taksonomisi: **working** (şu an ne yapıyoruz), **semantic** (neyin doğru olduğu), **episodic** (ne olduğu), ve **procedural** (bir görevin nasıl yapılacağı), gelen her öğeyi sınıflandırıp doğru store'a gönderen bir **write router** ile. İkincisi, **bir action olarak memory**: `memory_append` ve `memory_replace` birinci sınıf tool'lar haline gelir, Part 1 sözleşmesiyle declare edilir, controller'ın in-loop yeniden yazdığı labeled **core block'lar** üzerinde. Agent, kendi state'inin read-only bir tüketicisi olmaktan çıkar. Ve işletim sistemlerinden ödünç alınmış, ortogonal üçüncü bir taslak, access pattern'a göre bir **placement hierarchy**: **core** (her zaman context'te), **recall** (yakın zamanlı, page'lenerek getirilen), ve **archival** (büyük, search edilen). Archival read, RAG retrieval'ı bir black-box tool olarak yeniden kullanır, yeniden türettiğimiz bir şey olarak değil.
+
+## Ön koşullar
+
+Temel Python yeterli: fonksiyonlar, bir dictionary, bir liste ve bir string check. Hepsi bu. [Part 1](/essays/augmented-llm-loop)'den [Part 5](/essays/reflection-and-reflexion)'e kadarını bitirmek yardımcı olur, çünkü Part 1'in tool sözleşmesine (memory tool'ları onu tam olarak yeniden kullanır) ve Part 5'in düz reflection buffer'ına (bu parça onu nihayet type'lar) yaslanıyoruz. Ama bu yazı kendi içinde bütünlüklü: daha önceki bir fikre dayandığı yerde, onu tek bir cümleyle yeniden ifade eder. Eşlik eden kod, [four_memories.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-06-four-memories-self-editing), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz. Deterministik bir kural router'ı ve controller'ı varsayılan olarak source of truth'tur, gerçek LLM yolu (`generate()`) tek bir ortam bayrağı uzaklıkta, tam olarak Part 1'den 5'e kadarki gibi.
+
+## Part 5'ten bu yana yeni olan ne
+
+Neyin yeni olduğu konusunda kesin olmak istiyorum, çünkü çoğu şey değil. RAG serisinde hiçbir zaman typed memory yoktu: RAG Part 20 DÜZ bir buffer taşıdı ve query condensation yaptı, ki bu tamamen farklı bir operasyondur (bir takip sorusunu bağımsız bir soruya yeniden yazar, bilgiyi türe göre ayırmaz). RAG Part 19'un tool'ları yalnızca OKUDU; hiçbiri state'i geri yazmadı. Dolayısıyla typed dört-store taksonomisi, write router, ve bir action olarak memory RAG'de gerçekten yok, ve bu parçanın inşa ettiği şey bunlar. Tek RAG temas noktası gerçek ve yüksek sesle adlandırmaya değer: **archival** read, RAG retrieval'ı BİR BLACK-BOX TOOL OLARAK yeniden kullanır. Burada embedding'leri, similarity'yi ya da vector database'leri YENİDEN TÜRETMİYORUZ. O, RAG Part 2'den 4'e kadardı, ve onu yeniden öğretmek boşa harcanmış sayfalar olurdu. Vector search, memory sisteminin çağırdığı tek bir read tool'a indirgenir, ve sonucunu opak olarak ele alırız. Loop'u ya da tool sözleşmesini de yeniden öğretmiyorum; Part 1 onlara sahip, ve memory tool'ları onları yalnızca yeniden kullanır.
+
+## Dört tür bilgi
+
+Taksonomi cognitive science'tan gelir, ki orada psikologlar belleği nerede oturduğuna göre değil, sakladığı şeyin türüne göre ayırır. MemGPT ve Letta aynı ayrımı agent'lara taşır. Dört tür, her biri tek satır:
+
+```text
+  working    what we are doing now   (volatile scratchpad)
+  semantic   what is TRUE            (durable facts: the user, the world)
+  episodic   what HAPPENED           (an event log; formalizes Part 5's buffer)
+  procedural how to DO a task        (learned rules; e.g. Part 5's promoted reflection)
+```
+
+İki soy satırına dikkat edin, çünkü bu parçayı bir öncekine bağlarlar. **Episodic** memory typed bir event log'udur, ve Part 5'in düz reflection buffer'ını formalleştirir: buffer zaten olan şeylerin bir listesiydi, dolayısıyla en başından beri episodic memory'ydi, sadece typed değildi. **Procedural** memory öğrenilmiş kuralları tutar, ki bu tam olarak Part 5'in promoted reflection'ının ait olduğu yerdir: "sipariş toplamını 0.9 ile çarp" dersi bir event değil bir prosedürdür, ve şimdi event log'u olmayan, yaşayacağı bir yere sahip. Bunları düzgün tutan mekanizma bir **write router**'dır: gelen bir öğe verildiğinde, öğenin hangi tür bilgi olduğuna karar verir ve onu eşleşen store'a gönderir. Onun dört gerçek girdiyi route edişini izleyin, artefaktın çıktısından:
+
+```text
+  route -> semantic   (a durable fact about the user)
+           "Hi, I'm Dana and I prefer email contact."
+  route -> episodic   (an event that happened)
+           'User opened a return request for ORD-3300 earlier today.'
+  route -> procedural (a reusable how-to rule)
+           'Returns after the 30-day window incur a 10% restocking fee; multiply the total by 0.9.'
+  route -> working    (the current task focus)
+           'Quoting the refund for ORD-3300 now.'
+```
+
+Her route kararını okuyun, çünkü router bütün ayrımın kendisidir. Dana'nın kendini tanıtması kullanıcının kim olduğuna dair durable bir fact'tir, dolayısıyla **semantic**'e gider. Return talebi zamanın bir noktasında olmuş bir şeydir, dolayısıyla **episodic**'e gider. Fee kuralı yeniden kullanılabilir bir how-to'dur, dolayısıyla **procedural**'a gider. Ve "şimdi refund'u quote ediyoruz" mevcut odak noktasıdır, volatile ve değişmek üzeredir, dolayısıyla **working**'e gider. Route'tan sonra, her store tam olarak kendi türünü tutar:
+
+```text
+  Stores after routing:
+    CORE.user_profile : 'name: Dana; prefers email'
+    CORE.task_state   : 'Quoting the refund for ORD-3300 now.'
+    EPISODIC          : ['User opened a return request for ORD-3300 earlier today.']
+    PROCEDURAL        : ['Returns after the 30-day window incur a 10% restocking fee; multiply the total by 0.9.']
+```
+
+İşaret etmeye değer bir detay: semantic write, Dana'nın ham cümlesini saklamadı. `'name: Dana; prefers email'`'i, normalize edilmiş, kompakt bir profili sakladı. O normalizasyon, daha sonraki bir edit'in tüm bir ham cümle yerine temiz bir ifadeyi hedeflemesini sağlayan şeydir, ki bu da bir sonraki bölümdür. Offline router şeffaf bir kural policy'sidir; gerçek bir sistem gövdesini tek bir `generate()` sınıflandırma çağrısıyla değiştirir. Diagram 1 dört store'u onları dolduran router'ın yanına yerleştirir.
+
+<Diagram number={1} caption="The four typed memory stores and the write router that fills them. An incoming item enters the write router, which classifies it by the kind of knowledge it carries and sends it to one of four stores: working (what we are doing now, a volatile scratchpad), semantic (what is true, durable facts about the user and the world), episodic (what happened, an event log that formalizes Part 5's flat reflection buffer), and procedural (how to do a task, learned rules such as Part 5's promoted multiply-by-0.9 reflection). Each store has its own read path. The figure traces the four refund-world inputs to their stores: Dana's introduction to semantic, the return request to episodic, the restocking-fee rule to procedural, and the current task focus to working.">
+  <img src="/essays/four-memories-self-editing/part6-four-memories.svg" alt="A diagram of a write router at the centre with one incoming item arrow on the left. The router fans out to four labelled store boxes on the right. The first, working, is tinted volatile and labelled what we are doing now, a scratchpad, holding the current task focus quoting the refund for ORD-3300 now. The second, semantic, is labelled what is true, durable facts, holding name Dana, prefers email. The third, episodic, is labelled what happened, an event log, with a note that it formalizes Part 5's flat reflection buffer, holding the event user opened a return request for ORD-3300 earlier today. The fourth, procedural, is labelled how to do a task, learned rules, with a note that it holds Part 5's promoted reflection, containing the rule returns after the 30-day window incur a 10% restocking fee, multiply the total by 0.9. Four coloured routing arrows trace each of the four inputs from the router to its matching store. A caption strip reads: one router, four stores, sorted by the kind of knowledge, not by where it sits." class="w-full rounded-lg" />
+</Diagram>
+
+## Bir action olarak memory
+
+Router, bilgi dışarıdan geldiğinde yazar. Ama bir görevin ortasındaki bir controller çoğu zaman zaten bildiğini bilinçli olarak yeniden yazmaya ihtiyaç duyar: bir kullanıcı bir fact'i düzeltir, bir görev yeni bir detay edinir. Part 5'e kadar agent bunu yapamıyordu, çünkü sahip olduğu her tool read-only idi. Bu parça, MemGPT ve Letta'nın üzerine kurulduğu hamleyi tanıtır: **bir action olarak memory**. `memory_append` ve `memory_replace` birinci sınıf tool'lar haline gelir, Part 1 sözleşmesiyle declare edilir (typed bir schema, çağrı tetiklenmeden önce validate edilir), labeled **core block'lar** (`user_profile`, `task_state`) üzerinde işler. Controller kendi persistent memory'sini yeniden yazmak için onları in-loop çağırır. Üç edit'i izleyin, artefaktın çıktısından:
+
+```text
+  memory_replace(block='user_profile', old='prefers email', new='prefers phone')
+    -> replaced 'prefers email' with 'prefers phone' in user_profile
+  memory_append(block='task_state', text='order ORD-3300, $200, returned after the window')
+    -> appended to task_state
+  memory_replace(block='preferences', old='x', new='y')
+    -> [error] unknown memory block 'preferences'
+```
+
+Üçünü de okuyun. İlki bir düzeltmedir: Dana artık phone tercih ediyor, dolayısıyla `memory_replace`, `user_profile` içinde `'prefers email'`'i `'prefers phone'` ile değiştirir, ve profil temiz bir ifadeye normalize edildiği için edit tam olarak o ifadeyi hedefler. İkincisi, zaten orada olanı bozmadan `task_state`'e yeni bir görev detayı append eder. Üçüncüsü ilginç olanıdır: var olmayan `'preferences'` adlı bir block'u hedefler, ve hata fırlatmak yerine `[error] unknown memory block 'preferences'` döndürür. Bu, Part 2'den **error-as-observation** yeniden çerçevelemesidir: kötü bir memory edit'i bir çökme olarak değil, controller'ın üzerine action alabileceği okunabilir bir observation olarak geri gelir. Part 1 validator'ı her çağrıda önce çalışır, dolayısıyla hatalı bir argüman tool gövdesi çalışmadan önce reddedilir; yalnızca iyi biçimli çağrılar store'a ulaşır, ve o zaman bile bilinmeyen bir block raporlanır, çökmez. İşte başarılı edit'lerden sonra iki core block:
+
+```text
+  CORE.user_profile : 'name: Dana; prefers phone'
+  CORE.task_state   : 'Quoting the refund for ORD-3300 now.; order ORD-3300, $200, returned after the window'
+  The agent corrected a durable fact about the user with a single tool call.
+```
+
+Edit'ten önce profil `'name: Dana; prefers email'` okuyordu; sonra `'name: Dana; prefers phone'` okur. Agent kendisi hakkında durable bir fact'i, in-loop, validate edilmiş bir tool çağrısıyla düzeltti. Bu parçayı kendinden öncekilerden ayıran satır budur: agent artık state'in read-only bir tüketicisi değildir. Diagram 2, bir tool çağrısıyla edit edilen bir core block çizer.
+
+<Diagram number={2} caption="A labeled core-memory block being edited by a validated tool call, the MemGPT and Letta self-editing move done by hand. The user_profile core block starts as name Dana, prefers email. A memory_replace tool call, declared with the Part 1 contract and validated before it fires, targets the clean phrase prefers email and swaps it for prefers phone, leaving the block as name Dana, prefers phone. A second panel shows a memory_replace against a block named preferences that does not exist returning the observation unknown memory block, the error-as-observation reframe from Part 2: a bad edit comes back as a readable observation, not a crash. The point: memory is an action the agent takes with tools, not just state it reads.">
+  <img src="/essays/four-memories-self-editing/part6-self-editing-block.svg" alt="A diagram in two panels. The left panel shows a labelled core-memory block named user_profile containing the text name Dana, prefers email. A tool call memory_replace with block user_profile, old prefers email, new prefers phone enters through a Part 1 contract validator gate marked validated before firing, then targets the phrase prefers email inside the block and rewrites it, so the block now reads name Dana, prefers phone, with a green note replaced prefers email with prefers phone in user_profile. The right panel shows a second memory_replace call targeting a block named preferences, which passes the schema validator but hits an unknown block, returning a rose-tinted observation unknown memory block preferences, labelled error-as-observation from Part 2, not a crash. A caption strip reads: memory_append and memory_replace make memory an action the agent takes, the MemGPT and Letta core-memory editing done by hand." class="w-full rounded-lg" />
+</Diagram>
+
+## Memory nerede yaşar
+
+Dört-store taksonomisi belleği bilginin TÜRÜNE göre sıralar. İkinci, ortogonal bir soru var: ACCESS PATTERN'a göre, bir bellek parçası fiziksel olarak nerede yaşar, ve nasıl okunur? MemGPT cevabı işletim sistemlerinden ödünç alır, ki onlar aynı problemi RAM ve disk için çözdüler: her zaman mevcut küçük hızlı bir tier, ve talep üzerine page'lenerek getirilen büyük yavaş tier'lar. Üç tier:
+
+```text
+  core      always in context  -> user_profile, task_state (above)
+  recall    recent, paged in   -> last episodic event: 'User opened a return request for ORD-3300 earlier today.'
+  archival  large, searched    -> vector_search (black-box RAG; not re-derived here):
+             query 'restocking fee returns after the window'
+             -> 'Returns after the 30-day window are still refundable, minus a 10% restocking fee.' (score=0.63)
+```
+
+**Core**, her zaman context window'unda olan labeled block'lardır, agent'ın memory tool'larıyla edit ettiği olanlar. **Recall**, talep üzerine page'lenerek getirilen yakın zamanlı episodic event'lerdir, burada Dana'nın tetiklediği son event. **Archival**, büyük store'dur, context'te tutulamayacak kadar büyük, yalnızca search ederek okunur. Ve işte yüksek sesle okunacak kısım: archival read `vector_search('restocking fee returns after the window')`'dur, ki bir chunk ve `0.63` skoru döndürür, ve bir **black-box RAG çağrısıdır**. Trace onu bilerek `(black-box RAG; not re-derived here)` olarak etiketler. İçeriği, embedding'ler, similarity metriği, index, RAG Part 2'den 4'e kadarın konusudur, ve onları yeniden inşa etmiyoruz. Vector search, memory sisteminin çağırdığı ve sonucunu opak olarak ele aldığı tek bir read tool'a indirgenir. O indirgeme, RAG'i bir agent'ın içine koymanın bütün noktasıdır: retrieval artık sistemin kendisi değildir, core ve recall cevaba sahip olmadığında controller'ın uzandığı bir memory tier'ıdır. İnteraktif figür, bir öğenin router'dan bir store'a akışını izlemenizi, sonra bir read'in core, recall ve archival'dan çekişini izlemenizi sağlar.
+
+<Diagram number={3} caption="The memory router and the OS-style access hierarchy, interactive. The top half shows the write path: drop one of the four refund-world inputs into the write router and watch it land in working, semantic, episodic, or procedural. The bottom half shows the three placement tiers by access pattern: core (always in context, the labeled user_profile and task_state blocks the agent edits with tools), recall (recent episodic events paged in, here the last return event), and archival (the large store read only via a black-box vector_search that returns a chunk and a score of 0.63). The archival panel is labeled black-box RAG, not re-derived here, to make plain that vector search is demoted to one read tool, with embeddings and the index left to RAG Parts 2 through 4.">
+  <IframeFigure src="/essays/four-memories-self-editing/part6-memory-router.html" title="Interactive memory router and access-hierarchy player. The top half is the write path: four buttons load the refund-world inputs (Dana's introduction, the return request event, the restocking-fee rule, and the current task focus) into a write router, which animates the item travelling into one of four typed stores: working holds quoting the refund for ORD-3300 now, semantic holds name Dana prefers email, episodic holds the event user opened a return request for ORD-3300 earlier today, and procedural holds the rule returns after the 30-day window incur a 10% restocking fee multiply the total by 0.9. The bottom half is the OS-style access hierarchy with three tiers. Core, always in context, shows the editable user_profile and task_state blocks. Recall, recent and paged in, shows the last episodic event. Archival, large and searched, runs vector_search with the query restocking fee returns after the window and returns the chunk returns after the 30-day window are still refundable minus a 10% restocking fee with score 0.63, under a banner reading black-box RAG, not re-derived here, vector search demoted to one read tool. A note states the taxonomy sorts by kind of knowledge while the hierarchy sorts by access pattern, and the two are orthogonal." height={860} />
+</Diagram>
+
+## Dördü birden
+
+Asıl kazanç, tek bir grounded reply üretmek için dört belleği birlikte okumaktır. Controller kullanıcının adını ve tercihini **semantic**'ten, canlı görevi **working**'ten, fee kuralını **procedural**'dan, destekleyici policy chunk'ını **archival**'dan, ve tetikleyici event'i **episodic**'ten çeker, sonra besteler:
+
+```text
+  semantic   (user_profile): name: Dana; prefers phone
+  working    (task_state)  : Quoting the refund for ORD-3300 now.; order ORD-3300, $200, returned after the window
+  procedural (rule)        : Returns after the 30-day window incur a 10% restocking fee; multiply the total by 0.9.
+  archival   (RAG chunk)   : Returns after the 30-day window are still refundable, minus a 10% restocking fee.
+  episodic   (event)       : User opened a return request for ORD-3300 earlier today.
+
+  REPLY: Hi Dana, for ORD-3300 returned after the 30-day window your refund is
+         $180.00 (the 10% restocking fee applies). We will call you by phone.
+```
+
+Reply'daki her fact'i kendi store'una kadar izleyin. "Hi Dana" adı ve kapanış "We will call you by phone", `memory_replace` ile yaptığımız düzeltme de dahil, **semantic** memory'den gelir: agent Dana'nın artık email değil phone tercih ettiğini hatırlar. Sipariş ve after-the-window çerçevelemesi **working** ve **episodic**'ten gelir. `$180.00`, $200'lık siparişe uygulanan **procedural** kuraldır ($200 çarpı 0.9), pencereden sonraki return'lerin %10'luk bir fee düşülerek refundable olduğunu doğrulayan **archival** policy chunk'ı ile desteklenir. Beş typed kaynak, tek bir tutarlı cevap, ve hiçbiri diğerlerinin altına gömülmemiş. Düz bir listenin yapamadığı şey budur.
+
+> 💡 **Deneyimden.** Beni nihayet typed memory'ye ikna eden bug, tüm belleği büyüyen tek bir mesaj ve event listesi olan bir agent'tı. Bir kullanıcı ona, uzun bir oturumun erken bir noktasında, hesabının USD değil EUR olduğunu söyledi. Kırk tur sonra, bir yığın "fetched order", "called API", "got 200" event satırının altına gömülmüş o tek durable fact fiilen yok olmuştu: retrieval adımı yakın zamanlı oldukları için yakın zamanlı event'leri sürekli yüzeye çıkardı, ve currency notu orada gürültü tarafından oyçokluğuyla ezilmiş halde oturdu, bir daha asla context'e çekilmedi. Agent bir euro müşterisine dolar cinsinden bir refund quote etti, iki kez. Çözüm daha büyük bir context window ya da düz liste üzerinde daha iyi bir retriever değildi. Durable bir fact ile bir event'i aynı tür şey gibi ele almayı bırakmaktı. Currency notu her zaman context'te olan bir semantic store'a girdi, API event'leri zamanla eskiyen bir episodic log'a girdi, ve fact gürültüyle yarışmayı bıraktı çünkü artık aynı yığında değildi. Agent inşa etme şeklimi değiştiren ikinci şey, agent'ın o semantic store'u bir tool'la edit etmesine izin vermekti. Önceden, bir kullanıcı düzeltmesi geçmişteki, modelin ağırlık verebileceği ya da vermeyebileceği bir başka mesajdı; sonrasında, agent bayat fact'i `memory_replace` edebildi ve düzeltme turlar arasında gerçekten yapıştı, çünkü modelin fark etmesi gereken bir cümle eklemek yerine okuduğu şeyi yeniden yazmıştı.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Özet / Çıkarımlar
+
+- Part 5'in reflection buffer'ı **düz bir listedir**, ve düz bir liste ne OLDUĞUNU (bir event) neyin DOĞRU olduğundan (durable bir fact) bir görevin nasıl YAPILACAĞINDAN (bir prosedür) ayırt edemez; fact'ler event'lerin altına gömülür ve öğrenilmiş bir kural tek seferlik bir not gibi okunur.
+- Çare, bilginin türüne göre **dört typed memory**'dir: **working** (şimdi), **semantic** (doğru), **episodic** (oldu), **procedural** (nasıl yapılır), Dana'nın tanıtımını semantic'e, return'ü episodic'e, fee kuralını procedural'a, ve mevcut görevi working'e route eden bir **write router** ile doldurulur. Episodic Part 5'in buffer'ını formalleştirir; procedural Part 5'in promoted kuralını tutar.
+- Part 5'e kadar her tool **read-only** idi (RAG Part 19 yalnızca fetch etti). Bu parça **memory'yi bir action** yapar: `memory_append` ve `memory_replace`, Part 1 sözleşmesiyle, tetiklenmeden önce validate edilen, labeled **core block'lar** üzerindeki tool'lardır. Agent `user_profile`'ı tek bir çağrıyla `prefers email`'den `prefers phone`'a yeniden yazdı.
+- Kötü bir edit bir çökme değil, bir **observation**'dır: eksik bir block üzerinde `memory_replace`, Part 2'nin error-as-observation yeniden çerçevelemesi olarak `[error] unknown memory block 'preferences'` döndürür. Bu, elle yapılmış MemGPT ve Letta core-memory editing pattern'idir.
+- İkinci, ortogonal bir taslak belleği **access pattern**'a göre, OS tarzı sıralar: **core** (her zaman context'te), **recall** (yakın zamanlı episodic, page'lenerek getirilen), **archival** (büyük, search edilen). Archival, `0.63` skorunda bir chunk döndüren `vector_search(...)`'tür, bir **black-box RAG çağrısı**: vector search tek bir read tool'a indirgenir, ve embedding'ler ile index YENİDEN TÜRETİLMEZ (o, RAG Part 2'den 4'e kadardı).
+- Birlikte okunduğunda, dört store tek bir grounded reply besteler: ORD-3300 için `$180.00`, phone tercihi onurlandırılarak, her fact kendi store'una izlenebilir ve hiçbiri diğerleri tarafından bastırılmamış halde.
+
+## Sözlük
+
+- **Working memory**: agent'ın şu an ne yaptığının volatile scratchpad'i (burada `task_state` block'u); sürekli değişir ve persist etmesi amaçlanmaz.
+- **Semantic memory**: kullanıcı ve dünya hakkında durable fact'ler (burada `user_profile` block'u, `name: Dana; prefers phone`); şimdi doğru ve muhtemelen sonra da doğru, event'lerin altına gömülmemesi gereken türden şey.
+- **Episodic memory**: ne olduğunun bir event log'u (bugün erken saatlerdeki return talebi); bu, en başından beri episodic olan Part 5'in düz reflection buffer'ının typed halidir.
+- **Procedural memory**: öğrenilmiş how-to kuralları (%10'luk restocking-fee kuralı, toplamı 0.9 ile çarp); burası Part 5'in promoted reflection'ının, bir event değil bir prosedür olarak, ait olduğu yerdir.
+- **Write router**: gelen bir öğeyi taşıdığı bilginin türüne göre sınıflandırıp eşleşen store'a route eden policy; offline'da şeffaf bir kural policy'si, gerçek bir sistemde tek bir `generate()` sınıflandırma çağrısı.
+- **Core memory block**: agent'ın her turda okuduğu ve tool'larla edit ettiği, labeled, her zaman context'te olan bir bellek parçası (`user_profile`, `task_state`).
+- **memory_append / memory_replace (bir action olarak memory)**: Part 1 sözleşmesiyle declare edilen ve tetiklenmeden önce validate edilen, controller'ın bir core block yazmak ya da yeniden yazmak için in-loop çağırdığı birinci sınıf tool'lar; memory'yi agent'ın okuduğu bir state değil, yaptığı bir şey haline getirirler.
+- **MemGPT / Letta core-memory editing**: MemGPT'de doğan ve Letta'ya taşınan, bir agent'ın kendi persistent memory'sini tool çağrılarıyla yeniden yazdığı pattern; bu parça onu elle yeniden inşa eder.
+- **OS tier'ları (core / recall / archival)**: kind-of-knowledge taksonomisine ortogonal, access pattern'a göre bir placement hierarchy: core her zaman context'tedir, recall page'lenerek getirilen yakın zamanlı bellektir, archival yalnızca search ile okunan büyük store'dur.
+- **Black-box archival retrieval**: archival read, sonucu (bir chunk ve bir skor) opak olarak ele alınan tek bir `vector_search` çağrısıdır; vector search tek bir read tool'a indirgenir, embedding'ler, similarity ve index RAG Part 2'den 4'e kadara bırakılır ve burada yeniden türetilmez.
+
+---
+
+Bu parçanın kuralı: belleği tuttuğu bilginin türüne göre ayırın, böylece doğru fact doğru yerde yaşar, ve agent'a kendi core memory'sini yeniden yazacak tool'lar verin, böylece bir düzeltme gürültüyle yarışmak yerine gerçekten yapışır. Ama henüz çözmediğimiz şeye dikkat edin. Buradaki her store yalnızca büyür. Episodic log event'leri sonsuza dek append eder, archival store birikir, ve yeterince uzun bir koşu, ne kadar temiz type'lanmış olursa olsun context window'unu taşırır. Yalnızca büyüyen bir bellek sonunda yeni bir tür gürültü haline gelir: doğru şeyden çok fazla. **Part 7, Surviving the Long Haul**, compaction ve unutma ile ilgilidir: bir agent kendi belleğini nasıl özetler ve budar ki uzun bir koşu budget'ı içinde kalsın, ki RAG Part 20'nin eski turları özetleme notu nihayet burada karşılığını bulur.

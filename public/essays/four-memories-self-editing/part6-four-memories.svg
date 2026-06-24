@@ -1,0 +1,312 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" width="100%" style="height:auto" role="img" aria-label="The four typed memories fed by a central write router. An incoming item enters the write router, which classifies it by the kind of knowledge it carries and sends it to one of four labeled stores. Working memory holds what we are doing now, a volatile scratchpad, example task_state quoting the refund for ORD-3300 now. Semantic memory holds what is true, durable facts, example user_profile name Dana prefers email. Episodic memory holds what happened, an event log that formalizes Part 5's reflection buffer, example user opened a return request for ORD-3300 earlier today. Procedural memory holds how to do a task, learned rules that hold Part 5's promoted reflection, example returns after the window incur a 10% fee, multiply the total by 0.9. Off to the side an OS style placement sketch maps the stores onto three access tiers, core always in context, recall recent and paged in, archival large and searched via a black-box vector search reusing RAG, not re-derived here.">
+  <title>The four typed memories and the write router, with OS-style placement tiers</title>
+
+  <defs>
+    <marker id="arrSlate" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#64748b"/>
+    </marker>
+    <marker id="arrIndigo" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#6366f1"/>
+    </marker>
+    <marker id="arrAmber" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#14b8a6"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <polygon points="0 0, 10 4, 0 8" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <!-- Page background -->
+  <rect width="1200" height="820" fill="#f8fafc"/>
+
+  <!-- Top-right label -->
+  <text x="1170" y="30" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">AGENTS FROM FIRST PRINCIPLES</text>
+  <text x="1170" y="46" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#94a3b8">Part 6, the four typed memories and the write router</text>
+
+  <!-- Title -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="18" font-weight="700" fill="#0f172a">Four typed memories, by the KIND of knowledge they hold, fed by one write router</text>
+  <text x="40" y="54"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#64748b">A flat buffer cannot tell what HAPPENED from what is TRUE from how to DO a task. The router classifies each item and routes it to the matching store.</text>
+
+  <!-- ================= INCOMING ITEM + WRITE ROUTER ================= -->
+  <rect x="40" y="96" width="250" height="58" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+  <text x="54" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#64748b" letter-spacing="0.04em">INCOMING ITEM</text>
+  <text x="54" y="138"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#334155">a turn, an event, a fact, a rule ...</text>
+
+  <!-- arrow item -> router -->
+  <line x1="290" y1="125" x2="356" y2="125" stroke="#64748b" stroke-width="2.4" marker-end="url(#arrSlate)"/>
+
+  <!-- WRITE ROUTER block -->
+  <rect x="360" y="92" width="480" height="66" rx="12" fill="#f1f5f9" stroke="#475569" stroke-width="2"/>
+  <rect x="360" y="92" width="480" height="28" rx="12" fill="#475569"/>
+  <rect x="360" y="106" width="480" height="14" fill="#475569"/>
+  <text x="380" y="111"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">WRITE ROUTER</text>
+  <text x="820" y="111" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">classify by KIND of knowledge</text>
+  <text x="380" y="142"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#334155">Reads the item, decides which store it belongs in, writes it there. One rule policy offline; one classification call live.</text>
+
+  <!-- ================= FAN-OUT ARROWS to the four stores ================= -->
+  <!-- working (indigo) -->
+  <line x1="450" y1="158" x2="200" y2="232" stroke="#6366f1" stroke-width="2.4" marker-end="url(#arrIndigo)"/>
+  <text x="300" y="186"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#4f46e5">working</text>
+  <!-- semantic (amber) -->
+  <line x1="560" y1="158" x2="500" y2="232" stroke="#f59e0b" stroke-width="2.4" marker-end="url(#arrAmber)"/>
+  <text x="520" y="200"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#b45309">semantic</text>
+  <!-- episodic (teal) -->
+  <line x1="650" y1="158" x2="730" y2="232" stroke="#14b8a6" stroke-width="2.4" marker-end="url(#arrTeal)"/>
+  <text x="708" y="200"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#0d9488">episodic</text>
+  <!-- procedural (emerald) -->
+  <line x1="770" y1="158" x2="1030" y2="232" stroke="#10b981" stroke-width="2.4" marker-end="url(#arrEmerald)"/>
+  <text x="930" y="186"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#047857">procedural</text>
+
+  <!-- ================= FOUR STORE CARDS (row at y=240) ================= -->
+
+  <!-- WORKING (indigo) -->
+  <rect x="40" y="240" width="270" height="210" rx="13" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <rect x="40" y="240" width="270" height="30" rx="13" fill="#6366f1"/>
+  <rect x="40" y="255" width="270" height="15" fill="#6366f1"/>
+  <text x="58" y="261"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">WORKING</text>
+  <text x="292" y="261" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">volatile</text>
+  <text x="58" y="292"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">what we are doing now</text>
+  <text x="58" y="312"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#4f46e5">a volatile scratchpad for the current task</text>
+  <text x="58" y="346"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="700" fill="#64748b" letter-spacing="0.04em">EXAMPLE ITEM</text>
+  <rect x="58" y="354" width="234" height="44" rx="7" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <text x="70" y="372"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#312e81">task_state:</text>
+  <text x="70" y="386"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#312e81">Quoting the refund for ORD-3300 now.</text>
+  <rect x="58" y="412" width="234" height="24" rx="6" fill="#e0e7ff" stroke="#c7d2fe" stroke-width="1"/>
+  <text x="70" y="428"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#4f46e5">CORE block, edited by memory tools</text>
+
+  <!-- SEMANTIC (amber) -->
+  <rect x="330" y="240" width="270" height="210" rx="13" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <rect x="330" y="240" width="270" height="30" rx="13" fill="#f59e0b"/>
+  <rect x="330" y="255" width="270" height="15" fill="#f59e0b"/>
+  <text x="348" y="261"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">SEMANTIC</text>
+  <text x="582" y="261" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">durable</text>
+  <text x="348" y="292"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">what is TRUE</text>
+  <text x="348" y="312"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#b45309">durable facts about the user and the world</text>
+  <text x="348" y="346"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="700" fill="#64748b" letter-spacing="0.04em">EXAMPLE ITEM</text>
+  <rect x="348" y="354" width="234" height="44" rx="7" fill="#ffffff" stroke="#fde68a" stroke-width="1.2"/>
+  <text x="360" y="372"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#78350f">user_profile:</text>
+  <text x="360" y="386"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#78350f">name: Dana; prefers email</text>
+  <rect x="348" y="412" width="234" height="24" rx="6" fill="#fef3c7" stroke="#fde68a" stroke-width="1"/>
+  <text x="360" y="428"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#b45309">CORE block, edited by memory tools</text>
+
+  <!-- EPISODIC (teal) -->
+  <rect x="620" y="240" width="270" height="210" rx="13" fill="#f0fdfa" stroke="#14b8a6" stroke-width="2"/>
+  <rect x="620" y="240" width="270" height="30" rx="13" fill="#14b8a6"/>
+  <rect x="620" y="255" width="270" height="15" fill="#14b8a6"/>
+  <text x="638" y="261"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">EPISODIC</text>
+  <text x="872" y="261" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">event log</text>
+  <text x="638" y="292"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">what HAPPENED</text>
+  <text x="638" y="312"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#0d9488">an append-only event log</text>
+  <text x="638" y="346"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="700" fill="#64748b" letter-spacing="0.04em">EXAMPLE ITEM</text>
+  <rect x="638" y="354" width="234" height="44" rx="7" fill="#ffffff" stroke="#99f6e4" stroke-width="1.2"/>
+  <text x="650" y="372"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#134e4a">User opened a return request</text>
+  <text x="650" y="386"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#134e4a">for ORD-3300 earlier today.</text>
+  <rect x="638" y="412" width="234" height="24" rx="6" fill="#ccfbf1" stroke="#99f6e4" stroke-width="1"/>
+  <text x="650" y="428"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#0d9488">formalizes Part 5's reflection buffer</text>
+
+  <!-- PROCEDURAL (emerald) -->
+  <rect x="910" y="240" width="270" height="210" rx="13" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <rect x="910" y="240" width="270" height="30" rx="13" fill="#10b981"/>
+  <rect x="910" y="255" width="270" height="15" fill="#10b981"/>
+  <text x="928" y="261"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.02em">PROCEDURAL</text>
+  <text x="1162" y="261" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#ffffff">learned rules</text>
+  <text x="928" y="292"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#0f172a">how to DO a task</text>
+  <text x="928" y="312"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#047857">learned how-to rules</text>
+  <text x="928" y="346"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="700" fill="#64748b" letter-spacing="0.04em">EXAMPLE ITEM</text>
+  <rect x="928" y="354" width="234" height="44" rx="7" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+  <text x="940" y="372"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#064e3b">Returns after the window incur a</text>
+  <text x="940" y="386"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#064e3b">10% fee; multiply the total by 0.9.</text>
+  <rect x="928" y="412" width="234" height="24" rx="6" fill="#d1fae5" stroke="#a7f3d0" stroke-width="1"/>
+  <text x="940" y="428"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9" fill="#047857">holds Part 5's promoted reflection</text>
+
+  <!-- ================= OS-STYLE PLACEMENT TIERS (lower band) ================= -->
+  <text x="40" y="506"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#0f172a">An orthogonal sketch: placement by ACCESS PATTERN (an OS-style hierarchy)</text>
+  <text x="40" y="525"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#64748b">The same stores, mapped onto three tiers by how they are reached, not by what kind of knowledge they hold.</text>
+
+  <!-- CORE tier -->
+  <rect x="40" y="544" width="360" height="160" rx="12" fill="#ffffff" stroke="#0f172a" stroke-width="1.6"/>
+  <rect x="40" y="544" width="360" height="28" rx="12" fill="#0f172a"/>
+  <rect x="40" y="558" width="360" height="14" fill="#0f172a"/>
+  <text x="58" y="563"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">CORE</text>
+  <text x="382" y="563" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">always in context</text>
+  <text x="58" y="594"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#334155">The labeled blocks, held in the prompt every step.</text>
+  <rect x="58" y="606" width="160" height="30" rx="7" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.2"/>
+  <text x="138" y="625" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#4f46e5">working: task_state</text>
+  <rect x="226" y="606" width="160" height="30" rx="7" fill="#fffbeb" stroke="#fde68a" stroke-width="1.2"/>
+  <text x="306" y="625" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" fill="#b45309">semantic: user_profile</text>
+  <text x="58" y="664"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#64748b">These are the blocks the agent rewrites with memory_append</text>
+  <text x="58" y="678"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#64748b">and memory_replace (see the self-editing figure).</text>
+
+  <!-- RECALL tier -->
+  <rect x="420" y="544" width="320" height="160" rx="12" fill="#ffffff" stroke="#14b8a6" stroke-width="1.6"/>
+  <rect x="420" y="544" width="320" height="28" rx="12" fill="#14b8a6"/>
+  <rect x="420" y="558" width="320" height="14" fill="#14b8a6"/>
+  <text x="438" y="563"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">RECALL</text>
+  <text x="722" y="563" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">recent, paged in</text>
+  <text x="438" y="594"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#334155">The latest episodic events, brought into context on demand.</text>
+  <rect x="438" y="610" width="284" height="36" rx="7" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.2"/>
+  <text x="450" y="626"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#134e4a">last episodic event:</text>
+  <text x="450" y="639"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="8.5" fill="#134e4a">User opened a return request for ORD-3300 ...</text>
+  <text x="438" y="668"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#64748b">Maps to the EPISODIC store: too large to hold all of,</text>
+  <text x="438" y="682"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#64748b">so only the recent tail is paged in.</text>
+
+  <!-- ARCHIVAL tier -->
+  <rect x="760" y="544" width="420" height="160" rx="12" fill="#f1f5f9" stroke="#475569" stroke-width="1.6"/>
+  <rect x="760" y="544" width="420" height="28" rx="12" fill="#475569"/>
+  <rect x="760" y="558" width="420" height="14" fill="#475569"/>
+  <text x="778" y="563"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#ffffff" letter-spacing="0.03em">ARCHIVAL</text>
+  <text x="1162" y="563" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#ffffff">large, searched</text>
+  <text x="778" y="594"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#334155">A big store read ONLY through a search tool.</text>
+  <rect x="778" y="606" width="384" height="30" rx="7" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="790" y="625"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9" fill="#334155">vector_search('restocking fee returns ...')  &#8594; chunk (score=0.63)</text>
+  <rect x="778" y="644" width="384" height="26" rx="6" fill="#0f172a"/>
+  <text x="970" y="661" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="9.5" font-weight="700" fill="#ffffff">black-box vector search (RAG, not re-derived)</text>
+  <text x="778" y="688"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" fill="#64748b">Embeddings, similarity, the index: all from RAG Parts 2 to 4, demoted here to one read tool.</text>
+
+  <!-- ================= BOTTOM CAPTION ================= -->
+  <rect x="40" y="724" width="1140" height="56" rx="10" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1.2"/>
+  <text x="60" y="748"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#475569">Two axes, not one. The four KINDS (working, semantic, episodic, procedural) say what a memory IS; the three TIERS (core, recall, archival)</text>
+  <text x="60" y="766"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#475569">say how it is REACHED. A write router places by kind; the access tiers decide what fits in context now versus what is searched on demand.</text>
+
+</svg>

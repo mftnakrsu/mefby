@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Four Memories, Part 6</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 820px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner span { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+.goal-banner .amt { font-family: var(--font-mono); font-weight: 700; color: var(--text-heading); }
+
+/* SEGMENTED TOGGLE */
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  flex: 1;
+  min-width: 150px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.toggle-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.toggle-btn[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--indigo-dark);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px var(--border);
+}
+.toggle-btn .mode-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.strategy-blurb {
+  font-size: 12px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.strategy-blurb strong { color: var(--indigo-dark); }
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 16px 0 9px;
+}
+
+/* ===== STEP CONTROLS ===== */
+.step-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+}
+.step-btn:hover:not(:disabled) { background: #eef2ff; border-color: #c7d2fe; }
+.step-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.step-btn:disabled { opacity: 0.45; cursor: not-allowed; color: var(--text-muted); }
+.step-btn.primary { background: var(--indigo); color: #ffffff; border-color: var(--indigo); }
+.step-btn.primary:hover:not(:disabled) { background: var(--indigo-dark); }
+.step-progress {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-left: auto;
+}
+.step-progress .stepnum { font-family: var(--font-mono); color: var(--indigo-dark); }
+
+/* ===== ROUTER STAGE ===== */
+.router-stage { display: flex; flex-direction: column; gap: 12px; }
+
+/* the incoming-item card being routed */
+.inbox-card {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #ffffff;
+  overflow: hidden;
+}
+.inbox-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--chip-bg);
+}
+.inbox-head .ih-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+.inbox-head .ih-which { font-size: 10.5px; color: var(--text-muted); font-weight: 600; margin-left: auto; font-family: var(--font-mono); }
+.inbox-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 9px; animation: fadeIn 0.2s ease; }
+@media (prefers-reduced-motion: reduce) { .inbox-body, .store-fill, .edit-card, .reply-box { animation: none; } }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.inbox-quote {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-heading);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.route-arrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+}
+.route-arrow .ra-pre { color: var(--text-muted); font-weight: 600; }
+.route-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 5px;
+  padding: 3px 9px;
+  color: #ffffff;
+}
+.route-pill.working { background: var(--indigo); }
+.route-pill.semantic { background: var(--amber); }
+.route-pill.episodic { background: var(--teal); }
+.route-pill.procedural { background: var(--emerald); }
+.route-reason { font-size: 11px; color: var(--text-muted); font-style: italic; }
+
+/* ===== FOUR STORE PANELS ===== */
+.stores-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 6px;
+}
+@media (max-width: 560px) { .stores-grid { grid-template-columns: 1fr; } }
+.store {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.store-head {
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.store-head .s-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.store-head .s-name {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.store-head .s-kind { font-size: 10px; color: var(--text-muted); margin-left: auto; font-weight: 600; }
+.store-def { font-size: 10.5px; color: var(--text-muted); padding: 7px 11px 2px; line-height: 1.45; }
+.store-body {
+  padding: 8px 11px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 64px;
+  flex: 1;
+}
+.store-empty {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 8px 2px;
+}
+.store-fill {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.45;
+  border-radius: 7px;
+  padding: 6px 8px;
+  word-break: break-word;
+  animation: fadeIn 0.22s ease;
+}
+.store-fill .label-key { font-weight: 700; }
+/* per-store palette */
+.store.working { border-color: #c7d2fe; }
+.store.working .store-head { background: #eef2ff; border-bottom-color: #c7d2fe; }
+.store.working .s-dot { background: var(--indigo); }
+.store.working .s-name { color: var(--indigo-dark); }
+.store.working .store-fill { background: #eef2ff; color: #312e81; border: 1px solid #c7d2fe; }
+.store.working .store-fill .label-key { color: var(--indigo-dark); }
+
+.store.semantic { border-color: #fde68a; }
+.store.semantic .store-head { background: #fffbeb; border-bottom-color: #fde68a; }
+.store.semantic .s-dot { background: var(--amber); }
+.store.semantic .s-name { color: var(--amber-dark); }
+.store.semantic .store-fill { background: #fffbeb; color: #78350f; border: 1px solid #fde68a; }
+.store.semantic .store-fill .label-key { color: var(--amber-dark); }
+
+.store.episodic { border-color: #99f6e4; }
+.store.episodic .store-head { background: #f0fdfa; border-bottom-color: #99f6e4; }
+.store.episodic .s-dot { background: var(--teal); }
+.store.episodic .s-name { color: var(--teal-dark); }
+.store.episodic .store-fill { background: #f0fdfa; color: #134e4a; border: 1px solid #99f6e4; }
+.store.episodic .store-fill .label-key { color: var(--teal-dark); }
+
+.store.procedural { border-color: #a7f3d0; }
+.store.procedural .store-head { background: #ecfdf5; border-bottom-color: #a7f3d0; }
+.store.procedural .s-dot { background: var(--emerald); }
+.store.procedural .s-name { color: var(--emerald-dark); }
+.store.procedural .store-fill { background: #ecfdf5; color: #064e3b; border: 1px solid #a7f3d0; }
+.store.procedural .store-fill .label-key { color: var(--emerald-dark); }
+
+/* a value that just changed via a memory tool flashes */
+.store-fill.is-updated { box-shadow: 0 0 0 2px var(--amber); }
+
+/* core marker on the two CORE blocks */
+.core-flag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 6px;
+}
+
+/* ===== MEMORY-AS-TOOL EDITS ===== */
+.edit-list { display: flex; flex-direction: column; gap: 9px; }
+.edit-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: fadeIn 0.2s ease;
+}
+.edit-call {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-heading);
+  word-break: break-word;
+  line-height: 1.45;
+}
+.edit-call .fn { color: var(--amber-dark); font-weight: 700; }
+.edit-call .arg-k { color: var(--text-muted); }
+.edit-call .arg-v { color: var(--indigo-dark); }
+.edit-gate {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+}
+.gate-pill {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.gate-pill.ok { background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0; }
+.gate-pill.bad { background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3; }
+.edit-obs {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  border-radius: 7px;
+  padding: 6px 9px;
+  line-height: 1.45;
+}
+.edit-obs.ok { background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0; }
+.edit-obs.err { background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3; }
+.edit-obs .obs-tag {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  margin-right: 5px;
+}
+
+/* ===== ARCHIVAL / OS TIERS ===== */
+.tiers-grid { display: flex; gap: 10px; flex-wrap: wrap; }
+.tier {
+  flex: 1;
+  min-width: 200px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+.tier-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.tier-map { font-size: 11px; color: var(--text-body); line-height: 1.5; }
+.tier-map code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.tier.archival { border-color: #cbd5e1; background: #f8fafc; }
+.archival-search {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-heading);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 6px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.archival-search .fn { color: var(--text-muted); font-weight: 700; }
+.archival-result {
+  font-size: 10.5px;
+  color: var(--text-body);
+  margin-top: 6px;
+  line-height: 1.45;
+  background: var(--chip-bg);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.archival-result .score { font-family: var(--font-mono); font-weight: 700; color: var(--text-heading); }
+.blackbox-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 2px 7px;
+  display: inline-block;
+  margin-top: 7px;
+}
+
+/* ===== COMPOSED REPLY ===== */
+.reply-box {
+  margin-top: 16px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 11px 13px;
+  animation: fadeIn 0.22s ease;
+}
+.reply-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--emerald-dark);
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.reply-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+.src-chip {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: #ffffff;
+}
+.src-chip.working { background: var(--indigo); }
+.src-chip.semantic { background: var(--amber); }
+.src-chip.episodic { background: var(--teal); }
+.src-chip.procedural { background: var(--emerald-dark); }
+.src-chip.archival { background: #475569; }
+.reply-text { font-size: 12.5px; color: #064e3b; line-height: 1.55; }
+.reply-text .amt { font-family: var(--font-mono); font-weight: 700; }
+
+/* CAPTION / LEGEND */
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption .swatch {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== PANEL A: THE WRITE ROUTER + FOUR STORES ===================== -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <h2 id="panel-a-heading">The write router: four turns, four typed stores</h2>
+  <p class="panel-subtitle">A flat buffer cannot tell what HAPPENED from what is TRUE from how to DO a task. Feed in four turns and watch the write router classify each by KIND of knowledge and drop it in the matching store. Each store has its own read path.</p>
+
+  <div class="goal-banner">
+    <span>The world:</span> the same refund desk. User <code>Dana</code>, order <code>ORD-3300</code>, a <span class="amt">$200.00</span> order returned AFTER the 30-day window, a 10% restocking fee, so the policy-correct refund is <span class="amt">$180.00</span>.
+    <br />The four kinds: <strong style="color:var(--indigo-dark)">working</strong> (now), <strong style="color:var(--amber-dark)">semantic</strong> (true), <strong style="color:var(--teal-dark)">episodic</strong> (happened), <strong style="color:var(--emerald-dark)">procedural</strong> (how-to). Episodic formalizes Part 5's reflection buffer; procedural holds Part 5's promoted rule.
+  </div>
+
+  <!-- step controls -->
+  <div class="step-controls">
+    <button class="step-btn" id="btn-prev" type="button">&#8592; Back</button>
+    <button class="step-btn primary" id="btn-next" type="button">Route next turn &#8594;</button>
+    <button class="step-btn" id="btn-reset" type="button">Reset</button>
+    <span class="step-progress" id="step-progress"></span>
+  </div>
+
+  <div class="strategy-blurb" id="route-blurb">Press <strong>Route next turn</strong>. The router reads each turn, decides which KIND of knowledge it is, and sends it to one of the four stores. Offline the router is a transparent rule policy; a real system swaps the body for one classification call.</div>
+
+  <div class="router-stage" id="router-stage" aria-live="polite"></div>
+
+  <div class="section-label">The four stores, filling live</div>
+  <div class="stores-grid">
+    <div class="store working" id="store-working">
+      <div class="store-head"><span class="s-dot"></span><span class="s-name">working</span><span class="s-kind">what we are doing now</span></div>
+      <div class="store-def">volatile scratchpad. CORE block <code style="font-family:var(--font-mono)">task_state</code>.</div>
+      <div class="store-body" id="body-working"></div>
+    </div>
+    <div class="store semantic" id="store-semantic">
+      <div class="store-head"><span class="s-dot"></span><span class="s-name">semantic</span><span class="s-kind">what is TRUE</span></div>
+      <div class="store-def">durable facts about the user and the world. CORE block <code style="font-family:var(--font-mono)">user_profile</code>.</div>
+      <div class="store-body" id="body-semantic"></div>
+    </div>
+    <div class="store episodic" id="store-episodic">
+      <div class="store-head"><span class="s-dot"></span><span class="s-name">episodic</span><span class="s-kind">what HAPPENED</span></div>
+      <div class="store-def">an event log. Formalizes Part 5's flat reflection buffer.</div>
+      <div class="store-body" id="body-episodic"></div>
+    </div>
+    <div class="store procedural" id="store-procedural">
+      <div class="store-head"><span class="s-dot"></span><span class="s-name">procedural</span><span class="s-kind">how to DO a task</span></div>
+      <div class="store-def">learned rules. Holds Part 5's promoted reflection.</div>
+      <div class="store-body" id="body-procedural"></div>
+    </div>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="router-announcer"></div>
+</section>
+
+<!-- ===================== PANEL B: MEMORY AS AN ACTION ===================== -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <h2 id="panel-b-heading">Memory as an action: the agent rewrites its own core blocks</h2>
+  <p class="panel-subtitle">Every tool through Part 5 was read-only. Here <code style="font-family:var(--font-mono);font-size:11px">memory_append</code> and <code style="font-family:var(--font-mono);font-size:11px">memory_replace</code> are first-class tools, declared with the Part 1 contract (typed schema, validated before they fire) over the labeled CORE blocks. The controller calls them in-loop to edit its own persistent memory. This is MemGPT/Letta by hand.</p>
+
+  <div class="step-controls">
+    <button class="step-btn" id="btn-edit-prev" type="button">&#8592; Back</button>
+    <button class="step-btn primary" id="btn-edit-next" type="button">Apply next edit &#8594;</button>
+    <button class="step-btn" id="btn-edit-reset" type="button">Reset</button>
+    <span class="step-progress" id="edit-progress"></span>
+  </div>
+
+  <div class="strategy-blurb" id="edit-blurb">Each call passes through <code style="font-family:var(--font-mono)">validate()</code> first (Part 1's gate). A valid call edits a CORE block; an invalid one returns an error AS an observation (Part 2), it does not crash. Watch <code style="font-family:var(--font-mono)">user_profile</code> change from "prefers email" to "prefers phone".</div>
+
+  <div class="section-label">The two CORE blocks (always in context)</div>
+  <div class="stores-grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="store semantic" id="core-profile">
+      <div class="store-head"><span class="s-dot"></span><span class="s-name">user_profile</span><span class="core-flag">CORE</span></div>
+      <div class="store-body" id="body-core-profile"></div>
+    </div>
+    <div class="store working" id="core-task">
+      <div class="store-head"><span class="s-dot"></span><span class="s-name">task_state</span><span class="core-flag">CORE</span></div>
+      <div class="store-body" id="body-core-task"></div>
+    </div>
+  </div>
+
+  <div class="section-label">The tool calls, validated then fired</div>
+  <div class="edit-list" id="edit-list" aria-live="polite"></div>
+
+  <div class="sr-only" aria-live="polite" id="edit-announcer"></div>
+</section>
+
+<!-- ===================== PANEL C: OS TIERS + ARCHIVAL + REPLY ===================== -->
+<section class="panel" aria-labelledby="panel-c-heading">
+  <h2 id="panel-c-heading">Placement (core / recall / archival), and one reply from all four memories</h2>
+  <p class="panel-subtitle">Orthogonal to the four KINDS is an OS-style sketch by ACCESS PATTERN: what is always in context, what is paged in, what is searched. The archival read reuses RAG retrieval as a black-box tool. We do not re-derive embeddings, similarity, or vector databases here. Vector search is demoted to one read tool.</p>
+
+  <div class="tiers-grid">
+    <div class="tier">
+      <div class="tier-label">core &middot; always in context</div>
+      <div class="tier-map">The labeled blocks <code>user_profile</code>, <code>task_state</code> (the ones the agent edits above).</div>
+    </div>
+    <div class="tier">
+      <div class="tier-label">recall &middot; recent, paged in</div>
+      <div class="tier-map">The last episodic event: <span style="font-family:var(--font-mono);font-size:10px;color:var(--teal-dark)">User opened a return request for ORD-3300 earlier today.</span></div>
+    </div>
+    <div class="tier archival">
+      <div class="tier-label">archival &middot; large, searched</div>
+      <div class="tier-map">A big store read only through a search tool.</div>
+      <div class="archival-search"><span class="fn">vector_search</span>('restocking fee returns after the window')</div>
+      <div class="archival-result">&#8627; 'Returns after the 30-day window are still refundable, minus a 10% restocking fee.' <span class="score">(score=0.63)</span></div>
+      <span class="blackbox-badge">black-box RAG, not re-derived here</span>
+    </div>
+  </div>
+
+  <div class="reply-box">
+    <div class="reply-label">&#10003; Composed reply, reading all four memories at once</div>
+    <div class="reply-sources">
+      <span class="src-chip semantic">semantic</span>
+      <span class="src-chip working">working</span>
+      <span class="src-chip procedural">procedural</span>
+      <span class="src-chip archival">archival</span>
+      <span class="src-chip episodic">episodic</span>
+    </div>
+    <div class="reply-text">Hi Dana, for ORD-3300 returned after the 30-day window your refund is <span class="amt">$180.00</span> (the 10% restocking fee applies). We will call you by phone.</div>
+  </div>
+
+  <div class="caption">
+    <strong>What the four stores buy you:</strong> a flat list buries facts under events and reads a learned rule like a one-off note. Typed stores plus a write router keep them apart, each with its own read path; <span style="font-family:var(--font-mono);font-weight:600">memory_append</span> and <span style="font-family:var(--font-mono);font-weight:600">memory_replace</span> make memory an ACTION the agent takes, not just state it reads; and archival is one black-box retrieval call (RAG demoted to a tool), not a vector database rebuilt here.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>working &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>semantic / profile &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>episodic &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>procedural &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>validation error
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* ============================================================
+     The four verified inbox turns and their routes (verbatim from
+     the source docstring). Each turn names the store it goes to,
+     the router's reason, and what the store holds after routing.
+     ============================================================ */
+  var TURNS = [
+    {
+      text: "Hi, I'm Dana and I prefer email contact.",
+      store: "semantic", reason: "a durable fact about the user",
+      writes: { semantic: "name: Dana; prefers email" },
+      profileNote: "normalized from the raw sentence into an editable phrase"
+    },
+    {
+      text: "User opened a return request for ORD-3300 earlier today.",
+      store: "episodic", reason: "an event that happened",
+      writes: { episodic: "User opened a return request for ORD-3300 earlier today." }
+    },
+    {
+      text: "Returns after the 30-day window incur a 10% restocking fee; multiply the total by 0.9.",
+      store: "procedural", reason: "a reusable how-to rule",
+      writes: { procedural: "Returns after the 30-day window incur a 10% restocking fee; multiply the total by 0.9." }
+    },
+    {
+      text: "Quoting the refund for ORD-3300 now.",
+      store: "working", reason: "the current task focus",
+      writes: { working: "Quoting the refund for ORD-3300 now." }
+    }
+  ];
+
+  var STORE_KINDS = {
+    working: "what we are doing now",
+    semantic: "what is TRUE",
+    episodic: "what HAPPENED",
+    procedural: "how to DO a task"
+  };
+
+  var routeIndex = 0;   // how many turns have been routed (0 = none)
+
+  /* ---- compute the contents of every store after `n` routed turns ---- */
+  function storesAfter(n) {
+    var s = { working: [], semantic: [], episodic: [], procedural: [] };
+    for (var i = 0; i < n && i < TURNS.length; i++) {
+      var w = TURNS[i].writes;
+      for (var k in w) { if (w.hasOwnProperty(k)) {
+        if (k === "working" || k === "semantic") s[k] = [w[k]];   // CORE blocks are single-valued
+        else s[k].push(w[k]);
+      } }
+    }
+    return s;
+  }
+
+  function fillKeyFor(store) {
+    return store === "semantic" ? "user_profile" : (store === "working" ? "task_state" : null);
+  }
+
+  function renderStoreBody(store, items) {
+    var el = document.getElementById("body-" + store);
+    if (!items || items.length === 0) {
+      el.innerHTML = '<div class="store-empty">(empty)</div>';
+      return;
+    }
+    var key = fillKeyFor(store);
+    var html = "";
+    items.forEach(function (it) {
+      var prefix = key ? '<span class="label-key">' + key + ':</span> ' : "";
+      html += '<div class="store-fill">' + prefix + escHtml(it) + '</div>';
+    });
+    el.innerHTML = html;
+  }
+
+  function renderRouterStage() {
+    var stage = document.getElementById("router-stage");
+    if (routeIndex === 0) {
+      stage.innerHTML = '<div class="store-empty" style="padding:6px 2px;">No turn routed yet. The four stores below are empty.</div>';
+      return;
+    }
+    var html = "";
+    for (var i = 0; i < routeIndex; i++) {
+      var t = TURNS[i];
+      html += '<div class="inbox-card">';
+      html += '<div class="inbox-head"><span class="ih-tag">turn ' + (i + 1) + '</span><span class="ih-which">write_router()</span></div>';
+      html += '<div class="inbox-body">';
+      html += '<div class="inbox-quote">' + escHtml(t.text) + '</div>';
+      html += '<div class="route-arrow"><span class="ra-pre">route &#8594;</span>';
+      html += '<span class="route-pill ' + t.store + '">' + t.store + '</span>';
+      html += '<span class="route-reason">(' + escHtml(t.reason) + ')</span></div>';
+      if (t.profileNote) {
+        html += '<div class="route-reason" style="font-style:normal;color:var(--amber-dark);">&#8627; ' + escHtml(t.profileNote) + '</div>';
+      }
+      html += '</div></div>';
+    }
+    stage.innerHTML = html;
+  }
+
+  function renderRouter() {
+    renderRouterStage();
+    var s = storesAfter(routeIndex);
+    renderStoreBody("working", s.working);
+    renderStoreBody("semantic", s.semantic);
+    renderStoreBody("episodic", s.episodic);
+    renderStoreBody("procedural", s.procedural);
+
+    document.getElementById("step-progress").innerHTML =
+      'turn <span class="stepnum">' + routeIndex + '</span> of <span class="stepnum">' + TURNS.length + '</span>';
+    document.getElementById("btn-prev").disabled = routeIndex <= 0;
+    document.getElementById("btn-next").disabled = routeIndex >= TURNS.length;
+
+    var ann = document.getElementById("router-announcer");
+    if (routeIndex === 0) ann.textContent = "No turns routed.";
+    else {
+      var last = TURNS[routeIndex - 1];
+      ann.textContent = "Turn " + routeIndex + " routed to " + last.store + " store, " + last.reason + ".";
+    }
+  }
+
+  /* ============================================================
+     PANEL B: the three memory-tool edits (verbatim from source).
+     CORE starts AS LEFT by the router: user_profile prefers email,
+     task_state is the quoting line. memory_append in the source
+     concatenates onto task_state with "; ".
+     ============================================================ */
+  var CORE_START = {
+    user_profile: "name: Dana; prefers email",
+    task_state: "Quoting the refund for ORD-3300 now."
+  };
+
+  var EDITS = [
+    {
+      call: { fn: "memory_replace", args: [["block", "user_profile"], ["old", "prefers email"], ["new", "prefers phone"]] },
+      valid: true,
+      obs: "replaced 'prefers email' with 'prefers phone' in user_profile",
+      apply: function (core) { core.user_profile = core.user_profile.replace("prefers email", "prefers phone"); },
+      touched: "user_profile"
+    },
+    {
+      call: { fn: "memory_append", args: [["block", "task_state"], ["text", "order ORD-3300, $200, returned after the window"]] },
+      valid: true,
+      obs: "appended to task_state",
+      apply: function (core) { core.task_state = core.task_state + "; order ORD-3300, $200, returned after the window"; },
+      touched: "task_state"
+    },
+    {
+      call: { fn: "memory_replace", args: [["block", "preferences"], ["old", "x"], ["new", "y"]] },
+      valid: true,                                   // schema-valid (right shape), but the block is unknown
+      schemaNote: "schema OK (block, old, new all present and strings)",
+      obs: "[error] unknown memory block 'preferences'",
+      isError: true,
+      apply: function () {},                          // no state change: error AS observation
+      touched: null
+    }
+  ];
+
+  var editIndex = 0;   // how many edits applied (0 = none)
+
+  function coreAfter(n) {
+    var core = { user_profile: CORE_START.user_profile, task_state: CORE_START.task_state };
+    for (var i = 0; i < n && i < EDITS.length; i++) { EDITS[i].apply(core); }
+    return core;
+  }
+
+  function renderCoreBlock(bodyId, key, value, justTouched) {
+    var el = document.getElementById(bodyId);
+    var cls = "store-fill" + (justTouched ? " is-updated" : "");
+    el.innerHTML = '<div class="' + cls + '"><span class="label-key">' + key + ':</span> ' + escHtml(value) + '</div>';
+  }
+
+  function callHtml(call) {
+    var inner = call.args.map(function (kv) {
+      return '<span class="arg-k">' + escHtml(kv[0]) + '</span>=<span class="arg-v">\'' + escHtml(kv[1]) + '\'</span>';
+    }).join(", ");
+    return '<span class="fn">' + escHtml(call.fn) + '</span>(' + inner + ')';
+  }
+
+  function renderEdits() {
+    var core = coreAfter(editIndex);
+    var lastTouched = editIndex > 0 ? EDITS[editIndex - 1].touched : null;
+    renderCoreBlock("body-core-profile", "user_profile", core.user_profile, lastTouched === "user_profile");
+    renderCoreBlock("body-core-task", "task_state", core.task_state, lastTouched === "task_state");
+
+    var list = document.getElementById("edit-list");
+    if (editIndex === 0) {
+      list.innerHTML = '<div class="store-empty" style="padding:6px 2px;">No edit applied yet. Press <strong>Apply next edit</strong> to call the first memory tool.</div>';
+    } else {
+      var html = "";
+      for (var i = 0; i < editIndex; i++) {
+        var e = EDITS[i];
+        html += '<div class="edit-card">';
+        html += '<div class="edit-call">' + callHtml(e.call) + '</div>';
+        html += '<div class="edit-gate">';
+        if (e.isError) {
+          html += '<span class="gate-pill ok">validate() OK</span>';
+          html += '<span style="font-size:10px;color:var(--text-muted)">' + escHtml(e.schemaNote) + ', but the runtime rejects an unknown block</span>';
+        } else {
+          html += '<span class="gate-pill ok">validate() OK</span>';
+          html += '<span style="font-size:10px;color:var(--text-muted)">typed args present, block exists, fires</span>';
+        }
+        html += '</div>';
+        html += '<div class="edit-obs ' + (e.isError ? "err" : "ok") + '">';
+        html += '<span class="obs-tag">' + (e.isError ? "error-as-observation" : "observation") + '</span>';
+        html += escHtml(e.obs) + '</div>';
+        html += '</div>';
+      }
+      list.innerHTML = html;
+    }
+
+    document.getElementById("edit-progress").innerHTML =
+      'edit <span class="stepnum">' + editIndex + '</span> of <span class="stepnum">' + EDITS.length + '</span>';
+    document.getElementById("btn-edit-prev").disabled = editIndex <= 0;
+    document.getElementById("btn-edit-next").disabled = editIndex >= EDITS.length;
+
+    var ann = document.getElementById("edit-announcer");
+    if (editIndex === 0) ann.textContent = "No edits applied. user profile prefers email.";
+    else {
+      var le = EDITS[editIndex - 1];
+      ann.textContent = le.isError
+        ? "Edit " + editIndex + " rejected as an observation: unknown memory block preferences. State unchanged."
+        : "Edit " + editIndex + " applied: " + le.obs + ".";
+    }
+  }
+
+  /* ---- wiring: router panel ---- */
+  function routeFwd() { if (routeIndex < TURNS.length) { routeIndex++; renderRouter(); } }
+  function routeBack() { if (routeIndex > 0) { routeIndex--; renderRouter(); } }
+  function routeReset() { routeIndex = 0; renderRouter(); }
+
+  document.getElementById("btn-next").addEventListener("click", routeFwd);
+  document.getElementById("btn-prev").addEventListener("click", routeBack);
+  document.getElementById("btn-reset").addEventListener("click", routeReset);
+
+  /* ---- wiring: edit panel ---- */
+  function editFwd() { if (editIndex < EDITS.length) { editIndex++; renderEdits(); } }
+  function editBack() { if (editIndex > 0) { editIndex--; renderEdits(); } }
+  function editReset() { editIndex = 0; renderEdits(); }
+
+  document.getElementById("btn-edit-next").addEventListener("click", editFwd);
+  document.getElementById("btn-edit-prev").addEventListener("click", editBack);
+  document.getElementById("btn-edit-reset").addEventListener("click", editReset);
+
+  /* keyboard: left/right step within each panel's control row */
+  document.querySelector("#router-stage").closest(".panel").querySelector(".step-controls")
+    .addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight") { routeFwd(); e.preventDefault(); }
+      else if (e.key === "ArrowLeft") { routeBack(); e.preventDefault(); }
+    });
+  document.getElementById("edit-list").closest(".panel").querySelector(".step-controls")
+    .addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight") { editFwd(); e.preventDefault(); }
+      else if (e.key === "ArrowLeft") { editBack(); e.preventDefault(); }
+    });
+
+  renderRouter();
+  renderEdits();
+})();
+</script>
+</body>
+</html>
