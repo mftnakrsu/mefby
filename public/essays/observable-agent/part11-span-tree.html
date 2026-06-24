@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Observable Agent, Part 11</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #f8fafc;
+  --chip-bg: #f1f5f9;
+  --border: #e2e8f0;
+  --text-heading: #0f172a;
+  --text-body: #334155;
+  --text-muted: #64748b;
+  --indigo: #6366f1;
+  --indigo-dark: #4f46e5;
+  --teal: #14b8a6;
+  --teal-dark: #0d9488;
+  --amber: #f59e0b;
+  --amber-dark: #b45309;
+  --emerald: #10b981;
+  --emerald-dark: #047857;
+  --rose: #f43f5e;
+  --rose-dark: #9f1239;
+  --slate: #64748b;
+  --slate-dark: #475569;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--text-body);
+  padding: 24px 20px 40px;
+  max-width: 880px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.panel-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* GOAL BANNER */
+.goal-banner {
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.goal-banner .lead { font-weight: 600; color: var(--text-heading); }
+.goal-banner code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 16px 0 9px;
+}
+
+/* TWO-VIEW TAG */
+.two-view {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin-bottom: 16px;
+  color: var(--indigo-dark);
+  line-height: 1.45;
+}
+.two-view svg { width: 16px; height: 16px; flex-shrink: 0; }
+.two-view code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
+/* STEP CONTROLS */
+.step-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.step-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+}
+.step-btn:hover:not(:disabled) { background: #eef2ff; border-color: #c7d2fe; }
+.step-btn:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.step-btn:disabled { opacity: 0.42; cursor: not-allowed; color: var(--text-muted); }
+.step-btn.primary { background: var(--indigo); color: #ffffff; border-color: var(--indigo); }
+.step-btn.primary:hover:not(:disabled) { background: var(--indigo-dark); }
+.step-progress { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+.step-progress .stepnum { font-family: var(--font-mono); color: var(--indigo-dark); }
+
+/* SUBPANELS */
+.subpanel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.subpanel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.subpanel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.subpanel-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.subpanel-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.subpanel-body { padding: 12px; }
+
+/* SPAN TREE / GANTT WATERFALL */
+.tree-scale {
+  position: relative;
+  height: 16px;
+  margin: 0 0 6px 188px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  color: var(--text-muted);
+}
+.tree-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.tree-tick::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 13px;
+  width: 1px;
+  height: 5px;
+  background: var(--border);
+}
+
+.span-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  animation: fadeIn 0.2s ease;
+}
+.span-row.is-pending { opacity: 0.32; }
+.span-label {
+  width: 180px;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.25;
+  color: var(--text-body);
+}
+.span-label .op { font-weight: 700; }
+.span-label.lvl1 { padding-left: 14px; }
+.span-row.op-invoke .op { color: var(--indigo-dark); }
+.span-row.op-llm .op { color: var(--indigo-dark); }
+.span-row.op-tool .op { color: var(--teal-dark); }
+.span-label .sub { color: var(--text-muted); display: block; font-size: 9px; }
+.span-label .tok { color: var(--amber-dark); font-weight: 700; }
+
+.span-track {
+  position: relative;
+  flex: 1;
+  height: 26px;
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.span-bar {
+  position: absolute;
+  top: 3px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 7px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: width 0.35s ease, left 0.35s ease;
+}
+.span-bar.b-invoke { background: var(--indigo-dark); }
+.span-bar.b-llm { background: var(--indigo); }
+.span-bar.b-tool { background: var(--teal); }
+.span-bar .bar-ms { color: rgba(255,255,255,0.85); font-weight: 600; }
+.span-row.is-root .span-track { background: #eef2ff; border-color: #c7d2fe; height: 30px; }
+.span-row.is-root .span-bar { top: 4px; height: 22px; }
+.span-row.is-root .span-label .op { font-size: 11px; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .span-row, .feed-row, .span-bar { animation: none; transition: none; } }
+
+.tree-empty { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 8px 2px; }
+
+/* TOKEN GROWTH STRIP */
+.tokgrow {
+  font-size: 11px;
+  color: var(--text-body);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 3px solid var(--amber);
+  border-radius: 0 8px 8px 0;
+  padding: 9px 12px;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+.tokgrow strong { color: var(--amber-dark); }
+.tokgrow .grow {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--amber-dark);
+}
+.tokgrow .seq40 { color: var(--amber-dark); }
+.tokgrow .seq70 { color: var(--amber-dark); }
+.tokgrow .seq95 { color: var(--rose-dark); }
+
+/* GRID */
+.stage { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 700px) { .stage { grid-template-columns: 1fr; } }
+
+/* METRICS READOUT */
+.metric-list { display: flex; flex-direction: column; gap: 7px; }
+.metric-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fcfcfd;
+  padding: 8px 11px;
+}
+.metric-key {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.metric-val { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text-heading); text-align: right; }
+.metric-val.muted { color: var(--text-muted); font-weight: 600; font-size: 11px; }
+.metric-row.is-cost .metric-val { color: var(--amber-dark); }
+.metric-row.is-traj { display: block; }
+.metric-row.is-traj .metric-val { display: block; text-align: left; margin-top: 4px; font-size: 11px; }
+.metric-row.is-traj .tarrow { color: var(--teal-dark); }
+.metric-row.is-traj .ttool { color: var(--teal-dark); }
+.metric-note { font-size: 9.5px; color: var(--text-muted); font-weight: 500; }
+
+/* COST PER SUCCESS */
+.cps-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.cps-table th {
+  text-align: left;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.cps-table th.num, .cps-table td.num { text-align: right; font-family: var(--font-mono); }
+.cps-table td {
+  padding: 6px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-body);
+}
+.cps-table tr.run-ok td { }
+.cps-table tr.run-fail td { color: var(--rose-dark); }
+.cps-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.cps-pill.yes { background: #ecfdf5; color: var(--emerald-dark); border: 1px solid #a7f3d0; }
+.cps-pill.no { background: #fff1f2; color: var(--rose-dark); border: 1px solid #fecdd3; }
+.cps-cost { color: var(--amber-dark); font-weight: 700; }
+.cps-total td {
+  border-top: 1.5px solid var(--border);
+  border-bottom: none;
+  font-weight: 700;
+  color: var(--text-heading);
+  padding-top: 8px;
+}
+.cps-headline {
+  margin-top: 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 11px;
+  color: var(--amber-dark);
+  line-height: 1.5;
+}
+.cps-headline .big {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--amber-dark);
+  display: block;
+  margin-bottom: 2px;
+}
+.cps-headline strong { color: var(--amber-dark); }
+
+/* JSONL VIEW */
+.jsonl-toggle {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--indigo-dark);
+  border-radius: 7px;
+  padding: 5px 10px;
+  cursor: pointer;
+  outline: none;
+}
+.jsonl-toggle:hover { background: #eef2ff; border-color: #c7d2fe; }
+.jsonl-toggle:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.jsonl-body { display: none; }
+.jsonl-body.show { display: block; }
+.jsonl-pre {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--text-body);
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 11px 12px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.jsonl-pre .jk { color: #93c5fd; }
+.jsonl-pre .js { color: #6ee7b7; }
+.jsonl-pre .jn { color: #fcd34d; }
+
+/* STREAMING FEED */
+.feed-list { display: flex; flex-direction: column; gap: 5px; }
+.feed-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-body);
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+  animation: fadeIn 0.18s ease;
+  line-height: 1.45;
+}
+.feed-row .chev { color: var(--text-muted); font-weight: 700; flex-shrink: 0; }
+.feed-row.k-root { background: #eef2ff; border-color: #c7d2fe; }
+.feed-row.k-root .chev { color: var(--indigo-dark); }
+.feed-row.k-llm .chev { color: var(--indigo-dark); }
+.feed-row.k-tool { background: #f0fdfa; border-color: #99f6e4; }
+.feed-row.k-tool .chev { color: var(--teal-dark); }
+.feed-row.k-done { background: #ecfdf5; border-color: #a7f3d0; }
+.feed-row.k-done .chev { color: var(--emerald-dark); }
+.feed-empty { font-size: 10.5px; color: var(--text-muted); font-style: italic; }
+
+/* CONTRAST + CAPTION */
+.contrast {
+  font-size: 11.5px;
+  color: var(--text-body);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-left: 3px solid var(--indigo);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin-top: 16px;
+  line-height: 1.55;
+}
+.contrast strong { color: var(--indigo-dark); }
+.contrast code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  color: var(--indigo-dark);
+}
+
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 14px;
+  line-height: 1.55;
+}
+.caption strong { color: var(--text-body); }
+.caption code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+}
+.caption .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <h2 id="panel-heading">One run as a span tree, then metrics read back from the spans</h2>
+  <p class="panel-subtitle">The Part 9 event journal already records this refund run. Observability is not a second system; it is a second VIEW of the same log. Here we fold the run into an OTel-GenAI-shaped span tree (by hand, no otel SDK), play it back as a Gantt waterfall, and reconstruct the metrics and cost-per-success directly from those spans.</p>
+
+  <div class="goal-banner">
+    <span class="lead">The world:</span> one refund run <code>run-bb11</code> for <code>ORD-3300</code>, frozen timings and token counts. The root span <code>invoke_agent</code> runs <code>[0-690ms]</code> over five child spans. Each <code>llm</code> span carries <code>gen_ai.*-STYLE</code> attributes (operation chat, request model, token usage); each <code>execute_tool</code> span carries the tool name and its latency.
+  </div>
+
+  <div class="two-view" role="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
+    <span><strong>Same bytes, two views.</strong> The journal is the durability artifact (Part 9). Read as spans, it is the observability artifact. No new storage, no otel SDK: just dicts emitted as JSONL. A real OTLP exporter is a commented one-liner.</span>
+  </div>
+
+  <div class="section-label">Replay the run</div>
+  <div class="step-controls" id="controls"></div>
+
+  <!-- SPAN TREE WATERFALL -->
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-dot" style="background:var(--indigo)"></span>
+      <span class="subpanel-title">span tree &#183; OTel-GenAI-shaped, hand-rolled (no otel SDK)</span>
+      <span class="subpanel-meta" id="tree-meta">0 / 6 spans</span>
+    </div>
+    <div class="subpanel-body">
+      <div class="tree-scale" aria-hidden="true">
+        <span class="tree-tick" style="left:0%">0</span>
+        <span class="tree-tick" style="left:26.09%">180</span>
+        <span class="tree-tick" style="left:34.78%">240</span>
+        <span class="tree-tick" style="left:65.22%">450</span>
+        <span class="tree-tick" style="left:78.26%">540</span>
+        <span class="tree-tick" style="left:100%">690ms</span>
+      </div>
+      <div id="tree" aria-live="polite"></div>
+      <div class="tokgrow">
+        <strong>Transcript economics.</strong> The llm spans' input tokens grow
+        <span class="grow"><span class="seq40">40</span> &#8594; <span class="seq70">70</span> &#8594; <span class="seq95">95</span></span>
+        across the run. The agent re-sends a growing transcript every step; that growth, not the tool calls, is the dominant cost lever. Prompt and KV caching are the lever back.
+      </div>
+    </div>
+  </div>
+
+  <!-- THE SAME SPANS AS JSONL -->
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-dot" style="background:var(--slate)"></span>
+      <span class="subpanel-title">the same spans as JSONL (what a real OTLP exporter would ship)</span>
+      <button class="jsonl-toggle" id="jsonl-toggle" type="button" aria-expanded="false" aria-controls="jsonl-body">Show JSONL</button>
+    </div>
+    <div class="subpanel-body jsonl-body" id="jsonl-body">
+      <pre class="jsonl-pre" id="jsonl-pre"></pre>
+    </div>
+  </div>
+
+  <div class="section-label">Metrics reconstructed from the spans, and the number that matters in production</div>
+  <div class="stage">
+    <!-- METRICS -->
+    <div class="subpanel" style="margin-bottom:0">
+      <div class="subpanel-head">
+        <span class="subpanel-dot" style="background:var(--indigo)"></span>
+        <span class="subpanel-title">metrics &#183; read from the spans</span>
+      </div>
+      <div class="subpanel-body">
+        <div class="metric-list">
+          <div class="metric-row is-traj">
+            <span class="metric-key">trajectory</span>
+            <span class="metric-val"><span class="ttool">search_policy</span> <span class="tarrow">&#8594;</span> <span class="ttool">process_refund</span></span>
+            <span class="metric-note">finish is an llm decision, not a tool</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-key">llm calls</span>
+            <span class="metric-val">3</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-key">tokens</span>
+            <span class="metric-val">in=205 out=47</span>
+          </div>
+          <div class="metric-row is-cost">
+            <span class="metric-key">cost</span>
+            <span class="metric-val">$0.00252</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-key">latency</span>
+            <span class="metric-val">690ms <span class="metric-note">(sum of spans)</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COST PER SUCCESS -->
+    <div class="subpanel" style="margin-bottom:0">
+      <div class="subpanel-head">
+        <span class="subpanel-dot" style="background:var(--amber)"></span>
+        <span class="subpanel-title">cost per success &#183; you pay for failures too</span>
+      </div>
+      <div class="subpanel-body">
+        <table class="cps-table">
+          <thead>
+            <tr><th scope="col">task</th><th scope="col" class="num">success</th><th scope="col" class="num">cost</th></tr>
+          </thead>
+          <tbody>
+            <tr class="run-ok"><td>refund ORD-3300</td><td class="num"><span class="cps-pill yes">yes</span></td><td class="num cps-cost">$0.00252</td></tr>
+            <tr class="run-ok"><td>warranty lookup</td><td class="num"><span class="cps-pill yes">yes</span></td><td class="num cps-cost">$0.00180</td></tr>
+            <tr class="run-fail"><td>find a nonexistent discount</td><td class="num"><span class="cps-pill no">no</span></td><td class="num cps-cost">$0.00320</td></tr>
+            <tr class="cps-total"><td>3 runs, 2 successes</td><td class="num">&#8721;</td><td class="num">$0.00752</td></tr>
+          </tbody>
+        </table>
+        <div class="cps-headline">
+          <span class="big">$0.00376</span>
+          <strong>cost per success</strong> = total $0.00752 / 2 successes. Worse than one happy run's $0.00252: the failed discount lookup tripped the Part 8 breaker and still cost money.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STREAMING FEED -->
+  <div class="section-label">Streaming progress (spans revealed in time order)</div>
+  <div class="subpanel">
+    <div class="subpanel-head">
+      <span class="subpanel-dot" style="background:var(--indigo)"></span>
+      <span class="subpanel-title">live feed &#183; stream(spans)</span>
+      <span class="subpanel-meta" id="feed-meta">0 lines</span>
+    </div>
+    <div class="subpanel-body">
+      <div class="feed-list" id="feed" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="announce"></div>
+
+  <div class="contrast">
+    <strong>The controller is prompt plus model (the Part 1 payoff).</strong> The llm span's <code>gen_ai.request.model</code> and its token usage are exactly where model choice and thinking budget show up in the bill. Switch the model or the transcript and these spans, and the cost, change with it. Nothing here is a side channel: the metrics are derived from the same spans you see in the waterfall, which are the same bytes as the durability journal.
+  </div>
+
+  <div class="caption">
+    <strong>How we keep it honest:</strong> the span tree is a tree of plain dicts with <code>gen_ai.*-STYLE</code> attributes, emitted as JSONL. The names are hedged as -STYLE on purpose: the GenAI semantic conventions are still moving. A real OTLP exporter, like the <code>generate()</code> swap in earlier parts, is one flag away. Storage is roughly 60 lines, a JSONL file or SQLite; for production durability the essay tours Temporal, DBOS, the Vercel Workflow DevKit, and LangGraph, each with honest limits.
+    <br /><br />
+    <span class="swatch" style="background:var(--indigo)"></span>invoke_agent / llm &nbsp;
+    <span class="swatch" style="background:var(--teal)"></span>execute_tool &nbsp;
+    <span class="swatch" style="background:var(--amber)"></span>tokens / cost &nbsp;
+    <span class="swatch" style="background:var(--emerald)"></span>success &nbsp;
+    <span class="swatch" style="background:var(--rose)"></span>failed run
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =====================================================================
+     Verified facts from observable_agent.py (the single source of truth).
+     Run run-bb11, refund ORD-3300. Frozen timings and token counts.
+     PRICE_PER_TOKEN = 0.00001; cost = (in + out) * price.
+     Span tree (siblings under the root invoke_agent):
+       invoke_agent [0-690]  in=205 out=47  $0.00252
+       llm  decide search_policy  [0-180]   in=40 out=12
+       execute_tool search_policy [180-240]
+       llm  decide process_refund [240-450] in=70 out=15
+       execute_tool process_refund[450-540]
+       llm  decide finish         [540-690] in=95 out=20
+     Quoted strings reproduced EXACTLY from the source.
+  ===================================================================== */
+  var TOTAL_MS = 690;
+  var MODEL = "deterministic-rule-controller";
+
+  // Each span: id, parent, name, op, start, end, and label fields.
+  var SPANS = [
+    { id: "s0", parent: null, name: "invoke_agent", op: "invoke", start: 0,   end: 690,
+      tin: 205, tout: 47, cost: 0.00252, isRoot: true },
+    { id: "s1", parent: "s0", name: "llm",          op: "llm",    start: 0,   end: 180,
+      tool: "search_policy",  tin: 40, tout: 12 },
+    { id: "s2", parent: "s0", name: "execute_tool", op: "tool",   start: 180, end: 240,
+      tool: "search_policy" },
+    { id: "s3", parent: "s0", name: "llm",          op: "llm",    start: 240, end: 450,
+      tool: "process_refund", tin: 70, tout: 15 },
+    { id: "s4", parent: "s0", name: "execute_tool", op: "tool",   start: 450, end: 540,
+      tool: "process_refund" },
+    { id: "s5", parent: "s0", name: "llm",          op: "llm",    start: 540, end: 690,
+      tool: "finish",         tin: 95, tout: 20 }
+  ];
+
+  // The exact JSONL attribute objects, mirroring the source's sort_keys output.
+  var JSONL = [
+    '{"attributes": {"gen_ai.cost_usd": 0.00252, "gen_ai.operation.name": "invoke_agent", "gen_ai.usage.input_tokens": 205, "gen_ai.usage.output_tokens": 47}, "end_ms": 690, "name": "invoke_agent", "parent_id": null, "span_id": "s0", "start_ms": 0}',
+    '{"attributes": {"decided.tool": "search_policy", "gen_ai.operation.name": "chat", "gen_ai.request.model": "deterministic-rule-controller", "gen_ai.usage.input_tokens": 40, "gen_ai.usage.output_tokens": 12}, "end_ms": 180, "name": "llm", "parent_id": "s0", "span_id": "s1", "start_ms": 0}',
+    '{"attributes": {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": "search_policy"}, "end_ms": 240, "name": "execute_tool", "parent_id": "s0", "span_id": "s2", "start_ms": 180}',
+    '{"attributes": {"decided.tool": "process_refund", "gen_ai.operation.name": "chat", "gen_ai.request.model": "deterministic-rule-controller", "gen_ai.usage.input_tokens": 70, "gen_ai.usage.output_tokens": 15}, "end_ms": 450, "name": "llm", "parent_id": "s0", "span_id": "s3", "start_ms": 240}',
+    '{"attributes": {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": "process_refund"}, "end_ms": 540, "name": "execute_tool", "parent_id": "s0", "span_id": "s4", "start_ms": 450}',
+    '{"attributes": {"decided.tool": "finish", "gen_ai.operation.name": "chat", "gen_ai.request.model": "deterministic-rule-controller", "gen_ai.usage.input_tokens": 95, "gen_ai.usage.output_tokens": 20}, "end_ms": 690, "name": "llm", "parent_id": "s0", "span_id": "s5", "start_ms": 540}'
+  ];
+
+  // revealed: how many child spans (s1..s5) are visible. -1 = nothing, 0 = root only.
+  var revealed = -1;
+  var MAX = SPANS.length - 1; // 5 children
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function pct(ms) { return (ms / TOTAL_MS * 100); }
+
+  /* ---------------------------------------------------------------------
+     Render the span tree as a Gantt waterfall. The root is always shown
+     once started; children appear up to `revealed` in time order.
+  --------------------------------------------------------------------- */
+  function renderTree() {
+    var tree = document.getElementById("tree");
+    var meta = document.getElementById("tree-meta");
+    if (revealed < 0) {
+      tree.innerHTML = '<div class="tree-empty">No spans yet. Press <strong>Play the run</strong> or step through to fold the journal into spans.</div>';
+      meta.textContent = "0 / 6 spans";
+      return;
+    }
+    var html = "";
+    SPANS.forEach(function (s, i) {
+      var childIndex = i; // s0..s5; root is index 0
+      var visible = s.isRoot ? true : (childIndex <= revealed + 1);
+      // children index 1..5 map to reveal steps 0..4
+      var pending = !s.isRoot && (childIndex > revealed + 1);
+      if (!visible && pending) {
+        // still render as faint placeholder so the layout is stable
+      }
+      var rowCls = "span-row op-" + s.op + (s.isRoot ? " is-root" : "") + (pending ? " is-pending" : "");
+      html += '<div class="' + rowCls + '">';
+
+      // label
+      var labelCls = "span-label" + (s.isRoot ? "" : " lvl1");
+      html += '<div class="' + labelCls + '">';
+      if (s.isRoot) {
+        html += '<span class="op">invoke_agent</span>';
+        html += '<span class="sub"><span class="tok">in=205 out=47</span> &#183; $0.00252</span>';
+      } else if (s.op === "llm") {
+        html += '<span class="op">llm</span> <span class="sub" style="display:inline">decide ' + escHtml(s.tool) + '</span>';
+        html += '<span class="sub"><span class="tok">in=' + s.tin + ' out=' + s.tout + '</span> &#183; chat</span>';
+      } else {
+        html += '<span class="op">execute_tool</span>';
+        html += '<span class="sub">' + escHtml(s.tool) + '</span>';
+      }
+      html += '</div>';
+
+      // track + bar
+      html += '<div class="span-track">';
+      var left = pct(s.start);
+      var width = pct(s.end - s.start);
+      var barCls = "span-bar b-" + s.op;
+      var barText = "[" + s.start + "-" + s.end + "ms]";
+      html += '<div class="' + barCls + '" style="left:' + left + '%;width:' + width + '%">'
+        + '<span class="bar-ms">' + barText + '</span></div>';
+      html += '</div>';
+
+      html += '</div>';
+    });
+    tree.innerHTML = html;
+    var shown = (revealed < 0) ? 0 : (revealed + 2); // root + revealed+1 children
+    if (shown > SPANS.length) shown = SPANS.length;
+    meta.textContent = shown + " / 6 spans";
+  }
+
+  /* The live feed is a read over the spans in time order. */
+  function feedLineFor(s) {
+    if (s.isRoot) return { kind: "root", text: "invoke_agent started [0ms]" };
+    if (s.op === "llm") {
+      return { kind: "llm", text: "llm chat: decided " + s.tool + " (in=" + s.tin + " out=" + s.tout + ") [" + s.start + "-" + s.end + "ms]" };
+    }
+    return { kind: "tool", text: "execute_tool " + s.tool + " done [" + s.start + "-" + s.end + "ms]" };
+  }
+
+  function renderFeed() {
+    var feed = document.getElementById("feed");
+    var meta = document.getElementById("feed-meta");
+    if (revealed < 0) {
+      feed.innerHTML = '<div class="feed-empty">The feed reads from the spans. Play the run to populate it.</div>';
+      meta.textContent = "0 lines";
+      return;
+    }
+    var lines = [feedLineFor(SPANS[0])];
+    for (var i = 1; i <= revealed + 1 && i < SPANS.length; i++) {
+      lines.push(feedLineFor(SPANS[i]));
+    }
+    if (revealed + 1 >= MAX) {
+      lines.push({ kind: "done", text: "invoke_agent finished [690ms] in=205 out=47 $0.00252" });
+    }
+    feed.innerHTML = lines.map(function (f) {
+      return '<div class="feed-row k-' + f.kind + '"><span class="chev">&gt;</span><span>' + escHtml(f.text) + '</span></div>';
+    }).join("");
+    meta.textContent = lines.length + " lines";
+  }
+
+  function colorJSONL(line) {
+    return escHtml(line)
+      .replace(/&quot;([a-zA-Z0-9_.]+)&quot;:/g, '<span class="jk">&quot;$1&quot;</span>:')
+      .replace(/: (&quot;[^&]*&quot;)/g, ': <span class="js">$1</span>')
+      .replace(/: (-?\d+\.?\d*)/g, ': <span class="jn">$1</span>')
+      .replace(/: (null)/g, ': <span class="jn">$1</span>');
+  }
+
+  function renderJSONL() {
+    var pre = document.getElementById("jsonl-pre");
+    var n = (revealed < 0) ? 0 : Math.min(revealed + 2, JSONL.length);
+    if (n === 0) {
+      pre.innerHTML = '<span style="color:#94a3b8">// play the run to emit spans</span>';
+      return;
+    }
+    pre.innerHTML = JSONL.slice(0, n).map(colorJSONL).join("\n");
+  }
+
+  /* =====================================================================
+     Controls.
+  ===================================================================== */
+  function renderControls() {
+    var el = document.getElementById("controls");
+    var atStart = revealed < 0;
+    var atEnd = revealed >= MAX - 1; // all 5 children shown when revealed === 4
+    var html = "";
+    if (atStart) {
+      html += '<button class="step-btn primary" id="b-play" type="button">Play the run &#8594;</button>';
+      html += '<button class="step-btn" id="b-step" type="button">Step one span</button>';
+    } else {
+      html += '<button class="step-btn" id="b-step" type="button"' + (atEnd ? " disabled" : "") + '>Step one span</button>';
+      html += '<button class="step-btn primary" id="b-finish" type="button"' + (atEnd ? " disabled" : "") + '>Reveal all</button>';
+      html += '<button class="step-btn" id="b-reset" type="button">Reset</button>';
+      var doneTxt = atEnd ? "complete &#183; 690ms &#183; $0.00252" : "span " + (revealed + 2) + " / 6";
+      html += '<span class="step-progress"><span class="stepnum">' + doneTxt + '</span></span>';
+    }
+    el.innerHTML = html;
+    bind("b-play", function () { revealed = 0; render(); announceStep(); });
+    bind("b-step", function () {
+      if (revealed < 0) revealed = 0;
+      else if (revealed < MAX - 1) revealed += 1;
+      render(); announceStep();
+    });
+    bind("b-finish", function () { revealed = MAX - 1; render(); announceStep(); });
+    bind("b-reset", function () { revealed = -1; render(); });
+  }
+  function bind(id, fn) {
+    var b = document.getElementById(id);
+    if (b) b.addEventListener("click", fn);
+  }
+
+  function announceStep() {
+    var ann = document.getElementById("announce");
+    if (revealed < 0) { ann.textContent = "Reset."; return; }
+    if (revealed >= MAX - 1) {
+      ann.textContent = "Run complete. Six spans. invoke_agent 690 milliseconds, in 205 out 47 tokens, cost 0.00252 dollars. Cost per success 0.00376 dollars.";
+      return;
+    }
+    var s = SPANS[revealed + 1];
+    var t = s.op === "llm"
+      ? ("llm span: decided " + s.tool + ", input " + s.tin + " output " + s.tout + " tokens, " + s.start + " to " + s.end + " milliseconds.")
+      : ("execute tool span: " + s.tool + ", " + s.start + " to " + s.end + " milliseconds.");
+    ann.textContent = t;
+  }
+
+  function render() {
+    renderControls();
+    renderTree();
+    renderJSONL();
+    renderFeed();
+  }
+
+  // JSONL toggle
+  document.getElementById("jsonl-toggle").addEventListener("click", function () {
+    var body = document.getElementById("jsonl-body");
+    var open = body.classList.toggle("show");
+    this.setAttribute("aria-expanded", open ? "true" : "false");
+    this.textContent = open ? "Hide JSONL" : "Show JSONL";
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

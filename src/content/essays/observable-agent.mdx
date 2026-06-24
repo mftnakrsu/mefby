@@ -1,0 +1,174 @@
+---
+title: "Shipping It"
+description: "A durable agent you cannot see into is undebuggable. Fold the same journal into OTel-shaped spans for trajectory, cost, latency, and cost-per-success."
+date: 2026-07-07
+tags: ["Agents","Observability","OpenTelemetry","Cost","Tracing","AI"]
+seriesOrder: 11
+series: "agents"
+codeUrl: "https://github.com/mftnakrsu/agents-by-hand/tree/main/part-11-observable-agent"
+lang: "en"
+translationSlug: "observable-agent-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+This is the last part of the core track, and it closes a gap that every previous part quietly left open. The agent can plan, recover from a bad step, remember across runs, stop itself before it spirals, survive a crash, and pause for a human. It is, by any reasonable measure, a real agent. And yet you cannot ship it, because you cannot see into it. A durable agent you cannot observe is **undebuggable and unaccountable**: when it is slow you do not know which step ate the time, when it is expensive you do not know which call ran up the bill, and when it "works" you cannot prove it worked for the right reasons or at a cost anyone would sign off on. "It seemed fine in testing" is not an answer your on-call rotation, your finance team, or your auditor will accept. The good news is that the hard part is already done. Back in [Part 9](/essays/durable-agent) we made every step write an event to an append-only journal, and that journal is a complete, ordered record of the run. **Observability is not a second system; it is a second VIEW of the same log.** This part folds the journal into three things. First, a **span tree**, OpenTelemetry-GenAI-shaped and built by hand with no SDK: one root `invoke_agent` span over child spans for each `llm` decision and each `execute_tool` call, each carrying `gen_ai.*`-style attributes (operation name, model, tokens, latency), emitted as JSONL. Second, **metrics reconstructed from those spans**: the trajectory, the LLM-call count, tokens, cost, per-step latency, and the one number that decides whether shipping was worth it, **cost-per-success**. Third, the **core capstone**: a Part 1 to Part 11 checklist of every ring we added to the bare LLM, and an honest tour of what a real production durability backend looks like.
+
+## Prerequisites
+
+You need basic Python: functions, a dictionary, a list, and a loop. That is all. [Part 9](/essays/durable-agent) and [Part 10](/essays/pause-approve-resume) help, because this part reads out of the journal they built, but the essay is self-contained. Where it leans on those parts it restates the idea in a sentence, and it does **not** re-teach the ReAct loop, the journal's event shape, or the tool contract; those are owned by Parts 1, 9, and 10 and referenced here. The companion code, [observable_agent.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-11-observable-agent), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every trace in this essay yourself. The timings and token counts are frozen so the spans are byte-reproducible, with the real LLM path (`generate()`) and a real OTLP exporter each one line away, exactly as in Parts 1 through 10. When you run it with no key it prints the line `[trace] no OPENAI_API_KEY; folding the frozen journal into spans (offline default)` and proceeds entirely offline.
+
+## What is new since the durable agent
+
+I want to be precise about what is new, because tracing an agent is its own discipline with its own pitfalls. Parts 9 and 10 added durability and a human pause; this part adds **observability**, and it adds it without adding a single new dependency. The most important thing to notice is what it does **not** do: it does not bolt a separate metrics pipeline onto the side of the agent. It reads the journal that already exists. That is the whole conceit, and it is worth saying plainly because it is easy to get wrong: teams routinely build a second logging system that drifts out of sync with the real execution, so the trace says one thing and the run did another. Here the trace and the run are the same bytes, so they cannot disagree.
+
+It is also worth distinguishing this from the closest thing in the earlier series. RAG Part 12 measured a retrieval **service's** latency and cost, the kind of numbers you get from instrumenting a query endpoint. What is new here is **per-step agent spans**: a tree where each LLM decision and each tool call is its own node with its own tokens and timing, so you can see the *shape* of the run, not just an aggregate. New too is **cost-per-success**, which is an agent-level number (a single retrieval call either returns or it does not; an agent run is a multi-step trajectory that can succeed or fail as a whole). And new is the **journal-derived** nature of all of it. The spans are not emitted by instrumented code paths scattered through the loop; they are *folded out of* the journal after the fact, which is why the offline trace is reproducible and why a real OTLP exporter is a one-line swap rather than a rewrite. We hand-roll the OTel-shaped JSONL precisely to avoid the SDK dependency that would break the offline bar this whole series holds to.
+
+## One log, two views
+
+Start from the claim and then prove it: the journal that makes the agent durable is, byte for byte, the data that makes it observable. Here is the Part 9 journal for the refund run, `run-bb11`, quoted from the artifact's real output:
+
+```text
+    {"data": {"goal": "refund ORD-3300", "run_id": "run-bb11"}, "seq": 0, "type": "run_started"}
+    {"data": {"in": 40, "ms": 180, "out": 12, "tool": "search_policy"}, "seq": 1, "type": "llm_decided"}
+    {"data": {"ms": 60, "result": "refunds after the window: 10% restocking fee", "tool": "search_policy"}, "seq": 2, "type": "tool_result"}
+    {"data": {"in": 70, "ms": 210, "out": 15, "tool": "process_refund"}, "seq": 3, "type": "llm_decided"}
+    {"data": {"ms": 90, "result": "refunded $180.00 to ORD-3300", "tool": "process_refund"}, "seq": 4, "type": "tool_result"}
+    {"data": {"in": 95, "ms": 150, "out": 20, "tool": "finish"}, "seq": 5, "type": "llm_decided"}
+    {"data": {"answer": "Refund of $180.00 for ORD-3300 is complete."}, "seq": 6, "type": "finished"}
+```
+
+This is the same kind of journal from Parts 9 and 10, with two annotations a span needs: each `llm_decided` event now carries token counts (`in`, `out`) and a latency (`ms`), and each `tool_result` carries its own latency. Read top to bottom it is the run: started, decided to search, got the policy, decided to refund, refunded, decided to finish, finished. Now read the **same events** as a span tree, quoted from the artifact's real output:
+
+```text
+  invoke_agent  [0-690ms]  in=205 out=47 $0.00252
+  ├─ llm           [0-180ms]  decide search_policy  in=40 out=12
+  ├─ execute_tool  [180-240ms]  search_policy
+  ├─ llm           [240-450ms]  decide process_refund  in=70 out=15
+  ├─ execute_tool  [450-540ms]  process_refund
+  └─ llm           [540-690ms]  decide finish  in=95 out=20
+```
+
+Nothing was re-instrumented to produce this. Each `llm_decided` event became an `llm` span, each `tool_result` became an `execute_tool` span, and the clock was accumulated across them to give every span a start and an end. The root `invoke_agent` span spans the whole run, `[0-690ms]`, and its token totals (`in=205 out=47`) and cost (`$0.00252`) are just sums over its children. Replay the journal to a process and you get **resume** (Part 9); replay it to a screen and you get a **stream** (Part 10); fold it into spans and you get a **trace**. One log, read three ways. The point of writing every step down once is that you get all three for free.
+
+<Diagram number={1} caption="One log, two views. The append-only journal from Part 9 (left) is the durability artifact: seven events for run run-bb11, each a sequence number, a type, and a data payload, where the llm_decided events now carry token counts and a latency and the tool_result events carry a latency. The exact same events, folded by a clock that accumulates each latency, become the observability artifact (right): a span tree with one root invoke_agent over child llm and execute_tool spans. No code was re-instrumented to produce the tree; every span is derived from a journal event. The root's tokens and cost are sums over its children. The figure makes the central claim concrete, that durability and observability are the same bytes read two ways, so the trace and the run can never disagree.">
+  <img src="/essays/observable-agent/part11-spans-from-journal.svg" alt="A diagram split into two columns over a shared dashed bracket labelled the same bytes. The left column, headed JOURNAL (durability), shows seven stacked event rows for run-bb11: seq 0 run_started with goal refund ORD-3300, seq 1 llm_decided tool search_policy with in 40 out 12 ms 180, seq 2 tool_result search_policy ms 60 result refunds after the window 10 percent restocking fee, seq 3 llm_decided tool process_refund in 70 out 15 ms 210, seq 4 tool_result process_refund ms 90 result refunded 180 dollars to ORD-3300, seq 5 llm_decided tool finish in 95 out 20 ms 150, seq 6 finished answer Refund of 180 dollars for ORD-3300 is complete. Curved arrows labelled fold cross to the right column, headed SPAN TREE (observability), which shows a root box invoke_agent 0 to 690 ms in 205 out 47 cost 0.00252 dollars, with five indented child branches: llm 0 to 180 ms decide search_policy in 40 out 12, execute_tool 180 to 240 ms search_policy, llm 240 to 450 ms decide process_refund in 70 out 15, execute_tool 450 to 540 ms process_refund, and llm 540 to 690 ms decide finish in 95 out 20. A caption strip reads: durability and observability are one log read two ways, the trace cannot disagree with the run." class="w-full rounded-lg" />
+</Diagram>
+
+## A span tree by hand
+
+Now the fold itself, because the mechanics are simple and that is the point. A **span** is a record of one unit of work with a name, a start, an end, and a bag of attributes, and a **span tree** is spans linked by `parent_id` into a hierarchy. We build the tree with no OpenTelemetry SDK, just plain dicts: the root `invoke_agent` gets `parent_id: null` and a fresh span id `s0`, and every child points its `parent_id` at `s0`. Each `llm_decided` event becomes an `llm` span with `operation.name` `chat`; each `tool_result` becomes an `execute_tool` span. Because spans are just dicts, we can emit them as JSONL, which is exactly the line-oriented shape a real exporter would ship. Here is what those spans look like on the wire, quoted from the artifact's real output:
+
+```text
+    {"attributes": {"gen_ai.cost_usd": 0.00252, "gen_ai.operation.name": "invoke_agent", "gen_ai.usage.input_tokens": 205, "gen_ai.usage.output_tokens": 47}, "end_ms": 690, "name": "invoke_agent", "parent_id": null, "span_id": "s0", "start_ms": 0}
+    {"attributes": {"decided.tool": "search_policy", "gen_ai.operation.name": "chat", "gen_ai.request.model": "deterministic-rule-controller", "gen_ai.usage.input_tokens": 40, "gen_ai.usage.output_tokens": 12}, "end_ms": 180, "name": "llm", "parent_id": "s0", "span_id": "s1", "start_ms": 0}
+    {"attributes": {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": "search_policy"}, "end_ms": 240, "name": "execute_tool", "parent_id": "s0", "span_id": "s2", "start_ms": 180}
+```
+
+Read the attribute names. They are `gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.tool.name`, and so on, which is the **OpenTelemetry GenAI semantic conventions** shape. I have hedged them as `gen_ai.*`-**style** on purpose, because those conventions are still moving: the exact attribute keys have changed across releases and will change again, so treat the names here as the right *shape* rather than a frozen spec. The attractive thing about this shape is that it is vendor-neutral. Any OTel-compatible backend (Jaeger, Tempo, Honeycomb, an OTLP collector) understands a span tree with these attributes, so you are not locked into one observability vendor. And because the spans are just dicts, turning this offline trace into a live export is a one-line swap, the same pattern as `generate()`. The commented exporter in the file is literally:
+
+```python
+# from opentelemetry import trace; tracer.start_span("invoke_agent", ...)
+```
+
+That one line is the whole bridge from the hand-rolled JSONL to a production tracing pipeline. The figure below renders the same span tree as an interactive Gantt-style view, so you can see the spans laid out on a real timeline and watch the latency of each step.
+
+<Diagram number={2} caption="The span tree for run run-bb11 as an interactive timeline. The root invoke_agent span runs the full 0 to 690 milliseconds, with five child spans laid out left to right on a shared clock: an llm chat span deciding search_policy from 0 to 180, an execute_tool span running search_policy from 180 to 240, an llm chat span deciding process_refund from 240 to 450, an execute_tool span running process_refund from 450 to 540, and an llm chat span deciding finish from 540 to 690. Each llm span shows its gen_ai-style attributes, the model deterministic-rule-controller and its input and output token counts, and each execute_tool span shows its tool name. The figure makes per-step latency and per-call tokens legible at a glance, which is exactly what a hand-rolled OpenTelemetry-GenAI-shaped trace buys you, with a real OTLP exporter one commented line away.">
+  <IframeFigure src="/essays/observable-agent/part11-span-tree.html" title="Interactive span-tree timeline for the refund run run-bb11, rendered as a Gantt-style chart on a shared millisecond clock from 0 to 690. A top bar represents the root span invoke_agent spanning the full 0 to 690 milliseconds, annotated with gen_ai-style attributes input tokens 205, output tokens 47, and cost 0.00252 dollars. Below it, five child bars are positioned by their start and end times. The first child is an llm span with operation chat from 0 to 180 milliseconds, labelled decide search_policy, model deterministic-rule-controller, input tokens 40, output tokens 12. The second is an execute_tool span from 180 to 240 milliseconds running search_policy. The third is an llm chat span from 240 to 450 milliseconds, decide process_refund, input tokens 70, output tokens 15. The fourth is an execute_tool span from 450 to 540 milliseconds running process_refund. The fifth is an llm chat span from 540 to 690 milliseconds, decide finish, input tokens 95, output tokens 20. The view shows that the input tokens grow 40, 70, 95 across the three llm spans because the agent re-sends a growing transcript, and that each span is folded directly from a journal event with no separate instrumentation. A note states the timings and token counts are frozen so the trace is reproducible, and that a real OTLP exporter is one commented line away." height={860} />
+</Diagram>
+
+## Metrics from the spans
+
+Once you have spans, the metrics that matter are just folds over them, computed from the same data you would ship to a backend rather than from a side channel. Here is the readout, quoted from the artifact's real output:
+
+```text
+  trajectory   : search_policy -> process_refund
+  llm calls    : 3
+  tokens       : in=205 out=47 (input grew 40 -> 70 -> 95: the re-sent transcript is the dominant cost)
+  cost         : $0.00252
+  latency      : 690ms (sum of per-span latencies)
+```
+
+Read each line. The **trajectory** is `search_policy -> process_refund`, the sequence of tools the agent actually called. Note that `finish` is not in it: `finish` is an `llm` decision, not an `execute_tool` call, so the trajectory is exactly the two side-effecting steps, which is what you want when you are asking "what did this run *do*?" The **LLM-call count** is `3` (search, refund, finish are three controller turns), the **tokens** are `in=205 out=47`, the **cost** is `$0.00252`, and the **latency** is `690ms`. Every one of these is reconstructed from the spans we just emitted, not measured separately.
+
+> ### Sidebar: transcript economics
+>
+> Look hard at the token line: `input grew 40 -> 70 -> 95`. Those are the input tokens of the three `llm` spans, and they climb every step. That is not noise, it is the dominant cost lever of almost every agent. The agent re-sends its growing transcript to the model on every turn, so step three pays for steps one and two all over again. Output tokens (`12 -> 15 -> 20`) barely move; it is the **re-sent input** that compounds. This is why long-running agents get expensive in a way that surprises people: the bill is roughly quadratic in the number of steps, because each step re-pays for all the steps before it. The lever back is **prompt / KV caching**: when the provider caches the unchanged prefix of the transcript, you pay full price only for the new tokens each turn, which can cut input cost dramatically on a long run. You cannot reach for that lever, though, until a trace like this one shows you that the input tokens, not the tool calls, are where the money goes.
+
+> ### Sidebar: the controller is a prompt + a model
+>
+> Back in [Part 1](/essays/augmented-llm-loop) the sidebar promised that the controller is nothing but a system prompt plus a model, and that this would pay off at observability. Here is the payoff, sitting in the `llm` span: `gen_ai.request.model` and `gen_ai.usage.input_tokens` / `output_tokens`. Those three attributes are exactly where model choice and thinking budget show up in the bill. Swap a non-reasoning model for a reasoning one and the output tokens on every `llm` span jump, because the model is spending hidden deliberation tokens; widen the thinking budget and they jump again. The two knobs from Part 1, which model and how much it is allowed to think, are not abstract any more. They are line items on the `llm` span, and the trace is where you read them.
+
+## Cost per success
+
+Here is the number that decides whether you ship. A per-run cost of `$0.00252` looks great, but it is the cost of a run that *succeeded*. Production does not get to count only its wins. A cheap agent that never succeeds is not cheap, because you pay for the failures too: the tokens, the latency, the tool calls of a run that ends in nothing still hit your bill. So the honest metric is **cost-per-success**: total cost across all runs divided by the number of successes. Here it is over three runs, quoted from the artifact's real output:
+
+```text
+  task                            success        cost
+  -------------------------------------------------
+  refund ORD-3300                     yes    $0.00252
+  warranty lookup                     yes    $0.00180
+  find a nonexistent discount          no    $0.00320
+  -------------------------------------------------
+  total cost across 3 runs: $0.00752; successes: 2
+  COST PER SUCCESS: $0.00376  (worse than one happy run's $0.00252: the failed run still cost money)
+```
+
+Read the table. Two runs succeeded (the refund at `$0.00252` and a warranty lookup at `$0.00180`) and one failed: a search for a nonexistent discount that ran up `$0.00320` before it tripped the [Part 8](/essays/budgets-and-circuit-breaker) circuit breaker and gave up. The total spend was `$0.00752`, across `2` successes, so the **cost-per-success is `$0.00376`**. That is the production number, and it is `49%` higher than the cost of one happy run, precisely because the failed discount search was the **most expensive run of the three** and produced nothing. This is the trap in a single line: the failed run cost the most and succeeded least. If you budget against the happy-path number you will be wrong by exactly the failure rate times the average failure cost, and failures are often the *expensive* runs because they thrash before they give up. Cost-per-success is the metric that survives contact with a finance review, and you can only compute it because the spans gave you per-run cost and the agent's `finish` told you which runs succeeded.
+
+## The core capstone
+
+We have arrived at the end of the core track. Here is everything we built, every ring we added to the bare augmented LLM from Part 1, quoted from the artifact's real output:
+
+```text
+    1  augmented-LLM loop with typed, validated tools
+    2  robust execution: failure taxonomy, retries, idempotency (seed)
+    3  planning: plan-and-execute / ReWOO / tool DAG (LLM-call + depth accounting)
+    4  critic + error-triggered replanning over the DAG
+    5  reflection + cross-trial Reflexion
+    6  four typed memories the agent edits itself
+    7  compaction + forgetting for the long haul
+    8  budgets + loop detector + circuit breaker
+    9  durable event journal + replay + effectively-once
+    10 pause / approve / resume / steer (human-in-the-loop)
+    11 observability: spans, cost-per-success  <- you are here
+```
+
+Read it as the arc it is. We started with a [bare loop and a tool contract](/essays/augmented-llm-loop) (Part 1), then hardened execution (Part 2), taught the agent to [plan](/essays/planning-and-the-tool-dag) (Parts 3 and 4), to [reflect and learn across trials](/essays/reflection-and-reflexion) (Part 5), to [remember and forget](/essays/four-memories-self-editing) (Parts 6 and 7), to [stop itself](/essays/budgets-and-circuit-breaker) (Part 8), to [survive a crash](/essays/durable-agent) (Part 9), to [pause for a human](/essays/pause-approve-resume) (Part 10), and finally, here, to be seen into. That is a production-shaped core agent, every layer built and explained by hand.
+
+One honest note on storage. Everything in this part runs on a journal that is `~60 lines` of code: a JSONL file or a small SQLite table is all the durability either view needs, and that is genuinely enough to learn from and to ship a small system on. But for real production durability you will reach for a framework, and the choices have real trade-offs. **Temporal** gives you battle-tested durable execution with deterministic replay, at the cost of running a cluster and writing your code inside its workflow model. **DBOS** puts durable workflows on top of Postgres, lighter-weight but tied to that database. The **Vercel Workflow DevKit** gives you crash-safe, step-based workflows that fit serverless deployments, newer and platform-shaped. **LangGraph** offers checkpointing and human-in-the-loop primitives close to the agent abstractions we have been using, with the usual caveat of buying into a framework's worldview. None of them is free; each trades the `~60 lines` for operational features, and the right call depends on what you already run. The thing to carry forward is that the *pattern* is what matters: a journal, replay, idempotency, and spans folded out of the same log. The framework is an implementation of that pattern, not a substitute for understanding it.
+
+<Diagram number={3} caption="The core capstone: every ring we added to the bare augmented LLM across Parts 1 to 11, drawn as concentric layers. At the center is the Part 1 augmented-LLM loop with typed validated tools. Around it, in order: robust execution with a failure taxonomy and idempotency seed (Part 2), planning over a tool DAG (Part 3), a critic and error-triggered replanning (Part 4), reflection and cross-trial Reflexion (Part 5), four typed self-edited memories (Part 6), compaction and forgetting (Part 7), budgets and a circuit breaker (Part 8), a durable event journal with replay and effectively-once (Part 9), pause approve resume steer for human-in-the-loop (Part 10), and the outermost ring, observability with spans and cost-per-success (Part 11), marked you are here. A side panel notes that the storage under all of this is about 60 lines of JSONL or SQLite, and that production durability frameworks Temporal, DBOS, the Vercel Workflow DevKit, and LangGraph each implement this same pattern with their own trade-offs. The figure summarizes the whole core track as one layered agent.">
+  <img src="/essays/observable-agent/part11-core-capstone.svg" alt="A diagram of eleven concentric rings forming a single agent, each ring labelled with a part number and its contribution. The innermost core, ring 1, reads augmented-LLM loop, typed validated tools. Moving outward: ring 2 robust execution, failure taxonomy, retries, idempotency seed; ring 3 planning, plan-and-execute, ReWOO, tool DAG; ring 4 critic plus error-triggered replanning; ring 5 reflection plus cross-trial Reflexion; ring 6 four typed memories the agent edits itself; ring 7 compaction plus forgetting; ring 8 budgets plus loop detector plus circuit breaker; ring 9 durable event journal, replay, effectively-once; ring 10 pause, approve, resume, steer, human-in-the-loop; and the outermost ring 11 observability, spans, cost-per-success, marked with a YOU ARE HERE pin. To the right, a panel headed STORAGE reads about 60 lines, a JSONL file or SQLite, with a sub-panel headed PRODUCTION listing Temporal durable execution, DBOS workflows on Postgres, Vercel Workflow DevKit serverless steps, and LangGraph checkpointing plus human-in-the-loop, each tagged same pattern, different trade-offs. A caption strip reads: every ring is a part, the whole stack is one production-shaped core agent." class="w-full rounded-lg" />
+</Diagram>
+
+> 💡 **From experience.** The agent that taught me to trust cost-per-success over a dashboard was one that looked perfect. It passed every eyeball test we threw at it, the demo runs were snappy and cheap, and the per-run cost in the logs was a fraction of a cent, so we shipped it and moved on. Two weeks later finance asked why the line item was roughly five times what we had projected. Nobody had instrumented the failures. When I finally folded the production journal into spans and computed cost-per-success instead of mean-cost-per-run, the picture was obvious and ugly: a meaningful slice of runs were failing on a particular input class, and the failing runs were not cheap, they were the *most* expensive, because the agent would thrash, retry, re-send a bloating transcript, and only give up after burning far more tokens than a clean success ever did. The happy-path number we had shipped against was a fantasy that simply did not count the runs that hurt. The same span tree caught a second thing on a different agent: one tool, an external lookup we had assumed was instant, was eating sixty percent of every run's wall-clock time, sitting right there as the longest bar in the trace. Neither of those was visible from "it seemed fine." Both were obvious the moment the journal became a trace. The lesson I keep relearning is that an agent you cannot see into is one you are flying blind, and the trace is cheap because the journal already exists.
+
+{/* author: swap the above for your own first-person story if you have a better one */}
+
+## Key takeaways
+
+- An agent that can plan, recover, remember, stop, survive a crash, and pause for a human is still **unshippable if you cannot see into it**: you cannot tell which step is slow, which call is expensive, or whether a "success" cost an acceptable amount. Observability is the last ring of the core track.
+- **Observability is a second view of the Part 9 journal, not a second system.** The same events that make the agent durable, folded by a clock, become a span tree. The trace and the run are the same bytes, so they cannot disagree.
+- A **span tree by hand** needs no SDK: a root `invoke_agent` span over child `llm` (operation `chat`) and `execute_tool` spans, each carrying `gen_ai.*`-style attributes (`operation.name`, `request.model`, `usage.input_tokens`, `tool.name`), emitted as JSONL. The names are hedged because the GenAI conventions still move, and a real OTLP exporter is one commented line.
+- **Metrics are folds over the spans**: trajectory `search_policy -> process_refund` (`finish` is an LLM decision, not a tool), `llm calls: 3`, `tokens in=205 out=47`, `cost $0.00252`, `latency 690ms`. The input tokens grow `40 -> 70 -> 95` because the agent re-sends a bloating transcript, which is the dominant cost lever; prompt/KV caching is the lever back. Model choice and thinking budget show up directly on the `llm` span.
+- **Cost-per-success is the production number.** Across three runs the total was `$0.00752` for `2` successes, so cost-per-success is `$0.00376`, worse than one happy run's `$0.00252` because the failed discount search cost the most and produced nothing. You pay for the failures too; budget against this number, not the happy path.
+- The **capstone** is eleven rings on a bare LLM, Parts 1 to 11. The storage under it is `~60 lines` of JSONL or SQLite; for production, Temporal, DBOS, the Vercel Workflow DevKit, and LangGraph each implement the same pattern (journal, replay, idempotency, spans) with their own trade-offs. The framework is an implementation of the pattern, not a substitute for understanding it.
+
+## Glossary
+
+- **Span**: a record of one unit of work with a name, a start time, an end time, and a bag of attributes; here, one LLM decision or one tool call. A **span tree** links spans by `parent_id` into a hierarchy, with one root (`invoke_agent`) over its children.
+- **OTel-GenAI semantic conventions (`gen_ai.*`-style)**: OpenTelemetry's evolving standard for naming attributes on LLM and agent spans (`gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.tool.name`). Hedged as `-style` here because the exact keys are still changing across releases; treat them as the right shape, not a frozen spec.
+- **`invoke_agent` / `execute_tool` / `llm` spans**: the three span names used here. `invoke_agent` is the root span for the whole run; each `llm` span (operation `chat`) is one controller decision carrying tokens and model; each `execute_tool` span is one tool call carrying its tool name and latency.
+- **Cost-per-success**: total cost across all runs divided by the number of successful runs; always worse than the cost of a single happy run, because you pay for the failures too, and failures are often the most expensive runs. The metric that decides whether shipping is worth it.
+- **One log, two views**: the principle that the durability artifact (the journal) and the observability artifact (the span tree) are the same bytes read two ways, so the trace can never drift out of sync with the actual execution.
+- **Transcript economics**: the observation that an agent's input tokens grow every step because it re-sends a bloating transcript, making the re-sent input (not the tool calls) the dominant cost lever; prompt/KV caching, which charges full price only for new tokens, is the lever back.
+- **What follows**: the core track ends here. The **frontier track** (Parts 12 to 17) opens this self-contained agent to the protocol wire and to multi-agent systems, beginning with tools as a protocol.
+
+---
+
+The rule from this part: a durable agent you cannot see into is undebuggable and unaccountable, so do not build a second logging system, fold the journal you already have into spans. Make the trace a second view of the durability log (one root `invoke_agent` span over `llm` and `execute_tool` children with `gen_ai.*`-style attributes, emitted as JSONL), reconstruct your metrics from those spans rather than a side channel (trajectory, tokens, latency), and measure **cost-per-success** rather than the happy-path cost, because you pay for the failures too. That closes the core track: eleven rings on a bare LLM, a production-shaped agent you can plan with, recover with, remember with, bound, persist, pause, and now operate. But notice the one assumption that has held since Part 1 and never been questioned: the tools are a hardcoded dictionary inside the agent. They cannot be shared with another host, discovered at runtime, or swapped without editing the agent's own code. Every tool the agent has ever called was wired in by hand. **Part 12, Tools as a Protocol**, opens the frontier track by building a minimal Model Context Protocol server and host by hand, turning that private dictionary of tools into something any host can connect to, discover, and call over a wire.
