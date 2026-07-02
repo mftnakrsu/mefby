@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>What Is a Score? — grade the model by hand, Part 1</title>
+<title>What Is a Score? Grade the model by hand, Part 1</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -416,7 +416,7 @@ input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-o
   <div class="verdict" id="verdict"></div>
 
   <p class="guard-note">
-    Precision here is <code>0 / 0</code> — the baseline never predicts "urgent," so there is nothing to be right about — and it is guarded to <b>0.00</b>. When zero tickets are urgent, recall is <code>0 / 0</code> too, also guarded to <b>0.00</b>. Same rule as the code: an empty denominator scores <b>0.00</b>, never a crash.
+    Precision here is <code>0 / 0</code> (the baseline never predicts "urgent," so there is nothing to be right about), and it is guarded to <b>0.00</b>. When zero tickets are urgent, recall is <code>0 / 0</code> too, also guarded to <b>0.00</b>. Same rule as the code: an empty denominator scores <b>0.00</b>, never a crash.
   </p>
   <div class="sr-only" aria-live="polite" id="announcer-b"></div>
 </section>
@@ -586,13 +586,13 @@ input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-o
     var v = document.getElementById("verdict");
     if (posCount === 0) {
       v.className = "verdict calm";
-      v.innerHTML = "No urgent tickets exist, so a do-nothing model is <strong>100% accurate</strong> — and recall is <code style=\"font-family:var(--font-mono)\">0/0</code>, guarded to 0.00. There is simply nothing to catch.";
+      v.innerHTML = "No urgent tickets exist, so a do-nothing model is <strong>100% accurate</strong>, and recall is <code style=\"font-family:var(--font-mono)\">0/0</code>, guarded to 0.00. There is simply nothing to catch.";
     } else if (acc >= 0.8) {
       v.className = "verdict warn";
-      v.innerHTML = pct(acc) + " accurate, <strong>" + pct(rec) + " recall</strong>. With only " + posCount + " urgent ticket" + (posCount === 1 ? "" : "s") + " in " + N + ", ignoring them all still looks near-perfect on accuracy — yet it catches <strong>zero</strong> of the ones that matter.";
+      v.innerHTML = pct(acc) + " accurate, <strong>" + pct(rec) + " recall</strong>. With only " + posCount + " urgent ticket" + (posCount === 1 ? "" : "s") + " in " + N + ", ignoring them all still looks near-perfect on accuracy, yet it catches <strong>zero</strong> of the ones that matter.";
     } else {
       v.className = "verdict warn";
-      v.innerHTML = pct(acc) + " accurate, <strong>" + pct(rec) + " recall</strong>. As the classes balance out, accuracy finally drops — but recall was zero the whole time. Accuracy only ever measured the easy majority.";
+      v.innerHTML = pct(acc) + " accurate, <strong>" + pct(rec) + " recall</strong>. As the classes balance out, accuracy finally drops, but recall was zero the whole time. Accuracy only ever measured the easy majority.";
     }
 
     document.getElementById("announcer-b").textContent =
