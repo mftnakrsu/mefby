@@ -1,0 +1,234 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 680" width="100%" style="height:auto" role="img" aria-labelledby="ck-title ck-desc">
+  <title id="ck-title">Raw agreement collapses under chance correction, Cohen's kappa on 20 tickets</title>
+  <desc id="ck-desc">Two human raters, A and B, each label 20 support tickets urgent or not urgent. Rows are rater A (urgent, not urgent); columns are rater B (urgent, not urgent). The four cells hold both-urgent = 2, A-urgent-B-not (disagree) = 1, A-not-B-urgent (disagree) = 1, and both-not = 16, colored emerald on the agreement diagonal and amber on the disagreement diagonal. Row totals are 3 and 17, column totals are 3 and 17, grand total 20. From these counts: raw agreement po = (2 plus 16) divided by 20 = 0.90, chance agreement pe = 0.15 times 0.15 plus 0.85 times 0.85 = 0.0225 plus 0.7225 = 0.7450, and Cohen's kappa = (0.90 minus 0.745) divided by (1 minus 0.745) = 0.61. A footnote reports that with three raters on five fresh tickets, Fleiss' kappa, built the same way from observed agreement 0.7333 and chance agreement 0.52, comes out to 0.44.</desc>
+
+  <!-- Page background -->
+  <rect width="1180" height="680" fill="#ffffff"/>
+  <rect width="1180" height="680" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 3, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 3 &#183; DO HUMANS EVEN AGREE?</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">90% raw agreement, chance-corrected to kappa 0.61</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">Two raters, 20 tickets. Both almost always say "not urgent", so most of the agreement is chance.</text>
+
+  <!-- ============================================================
+       LEFT: the 2x2 of rater A vs rater B
+  ============================================================ -->
+
+  <!-- Rater B axis title (columns) -->
+  <text x="410" y="120" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.14em">RATER B</text>
+
+  <!-- Column header labels -->
+  <text x="345" y="147" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13.5" font-weight="600" fill="#3f3f46">urgent</text>
+  <text x="475" y="147" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13.5" font-weight="600" fill="#3f3f46">not urgent</text>
+
+  <!-- Rater A axis title (rows), rotated -->
+  <text x="146" y="288" text-anchor="middle" transform="rotate(-90 146 288)"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.14em">RATER A</text>
+
+  <!-- Row header labels -->
+  <text x="268" y="220" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13.5" font-weight="600" fill="#3f3f46">urgent</text>
+  <text x="268" y="350" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13.5" font-weight="600" fill="#3f3f46">not urgent</text>
+
+  <!-- both-urgent cell (A urgent, B urgent), agree -->
+  <rect x="280" y="158" width="130" height="130" rx="12" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2"/>
+  <text x="345" y="200" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#059669" letter-spacing="0.04em">AGREE</text>
+  <text x="345" y="242" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="46" font-weight="700" fill="#047857">2</text>
+  <text x="345" y="270" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="600" fill="#059669">both say urgent</text>
+
+  <!-- A urgent, B not, disagree -->
+  <rect x="410" y="158" width="130" height="130" rx="12" fill="#fffbeb" stroke="#fcd34d" stroke-width="2"/>
+  <text x="475" y="200" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#d97706" letter-spacing="0.04em">DISAGREE</text>
+  <text x="475" y="242" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="46" font-weight="700" fill="#b45309">1</text>
+  <text x="475" y="270" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="600" fill="#d97706">A urgent, B not</text>
+
+  <!-- A not, B urgent, disagree -->
+  <rect x="280" y="288" width="130" height="130" rx="12" fill="#fffbeb" stroke="#fcd34d" stroke-width="2"/>
+  <text x="345" y="330" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#d97706" letter-spacing="0.04em">DISAGREE</text>
+  <text x="345" y="372" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="46" font-weight="700" fill="#b45309">1</text>
+  <text x="345" y="400" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="600" fill="#d97706">A not, B urgent</text>
+
+  <!-- both-not cell (A not, B not), agree -->
+  <rect x="410" y="288" width="130" height="130" rx="12" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2"/>
+  <text x="475" y="330" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#059669" letter-spacing="0.04em">AGREE</text>
+  <text x="475" y="372" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="46" font-weight="700" fill="#047857">16</text>
+  <text x="475" y="400" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="600" fill="#059669">both say not urgent</text>
+
+  <!-- Row totals (right of matrix) -->
+  <text x="583" y="132" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="600" fill="#a1a1aa" letter-spacing="0.06em">ROW</text>
+  <rect x="556" y="200" width="54" height="40" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="583" y="226" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#3f3f46">3</text>
+  <rect x="556" y="336" width="54" height="40" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="583" y="362" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#3f3f46">17</text>
+
+  <!-- Column totals (below matrix) -->
+  <rect x="325" y="432" width="40" height="40" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="345" y="458" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#3f3f46">3</text>
+  <rect x="455" y="432" width="40" height="40" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="475" y="458" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#3f3f46">17</text>
+  <text x="410" y="492" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="600" fill="#a1a1aa" letter-spacing="0.06em">COLUMN TOTAL</text>
+
+  <!-- Grand total (bottom-right corner) -->
+  <rect x="556" y="432" width="54" height="40" rx="9" fill="#18181b"/>
+  <text x="583" y="458" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#ffffff">20</text>
+  <text x="583" y="492" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="600" fill="#a1a1aa" letter-spacing="0.06em">n</text>
+
+  <!-- Legend (bottom-left) -->
+  <rect x="40" y="540" width="14" height="14" rx="4" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="62" y="551"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">diagonal = agree</text>
+  <rect x="205" y="540" width="14" height="14" rx="4" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="227" y="551"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">off-diagonal = disagree</text>
+  <text x="40" y="580"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#a1a1aa">A's marginal: urgent 3/20 = 0.15. B's marginal: urgent 3/20 = 0.15.</text>
+
+  <!-- Divider between matrix and metrics -->
+  <line x1="632" y1="100" x2="632" y2="600" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       RIGHT: raw agreement, chance agreement, Cohen's kappa
+  ============================================================ -->
+  <text x="672" y="120"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">TWO NUMBERS &#8594; ONE HONEST SCORE</text>
+
+  <!-- Raw agreement po -->
+  <text x="672" y="168"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="16" font-weight="700" fill="#18181b">Raw agreement po</text>
+  <text x="1140" y="171" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="30" font-weight="700" fill="#18181b">0.90</text>
+  <text x="672" y="190"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#71717a">(both-urgent + both-not) / n = (2 + 16) / 20</text>
+  <rect x="672" y="202" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="202" width="297" height="7" rx="3.5" fill="#a1a1aa"/>
+  <line x1="672" y1="228" x2="1140" y2="228" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- Chance agreement pe -->
+  <text x="672" y="262"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="16" font-weight="700" fill="#18181b">Chance agreement pe</text>
+  <text x="1140" y="265" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="30" font-weight="700" fill="#d97706">0.745</text>
+  <text x="672" y="284"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#71717a">0.15*0.15 + 0.85*0.85 = 0.0225 + 0.7225</text>
+  <text x="672" y="300"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#a1a1aa">what two coin-flip raters would agree on anyway</text>
+  <rect x="672" y="310" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="310" width="246" height="7" rx="3.5" fill="#fcd34d"/>
+  <line x1="672" y1="336" x2="1140" y2="336" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- Cohen's kappa -->
+  <text x="672" y="370"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="16" font-weight="700" fill="#18181b">Cohen's kappa</text>
+  <text x="1140" y="373" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="30" font-weight="700" fill="#059669">0.61</text>
+  <text x="672" y="392"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#71717a">(po - pe) / (1 - pe) = (0.90 - 0.745) / (1 - 0.745)</text>
+  <text x="672" y="408"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#a1a1aa">the agreement beyond chance, as a fraction of what was possible</text>
+  <rect x="672" y="418" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="418" width="201" height="7" rx="3.5" fill="#34d399"/>
+
+  <!-- Fleiss footnote panel -->
+  <rect x="672" y="452" width="468" height="86" rx="12" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="692" y="476"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#52525b" letter-spacing="0.06em">THREE RATERS? FLEISS' KAPPA</text>
+  <text x="692" y="497"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#3f3f46">5 tickets &#183; 3 raters: P_bar 0.7333, P_e 0.5200</text>
+  <text x="692" y="516"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#3f3f46">kappa = (0.7333 - 0.52) / (1 - 0.52) = <tspan font-weight="700" fill="#059669">0.44</tspan></text>
+  <text x="692" y="532"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#a1a1aa">same idea, generalized past two raters</text>
+
+  <!-- Bottom caption strip -->
+  <rect x="40" y="612" width="1100" height="48" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="590" y="633" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">Two raters who almost always say "not urgent" agree by chance 74% of the time.</text>
+  <text x="590" y="651" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">The honest, chance-corrected score is kappa 0.61, not the raw 90%.</text>
+</svg>

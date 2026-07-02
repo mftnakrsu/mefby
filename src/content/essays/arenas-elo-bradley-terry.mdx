@@ -1,0 +1,168 @@
+---
+title: "Arenas"
+description: "How leaderboards turn a pile of head-to-head battles into one ranking. Part 9 runs four chatbots through an 18-battle round-robin arena, ranks them two ways (Elo updated match by match, then the Bradley-Terry MLE fit to the aggregate win matrix), and shows numerically why Elo depends on match order while Bradley-Terry does not."
+date: 2026-07-22
+tags: ["Evals", "LLM", "AI", "Elo", "Bradley-Terry", "Ranking"]
+seriesOrder: 9
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-09-arenas-elo-bradley-terry"
+lang: "en"
+translationSlug: "arenas-elo-bradley-terry-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 8, "pass@k", gave us a defensible single number for one model we sample many times. This part is the opposite problem: we have many models and only relative judgments, and we want to line them all up. That is what an **arena** does. You have probably seen one, because the public LLM leaderboards work exactly this way: a crowd is shown two anonymous answers to the same prompt, votes for the better one, and every such vote is a **battle** between two models. There is no gold label anywhere. Nobody ever writes down "the correct answer." All you get is a pile of "A beat B this time" verdicts, and out of that pile you have to manufacture a single ranking that says who is best.
+
+This is a genuinely different kind of measurement from everything so far in the series. Parts 1 through 8 all graded outputs against a fixed reference. Here there is no reference, only preference. So the whole question becomes: how do you turn a heap of pairwise wins and losses into one ordered list, and can you trust the order you get? We will answer it by running four chatbots (call them A, B, C, and D) through a small round-robin arena and ranking them two ways. First **Elo**, the chess rating system, which updates after every single battle. Then **Bradley-Terry**, a maximum-likelihood model that reads only the final tally. Along the way we will find a genuinely uncomfortable fact: replay the exact same battles in a different order and Elo hands back different numbers, while Bradley-Terry does not move a hair. By the end you will know which one a leaderboard should actually use, and why.
+
+## Prerequisites
+
+You need basic Python and comfort with a fraction and an exponent. One formula, Elo's expected score, uses a power of ten (`10^x`); we walk through it digit by digit, so you do not need to have seen it before. No prior exposure to Elo, chess ratings, or maximum likelihood is assumed. If you read Part 1 you already have the mindset: trace every number on a set small enough to print. The companion file, [arenas.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-09-arenas-elo-bradley-terry), runs offline with no API key, no network, and nothing beyond the Python standard library, and every figure quoted in this essay is that file's printed output, unrounded and unedited.
+
+## The arena and its win matrix
+
+Let us make the battles concrete. Four chatbots enter a round-robin, meaning every pair meets, and each pair battles exactly 3 times. Six pairs times three battles gives **18 battles total**. Each battle is settled by a judge (a human crowd, or the mock judge in the code) that simply picks the better answer, so each battle produces one winner and one loser, no ties.
+
+The true skill order we baked in is `A > B > C > D`, but the arena is noisy, the way a real crowd is noisy. Most battles go to the stronger bot, but a few upsets slip through: B beat A once, C beat B once, and D beat C once. When you finish tallying all 18 battles, you can write the whole arena as a **win matrix**, where the entry in row `i`, column `j` is the number of times `i` beat `j`:
+
+```text
+  win matrix (row beat col):   A  B  C  D
+                          A  [ 0  2  3  3 ]
+                          B  [ 1  0  2  3 ]
+                          C  [ 0  1  0  2 ]
+                          D  [ 0  0  1  0 ]
+```
+
+Read it row by row. Row A says A beat B twice, C three times, D three times. Row B says B beat A once (there is the upset), C twice, D three times. Row C says C beat B once, D twice. Row D says D beat C once, and lost everything else. Every off-diagonal pair sums to 3 across the two triangles (A beat B twice plus B beat A once is three A-versus-B battles), which is the sanity check that all 18 battles are accounted for. This matrix is the entire input. Both ranking methods we are about to build read from nothing but these battles. The only difference is whether they read them one at a time in order, or all at once as totals.
+
+## Elo: one update by hand
+
+Elo assigns every player a rating, starts everyone equal, and nudges the two ratings after each battle: the winner takes points from the loser. The size of the nudge depends on how surprising the result was. Beat someone you were expected to beat and you gain little; beat someone far above you and you gain a lot. The machinery is two short formulas, and we will do one battle entirely by hand before letting the computer do the rest.
+
+Start both A and B at the standard **start rating** of `1000`. Before the battle, Elo computes an **expected score** for A, its predicted probability of winning, from the rating gap:
+
+```text
+E_A = 1 / (1 + 10^((Rb - Ra) / 400)) = 1 / (1 + 10^0) = 0.50
+```
+
+Because the two ratings are equal, the gap `Rb - Ra` is zero, `10^0` is 1, and the expression is `1 / (1 + 1) = 0.50`. Elo is saying the obvious thing: two equally rated players are a coin flip. Now the battle happens and A wins. The update rule moves each rating toward the actual result `S` (1 for a win, 0 for a loss), scaled by the **K-factor**, which is the biggest jump a single battle can cause. We use `K = 32`, the classic chess value:
+
+```text
+A won, so S_A = 1.  R_A' = 1000 + 32 * (1 - 0.50) = 1016.0
+         S_B = 0.  R_B' = 1000 + 32 * (0 - 0.50) = 984.0
+```
+
+A expected to score 0.50 and actually scored 1, so it beat expectation by half a point; `32 * 0.5 = 16`, and A climbs to `1016.0`. B fell short of expectation by the same half point and drops to `984.0`. Note that A gained exactly what B lost: Elo is a closed economy, points only move between players, they are never created. And note the magnitude. When the prediction was a coin flip, the win moves 16 points, half of K. Had A been heavily favored, `E_A` would have been near 1, `(1 - E_A)` near zero, and the same win would have earned it almost nothing. That is the whole idea: Elo rewards you for results in proportion to how much they surprised it.
+
+<Diagram number={1} caption="The four-bot arena resolved two ways. Left: the 18-battle round-robin as a win matrix, row beat column, with A on top (8 wins) down to D (1 win) and the three upset battles (B over A, C over B, D over C) marked. Center: one Elo update worked by hand, both bots starting at 1000 with expected score E_A = 0.50, A winning to 1016.0 while B drops to 984.0, K = 32. Right: the two final rankings. Elo replayed over all 18 battles gives A 1083.7, B 1034.8, C 962.2, D 919.2 in the as-listed order but A 1087.2, B 1038.8, C 961.4, D 912.6 after a fixed-seed shuffle, the same order but different numbers; Bradley-Terry fit to the aggregate matrix gives order-independent strengths pA 0.7015, pB 0.2314, pC 0.0506, pD 0.0164. Both agree the ranking is A > B > C > D.">
+  <img src="/essays/arenas-elo-bradley-terry/part9-figure.svg" alt="A three-panel figure. The left panel shows a 4x4 win matrix labelled 'row beat col' with rows and columns A, B, C, D; the entries are A row 0 2 3 3, B row 1 0 2 3, C row 0 1 0 2, D row 0 0 1 0, and the three upset cells (B beat A once, C beat B once, D beat C once) are highlighted in amber. The center panel shows a single Elo update: A and B both start at 1000, E_A equals 0.50, A wins and rises to 1016.0 in emerald while B falls to 984.0 in rose, with K equals 32 noted. The right panel shows two ranking columns. The Elo column lists an as-listed order A 1083.7, B 1034.8, C 962.2, D 919.2 and a shuffled order A 1087.2, B 1038.8, C 961.4, D 912.6, with the per-bot differences plus 3.5, plus 4.0, minus 0.8, minus 6.6 shown between them. The Bradley-Terry column lists converged strengths pA 0.7015, pB 0.2314, pC 0.0506, pD 0.0164. A footnote reads: same battles, Elo's numbers depend on order, Bradley-Terry's do not; both rank A over B over C over D." class="w-full rounded-lg" />
+</Diagram>
+
+## Elo over all 18 battles, twice
+
+One battle is easy. Now replay the whole arena. Start all four bots at `1000`, walk the **battle log** in order, and apply that same two-line update to the two bots involved in each battle. After the last of the 18 battles the ratings have settled. In the order the battles were listed, they land here:
+
+```text
+  as-listed order:  A=1083.7  B=1034.8  C=962.2  D=919.2
+```
+
+That looks right. A on top, then B, then C, then D, exactly the skill order we built in, and the two strong bots have pulled above the 1000 line while the two weak ones sank below it. Total is conserved: the points A, B gained are the points C, D lost. If this were all we did, we would happily publish `A > B > C > D` and move on.
+
+Here is the catch. Take the **exact same 18 battles**, the same winners and losers, and only shuffle the order in which we feed them to Elo (a fixed-seed shuffle, so it is reproducible). Replay:
+
+```text
+  shuffled order:   A=1087.2  B=1038.8  C=961.4  D=912.6
+  difference:       A=+3.5  B=+4.0  C=-0.8  D=-6.6
+```
+
+The numbers changed. Not the battles, only their order, and yet A moved by `+3.5`, B by `+4.0`, C by `-0.8`, and D by `-6.6`. D in particular is more than six rating points lower for no reason other than when its losses happened to fall in the sequence. This is not a bug in the code and it is not rounding. It is a real property of Elo: because each update uses the ratings *as they stand at that moment*, and those ratings depend on every battle that came before, the path matters. Beat a bot early, while it is still rated 1000, and you gain one amount; beat it later, after it has already lost a few and dropped to 950, and the same win is worth less. The final ratings therefore depend on the trajectory, not just the outcomes.
+
+Now, before you write Elo off, notice what did *not* change:
+
+```text
+  ranking (as-listed): A > B > C > D
+  ranking (shuffled):  A > B > C > D
+```
+
+The order held. Both replays rank `A > B > C > D`. The order-dependence perturbed the *numbers* by a few points but not enough, on this clean-ish arena, to swap anybody's rank. That is the honest summary of Elo: it is an online, streaming rating that is wonderful when battles arrive one at a time and you want a live number after each one (which is exactly the situation in chess, and on a leaderboard collecting votes all day). But the rating you read at any instant is a snapshot of a path, so two people who processed the same battles in different orders can legitimately report different Elo scores. When a leaderboard needs one canonical, reproducible number that everyone agrees on, that path-dependence is a liability.
+
+## Bradley-Terry: rank the totals, not the sequence
+
+Bradley-Terry throws away the sequence entirely. It is a probabilistic model of the whole arena at once. It says: give each bot a positive **strength** `p`, and model the probability that `i` beats `j` in any single battle as its share of the two strengths:
+
+```text
+P(i beats j) = p_i / (p_i + p_j)
+```
+
+That is the entire model. A stronger bot (bigger `p`) wins more often, and how much more depends only on the *ratio* of the two strengths, never on any rating gap or history. Our job is to find the set of strengths that makes the arena we actually observed as likely as possible: the **maximum-likelihood estimate**. There is no closed-form answer, but there is a beautifully simple iteration that is guaranteed to climb to it, the Zermelo / MM update. Each round, replace every bot's strength with
+
+```text
+p_i (new) = W_i / sum over opponents j of  n_ij / (p_i + p_j)
+```
+
+then divide all four by their sum so they stay normalized to 1. Here `W_i` is bot `i`'s total wins (its row sum in the win matrix) and `n_ij` is the number of battles between `i` and `j` (always 3 here). The numerator is "how much you won," the denominator is "how much you were expected to win given everyone's current strength," and the ratio pushes each strength toward consistency with the tallies.
+
+Watch the first step by hand, because it comes out clean. Everyone starts equal at **`p = 0.2500`**. The total wins are `W_A = 8`, `W_B = 6`, `W_C = 3`, `W_D = 1` (the row sums; they add to 18, one per battle). At the start every `p_i + p_j` is `0.25 + 0.25 = 0.5`, so each term `n_ij / (p_i + p_j)` is `3 / 0.5 = 6`, and with three opponents the whole denominator is `18` for every bot. So the first-iteration strengths are just each bot's wins over 18:
+
+```text
+      it 1      A=0.4444  B=0.3333  C=0.1667  D=0.0556
+```
+
+`8/18 = 0.4444`, `6/18 = 0.3333`, `3/18 = 0.1667`, `1/18 = 0.0556`, and they already sum to 1. After one pass the strengths are simply the win shares. But that is not the fixed point, because it ignores *who* each bot beat. Beating strong opponents should count for more than beating weak ones, and the iteration keeps re-weighting until the numbers reflect it. Let it run:
+
+```text
+     start      0.2500  0.2500  0.2500  0.2500
+      it 1      0.4444  0.3333  0.1667  0.0556
+      it 2      0.5195  0.3274  0.1179  0.0352
+      it 3      0.5655  0.3122  0.0933  0.0290
+     it 20      0.7015  0.2314  0.0506  0.0164
+```
+
+By iteration 20 it has converged: `A = 0.7015`, `B = 0.2314`, `C = 0.0506`, `D = 0.0164`. Notice A pulled up well past its raw `8/18` win share (from 0.4444 all the way to 0.7015), because it beat everyone including the bots that themselves beat others, so the model credits its wins as high-quality wins. D sank far below its raw share, because its one win was over C, near the bottom. The **converged ranking** is `A > B > C > D`, the same order Elo gave, but now it is a property of the totals alone.
+
+Those strengths are directly interpretable through the model. Plug two of them into `p_i / (p_i + p_j)` and you get a predicted head-to-head win probability:
+
+```text
+  P(A beats D) = pA / (pA + pD) = 0.977
+  P(B beats C) = pB / (pB + pC) = 0.821
+```
+
+Bradley-Terry says A beats D about `0.977` of the time and B beats C about `0.821` of the time, numbers you can read off the leaderboard and actually bet with. And here is the payoff: **shuffle the battles into any order you like and none of this moves.** The iteration never looked at the sequence; it only ever consumed `W_i` (row sums) and `n_ij` (pair counts), and shuffling the battle log changes neither. So Bradley-Terry returns one canonical ranking, identical for everyone who saw the same battles, no matter what order they arrived in. That is precisely the property Elo lacked.
+
+The interactive figure lets you feel both behaviors at once. In the Elo panel you can drag the 18 battles into a new order (or hit shuffle) and watch the four final ratings twitch by a few points while the ranking usually holds. In the Bradley-Terry panel you can step the MM iteration one round at a time from the flat `0.2500` start and watch the strengths crawl to `A = 0.7015, B = 0.2314, C = 0.0506, D = 0.0164`, and no matter how you reorder the battles the converged bars land in exactly the same place.
+
+<IframeFigure src="/essays/arenas-elo-bradley-terry/part9-interactive.html" title="Interactive arena explorer: a top panel where you reorder or shuffle the 18 battles and watch the four Elo ratings shift by a few points while the ranking holds, and a bottom panel where you step the Bradley-Terry MM iteration from the flat 0.2500 start to the converged strengths and see they are identical under any battle order." height={860} />
+
+## Which one should a leaderboard use?
+
+Both methods agreed on `A > B > C > D`, so on this arena you would ship the same list either way. The difference is what you can promise about that list. Elo gives you a live, streaming number that updates the instant a vote lands, which is why real arenas use it to show a moving leaderboard through the day, but the exact rating you screenshot is a function of the order the votes happened to arrive, so it is not something two people can independently reproduce to the decimal. Bradley-Terry gives you one canonical fit of the whole battle history, reproducible by anyone with the same win matrix and interpretable as real win probabilities, at the cost of being a batch computation you re-run rather than a running tally. In practice the mature leaderboards do both: Elo (or its online cousins) to move fast during collection, and a Bradley-Terry fit over the full history to publish the number of record. And every ranking here still rests on the judge that decided each battle, which is the exact thing Parts 4 and 5 taught you to distrust and de-bias: garbage battles in, a confidently wrong ranking out.
+
+## Key takeaways
+
+- **An arena has no gold label, only preference.** You never learn the right answer, only which of two answers a judge preferred. Ranking is the act of turning a pile of pairwise battles (here 18 battles among 4 bots, an `A > B > C > D` truth with three upsets) into one ordered list.
+- **Elo updates one battle at a time.** From equal ratings the expected score `E_A` is `0.50`, so a win moves the classic `K = 32` by half, `16` points: A climbs `1000 -> 1016.0`, B drops to `984.0`. Points are only moved between players, never created.
+- **Elo is order-dependent.** The same 18 battles give `A=1083.7, B=1034.8, C=962.2, D=919.2` as listed but `A=1087.2, B=1038.8, C=961.4, D=912.6` shuffled, differences of `+3.5, +4.0, -0.8, -6.6`. Each update reads the current ratings, so the path matters, not just the outcomes.
+- **Bradley-Terry ranks the totals, not the sequence.** Its MM iteration fits strengths to the aggregate win matrix, moving from a flat `0.2500` each through `it 1` win shares (`0.4444, 0.3333, 0.1667, 0.0556`) to converged `0.7015, 0.2314, 0.0506, 0.0164` by iteration 20. Because it consumes only win totals and pair counts, shuffling the battles changes nothing: the ranking is order-independent and reproducible.
+- **Strengths are readable probabilities.** `P(i beats j) = p_i / (p_i + p_j)` turns the fit into bets: `P(A beats D) = 0.977`, `P(B beats C) = 0.821`. Use Elo for a live streaming number, Bradley-Terry for the canonical one you publish.
+
+## Glossary
+
+- **Arena**: an evaluation with no gold label, where models are compared only head-to-head and a judge picks a winner each time. Ranking, not scoring, is the goal.
+- **Battle**: a single head-to-head comparison of two models on one prompt, producing one winner and one loser. Our arena has 18 of them (4 bots, every pair 3 times).
+- **Win matrix**: the table whose entry in row `i`, column `j` is how many times `i` beat `j`. The complete order-free summary of an arena; the row sum is a model's total wins.
+- **Elo**: an online rating system that starts everyone equal and, after each battle, moves points from loser to winner in proportion to how surprising the result was. Live and streaming, but order-dependent.
+- **Expected score (`E_A`)**: Elo's predicted win probability for A from the rating gap, `1 / (1 + 10^((Rb - Ra) / 400))`. Equal ratings give `0.50`, a coin flip.
+- **K-factor**: the maximum rating swing a single battle can cause in Elo. We use `K = 32`; at a coin-flip prediction a win moves half of it, `16` points.
+- **Order dependence**: the property that a method's output changes when the same events are processed in a different sequence. Elo has it (final ratings shift by a few points); Bradley-Terry does not.
+- **Bradley-Terry model**: a model giving each item a strength `p` and setting `P(i beats j) = p_i / (p_i + p_j)`. Fit by maximum likelihood to the win totals, so it is order-independent.
+- **Maximum-likelihood estimate (MLE)**: the parameter values (here the strengths) that make the observed data most probable under the model. Found by the MM / Zermelo iteration, which is guaranteed to climb toward it.
+- **MM iteration**: the update `p_i = W_i / sum_j n_ij / (p_i + p_j)` followed by renormalizing, repeated to convergence. `W_i` is total wins, `n_ij` the number of battles between `i` and `j`.
+
+---
+
+Two models can share a ranking yet differ in something Elo and Bradley-Terry never asked about: whether a model's stated confidence means anything. **Part 10, Calibration**, bins predictions by the confidence the model claimed, draws the reliability curve, and computes ECE and the Brier score to show exactly what over-confidence looks like as a number.

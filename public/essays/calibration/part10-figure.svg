@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 640" width="100%" style="height:auto" role="img" aria-labelledby="cal-title cal-desc">
+  <title id="cal-title">The reliability diagram: 10 trivia predictions, over-confident vs. well-calibrated</title>
+  <desc id="cal-desc">Ten confidence values (0.6, 0.6, 0.7, 0.8, 0.8, 0.9, 0.9, 0.9, 1.0, 1.0) grouped into three bins, [0.6, 0.8) with n=3, [0.8, 1.0) with n=5, and [1.0] with n=2, plotted as mean confidence versus accuracy against a dashed diagonal where confidence equals accuracy. The over-confident model's points sit below the diagonal at (0.633, 0.333), (0.860, 0.400), and (1.000, 0.500), giving gaps of 0.300, 0.460, and 0.500; its overall mean confidence is 0.82 against an actual accuracy of 0.40. The well-calibrated model uses the same confidences but its points sit near the diagonal at (0.633, 0.667), (0.860, 0.800), and (1.000, 1.000), giving gaps of 0.033, 0.060, and 0.000; its overall accuracy is 0.80. Weighting each bin's gap by its share of the 10 predictions gives an expected calibration error, ECE, of 0.420 for the over-confident model and 0.040 for the well-calibrated model, a 10.5 times shrink. The Brier score, the mean squared error between confidence and outcome, falls from 0.432 to 0.172 over the same pair.</desc>
+
+  <!-- Page background -->
+  <rect width="1180" height="640" fill="#ffffff"/>
+  <rect width="1180" height="640" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 10, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 10 &#183; CALIBRATION</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">The reliability diagram: promise vs. reality</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">Same 10 confidences, same 3 bins. Distance from the diagonal is the calibration gap.</text>
+
+  <!-- ============================================================
+       LEFT: reliability diagram (mean confidence vs. accuracy)
+  ============================================================ -->
+
+  <text x="120" y="112"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">RELIABILITY DIAGRAM &#183; MEAN CONFIDENCE VS. ACCURACY</text>
+
+  <!-- plot box -->
+  <rect x="120" y="140" width="380" height="320" fill="#ffffff" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- y gridlines / ticks (accuracy) -->
+  <line x1="120" y1="460" x2="500" y2="460" stroke="#e4e4e7" stroke-width="1"/>
+  <line x1="120" y1="300" x2="500" y2="300" stroke="#eeeeef" stroke-width="1" stroke-dasharray="2 3"/>
+  <line x1="120" y1="140" x2="500" y2="140" stroke="#e4e4e7" stroke-width="1"/>
+  <text x="108" y="464" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#a1a1aa">0.0</text>
+  <text x="108" y="304" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#a1a1aa">0.5</text>
+  <text x="108" y="144" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#a1a1aa">1.0</text>
+
+  <!-- x ticks (confidence) -->
+  <text x="120" y="478" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#a1a1aa">0.0</text>
+  <text x="310" y="478" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#a1a1aa">0.5</text>
+  <text x="500" y="478" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#a1a1aa">1.0</text>
+
+  <!-- axis titles -->
+  <text x="310" y="500" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">MEAN CONFIDENCE</text>
+  <text x="80" y="300" text-anchor="middle" transform="rotate(-90 80 300)"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">ACCURACY</text>
+
+  <!-- diagonal: perfect calibration -->
+  <line x1="120" y1="460" x2="500" y2="140" stroke="#a1a1aa" stroke-width="1.75" stroke-dasharray="5 4"/>
+  <text x="175" y="410" transform="rotate(-40 175 410)"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="600" fill="#71717a">perfect calibration (confidence = accuracy)</text>
+
+  <!-- gap segments: diagonal down to the over-confident point, per bin -->
+  <line x1="360.5" y1="257.4" x2="360.5" y2="353.4" stroke="#fda4af" stroke-width="2" stroke-dasharray="3 3"/>
+  <line x1="446.8" y1="184.8" x2="446.8" y2="332.0" stroke="#fda4af" stroke-width="2" stroke-dasharray="3 3"/>
+  <line x1="500.0" y1="140.0" x2="500.0" y2="300.0" stroke="#fda4af" stroke-width="2" stroke-dasharray="3 3"/>
+  <text x="368" y="308" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#be123c">gap 0.300</text>
+  <text x="454" y="262" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#be123c">gap 0.460</text>
+  <text x="428" y="222" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#be123c">gap 0.500</text>
+
+  <!-- connecting lines: over-confident (rose) and well-calibrated (emerald) -->
+  <polyline points="360.5,353.4 446.8,332.0 500.0,300.0" fill="none" stroke="#e11d48" stroke-width="2.25"/>
+  <polyline points="360.5,246.6 446.8,204.0 500.0,140.0" fill="none" stroke="#059669" stroke-width="2.25"/>
+
+  <!-- well-calibrated points -->
+  <circle cx="360.5" cy="246.6" r="10.4" fill="#059669" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="446.8" cy="204.0" r="14.0" fill="#059669" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="500.0" cy="140.0" r="8.6" fill="#059669" stroke="#ffffff" stroke-width="2"/>
+
+  <!-- over-confident points -->
+  <circle cx="360.5" cy="353.4" r="10.4" fill="#e11d48" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="446.8" cy="332.0" r="14.0" fill="#e11d48" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="500.0" cy="300.0" r="8.6" fill="#e11d48" stroke="#ffffff" stroke-width="2"/>
+
+  <!-- bin labels under the x axis -->
+  <text x="360.5" y="516" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#3f3f46">[0.6, 0.8)</text>
+  <text x="360.5" y="530" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#a1a1aa">n=3, mean 0.633</text>
+  <text x="446.8" y="516" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#3f3f46">[0.8, 1.0)</text>
+  <text x="446.8" y="530" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#a1a1aa">n=5, mean 0.860</text>
+  <text x="500.0" y="516" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#3f3f46">[1.0]</text>
+  <text x="500.0" y="530" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#a1a1aa">n=2, mean 1.000</text>
+
+  <!-- legend -->
+  <circle cx="47" cy="551" r="6" fill="#e11d48"/>
+  <text x="60" y="555"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">over-confident (below diagonal)</text>
+  <circle cx="280" cy="551" r="6" fill="#059669"/>
+  <text x="293" y="555"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">well-calibrated (on diagonal)</text>
+  <line x1="470" y1="551" x2="494" y2="551" stroke="#a1a1aa" stroke-width="1.75" stroke-dasharray="5 4"/>
+  <text x="502" y="555"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">confidence = accuracy</text>
+
+  <!-- Divider between diagram and metrics -->
+  <line x1="632" y1="100" x2="632" y2="560" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       RIGHT: ECE and Brier, over-confident vs. well-calibrated
+  ============================================================ -->
+  <text x="672" y="120"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">SAME CONFIDENCES &#8594; TWO SCORES</text>
+  <text x="672" y="136"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#a1a1aa">mean confidence 0.82 both &#183; accuracy 0.40 (over) vs 0.80 (cal)</text>
+
+  <!-- ECE -->
+  <text x="672" y="172"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="16" font-weight="700" fill="#18181b">ECE</text>
+  <text x="1050" y="166" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#e11d48" text-decoration="line-through">0.420</text>
+  <text x="1140" y="175" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="30" font-weight="700" fill="#059669">0.040</text>
+  <text x="672" y="194"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#71717a">weighted avg |mean_conf - accuracy| per bin</text>
+
+  <rect x="672" y="206" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="206" width="277.2" height="7" rx="3.5" fill="#fda4af"/>
+  <text x="1006" y="212" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#be123c">over</text>
+
+  <rect x="672" y="219" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="219" width="26.4" height="7" rx="3.5" fill="#34d399"/>
+  <text x="1006" y="225" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#047857">cal</text>
+
+  <text x="672" y="242"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="600" fill="#71717a">gap between promise and reality shrinks 10.5&#215;</text>
+
+  <line x1="672" y1="258" x2="1140" y2="258" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- Brier -->
+  <text x="672" y="292"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="16" font-weight="700" fill="#18181b">Brier score</text>
+  <text x="1050" y="286" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#e11d48" text-decoration="line-through">0.432</text>
+  <text x="1140" y="295" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="30" font-weight="700" fill="#059669">0.172</text>
+  <text x="672" y="314"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#71717a">mean (confidence - outcome)^2</text>
+
+  <rect x="672" y="326" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="326" width="285.1" height="7" rx="3.5" fill="#fda4af"/>
+  <text x="1006" y="332" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#be123c">over</text>
+
+  <rect x="672" y="339" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="339" width="113.5" height="7" rx="3.5" fill="#34d399"/>
+  <text x="1006" y="345" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10" fill="#047857">cal</text>
+
+  <text x="672" y="362"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="600" fill="#71717a">lower is better: rewards being right AND appropriately unsure</text>
+
+  <line x1="672" y1="378" x2="1140" y2="378" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- punchline callout -->
+  <rect x="672" y="398" width="468" height="150" rx="12" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="692" y="424"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#be123c">The over-confident model says 0.82</text>
+  <text x="692" y="444"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#be123c">but is right 0.40 of the time.</text>
+  <text x="692" y="468"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">Every bin sits below the diagonal. Confidence</text>
+  <text x="692" y="486"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">you cannot trust is worse than no confidence</text>
+  <text x="692" y="504"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">at all. ECE and Brier both catch it; a bare</text>
+  <text x="692" y="522"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">accuracy score would not.</text>
+
+  <!-- Bottom caption strip -->
+  <rect x="40" y="580" width="1100" height="40" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="590" y="605" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">A score is only trustworthy if a stated confidence means what it says. Distance from the diagonal is the lie.</text>
+</svg>

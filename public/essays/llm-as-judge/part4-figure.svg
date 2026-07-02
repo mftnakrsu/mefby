@@ -1,0 +1,312 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 860" width="100%" style="height:auto" role="img" aria-labelledby="j-title j-desc">
+  <title id="j-title">Twelve items, ten scorable, one judge-vs-human confusion matrix</title>
+  <desc id="j-desc">A deterministic mock LLM judge grades 12 labeled items. Its raw verdict is parsed into PASS, FAIL, or ABSTAIN. One refusal is parsed as FAIL and kept in the matrix; one tie and one case of format drift (no VERDICT tag) are parsed as ABSTAIN and dropped, leaving 10 scorable items. On those 10, the judge is scored against human gold with positive class PASS: true positives = 4, false positives = 1, false negatives = 2, true negatives = 3. Human PASS totals 6, human FAIL totals 4; judge-said-PASS totals 5, judge-said-FAIL totals 5; the grand total is 10. From those four counts: accuracy = (4 plus 3) divided by 10 = 0.70, precision = 4 divided by (4 plus 1) = 0.80, recall = 4 divided by (4 plus 2) = 0.67, and F1 = 0.73. The one false positive is a keyword-gamed wrong answer; the two false negatives are correct answers the judge missed for using a synonym or a digit.</desc>
+
+  <!-- Page background -->
+  <rect width="1180" height="860" fill="#ffffff"/>
+  <rect width="1180" height="860" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 4, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 4 &#183; LLM-AS-JUDGE BY HAND</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">Twelve items, ten scorable, one confusion matrix</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">A parsed judge verdict is either PASS, FAIL, or ABSTAIN. Only PASS/FAIL get scored.</text>
+
+  <!-- ============================================================
+       TOP: the funnel from 12 raw items to 10 scorable
+  ============================================================ -->
+  <text x="40" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">FROM RAW VERDICTS TO A SCORABLE SET</text>
+
+  <!-- Box A: 12 items -->
+  <rect x="40" y="140" width="150" height="110" rx="12" fill="#18181b"/>
+  <text x="115" y="195" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="40" font-weight="700" fill="#ffffff">12</text>
+  <text x="115" y="222" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="600" fill="#a1a1aa" letter-spacing="0.06em">TOTAL ITEMS</text>
+
+  <!-- Arrow 1 -->
+  <line x1="192" y1="195" x2="242" y2="195" stroke="#a1a1aa" stroke-width="2"/>
+  <polygon points="242,189 254,195 242,201" fill="#a1a1aa"/>
+
+  <!-- Failure-mode chips -->
+  <rect x="256" y="142" width="330" height="32" rx="8" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="270" y="163"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="600" fill="#92400e">REFUSAL &#183; 1 item &#8594; parsed FAIL, kept in the matrix</text>
+
+  <rect x="256" y="180" width="330" height="32" rx="8" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="270" y="201"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="600" fill="#52525b">TIE &#183; 1 item &#8594; ABSTAIN, dropped from the matrix</text>
+
+  <rect x="256" y="218" width="330" height="32" rx="8" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="270" y="239"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="600" fill="#52525b">FORMAT DRIFT &#183; 1 item &#8594; ABSTAIN, dropped</text>
+
+  <!-- Arrow 2 -->
+  <line x1="588" y1="195" x2="622" y2="195" stroke="#a1a1aa" stroke-width="2"/>
+  <polygon points="622,189 634,195 622,201" fill="#a1a1aa"/>
+
+  <!-- Box B: 10 scorable -->
+  <rect x="636" y="140" width="170" height="110" rx="12" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2"/>
+  <text x="721" y="195" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="40" font-weight="700" fill="#047857">10</text>
+  <text x="721" y="222" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="600" fill="#059669" letter-spacing="0.06em">SCORABLE OF 12</text>
+  <text x="721" y="238" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#71717a">(2 abstained)</text>
+
+  <!-- Side note card -->
+  <rect x="836" y="140" width="304" height="110" rx="12" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="852" y="164"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.08em">WHY ABSTAINS MATTER</text>
+  <text x="852" y="187"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#52525b">A tie or format drift means the judge</text>
+  <text x="852" y="207"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#52525b">never committed to PASS or FAIL, so it</text>
+  <text x="852" y="227"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#52525b">is dropped, not scored as wrong.</text>
+
+  <!-- Down arrow into the matrix -->
+  <line x1="721" y1="252" x2="721" y2="292" stroke="#a1a1aa" stroke-width="2"/>
+  <polygon points="715,292 721,304 727,292" fill="#a1a1aa"/>
+
+  <!-- Divider between funnel and scoring -->
+  <line x1="40" y1="272" x2="1140" y2="272" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       BOTTOM LEFT: the confusion matrix, judge vs human
+  ============================================================ -->
+  <text x="40" y="298"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.08em">JUDGE vs HUMAN ON THE SCORABLE SET (positive = PASS)</text>
+
+  <!-- JUDGE axis title (columns) -->
+  <text x="410" y="320" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.14em">JUDGE</text>
+
+  <!-- Column header labels -->
+  <text x="345" y="347" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13.5" font-weight="600" fill="#3f3f46">PASS</text>
+  <text x="475" y="347" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13.5" font-weight="600" fill="#3f3f46">FAIL</text>
+
+  <!-- HUMAN axis title (rows), rotated -->
+  <text x="146" y="488" text-anchor="middle" transform="rotate(-90 146 488)"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.14em">HUMAN</text>
+
+  <!-- Row header labels -->
+  <text x="268" y="420" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13.5" font-weight="600" fill="#3f3f46">PASS</text>
+  <text x="268" y="550" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13.5" font-weight="600" fill="#3f3f46">FAIL</text>
+
+  <!-- TP cell (human PASS, judge PASS), agree -->
+  <rect x="280" y="358" width="130" height="130" rx="12" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2"/>
+  <rect x="292" y="370" width="34" height="19" rx="6" fill="#059669"/>
+  <text x="309" y="384" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">TP</text>
+  <text x="345" y="442" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="46" font-weight="700" fill="#047857">4</text>
+  <text x="345" y="470" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="600" fill="#059669">agree &#183; correct</text>
+
+  <!-- FN cell (human PASS, judge FAIL), miss -->
+  <rect x="410" y="358" width="130" height="130" rx="12" fill="#fff1f2" stroke="#fda4af" stroke-width="2"/>
+  <rect x="422" y="370" width="34" height="19" rx="6" fill="#e11d48"/>
+  <text x="439" y="384" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">FN</text>
+  <text x="475" y="442" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="46" font-weight="700" fill="#be123c">2</text>
+  <text x="475" y="470" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="600" fill="#e11d48">missed by synonym</text>
+
+  <!-- FP cell (human FAIL, judge PASS), keyword-gamed -->
+  <rect x="280" y="488" width="130" height="130" rx="12" fill="#fffbeb" stroke="#fcd34d" stroke-width="2"/>
+  <rect x="292" y="500" width="34" height="19" rx="6" fill="#d97706"/>
+  <text x="309" y="514" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">FP</text>
+  <text x="345" y="572" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="46" font-weight="700" fill="#b45309">1</text>
+  <text x="345" y="600" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="600" fill="#d97706">keyword-gamed</text>
+
+  <!-- TN cell (human FAIL, judge FAIL), agree -->
+  <rect x="410" y="488" width="130" height="130" rx="12" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2"/>
+  <rect x="422" y="500" width="34" height="19" rx="6" fill="#059669"/>
+  <text x="439" y="514" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#ffffff">TN</text>
+  <text x="475" y="572" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="46" font-weight="700" fill="#047857">3</text>
+  <text x="475" y="600" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="600" fill="#059669">agree &#183; correct</text>
+
+  <!-- Row totals (right of matrix) -->
+  <text x="583" y="332" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="600" fill="#a1a1aa" letter-spacing="0.06em">ROW</text>
+  <rect x="556" y="400" width="54" height="40" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="583" y="426" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#3f3f46">6</text>
+  <rect x="556" y="536" width="54" height="40" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="583" y="562" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#3f3f46">4</text>
+
+  <!-- Column totals (below matrix) -->
+  <rect x="325" y="632" width="40" height="40" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="345" y="658" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#3f3f46">5</text>
+  <rect x="455" y="632" width="40" height="40" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+  <text x="475" y="658" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#3f3f46">5</text>
+  <text x="410" y="692" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="600" fill="#a1a1aa" letter-spacing="0.06em">COLUMN TOTAL</text>
+
+  <!-- Grand total (bottom-right corner) -->
+  <rect x="556" y="632" width="54" height="40" rx="9" fill="#18181b"/>
+  <text x="583" y="658" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#ffffff">10</text>
+  <text x="583" y="692" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="600" fill="#a1a1aa" letter-spacing="0.06em">n</text>
+
+  <!-- Legend -->
+  <rect x="40" y="740" width="14" height="14" rx="4" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="62" y="751"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">diagonal = judge agrees</text>
+  <rect x="238" y="740" width="14" height="14" rx="4" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="260" y="751"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">FP = keyword-gamed pass</text>
+  <rect x="440" y="740" width="14" height="14" rx="4" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="462" y="751"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">FN = missed synonym/digit</text>
+
+  <!-- Divider between matrix and metrics -->
+  <line x1="632" y1="300" x2="632" y2="760" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       BOTTOM RIGHT: the four metrics, worked from the four counts
+  ============================================================ -->
+  <text x="672" y="320"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">FOUR COUNTS &#8594; FOUR SCORES</text>
+
+  <!-- Accuracy -->
+  <text x="672" y="368"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="16" font-weight="700" fill="#18181b">Accuracy</text>
+  <text x="1140" y="371" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="30" font-weight="700" fill="#059669">0.70</text>
+  <text x="672" y="390"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#71717a">(TP + TN) / n = (4 + 3) / 10</text>
+  <rect x="672" y="402" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="402" width="231" height="7" rx="3.5" fill="#34d399"/>
+  <line x1="672" y1="428" x2="1140" y2="428" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- Precision -->
+  <text x="672" y="462"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="16" font-weight="700" fill="#18181b">Precision</text>
+  <text x="1140" y="465" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="30" font-weight="700" fill="#059669">0.80</text>
+  <text x="672" y="484"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#71717a">TP / (TP + FP) = 4 / (4 + 1)</text>
+  <text x="672" y="500"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#a1a1aa">down the judge-PASS column (5)</text>
+  <rect x="672" y="510" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="510" width="264" height="7" rx="3.5" fill="#34d399"/>
+  <line x1="672" y1="536" x2="1140" y2="536" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- Recall -->
+  <text x="672" y="570"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="16" font-weight="700" fill="#18181b">Recall</text>
+  <text x="1140" y="573" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="30" font-weight="700" fill="#059669">0.67</text>
+  <text x="672" y="592"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#71717a">TP / (TP + FN) = 4 / (4 + 2)</text>
+  <text x="672" y="608"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#a1a1aa">across the human-PASS row (6)</text>
+  <rect x="672" y="618" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="618" width="221" height="7" rx="3.5" fill="#34d399"/>
+  <line x1="672" y1="644" x2="1140" y2="644" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- F1 -->
+  <text x="672" y="678"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="16" font-weight="700" fill="#18181b">F1</text>
+  <text x="1140" y="681" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="30" font-weight="700" fill="#059669">0.73</text>
+  <text x="672" y="700"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" fill="#71717a">2PR / (P + R) = 2(0.80)(0.67) / 1.47</text>
+  <rect x="672" y="712" width="330" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="672" y="712" width="241" height="7" rx="3.5" fill="#34d399"/>
+
+  <!-- Bottom caption strip -->
+  <rect x="40" y="780" width="1100" height="40" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="590" y="805" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">A judge is just another noisy grader: measure it against humans, on a scorable set, before you trust its score.</text>
+</svg>

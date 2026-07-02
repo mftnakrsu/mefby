@@ -1,0 +1,206 @@
+---
+title: "Agent-Trajectory Evals"
+description: "Grading an agent's final answer misses how it got there. Part 14 scores the tool-call path of eight runs against an approved reference trajectory four ways (exact, order-aware, set-overlap, and step-level credit), then grades a pass/fail rubric with a mock judge and a human and chance-corrects their agreement with Cohen's kappa."
+date: 2026-07-27
+tags: ["Evals", "LLM", "AI", "Agents", "Trajectory", "Cohen's Kappa"]
+seriesOrder: 14
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-14-agent-trajectory-evals"
+lang: "en"
+translationSlug: "agent-trajectory-evals-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+In Part 13 we left the lab and measured a change where it lives, running one A/B test in production so the number we trusted was a real-user outcome and not a photograph of the past. This part goes back inside a single run and asks a question that a final-answer score can never answer: not just *was the answer right*, but *did the agent get there the right way*. An agent that stumbles onto a correct number by guessing, and an agent that searches, reads the page, converts the currency, and reports the total, can both print the same final string. If you grade only that string they look identical. They are not, and the difference is the whole reason we grade the path.
+
+The Agents series ended on exactly this cliff. Its Part 17, "Grading the Agent," scored whether the agent's final answer matched the gold answer, and that was the right place to stop a series about *building* agents. This part picks the thread back up from the measurement side. We take one concrete task, an agent that must answer "what does 3 nights at the top-rated Paris hotel cost in USD?", and a **reference trajectory** of length 4 that a human approved: the tool sequence `search > open > convert > answer`. Then we take eight actual agent runs, some clean and some messy, and score each run's path four different ways: exact-match, an order-aware score built from the longest common subsequence, a set-overlap score built from Jaccard, and a step-level credit score that labels every single step MATCH, EXTRA, or MISSING. Finally we grade a simple pass/fail rubric over all eight runs with a deterministic mock judge and a human, and we chance-correct their agreement with Cohen's kappa, the same statistic from Part 3, to find out how much of their apparent agreement is real. The punchline: the trajectory catches two failures the lenient judge waved straight through.
+
+## Prerequisites
+
+You need basic Python: a list, a dict, a loop, and a division. Two ideas carry over from earlier parts but we rebuild both from scratch here, so you do not need to remember either formula. The first is the **longest common subsequence** (LCS), the diff-style alignment that finds the longest in-order overlap between two sequences while tolerating extra or missing steps on either side. The second is **Cohen's kappa** from Part 3, the chance-corrected agreement between two raters. The companion file, [trajectory_evals.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-14-agent-trajectory-evals), runs offline with no API key, no network, and no dependencies: the "judge" is a transparent rule standing in for an LLM grader, so every number is traceable by hand. Every figure in this essay is that file's printed output, unrounded and unedited.
+
+## The task and the reference trajectory
+
+A trajectory eval needs three things, and they are the same three atoms from Part 1 wearing new clothes. The **task** is the thing being graded: our agent must answer "what does 3 nights at the top-rated Paris hotel cost in USD?" The **gold label** is no longer a single right answer; it is a *right path*, the ordered list of tool calls a human decided is an acceptable way to solve the task. And the **metric** is the rule that turns "how close was the agent's path to the approved path" into a number.
+
+Here is the reference trajectory, the path a human approved, four tool calls long:
+
+```text
+  1.search > 2.open > 3.convert > 4.answer
+```
+
+Read it as a plan. To price three nights in dollars the agent should `search` the web for the top-rated Paris hotel, `open` the hotel page to read the nightly euro rate, `convert` that euro figure into USD, and then `answer`. Every step is load-bearing: skip `convert` and the number is in the wrong currency; skip `open` and you never read a real price at all. The order matters too, because you cannot convert a price you have not yet read. This is what makes a trajectory richer than a final answer. It encodes not just the destination but the reasoning, and a good path eval has to be able to say *how* a run went wrong, not just *that* it did.
+
+Against this reference we will hold eight runs, labeled R1 through R8. R1 walks the textbook path. R2 has all the right tools but in the wrong order. R3 skips the currency conversion and re-searches instead. R4 converts twice. R5 is lazy and jumps straight from search to answer. R6 answers twice. R7 does a redundant search up front. R8 just guesses, using no tools at all. Each run is a sequence of tool names, and our job is to score how far each strayed from the approved path.
+
+## Three ways to match a trajectory
+
+There is no single "trajectory match" score, because "close to the reference" can mean three genuinely different things, and they disagree. To see the disagreement in the open, take the most instructive run, R2, whose tools are exactly right but whose order is scrambled:
+
+```text
+  candidate : open > search > convert > answer
+  reference : search > open > convert > answer
+```
+
+R2 used `search`, `open`, `convert`, and `answer`, the same four tools as the reference, but it opened a page before it had searched for one. Now watch three metrics render three different verdicts on this one run.
+
+**Exact-match** is the strictest possible rule: score `1.00` only if the candidate is identical to the reference, position for position, else `0.00`. R2 is not identical (the first two steps are swapped), so:
+
+```text
+  exact-match  : cand == ref ?           -> 0.00
+```
+
+A flat zero. Exact-match is unforgiving by design: it treats any deviation, however small, as total failure. That is sometimes what you want (a regression gate that must never allow a reordered path) and usually far too blunt, because it cannot tell a one-step swap apart from pure garbage.
+
+**Order-aware** loosens the rule to ask: how much of the reference path did the run recover *in order*? We compute the longest common subsequence of the candidate and the reference, then divide its length by the length of the reference. The LCS of R2 and the reference is `search, convert, answer`, which is three tools long (the subsequence has to keep the reference's order, and R2's out-of-place `open` cannot join it without breaking that order). So:
+
+```text
+  order-aware  : LCS=3 / len(ref)=4       -> 0.75
+```
+
+Three of the four reference steps survived in the right order, giving `0.75`. This is the score that best captures "mostly right, one thing out of place." It rewards partial in-order progress and docks exactly the step that the reordering broke.
+
+**Set-overlap** throws order away entirely and asks only: did the run use the right *tools*, regardless of sequence? It is the Jaccard index, the size of the intersection of the two tool sets over the size of their union. R2's tool set and the reference tool set are both exactly `search, open, convert, answer`, so the intersection has 4 tools and the union has 4 tools:
+
+```text
+  set-overlap  : |cap|=4 / |cup|=4          -> 1.00
+```
+
+A perfect `1.00`. From set-overlap's point of view R2 is flawless, because it used every right tool and no wrong ones. That is true and also misleading: it used them in an order that could not have worked.
+
+So on one run, three scores: exact says `0.00`, order-aware says `0.75`, set-overlap says `1.00`. Nothing changed about R2 between those three numbers; only the question changed. The metric you pick *is* the verdict. Set-overlap is right when you only care that the agent had the right tools in its toolbox; order-aware is right when sequence matters (it almost always does for agents); exact-match is right when even a cosmetic deviation is a bug. Choosing among them is a decision about what kind of path mistake you can least afford, exactly as choosing precision over recall was in Part 1.
+
+## Step-level credit: labeling every step
+
+The three scores above each collapse a whole path into one number. Often you want the opposite: a per-step breakdown that says precisely which steps were right, which the run invented, and which it skipped. That is **step-level credit**, and it is built from the same LCS alignment, read at finer grain.
+
+Take R3, which skipped the conversion and re-searched instead:
+
+```text
+  R3 : search > open > search > answer
+```
+
+Align R3 against the reference `search > open > convert > answer` with LCS and label each step. A candidate step that lands in the alignment is a **MATCH**; a candidate step that matches nothing is an **EXTRA**; and any reference step that no candidate step covered is **MISSING**:
+
+```text
+  step 1: search   -> MATCH
+  step 2: open     -> MATCH
+  step 3: search   -> EXTRA
+  step 4: answer   -> MATCH
+  (ref)   convert  -> MISSING
+```
+
+Read it top to bottom and the story is exact: R3 searched (good), opened the page (good), then searched a second time instead of converting (an EXTRA step that does no work), and answered (good). The reference `convert` step appears nowhere in R3, so it is MISSING, and that missing conversion means R3's answer is in euros, not dollars: wrong, even though the run "finished." The label set tells you *what to fix* in a way no single scalar can.
+
+Now collapse the labels into one number. Credit is the correct steps over everything that could count against them, correct plus missing plus extra:
+
+```text
+  credit = correct/(correct+missing+extra) = 3/(3+1+1) = 0.60
+```
+
+Three correct steps, one missing (`convert`), one extra (the second `search`), gives `0.60`. Notice this is stricter than R3's order-aware score of `0.75`, and deliberately so: order-aware only divides by the reference length, so it never charges a run for the junk steps it added, while credit puts both the missing step *and* the extra step in the denominator. A run that hits the right steps but pads the path with noise will score well on order-aware and worse on credit, which is usually the honest ranking. The figure below shows this alignment as a grid, with R3's four steps down one axis and the reference's four down the other, so you can see the MATCH steps sit on the diagonal while the EXTRA and MISSING steps fall off it.
+
+<Diagram number={1} caption="Step-level credit for run R3 (search, open, search, answer) aligned against the reference trajectory (search, open, convert, answer). The longest common subsequence pairs three steps: search, open, and answer, drawn as an emerald diagonal of MATCH cells. R3's third step, a second search, matches nothing in the reference and is labelled EXTRA in amber. The reference's convert step is covered by no candidate step and is labelled MISSING in rose. The credit formula reads correct / (correct + missing + extra) = 3 / (3 + 1 + 1) = 0.60, stricter than the order-aware score of 0.75 because it charges the run for both the skipped and the invented step.">
+  <img src="/essays/agent-trajectory-evals/part14-figure.svg" alt="A step-level alignment diagram titled 'Step-level credit: R3 aligned to the reference'. Run R3's four tool calls (search, open, search, answer) run down the left; the reference trajectory's four tool calls (search, open, convert, answer) run across the top. Three cells lie on the diagonal in emerald and are labelled MATCH: search-to-search, open-to-open, and answer-to-answer. R3's third step, search, is boxed in amber off the diagonal and labelled EXTRA because it matches no reference step. The reference's convert step is boxed in rose at the top and labelled MISSING because no candidate step covers it. A panel below reads: correct = 3, missing = 1, extra = 1, credit = correct / (correct + missing + extra) = 3 / (3 + 1 + 1) = 0.60. A footnote notes that credit is stricter than R3's order-aware 0.75 because it counts the extra step against the run." class="w-full rounded-lg" />
+</Diagram>
+
+## All eight runs, scored four ways
+
+Put all four scores side by side across all eight runs and the personalities of the metrics come into focus. Here is the full table straight from the companion file:
+
+```text
+  run trajectory                         exact  order   set  credit
+  R1  search>open>convert>answer          1.00   1.00  1.00    1.00
+  R2  open>search>convert>answer          0.00   0.75  1.00    0.60
+  R3  search>open>search>answer           0.00   0.75  0.75    0.60
+  R4  search>open>convert>convert>answer  0.00   1.00  1.00    0.80
+  R5  search>answer                       0.00   0.50  0.50    0.50
+  R6  search>open>convert>answer>answer   0.00   1.00  1.00    0.80
+  R7  search>search>open>convert>answer   0.00   1.00  1.00    0.80
+  R8  answer                              0.00   0.25  0.25    0.25
+```
+
+R1 is the textbook path and scores a clean `1.00` on all four, our only perfect run and the sanity check that the metrics agree when a run is genuinely flawless. Look down the exact-match column and it is `0.00` for every other run: seven of eight runs deviate from the reference in *some* way, which is exactly why exact-match alone is useless for ranking imperfect agents. It cannot tell R4 (converted one extra time, basically fine) apart from R8 (guessed, did nothing).
+
+The interesting rows are the near-misses. R4, R6, and R7 all score order-aware `1.00` but credit `0.80`: each recovered the whole reference path in order, so order-aware is perfect, but each padded the path with one harmless extra step (a duplicate `convert`, a duplicate `answer`, a redundant `search`), and credit is the only column that charges them for it, docking `0.20`. That gap between a perfect order score and an `0.80` credit is the fingerprint of a run that did everything right and then some. R5, the lazy run that jumped `search > answer`, scores `0.50` on order-aware (it recovered two of the four reference steps in order) and `0.50` on set-overlap and credit alike. And R8, which used no tools and simply answered, bottoms out at order-aware `0.25`: the lone `answer` step is the only overlap with a four-step reference, so it recovers one quarter of the path and nothing more.
+
+Contrast R2 and R3, the two runs that share an order-aware score of `0.75` but split on set-overlap. R2 used the right tools in the wrong order, so its set-overlap is a perfect `1.00`; R3 used a wrong tool (a second `search`) in place of `convert`, so its set-overlap drops to `0.75`. Reading across a row instead of down a column tells you the *shape* of a run's mistake: a high set-overlap with a lower order-aware means "right tools, wrong order," while a set-overlap that also drops means "wrong tools were used." The interactive figure below lets you build any trajectory step by step and watch all four scores, plus the MATCH / EXTRA / MISSING labels, recompute live, so you can feel how each metric responds to a swap, a skip, or a padded step.
+
+<IframeFigure src="/essays/agent-trajectory-evals/part14-interactive.html" title="Interactive trajectory scorer: pick or edit a sequence of tool calls and watch exact-match, order-aware (LCS over reference length), set-overlap (Jaccard), and step-level credit recompute live against the reference search > open > convert > answer, with every step labelled MATCH, EXTRA, or MISSING and the eight preset runs R1 through R8 selectable." height={820} />
+
+## The rubric: mock judge vs human, and Cohen's kappa
+
+Scores rank runs, but shipping decisions are usually binary: does this run pass or fail? So the last step is a **rubric**, a pass/fail rule applied to every run, graded twice: once by a human and once by a deterministic **mock judge** standing in for an LLM grader. The human's rule is what you would hope for: a run PASSES if it took an acceptable path, hitting every needed step in a sensible order without a wrong-order or skipped-step mistake, while tolerating a harmless duplicate. By that rule the human passes R1, R4, R6, and R7 (all reached the goal by a valid path, some with a harmless extra step) and fails R2, R3, R5, and R8 (wrong order, skipped step, lazy, and no tools).
+
+The mock judge is deliberately imperfect, the way a real automated grader often is: it passes a run if the run recovered the whole reference path in order (order-aware at least `0.75`) and added at most one extra step. That rule sounds reasonable and it is too lenient, because an order-aware score of `0.75` can come from a *reordered* path, not just a mostly-complete one. Here is how the two graders line up:
+
+```text
+  run   human  judge    agree?
+  R1     PASS   PASS       yes
+  R2     FAIL   PASS        NO
+  R3     FAIL   PASS        NO
+  R4     PASS   PASS       yes
+  R5     FAIL   FAIL       yes
+  R6     PASS   PASS       yes
+  R7     PASS   PASS       yes
+  R8     FAIL   FAIL       yes
+```
+
+They agree on six of eight runs and disagree on exactly two: R2 and R3. Both are runs the human failed (R2 for wrong order, R3 for a skipped step) that the judge waved through, because both clear the judge's `0.75` order-aware bar with at most one extra step. These are precisely the path mistakes a final-answer grader would also miss, and they are the two runs the trajectory eval exists to catch.
+
+Now, how good is that six-of-eight agreement, really? Raw agreement flatters itself, because two graders who both say PASS most of the time will agree a lot *by chance alone*. This is the exact problem Cohen's kappa solved back in Part 3, and we reuse it here. First build the 2x2 table of the two graders' verdicts, with the judge on the rows and the human on the columns:
+
+```text
+                human=PASS  human=FAIL
+    judge=PASS      4           2
+    judge=FAIL      0           2
+```
+
+The four cells: `a = 4` runs both graders passed, `b = 2` runs the judge passed but the human failed (R2 and R3), `c = 0` runs the judge failed but the human passed, and `d = 2` runs both failed. Observed agreement is the diagonal over the total:
+
+```text
+  observed agreement po = (a+d)/n = (4+2)/8 = 0.75
+```
+
+So the graders agree 75% of the time. But look at the marginals: the judge said PASS on six of eight runs, the human on four of eight, so even two graders throwing darts with those same rates would agree a good fraction of the time. Chance agreement `pe` works that expected overlap out from the marginals and lands at:
+
+```text
+  chance agreement   pe = 0.50
+```
+
+Half of the possible agreement was free. Cohen's kappa rescales the observed agreement against that floor, asking what fraction of the *non-chance* room the graders actually closed:
+
+```text
+  Cohen's kappa = (po-pe)/(1-pe) = (0.75-0.50)/(1-0.50) = 0.50
+```
+
+Kappa `0.50`, conventionally read as only "moderate." That is a very different story from the reassuring "they agree 75% of the time." The 75% was half chance. And the two runs that drove kappa down from perfect are not random noise: they are R2 and R3, the wrong-order and skipped-step paths the lenient judge could not see. A final-answer eval would have shrugged at both. Grading the trajectory, and then chance-correcting the graders, is what surfaced them.
+
+## Key takeaways
+
+- **Grade the path, not just the answer.** Two agents can print the same final string, one by reasoning and one by guessing. A final-answer score (Agents Part 17) cannot tell them apart; a trajectory eval scores the sequence of tool calls against a human-approved reference path, here `search > open > convert > answer` of length 4, so *how* the agent got there becomes measurable.
+- **There is no single trajectory-match score.** On run R2 (right tools, wrong order), exact-match says `0.00`, order-aware says `0.75` (LCS 3 over reference length 4), and set-overlap says `1.00` (Jaccard 4 over 4). Same run, three verdicts. The metric you pick is the verdict: set-overlap ignores order, order-aware rewards in-order progress, exact-match forgives nothing.
+- **Step-level credit tells you what to fix.** Aligning a run to the reference with LCS labels every step MATCH, EXTRA, or MISSING. Run R3 (skipped convert, re-searched) scores credit `0.60` = 3 correct / (3 + 1 missing + 1 extra), stricter than its order-aware `0.75` because credit charges the run for both the skipped step and the invented one. Runs R4, R6, and R7 each score order-aware `1.00` but credit `0.80`, the fingerprint of a correct path padded with one harmless extra step.
+- **Chance-correct the graders, always.** A mock judge and a human agreed on six of eight runs (`po = 0.75`), but both mostly said PASS, so chance agreement was already `pe = 0.50`. Cohen's kappa `= (0.75-0.50)/(1-0.50) = 0.50` reveals the agreement is only "moderate," and the two disagreements (R2, R3) are exactly the wrong-order and skipped-step paths the lenient judge waved through. Trajectory grading caught the failures a final-answer grader would miss.
+
+## Glossary
+
+- **Trajectory**: the ordered sequence of tool calls an agent made to solve a task, stripped to tool names (for example `search > open > convert > answer`). The object a trajectory eval grades, richer than the final answer because it encodes the reasoning path.
+- **Reference trajectory**: the tool sequence a human approved as an acceptable way to solve the task, the "gold label" of a path eval. Here it has length 4: `search > open > convert > answer`.
+- **Exact-match**: the strictest trajectory score, `1.00` only if the run is identical to the reference position for position, else `0.00`. Useful as a hard gate, too blunt for ranking imperfect runs.
+- **Order-aware score**: the length of the longest common subsequence (LCS) of the run and the reference, divided by the reference length. It rewards recovering the reference steps *in order* while tolerating extra or missing steps. R2 scores `0.75`.
+- **Set-overlap score**: the Jaccard index of the two tool sets, the size of their intersection over the size of their union, ignoring order entirely. It asks only whether the right tools were used. R2 scores `1.00`, R3 scores `0.75`.
+- **Longest common subsequence (LCS)**: the longest sequence of steps that appears in both the run and the reference in the same relative order, allowing gaps. The alignment underneath both the order-aware score and step-level credit.
+- **Step-level credit**: the per-step breakdown from the LCS alignment, labeling each step MATCH, EXTRA (a run step matching nothing), or MISSING (a reference step never covered), plus the scalar `correct / (correct + missing + extra)`. R3 scores `0.60`.
+- **Rubric**: a pass/fail rule applied to every run. Graded here by both a human and a mock judge so their agreement can be measured.
+- **Mock judge**: a deterministic rule standing in for an LLM grader, so every grade is traceable and offline. Ours is deliberately too lenient (it passes on order-aware `0.75` with at most one extra step), which is why it misses R2 and R3.
+- **Cohen's kappa**: the chance-corrected agreement between two raters, `(po - pe) / (1 - pe)`, from Part 3. Observed agreement `po = 0.75` minus chance agreement `pe = 0.50` gives kappa `0.50`, "moderate," a truer picture than raw agreement when both raters mostly pick the same label.
+
+---
+
+Four metrics, a judge, a human, and a kappa, and we assembled them by hand for one task. **Part 15, A Tiny Eval Harness**, ties the whole series into a single pure-Python framework, a dataset, a metric, a judge, a confidence interval, and a gate, that you could actually run, with the RAG and Agents evals re-expressed inside it.

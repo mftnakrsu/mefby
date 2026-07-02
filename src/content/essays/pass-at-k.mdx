@@ -1,0 +1,175 @@
+---
+title: "pass@k"
+description: "One coding task, five sampled completions, two that pass the hidden tests: this part derives the unbiased pass@k estimator as a combinatorial identity, checks it by brute-force enumeration, and proves in exact arithmetic why the tempting plug-in formula reports too low."
+date: 2026-07-21
+tags: ["Evals", "LLM", "AI", "Code Generation", "Sampling", "Estimators"]
+seriesOrder: 8
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-08-pass-at-k"
+lang: "en"
+translationSlug: "pass-at-k-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+In Part 7, "Is the Difference Real?", we asked whether a gap between two scores could be noise, and the machinery there quietly assumed each system produced one deterministic answer per example. Code generation breaks that assumption. Ask a model to solve a programming problem and it does not give you one answer; you sample several, run each against a hidden test suite, and you have solved the problem if any of them passes. The metric for that setting is **pass@k**: the probability that at least one of `k` sampled completions passes. It is the number every code model reports, and it is also one of the most commonly miscomputed metrics in the field, because the obvious formula for it is wrong in a way that is easy to miss and always points the same direction.
+
+This part fixes that from the ground up. We take a single task where the model produced `n = 5` completions, `c = 2` of which pass the tests, and we compute pass@2 three separate ways: the tempting **plug-in** formula that everyone writes first, the **unbiased** combinatorial estimator that the field actually uses, and a **brute-force** enumeration over all ten size-2 subsets that settles the argument by counting. The three answers do not agree, and understanding exactly why the plug-in is low, by proving unbiasedness in exact rational arithmetic, is the whole lesson. By the end you will know why pass@k is a combinatorial identity, not a coin-flip formula, and you will never report the wrong one again.
+
+## Prerequisites
+
+You need basic Python and one idea from combinatorics: the binomial coefficient `C(n, k)`, "n choose k", the number of ways to pick an unordered subset of `k` items from `n`. That is `C(5, 2) = 10` and `C(3, 2) = 3`, the only two values we lean on. No probability background beyond "a probability is a fraction between 0 and 1" is assumed; we build the estimator by counting subsets, and we check it by listing every subset out loud. The companion file, [pass_at_k.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-08-pass-at-k), runs offline with no API key, no network, and no dependencies beyond NumPy, and every number printed in this essay is that file's real output, unrounded. The final proof is done in exact fractions, not floating point, so you can trust the last digit.
+
+## The setup: one task, five draws
+
+Here is the concrete situation, and it is worth pinning down before any arithmetic. We have one coding task, say "write a function that does X", and one model. Because the model is stochastic, we sampled it `n = 5` times at some temperature, getting five candidate completions `s0` through `s4`. We ran each one against the hidden unit-test suite. Two of them passed and three failed:
+
+```text
+  samples:  s0(ok) s1(ok) s2(x ) s3(x ) s4(x )
+```
+
+So `c = 2` of our `n = 5` samples are correct. The empirical per-sample pass rate is just that ratio:
+
+```text
+  p_hat = c/n = 2/5 = 0.40
+```
+
+That is the fraction of draws that worked. It is a perfectly good estimate of how often this model, at this temperature, solves this task on a single try. But it is *not* what we want to report. In practice nobody ships one completion; you sample a few, and the user is happy if any of them compiles and passes. So the question that matters is: if we are allowed a budget of `k` draws, what is the chance that at least one of them is correct? That is pass@k, and for our task we will fix `k = 2`. Given that `p_hat` is 0.40, what is pass@2?
+
+## Step 1: the tempting plug-in, and why it is wrong
+
+Here is the formula almost everyone writes first. Each draw succeeds with probability `p_hat = 0.40`, so each draw fails with probability `1 - 0.40 = 0.60`. If the draws were independent, the chance that *all* `k` of them fail is `0.60` raised to the `k`, and the chance that at least one succeeds is one minus that:
+
+```text
+  pass@2 ~= 1 - (1 - c/n)^k = 1 - (1 - 0.40)^2 = 1 - 0.36 = 0.640
+```
+
+Clean, memorable, and biased. The hidden assumption is the phrase "the draws were independent, each succeeding with probability 0.40". That would be exactly true if you reached into an *infinite* pool of completions, 40% of which pass, and pulled `k` of them with replacement. But that is not what happened. You drew five completions, and you are choosing your `k` from those five, without replacement. The plug-in treats your finite pool of 5 samples as an infinite coin with bias 0.40. It ignores that once you have looked at your five draws, the composition is fixed: there are exactly 2 good ones and 3 bad ones, no more and no fewer.
+
+Why does this bias the estimate downward? Think about the extreme. Suppose `c = 2` and you draw `k = 4` without replacement. You literally cannot avoid a correct sample, because only 3 are bad, so pass@4 must be 1.000. But the plug-in says `1 - 0.60^4 = 0.870`, insisting there is a 13% chance you drew four failures, which is impossible from a pool that holds only three. Sampling with replacement can repeat the bad draws; sampling without replacement exhausts them. The plug-in systematically over-counts the ways to miss, so it under-reports pass@k. Hold that intuition; we will make it exact at the end.
+
+## Step 2: the unbiased estimator, by counting subsets
+
+The fix is to compute the probability the honest way: over the actual finite pool. Forget infinite coins. You have 5 samples, you will draw `k = 2` of them, and every size-2 subset is equally likely. So this is pure counting. The total number of ways to choose 2 of the 5 samples is the binomial coefficient:
+
+```text
+  total size-k subsets      C(n, k)   = C(5,2) = 10
+```
+
+Now, out of those 10 possible draws, how many are complete failures, meaning both picks came from the failing samples? The failing samples are the `n - c = 3` of them, `s2`, `s3`, `s4`, and the number of ways to pick 2 failures from those 3 is:
+
+```text
+  all-wrong size-k subsets  C(n-c, k) = C(3,2) = 3
+```
+
+So of the 10 equally likely draws, 3 contain no correct sample at all. The probability that a random size-2 draw is all wrong is the ratio of those two counts:
+
+```text
+  P(draw is all wrong) = C(n-c,k)/C(n,k) = 3/10 = 0.300
+```
+
+And pass@k is just one minus that, the probability that the draw is *not* all wrong, that at least one of the two picks passes:
+
+```text
+  pass@2 = 1 - C(n-c,k)/C(n,k) = 1 - 3/10 = 0.700
+```
+
+That is the unbiased estimator, and it is the exact formula the code-evaluation literature uses. Notice it gives **0.700**, not the plug-in's 0.640. Same task, same two correct samples, a gap of 0.060 between the two formulas, and the whole difference is with-replacement versus without. The combinatorial version never imagines drawing a fourth failure from a pool of three, because it only ever considers the subsets that actually exist.
+
+There is a boundary case worth naming, because the companion code guards it: if `n - c < k`, meaning there are fewer failing samples than your budget, then `C(n-c, k)` is zero (you cannot pick `k` failures when fewer than `k` exist), so the all-wrong probability is 0 and pass@k is exactly 1.000. That is the "you cannot miss" regime, and the formula lands on it automatically.
+
+## Step 3: brute force settles it
+
+We do not have to trust either formula. At `n = 5` the whole sample space is tiny, so we can enumerate every single size-2 draw by hand and just count how many contain a correct sample. The correct samples are `s0` and `s1`; the draw passes if it includes at least one of them. Here are all ten:
+
+```text
+  size-2 subsets of s0..s4 that contain >=1 correct sample:
+    {s0,s1}     -> PASS
+    {s0,s2}     -> PASS
+    {s0,s3}     -> PASS
+    {s0,s4}     -> PASS
+    {s1,s2}     -> PASS
+    {s1,s3}     -> PASS
+    {s1,s4}     -> PASS
+    {s2,s3}     -> fail
+    {s2,s4}     -> fail
+    {s3,s4}     -> fail
+  passing subsets / total = 7/10 = 0.700
+```
+
+Seven of the ten draws contain at least one of `s0` or `s1`; the only three that fail are the pairs drawn entirely from the failing trio `s2`, `s3`, `s4`, which are precisely the `C(3, 2) = 3` subsets the estimator counted. Brute force says **7/10 = 0.700**, and the combinatorial estimator said 0.700. They match exactly, because the estimator *is* this enumeration, written as a ratio of counts instead of a list. The plug-in's 0.640 corresponds to no count of actual subsets at all; there is no way to pick from these ten draws and land on 0.640. That is the tell that it is measuring the wrong thing.
+
+The static figure lays all of this out in one view: the five samples, the ten subsets with their pass or fail verdict, and the two formulas side by side so you can see the gap.
+
+<Diagram number={1} caption="pass@2 for one task with n=5 completions, of which c=2 pass. Left: the five samples, s0 and s1 correct, s2 to s4 failing. Center: all C(5,2)=10 equally likely size-2 draws enumerated by hand, 7 containing at least one correct sample (PASS) and 3 drawn only from the failing trio (fail), giving the brute-force answer 7/10 = 0.700. Right: the two closed-form estimators compared. The unbiased combinatorial estimator 1 minus C(3,2)/C(5,2) = 1 minus 3/10 = 0.700 matches the brute-force count exactly, while the tempting plug-in 1-(1-0.40)^2 = 0.640 is lower because it models sampling with replacement from an infinite pool rather than the finite five draws we actually have.">
+  <img src="/essays/pass-at-k/part8-figure.svg" alt="A figure titled 'Two estimators of pass@k, checked by brute force' for a coding task with five sampled completions. On the left, five sample cards: s0 and s1 marked pass in emerald, s2, s3 and s4 marked fail. In the center, a list of all ten size-2 subsets of the five samples: the seven subsets containing s0 or s1 are labelled PASS in emerald, and the three subsets drawn only from s2, s3 and s4 are labelled fail, giving passing subsets over total of 7 over 10 equals 0.700. On the right, two boxes compare the estimators: the unbiased combinatorial estimator, 1 minus C(3,2) over C(5,2) equals 1 minus 3 over 10 equals 0.700, shown in emerald and marked as matching the brute-force count; and the plug-in estimator, 1 minus (1 minus 0.40) squared equals 0.640, shown in a muted color and marked biased low. A caption notes the plug-in treats the five finite draws as an infinite coin, so it under-reports pass@k." class="w-full rounded-lg" />
+</Diagram>
+
+## Step 4: sweeping the budget k
+
+One task and one `k` shows the gap; sweeping `k` shows its shape. Keeping the same pool (`n = 5`, `c = 2`), we compute pass@k for every budget from 1 to 5 with all three methods. The unbiased and brute-force columns are, by construction, identical; the plug-in drifts away from them:
+
+```text
+    k   plug-in(biased)   unbiased    brute-force
+    1      0.400          0.400       2/5 = 0.400
+    2      0.640          0.700       7/10 = 0.700
+    3      0.784          0.900       9/10 = 0.900
+    4      0.870          1.000       5/5 = 1.000
+    5      0.922          1.000       1/1 = 1.000
+```
+
+Read the columns. At `k = 1` all three agree on **0.400**, because with a single draw pass@1 is just the per-sample rate `p_hat`, and drawing one from five with replacement or without is the same thing. From `k = 2` on they part ways. The unbiased estimator climbs 0.700, **0.900**, then hits **1.000** at `k = 4` and stays there. That ceiling is the "you cannot miss" fact made visible: once your budget exceeds the number of failing samples (`n - c = 3`), every possible draw must include a correct sample, so pass@k is exactly 1. The brute-force column confirms it with shrinking denominators, `5/5` then `1/1`, because there are only `C(5, 4) = 5` and `C(5, 5) = 1` ways to draw at those budgets.
+
+The plug-in, meanwhile, never reaches 1. It reports 0.784 at `k = 3`, **0.870** at `k = 4`, **0.922** at `k = 5`, forever leaving a sliver of probability on "all draws failed" even when that is combinatorially impossible. At `k = 5` you are drawing all five samples, two of which pass, so pass@5 is certainly 1.000, yet the plug-in insists on 0.922. That 0.078 shortfall is pure artifact of the with-replacement fiction. The lesson from the sweep: pass@k rises monotonically with `k` and saturates at 1 once `k > n - c`, and any estimator that fails to saturate is telling you about an imaginary infinite pool, not your five samples.
+
+## Step 5: why "unbiased", proven in exact arithmetic
+
+We keep calling the combinatorial estimator "unbiased". That word has a precise meaning worth earning: averaged over all the datasets you *could* have drawn, the estimator equals the true quantity. Not close on average, exactly equal. Let us prove it, because the proof is short and it is the reason to trust the formula.
+
+Suppose the model's true per-sample success probability on this task is `p = 0.40`. If that were the truth, the honest target, the *true* pass@2, is the with-replacement formula, because a fresh independent draw really does succeed with probability `p` each time:
+
+```text
+  true per-sample rate p = 0.40,  true pass@2 = 1 - (1-p)^2 = 0.640
+```
+
+So the number we are trying to estimate is 0.640. Now here is the subtlety that trips people up: the plug-in formula evaluated at the *true* `p` gives 0.640, which is correct. The problem is that in practice you do not know `p`; you plug in `p_hat = c/n` estimated from the same five noisy draws, and `c` itself is random. The right way to judge an estimator is to average its output over all the ways the data could come out. The number of correct samples `c` in five draws follows a Binomial(5, 0.4) distribution, so we take the exact expectation of each estimator over `c` from 0 to 5, weighting by the binomial probability of each `c`, and doing the whole sum in rational arithmetic:
+
+```text
+  E[unbiased estimator] = 0.640   (exact: 16/25)  -> matches truth
+  E[plug-in  estimator] = 0.592   (exact: 74/125)  -> low by 0.048
+```
+
+There it is. Averaged over every possible dataset, the combinatorial estimator returns exactly **16/25 = 0.640**, dead on the true pass@2. It is unbiased in the literal, provable sense. The plug-in averages to **74/125 = 0.592**, which is **low by 0.048**, a fixed downward bias that no amount of data at fixed `n` removes. The `16/25` and `74/125` are computed as exact fractions in the companion file, not floating-point approximations, so this is a proof and not a numerical coincidence.
+
+The intuition connects back to Step 1. The plug-in is not wrong because `1 - (1-p)^k` is the wrong target; it is wrong because it feeds a *noisy, low-on-average* estimate of the failure rate into a convex function. When you draw few samples, `c/n` bounces around, and the way the failure term `(1 - c/n)^k` responds to that bounce is asymmetric: it penalizes the estimate more than it rewards it, dragging the average below the truth. The combinatorial estimator sidesteps the whole problem by never estimating `p` at all. It answers a different, purely finite question, "of the draws I could make from these exact five samples, what fraction contain a correct one", and that question's answer happens to be an unbiased estimate of the true pass@k. That is the quiet magic of the identity: it looks like it is only describing your five samples, but on average it nails the population.
+
+The interactive figure lets you feel both halves of the story. In the top panel you set which of the five samples pass and slide the budget `k`, watching the subset enumeration and both estimators update live so you can see the gap open and close. In the bottom panel you slide the true `p` and watch the exact expectations, seeing the plug-in's average sit stubbornly below the truth while the unbiased estimator tracks it exactly.
+
+<IframeFigure src="/essays/pass-at-k/part8-interactive.html" title="Interactive pass@k explorer: a top panel where you click any of five sampled completions to mark it pass or fail and drag a budget slider k from 1 to 5, watching the enumeration of size-k subsets, the brute-force count, the unbiased estimator, and the biased plug-in update together; and a bottom panel where dragging the true per-sample rate p shows the exact expectation of each estimator over a Binomial(5, p) of correct counts, making visible that the plug-in's average stays below the true pass@k while the unbiased estimator matches it." height={860} />
+
+## Key takeaways
+
+- **pass@k is the probability that at least one of `k` sampled completions passes, and it is a counting problem, not a coin-flip.** For our task (`n = 5` samples, `c = 2` correct), pass@2 is 0.700, computed as one minus the fraction of size-2 draws that contain no correct sample.
+- **The tempting plug-in `1 - (1 - c/n)^k` is biased low.** It gives 0.640 for pass@2 versus the correct 0.700, because it models drawing `k` samples with replacement from an infinite pool rather than choosing `k` from your finite `n`. It never saturates: it reports 0.922 for pass@5 when the true answer is a certain 1.000.
+- **The unbiased estimator is a combinatorial identity: `1 - C(n-c, k) / C(n, k)`.** For pass@2 that is `1 - C(3,2)/C(5,2) = 1 - 3/10 = 0.700`, and brute-force enumeration of all 10 subsets confirms 7 of them pass, exactly 7/10. When `n - c < k` the estimator is exactly 1: you cannot miss.
+- **"Unbiased" is provable, not a slogan.** Taking the exact expectation over `c` from Binomial(5, 0.4) in rational arithmetic, the combinatorial estimator averages to 16/25 = 0.640, exactly the true pass@2, while the plug-in averages to 74/125 = 0.592, low by 0.048 at every fixed `n`.
+- **Report the unbiased estimator.** Whenever you sample `n` completions and want pass@k for a smaller `k`, use the combinatorial form. The plug-in will quietly make every code model in your report look worse than it is, and always by the same downward tilt.
+
+## Glossary
+
+- **pass@k**: the probability that at least one of `k` sampled completions for a task passes its tests. The standard success metric for code generation and any setting where you sample several answers and accept the task as solved if any one works.
+- **Sample / completion**: one output the model produced for the task. We drew `n = 5` of them, labeled `s0` through `s4`; `c = 2` passed the hidden unit tests.
+- **p_hat (empirical per-sample rate)**: `c / n`, the fraction of sampled completions that passed. Here `2/5 = 0.40`. It is pass@1, but not pass@k for `k > 1`.
+- **Plug-in estimator**: the formula `1 - (1 - c/n)^k`. It treats the finite pool of `n` samples as an infinite coin drawn with replacement, which biases pass@k downward. Gives 0.640 for our pass@2.
+- **Unbiased estimator**: the combinatorial formula `1 - C(n-c, k) / C(n, k)`, the fraction of size-`k` subsets of the `n` samples that contain at least one correct sample. Gives 0.700 for our pass@2 and equals the true pass@k on average.
+- **Binomial coefficient `C(n, k)`**: the number of ways to choose an unordered `k`-subset from `n` items. We used `C(5,2) = 10` (all draws) and `C(3,2) = 3` (all-failing draws).
+- **Bias**: the difference between an estimator's average value, over all datasets it could see, and the true quantity. The plug-in's bias here is 0.592 minus 0.640, a downward 0.048; the combinatorial estimator's bias is zero.
+- **Sampling without replacement**: choosing `k` distinct items from a fixed pool of `n`, so each item can appear at most once in a draw. This, not with-replacement sampling, is what actually happens when you pick `k` of your `n` completions, and it is why the combinatorial estimator is the right one.
+
+---
+
+We can now score a single system, even a stochastic one, from a fixed set of examples. But some qualities, "which of these two answers is better", resist an absolute number entirely and are only ever judged in comparison. **Part 9, Arenas**, turns pairwise wins and losses into a single ranking, deriving the Elo and Bradley-Terry models from the same first principles.

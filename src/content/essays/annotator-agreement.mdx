@@ -1,0 +1,162 @@
+---
+title: "Do Humans Even Agree?"
+description: "The gold labels you grade against are themselves opinions, and opinions have noise. Part 3 takes 20 support tickets graded by two humans who agree on 18 of them, a scary-high 90%, and shows by hand why most of that agreement is chance: Cohen's kappa collapses it to 0.61, Fleiss' kappa handles three raters, and Krippendorff's alpha waits as the general case."
+date: 2026-07-16
+tags: ["Evals", "LLM", "AI", "Inter-Annotator Agreement", "Cohen's Kappa", "Fleiss' Kappa"]
+seriesOrder: 3
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-03-annotator-agreement"
+lang: "en"
+translationSlug: "annotator-agreement-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+In Part 2, Building a Golden Set, we assembled a labeled set and promised it was trustworthy, but we quietly leaned on one human's judgment to define "correct." This part asks the uncomfortable follow-up: what if a second careful human, given the exact same examples and the exact same instructions, would have labeled some of them differently? If they disagree, then "the gold label" is not a fact you read off the world; it is an opinion, and opinions carry noise. Every score you compute downstream inherits that noise. So before we trust a single label, we have to measure how much two people actually agree, and we have to do it honestly.
+
+The honest part is the whole lesson. The obvious way to measure agreement is to count how often two raters gave the same label and divide by the total, the **raw agreement** (often written `po`, "proportion observed"). It is easy, intuitive, and quietly broken. When one label dominates (most tickets really are not urgent), two raters will land on the same answer constantly just by both guessing the common label, and raw agreement rewards them for it. We will watch two raters hit a headline **90%** agreement that is almost entirely luck. Then we will correct for that luck by hand, using **Cohen's kappa**, and see the honest number fall to **0.61**. We will extend to three raters with **Fleiss' kappa** (**0.44** on a fresh five-ticket set), and close with a one-line note on **Krippendorff's alpha**, the general case that swallows all the others. Every number in this essay is printed by the companion file, unrounded and unedited.
+
+## Prerequisites
+
+You need Part 1's vocabulary (the 2x2 grid of two labels crossed against each other) and nothing more than basic Python: a list, a loop, a division. No statistics background is assumed; we build kappa from counting, exactly the way we built precision and recall. The companion file, [agreement.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-03-annotator-agreement), runs offline with no API key, no network, and no dependencies (not even NumPy this time, it is pure Python), so you can read every line and reproduce every figure here yourself. It exposes three functions, `cohen_cells`, `cohen_kappa`, and `fleiss_kappa`, and prints the full trace we walk through below.
+
+## Two raters, twenty tickets
+
+Here is the setup, straight from the companion file. Two human annotators, A and B, are handed the same 20 support tickets and asked the same question we used in Part 1: is this ticket **urgent** (`1`) or **not urgent** (`0`)? They work independently. Because a real support inbox is mostly calm, both raters say "not urgent" on the overwhelming majority of tickets, which is precisely the condition that will fool raw agreement:
+
+```python
+RATER_A = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+RATER_B = [1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+```
+
+Walk the two lists together and mark each ticket "yes" if the raters agree or "NO" if they differ. They match on ticket 1 (both urgent), match on ticket 2 (both urgent), disagree on ticket 3 (A says urgent, B says not), disagree on ticket 4 (A says not, B says urgent), and then agree on all sixteen remaining tickets (both say not urgent every time). Two disagreements out of twenty. So they agree on **18 of 20** items, and the raw agreement is:
+
+```text
+po = agreements / n = 18 / 20 = 0.90
+```
+
+Ninety percent. That is the number that goes in the annotation-quality report, the number a manager nods at. And it feels earned: nine out of ten, the raters are twins. Hold that feeling, because we are about to take it apart.
+
+## The 2x2 of two raters
+
+The tool for taking it apart is the same 2x2 from Part 1, but repurposed. In Part 1 the grid crossed the gold label against the model's prediction. Here there is no model and no gold; there are two humans, and the grid crosses rater A's label against rater B's. The function `cohen_cells` fills it by hand, walking the two lists once and dropping each ticket into one of four buckets: both said urgent, A urgent while B said not, A not while B said urgent, or both said not. Counting the twenty tickets gives:
+
+```text
+                 B=urgent   B=not
+    A=urgent        2         1
+    A=not           1        16
+```
+
+So the four cells are: both-urgent = **2** (tickets 1 and 2), A-urgent-B-not = **1** (ticket 3), A-not-B-urgent = **1** (ticket 4), and both-not = **16** (the calm sixteen). They sum to 20, our sanity check. The two agreement cells sit on the diagonal, both-urgent and both-not, and they add to `2 + 16 = 18`, which is exactly the 18 agreements we counted, so raw agreement really is `(2 + 16) / 20 = 0.90`. Nothing is wrong with the arithmetic. What is wrong is what the arithmetic leaves out.
+
+<Diagram number={1} caption="The 2x2 agreement matrix for two raters over 20 tickets, and the chance-correction that deflates it. On the left, rater A's label crosses rater B's label: both-urgent=2 and both-not=16 sit on the emerald agreement diagonal, the two disagreements (A-urgent-B-not=1 and A-not-B-urgent=1) sit off-diagonal in rose. The raw agreement is the diagonal over the total, (2+16)/20 = 0.90. The right panel shows why that is misleading: each rater says urgent only 3 of 20 times (0.15) and not 17 of 20 (0.85), so two raters guessing at those rates would both say 'not' 0.85*0.85 = 0.7225 of the time and both say 'urgent' 0.15*0.15 = 0.0225 of the time, for a chance agreement pe = 0.7450, meaning 74% of the raw 90% is luck. Cohen's kappa removes that floor: (0.90 - 0.7450) / (1 - 0.7450) = 0.61.">
+  <img src="/essays/annotator-agreement/part3-figure.svg" alt="An agreement analysis in two panels. The left panel is a 2x2 matrix titled 'A vs B, counted by hand' with rows labelled A=urgent and A=not and columns labelled B=urgent and B=not. The top-left cell (both urgent) reads 2 in emerald, the bottom-right cell (both not) reads 16 in emerald, and these form the agreement diagonal; the top-right cell (A urgent, B not) reads 1 in rose and the bottom-left cell (A not, B urgent) reads 1 in rose. A caption reads raw agreement po = (2 + 16) / 20 = 0.90. The right panel, titled 'how much is chance?', shows each rater's marginal rates: A says urgent 3/20 = 0.15 and not 0.85; B says urgent 3/20 = 0.15 and not 0.85. It then computes chance agreement pe = 0.15 times 0.15 + 0.85 times 0.85 = 0.0225 + 0.7225 = 0.7450, annotated as 74 percent luck. A final emerald box reads Cohen kappa = (0.90 - 0.7450) / (1 - 0.7450) = 0.61." class="w-full rounded-lg" />
+</Diagram>
+
+## How much of that is chance?
+
+Here is the trap. Suppose the two raters had not read a single ticket. Suppose each just flipped a biased coin that says "urgent" as often as they usually do and "not urgent" the rest of the time. How often would two such coins land on the same answer, by pure luck? If that lucky floor is already high, then a raw agreement of 0.90 is not impressive; it is barely above what noise alone would produce.
+
+To compute that floor we need each rater's **marginal rate**: how often each one says urgent, ignoring the other rater entirely. Read it off the grid. Rater A said urgent on the top row, `2 + 1 = 3` tickets out of 20, so A's urgent rate is `3/20 = 0.15` and A's not rate is `0.85`. Rater B said urgent down the left column, `2 + 1 = 3` tickets out of 20, so B's urgent rate is also `3/20 = 0.15` and B's not rate is `0.85`. Both raters call roughly one ticket in seven urgent and wave the rest through.
+
+Now, if the two raters labeled independently at those rates, they would agree in two ways. They would both say urgent with probability `0.15 * 0.15 = 0.0225`, and they would both say not urgent with probability `0.85 * 0.85 = 0.7225`. Add those and you get the **chance agreement**, `pe` ("proportion expected"):
+
+```text
+pe = 0.15*0.15 + 0.85*0.85 = 0.0225 + 0.7225 = 0.7450
+```
+
+Read that number slowly. **0.7450.** Two raters who never spoke, never read a ticket, and just guessed at their usual rates would still agree **74%** of the time, entirely by luck, because both of them almost always reach for "not urgent" and "not urgent" agrees with "not urgent." The agreement we were so impressed by starts three-quarters of the way up the ladder before either human has done any thinking at all. That `0.7225` term, both raters guessing "not," is doing nearly all the work, and it is worth exactly nothing as evidence that the raters understand the task.
+
+## Cohen's kappa: crediting only the skill
+
+Cohen's kappa fixes this with one honest idea: give the raters credit only for the agreement they achieved *above* the chance floor, and measure it against the most they could have achieved above that floor. The floor is `pe = 0.7450`. Perfect agreement is `1.0`. So the room above the floor is `1 - pe`, and the raters climbed `po - pe` of it. The ratio is kappa:
+
+```text
+kappa = (po - pe) / (1 - pe)
+      = (0.90 - 0.7450) / (1 - 0.7450)
+      = 0.1550 / 0.2550
+      = 0.61
+```
+
+The raw 0.90 becomes **0.61**. The raters did agree more than chance would predict (kappa is well above zero, so this is real signal, not noise), but the honest, chance-corrected figure is far below the headline. That gap between 0.90 and 0.61 is the entire point of this part: the 0.29 that evaporated was never skill, it was the arithmetic of two people who both default to the common label.
+
+It helps to know the endpoints kappa can hit. If the raters agreed exactly as often as chance predicts, `po = pe`, the numerator is zero and kappa is `0`: no skill demonstrated. If they agreed perfectly, `po = 1`, kappa is `1`. And kappa can go **negative**, below zero, when raters agree *less* than chance, which usually means they misunderstood the task in opposite directions or someone flipped a label convention. As a rough field convention (the Landis and Koch guideposts, useful but not law), kappa from 0.41 to 0.60 is "moderate" and 0.61 to 0.80 is "substantial," so our 0.61 sits right at the bottom edge of "substantial." Decent, defensible, and a world away from the "our raters agree 90% of the time" you would have reported without the correction.
+
+The widget below lets you feel the mechanism instead of taking it on faith. Slide how imbalanced the tickets are (how rare "urgent" really is) and watch two things move in opposite directions: raw agreement climbs toward 1.0 as the data gets more lopsided, because both raters coast on the majority label, while kappa refuses to be impressed and can even sink as the chance floor rises to meet the raw number. It is the clearest way to see that a high `po` on skewed labels tells you almost nothing.
+
+<IframeFigure src="/essays/annotator-agreement/part3-interactive.html" title="Interactive agreement explorer: adjust the class balance of the ticket set and the two raters' error rates, and watch the 2x2 agreement matrix, the raw agreement po, the chance floor pe, and Cohen's kappa update together, showing how a lopsided label distribution inflates raw agreement while kappa stays honest." height={820} />
+
+## Three raters: Fleiss' kappa
+
+Cohen's kappa handles exactly two raters. Real annotation projects often use three or more, both to break ties and to measure agreement across a panel, and for that we need **Fleiss' kappa**. It keeps the same skeleton, observed agreement corrected by chance agreement, `(P_bar - P_e) / (1 - P_e)`, but it counts agreement per *item* instead of per rater pair, so it scales to any number of raters.
+
+Take five fresh tickets, each now graded by three raters, R1, R2, and R3:
+
+```text
+  item  R1 R2 R3  | urgent  not
+     1   1  1  1  |     3     0
+     2   1  1  0  |     2     1
+     3   0  0  0  |     0     3
+     4   1  0  0  |     1     2
+     5   0  0  0  |     0     3
+```
+
+Fleiss does not ask "did rater X match rater Y." It asks, for each item, what fraction of the *pairs of raters* on that item landed on the same label. With 3 raters there are 3 possible pairs per item. The tidy formula in `fleiss_kappa` computes that fraction as the sum of squared vote-counts minus the number of raters, all divided by `raters * (raters - 1)`:
+
+```text
+P_i = (sum of squared vote-counts - raters) / (raters * (raters - 1))
+```
+
+Run it on each item. Item 1 has votes (3 urgent, 0 not), so `(3*3 + 0*0 - 3) / (3*2) = (9 - 3)/6 = 1.0000`: unanimous, all three pairs agree, perfect item agreement. Item 2 has votes (2, 1), so `(4 + 1 - 3)/6 = 2/6 = 0.3333`: only one of the three pairs agrees (the two raters who both said urgent), the other two pairs disagree. Item 3 is unanimous "not," `1.0000`. Item 4 is (1, 2), another `0.3333`. Item 5 is unanimous "not," `1.0000`. Average those five per-item agreements:
+
+```text
+P_bar = (1.0000 + 0.3333 + 1.0000 + 0.3333 + 1.0000) / 5 = 0.7333
+```
+
+Now the chance floor, exactly as before but pooled across all raters. Count every vote in the whole table: there are `5 items * 3 raters = 15` votes, of which `3 + 2 + 0 + 1 + 0 = 6` are "urgent" and 9 are "not." So the category shares are urgent `6/15 = 0.40` and not `9/15 = 0.60`. If raters assigned labels at those rates by chance, the probability two of them match on a category is that category's share squared, summed over categories:
+
+```text
+P_e = 0.40^2 + 0.60^2 = 0.16 + 0.36 = 0.52
+```
+
+And Fleiss' kappa snaps together from the same `(observed - chance) / (1 - chance)` shape:
+
+```text
+Fleiss kappa = (P_bar - P_e) / (1 - P_e)
+             = (0.7333 - 0.52) / (1 - 0.52)
+             = 0.2133 / 0.48
+             = 0.44
+```
+
+**0.44**, "moderate" on the same rough scale, dragged down mostly by items 2 and 4 where the panel split. Notice the machine is identical to Cohen's: measure how far above the chance floor the raters climbed, divide by how far they could have climbed. The only thing that changed is that "agreement" is now counted over rater pairs per item, so the formula no longer cares whether you have two raters or twenty. Two labels or two hundred, the correction is the same move we did by hand.
+
+## Krippendorff's alpha: the general case
+
+Fleiss still assumes every item was graded by the same number of raters and that all disagreements are equally bad (calling an "urgent" ticket "not urgent" costs the same as any other mismatch). Real projects break both assumptions: raters skip items, panels are uneven, and on an ordinal scale (say, severity 1 to 5) being off by one is not as bad as being off by four. **Krippendorff's alpha** is the general case that absorbs all of this. It works for any number of raters, tolerates missing labels, and accepts any measurement scale (nominal, ordinal, interval) by plugging in a distance function that says how far apart two labels are. Mechanically it is built from *disagreement* rather than agreement, `alpha = 1 - (observed disagreement / expected disagreement)`, which looks like the mirror image of what we did, but it is the same idea turned inside out: correct the raw number for how much you would see by chance. When every item has the same raters and the scale is nominal, alpha and Fleiss' kappa nearly coincide. We will not derive it line by line here (its bookkeeping earns its own treatment), but you now know exactly what it is doing, because you did the core move three times already.
+
+## Key takeaways
+
+- **Gold labels are opinions with noise, so measure that noise before trusting any score built on them.** If two careful humans disagree on some examples, "the gold label" is a judgment call, and every downstream metric inherits its uncertainty.
+- **Raw percent-agreement lies under class imbalance.** Two raters who both default to the common label agree constantly by luck. Our two raters hit `po = 0.90` on 20 tickets, but with each rater calling only 3 of 20 urgent, the chance floor was `pe = 0.7450`: 74% of that agreement was noise.
+- **Cohen's kappa credits only the agreement above chance.** `kappa = (po - pe) / (1 - pe) = (0.90 - 0.7450) / (1 - 0.7450) = 0.61`. It is 0 when raters do no better than chance, 1 when they agree perfectly, and negative when they agree less than chance. The honest number here is 0.61, not 0.90.
+- **Fleiss' kappa is the same correction for three or more raters.** Count agreement over rater pairs per item, average to `P_bar = 0.7333`, pool the category shares (urgent 0.40, not 0.60) into `P_e = 0.52`, and get `Fleiss kappa = 0.44`. The `(observed - chance) / (1 - chance)` skeleton never changes.
+- **Krippendorff's alpha generalizes all of it** to any rater count, missing labels, and any scale via a distance function, built from disagreement but resting on the identical chance-correction. Learn the by-hand move once and every agreement coefficient is a variation on it.
+
+## Glossary
+
+- **Inter-annotator agreement**: how consistently two or more human raters assign the same labels to the same items. High agreement is evidence your labeling task is well-defined and your gold set is trustworthy; low agreement means the instructions, the examples, or the labels themselves are ambiguous.
+- **Raw agreement (po)**: the fraction of items on which raters gave the same label, the diagonal of the agreement matrix over the total. Intuitive but inflated whenever one label dominates, because raters agree by luck on the common label.
+- **Chance agreement (pe)**: how often raters would agree by pure luck if each labeled independently at their own base rates, computed by summing the products of the per-category rates. Here `0.15*0.15 + 0.85*0.85 = 0.7450`.
+- **Marginal rate**: how often a single rater assigns a given label overall, ignoring the other rater. Read from the row totals (rater A) or column totals (rater B) of the 2x2. Both raters called urgent `3/20 = 0.15` of the time.
+- **Cohen's kappa**: the chance-corrected agreement for exactly two raters, `(po - pe) / (1 - pe)`. Zero means chance-level, one means perfect, negative means worse than chance. Our raters scored 0.61 despite 0.90 raw agreement.
+- **Fleiss' kappa**: the extension of the same correction to any fixed number of raters, using per-item agreement over rater pairs (`P_bar = 0.7333`) and pooled category shares (`P_e = 0.52`) to give `0.44` on the three-rater set.
+- **Krippendorff's alpha**: the general-case agreement coefficient for any number of raters, missing data, and any scale (nominal, ordinal, interval). Built from observed versus expected disagreement, `1 - (D_observed / D_expected)`, it reduces to Fleiss' kappa in the simple nominal case.
+- **Kappa interpretation guideposts**: the rough Landis and Koch bands (0.41 to 0.60 moderate, 0.61 to 0.80 substantial, above 0.81 almost perfect). Useful shorthand, not a hard rule, and always secondary to whether the number is stable on a large enough sample.
+
+---
+
+We now know how much to trust the humans who write our gold labels, and how to put an honest number on it. The next question is whether we can replace those expensive humans with a model that grades outputs for us. **Part 4, LLM-as-Judge by Hand**, builds a rubric-driven judge from scratch, parses its verdicts, and lays the judge against the human gold set in a confusion matrix to see exactly where, and how badly, it disagrees.

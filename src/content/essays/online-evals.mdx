@@ -1,0 +1,179 @@
+---
+title: "Online Evals"
+description: "Offline scores are necessary, not sufficient: the final judge is live traffic. Part 13 splits one week of a support chatbot's sessions 50/50, computes the resolution-rate lift and a by-hand two-proportion z-test, and then lets a refusal-rate guardrail overrule a real, significant +8 pp win into a DO-NOT-SHIP verdict."
+date: 2026-07-26
+tags: ["Evals", "LLM", "AI", "A/B Testing", "Significance", "Guardrails"]
+seriesOrder: 13
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-13-online-evals"
+lang: "en"
+translationSlug: "online-evals-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 12 grew a golden set out of production logs, so your offline eval finally reflects the failures real users hit. But everything in this series so far, every score, every confidence interval, every gate, has been measured after the fact on logged examples. None of it answers the question a product owner actually asks on launch day: when this new prompt meets live users, does it make things better or worse? That is a different kind of measurement, and it is the subject of this part.
+
+An **online eval** runs the change in production and reads the result off real traffic. The classic instrument is the **A/B test**: split live users into two arms, show the old version to one and the new version to the other, and compare a metric that maps to business value. In this part we take one concrete case, a support chatbot that has just shipped a new answer-generation prompt, split one week of sessions 50/50, and by hand compute three things: the **lift** (how much the primary metric moved), whether that lift is **real or noise** (a two-proportion z-test and its p-value, derived from scratch), and whether a **guardrail metric** we promised never to regress stayed inside its margin. The twist, and the whole lesson, is that these three answers can disagree. Our new prompt wins the primary metric by a genuinely significant margin and still ships nothing, because it breaks the guardrail. An offline win, and even an online primary win, is necessary but not sufficient.
+
+## Prerequisites
+
+You need basic Python: a division and a square root. Everything statistical is built here from counts, exactly as in Part 1. It helps to have read Part 7 (Is the Difference Real?), where we first met significance testing, because the z-test below is the same idea applied to two rates instead of a paired set; but this part is self-contained and re-derives what it needs. The companion file, [online_evals.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-13-online-evals), runs offline with no API key, no network, and only NumPy, so you can reproduce every number in this essay yourself. Every figure in prose here is that file's printed output, unrounded and unedited.
+
+## The setup: two arms of live traffic
+
+Here is the situation, straight from the companion file. A support chatbot has been answering customers with one prompt for months. The team wrote a new answer-generation prompt they believe is better, and rather than argue about it in a meeting they ship it to half the traffic. For one week, every incoming session is assigned to one of two arms:
+
+- **Control** (the old prompt): 400 sessions, of which 168 were **resolved** and 20 ended in a **refusal**.
+- **Treatment** (the new prompt): 400 sessions, of which 200 were **resolved** and 40 ended in a **refusal**.
+
+```text
+Two arms of live traffic, one week, 50/50 split:
+  control  (old prompt):  n=400  resolved=168  refused=20
+  treatment(new prompt):  n=400  resolved=200  refused=40
+```
+
+Two metrics live on top of these counts, and it is worth being precise about their roles before we touch any arithmetic, because confusing them is how teams ship regressions.
+
+The **primary metric** is **resolution rate**: the fraction of sessions where the customer's problem got solved without escalating to a human. This is the number the change is meant to improve, the one that maps to money and customer happiness. Higher is better. It is what we are running the experiment to move.
+
+The **guardrail metric** is **refusal rate**: the fraction of sessions where the bot declined to answer at all ("I can't help with that"). Nobody is trying to improve refusals in this experiment. The guardrail exists to catch a specific failure mode: a prompt that hits its primary number by cheating. A bot that refuses more often can look better on resolution (the hard cases it used to fumble now just get punted) while quietly degrading the product. The guardrail is a promise we made before the experiment: this metric must NOT regress, no matter how good the primary looks. Lower is better, and we allow it only a tiny margin of slack.
+
+That split, one metric to move and one metric to protect, is the heart of responsible online evaluation. Let us compute both by hand.
+
+## The primary metric: lift, and is it real?
+
+A **rate** is just a count over a total, the humblest possible metric and the one this whole part rests on. The control arm resolved 168 of its 400 sessions and the treatment arm resolved 200 of its 400:
+
+```text
+  control   = 168/400 = 0.420
+  treatment = 200/400 = 0.500
+```
+
+So the new prompt resolves 50.0% of sessions against the old prompt's 42.0%. The gap between two rates is the **lift**, and it comes in two flavors that people constantly mix up. The **absolute lift** is the plain difference:
+
+```text
+absolute lift = 0.500 - 0.420 = +0.080  (+8.0 pp)
+```
+
+Eight one-hundredths, which we read as **+8.0 percentage points** (pp). Percentage points are the unit of a difference between two percentages, and saying "points" instead of "percent" here is not pedantry: it is the difference between a true and a false statement, as the next line shows. The **relative lift** divides that gain by where we started:
+
+```text
+relative lift = 0.080/0.420 = +19.0%
+```
+
+The same improvement, expressed relative to the control's 0.420 baseline, is **+19.0%**. Both numbers are correct and they describe the identical change; the +8.0 is in points, the +19.0 is in percent of the old rate. A headline that says "the new prompt is 19% better" and a headline that says "resolution rose 8 points" are the same fact wearing different clothes. Marketing likes the bigger-sounding relative number; an honest dashboard shows both and labels the units.
+
+Now the question that separates an experiment from a coincidence: is that +8 points **real**, or did treatment just get a slightly easier week of customers by luck? Each arm is only 400 sessions. If you flipped a fair coin 400 times twice, the two heads-counts would rarely be identical; some gap appears from pure chance. We need to know whether an 8-point gap is bigger than the chance wobble. That is exactly what a significance test measures.
+
+### A two-proportion z-test, by hand
+
+We are comparing two proportions (two rates), so the right tool is the **two-proportion z-test**. The logic is the same null-hypothesis reasoning from Part 7: assume, for the sake of argument, that the new prompt is truly no different from the old one, that both arms are drawing from a single underlying resolution rate. Under that assumption, how surprising is a gap of 8 points? If it is very surprising, we reject the assumption and call the result real.
+
+Step one: if the two arms really share one rate, our best estimate of that shared rate is to pool all the successes over all the sessions. This is the **pooled rate**:
+
+```text
+pooled rate p = (168+200)/(400+400) = 0.460
+```
+
+Combine both arms and 368 of 800 sessions resolved, a pooled rate of 0.460. Step two: figure out how much a difference of two rates would naturally bounce around, if the null were true, given these sample sizes. That spread is the **standard error** of the difference, and for two proportions under the pooled null it has a clean closed form. Take the pooled rate `p`, multiply by `1 - p` (the variance of a single yes/no draw), scale by the two sample sizes, and take the square root:
+
+```text
+SE = sqrt( p * (1 - p) * (1/n_c + 1/n_t) )
+   = sqrt( 0.460 * 0.540 * (1/400 + 1/400) )
+   = 0.03524
+```
+
+So under the null, differences between the two arms' rates have a typical size of about 0.03524, roughly 3.5 points. Our observed difference is 8 points. Step three: express the observed difference in units of that standard error. That ratio is the **z statistic**:
+
+```text
+z = (p_t - p_c) / SE = +0.080 / 0.03524 = 2.270
+```
+
+The observed gap is **2.270** standard errors away from zero. A z of about 2 is the folk boundary for "unusual"; 2.270 is past it. To turn that into a probability we ask: if the null were true, how often would chance alone produce a gap at least this many standard errors from zero, in either direction? That tail probability is the **p-value**, and it comes from the standard normal distribution. We compute it from the normal CDF (the companion file builds `normal_cdf` by hand from the error function so nothing is imported to do the real work), doubling the upper tail because a gap in either direction would have counted:
+
+```text
+p-value (two-sided) = 2 * (1 - normal_cdf(2.270)) = 0.0232
+```
+
+A p-value of **0.0232** means: if the new prompt were genuinely no better, we would see a gap this large or larger only about 2.3% of the time by pure luck. We fixed our threshold, **alpha**, at the conventional 0.05 before looking. Since 0.0232 is below 0.05, we reject the null:
+
+```text
+  at alpha=0.05: SIGNIFICANT  (p < 0.05)
+```
+
+The +8-point lift is **significant**. It is very unlikely to be a fluke of one lucky week. If resolution rate were the only thing we cared about, we would ship right now. The static figure below lays out this entire primary-metric calculation as one flow, from the four raw counts through the pooled rate, standard error, and z, to the p-value and the alpha comparison, so you can see that the whole verdict is nothing but those counts divided and square-rooted.
+
+<Diagram number={1} caption="The full online-eval calculation for the support-chatbot A/B test, laid out as one left-to-right flow. On the left, the two arms: control (old prompt) with 400 sessions, 168 resolved, 20 refused; treatment (new prompt) with 400 sessions, 200 resolved, 40 refused. The middle column derives the primary metric: control resolution 0.420, treatment 0.500, absolute lift +0.080 (+8.0 pp), relative lift +19.0%, then the two-proportion z-test with pooled rate 0.460, standard error 0.03524, z 2.270, and two-sided p-value 0.0232, marked SIGNIFICANT against alpha 0.05. The right column shows the guardrail metric: control refusal 0.050, treatment refusal 0.100, change +0.050 (+5.0 pp) against an allowed margin of +2 pp, marked BREACHED in rose. A verdict bar across the bottom reads: primary significant True, guardrail ok False, therefore DO NOT SHIP.">
+  <img src="/essays/online-evals/part13-figure.svg" alt="A flow diagram of an A/B test for a support chatbot. On the left, two stacked boxes: control (old prompt), n=400, resolved=168, refused=20; and treatment (new prompt), n=400, resolved=200, refused=40. The center column, headed PRIMARY METRIC resolution rate, shows control 168/400 = 0.420 and treatment 200/400 = 0.500 in emerald, an absolute lift of +0.080 (+8.0 pp) and relative lift +19.0%, then a two-proportion z-test: pooled rate 0.460, SE 0.03524, z 2.270, p-value 0.0232, tagged SIGNIFICANT at alpha 0.05. The right column, headed GUARDRAIL METRIC refusal rate, shows control 20/400 = 0.050 and treatment 40/400 = 0.100, a change of +0.050 (+5.0 pp) against an allowed margin of +2 pp, tagged BREACHED in rose. A wide bar along the bottom states primary significant? True, guardrail ok? False, and in bold: DO NOT SHIP." class="w-full rounded-lg" />
+</Diagram>
+
+## The guardrail metric: a win that isn't
+
+Before anyone touches the deploy button, we check the promise we made: refusal rate must not regress. Same arithmetic as the primary, a rate is a count over a total, but now the count is refusals and the direction of "good" is flipped, because lower is better.
+
+```text
+  control   = 20/400 = 0.050
+  treatment = 40/400 = 0.100
+  change = 0.100 - 0.050 = +0.050  (+5.0 pp)
+```
+
+The old prompt refused 20 of 400 sessions, a 0.050 refusal rate. The new prompt refused 40 of 400, a 0.100 rate: it refuses **twice as often**. The change is +0.050, or **+5.0 percentage points** in the wrong direction. And now the guardrail earns its keep. Before the experiment we set an **allowed margin** for this metric of **+2 pp**: we are willing to tolerate a couple of points of refusal drift as the noise of shipping anything, but no more. A change of +5.0 pp blows straight through +2 pp:
+
+```text
+  allowed margin = +2 pp  ->  BREACHED
+```
+
+The guardrail is **breached**. Notice what just happened to our +8-point primary win. The new prompt did not resolve more issues by being uniformly smarter; a good chunk of its apparent gain came from refusing the hard cases outright. When the bot says "I can't help with that" and the session ends, it never gets a chance to fumble a real answer, so the resolution rate on the cases it does attempt looks cleaner. The guardrail exposed the mechanism the primary metric hid. This is the online-eval version of the lesson from Part 1, where accuracy lied under class imbalance: a single headline number, even a statistically significant one, can be right about the wrong thing.
+
+Whether the guardrail regression is itself statistically significant is a fair question (you could run the identical z-test on the two refusal rates), but it is beside the point of a guardrail. A guardrail is not a hypothesis test you are hoping to win; it is a hard line the product owner drew in advance. You do not get to argue a breach away with a p-value. The margin is the contract.
+
+## The verdict: necessary is not sufficient
+
+Now we combine the two answers into a shipping decision, and the rule is deliberately conjunctive: ship only if the primary is significant AND the guardrail is OK. Both must be true. Either one false blocks the release.
+
+```text
+VERDICT: ship only if primary is SIGNIFICANT and guardrail is OK.
+  primary significant? True   guardrail ok? False
+  -> DO NOT SHIP. The new prompt resolves more issues (a real,
+     significant +8 pp gain) but refuses twice as often, breaching
+     the guardrail. An offline win is necessary, not sufficient.
+```
+
+`primary significant? True` and `guardrail ok? False`, so the AND is false, so we **do not ship**. Sit with how counterintuitive that is for a moment. We have a real, statistically significant, +8-point improvement in the exact metric the experiment was designed to move, and we are throwing it away. That is not timidity; it is the whole discipline. The guardrail encodes a value the primary metric cannot see, that a chatbot which resolves more by refusing more is a worse product, and we agreed to honor that value before we knew which way the numbers would fall. If we let a significant primary override a breached guardrail, the guardrail was never real.
+
+This is also the capstone lesson of the whole series, made concrete. Parts 1 through 12 built an offline eval you can trust: a golden set, agreement, an LLM judge, confidence intervals, significance, calibration, a regression gate. All of it is **necessary**. None of it is **sufficient**. An offline eval, however rigorous, is measured on examples you chose, graded by a rubric you wrote, in a world that holds still. Production does not hold still. The only place to learn whether a change helps real users is on real users, and even there, the primary metric is not the last word: the guardrails you set are. Offline evals earn a change the right to be tested online; online primary metrics earn it the right to be tested against the guardrails; and only a change that clears all three ships.
+
+The interactive figure below lets you feel the conjunction. Drag the treatment's resolved and refused counts and watch the whole pipeline recompute live: the lift, the standard error, the z, the p-value flipping across the alpha line, and the guardrail flipping across its margin. Try to find a setting where the primary is significant and the guardrail holds; that is the only region where the verdict turns to SHIP, and it is smaller than your intuition expects.
+
+<IframeFigure src="/essays/online-evals/part13-interactive.html" title="Interactive online-eval explorer: fixed control counts (168 resolved and 20 refused of 400) beside adjustable treatment counts, with the resolution-rate lift, pooled rate, standard error, z statistic, two-sided p-value against alpha, and the refusal-rate guardrail against its margin all recomputing live, and a verdict banner that reads SHIP only when the primary is significant and the guardrail holds." height={860} />
+
+## Key takeaways
+
+- **Offline is necessary, online is the verdict.** Every score, CI, and gate from Parts 1 to 12 is measured on examples you picked and rubrics you wrote. The only test of whether a change helps real users is live traffic. An A/B test splits users into control and treatment and compares a business metric on each arm.
+- **Report lift in both units and label them.** The new prompt moved resolution from 0.420 to 0.500: an absolute lift of +0.080 (+8.0 pp) and a relative lift of +19.0%. Same fact, different units. Points are the difference between two percentages; percent is that difference relative to the baseline. Confusing them misleads.
+- **A two-proportion z-test is just counts, pooled and square-rooted.** Pool the arms into one rate (0.460), get the standard error under the null (0.03524), express the observed +0.080 gap in those units (z = 2.270), and read the two-sided tail (p = 0.0232). Below alpha = 0.05, so the lift is significant, not luck.
+- **Guardrails outrank the primary metric.** Refusal rate doubled, from 0.050 to 0.100, a +5.0 pp change against an allowed margin of +2 pp, so the guardrail is breached. A prompt can win its primary metric by cheating (refusing the hard cases), and the guardrail is the pre-committed line that catches it. You do not argue a breach away with a p-value.
+- **The ship rule is a conjunction: significant AND safe.** Here primary significant is True but guardrail ok is False, so the verdict is DO NOT SHIP, despite a real +8-point gain. Necessary is not sufficient. Offline evals earn the right to an online test; online primaries earn the right to face the guardrails; only a change that clears all three ships.
+
+## Glossary
+
+- **Online eval**: an evaluation run in production on live traffic, as opposed to an offline eval run on a fixed logged dataset. It measures the change where it actually operates, on real users, so it can catch effects an offline eval cannot see.
+- **A/B test**: an experiment that splits live users into a control arm (the existing version) and a treatment arm (the change) and compares a metric across the two. Here, one week of 400 + 400 sessions, split 50/50.
+- **Primary metric**: the single business-value metric the change is meant to improve, agreed on before the experiment. Here, resolution rate (fraction of sessions solved without escalation), higher is better.
+- **Guardrail metric**: a metric the change must not regress, protecting against a primary win achieved by cheating. Here, refusal rate, lower is better, with a pre-set allowed margin of +2 pp. A breach blocks the ship regardless of the primary.
+- **Absolute lift / relative lift**: the absolute lift is the plain difference of two rates (+0.080, read as +8.0 percentage points); the relative lift is that difference divided by the baseline (+19.0%). Same change, different units.
+- **Two-proportion z-test**: a significance test for the gap between two rates. Pool the arms to estimate the shared rate under the null, compute the standard error of the difference, form z = difference / SE, and convert to a p-value via the normal distribution.
+- **Pooled rate**: the single rate you get by combining both arms' successes over both arms' totals ((168+200)/(400+400) = 0.460). It is the null-hypothesis estimate of the common rate and feeds the standard error.
+- **Standard error (SE)**: the typical size of the difference between the two arms' rates if the null were true, here sqrt(p(1-p)(1/n_c + 1/n_t)) = 0.03524. It is the yardstick the observed gap is measured against.
+- **z statistic**: the observed difference expressed in standard errors, +0.080 / 0.03524 = 2.270. Larger magnitude means more surprising under the null.
+- **p-value**: the probability, if the null were true, of a gap at least as extreme as observed, in either direction (two-sided), here 0.0232. Compared against alpha.
+- **alpha**: the significance threshold fixed in advance, here 0.05. A p-value below alpha means the result is significant.
+
+---
+
+We can now judge a change on live traffic by a single primary metric and a guardrail. But some systems do not have a single final answer to score: an agent takes a whole sequence of steps to reach one, and a correct final answer can hide a reckless path. **Part 14, Agent-Trajectory Evals**, grades the path itself: trajectory-match scoring, step-level credit assignment, and a judge-graded rubric over a multi-step transcript with agreement measured.

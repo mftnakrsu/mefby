@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Is the Difference Real? McNemar and power explorer, Part 7</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.panel:last-child { margin-bottom: 0; }
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+/* ── SLIDERS ── */
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.ctrl label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--body);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ctrl-row { display: flex; align-items: center; gap: 10px; }
+input[type="range"] { flex: 1; min-width: 0; accent-color: var(--emerald); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+.ctrl-read {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  min-width: 48px;
+  text-align: center;
+}
+
+/* ── TABLE BOXES ── */
+.cell-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.cell-box {
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  padding: 12px 10px;
+  text-align: center;
+}
+.cell-box.concordant { background: var(--chip-bg); border-color: var(--border); }
+.cell-box.b-cell { background: var(--amber-bg); border-color: var(--amber-bd); }
+.cell-box.c-cell { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.cell-box .cnt { font-family: var(--font-mono); font-size: 26px; font-weight: 700; line-height: 1.1; }
+.cell-box.concordant .cnt { color: var(--muted); }
+.cell-box.b-cell .cnt { color: var(--amber-ink); }
+.cell-box.c-cell .cnt { color: var(--emerald-ink); }
+.cell-box .lbl { font-size: 10.5px; font-weight: 600; color: var(--muted); margin-top: 3px; }
+
+/* ── STAT ROWS ── */
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+.stat-formula { font-family: var(--font-mono); font-size: 11px; color: var(--faint); display: block; margin-top: 1px; }
+.stat-val { font-family: var(--font-mono); font-size: 19px; font-weight: 700; color: var(--emerald); white-space: nowrap; }
+.stat-val.warn { color: var(--rose-ink); }
+
+.verdict {
+  font-size: 12.5px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+  margin-top: 14px;
+}
+.verdict.sig { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.verdict.notsig { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.verdict strong { font-weight: 700; }
+
+/* ── PANEL B ── */
+.assume-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.assume-note code { font-family: var(--font-mono); background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+
+.size-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 4px 0 16px;
+}
+.big-stat {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+.big-stat.unp { background: var(--chip-bg); }
+.big-stat.pair { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.big-stat .k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.big-stat.pair .k { color: var(--emerald); }
+.big-stat .v { font-family: var(--font-mono); font-size: 30px; font-weight: 700; line-height: 1.1; margin-top: 4px; color: var(--ink); }
+.big-stat.pair .v { color: var(--emerald-ink); }
+.big-stat .sub { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+
+.scale-bars { margin-top: 4px; }
+.scale-row { margin-bottom: 10px; }
+.scale-label { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--body); margin-bottom: 4px; }
+.scale-label b { font-family: var(--font-mono); color: var(--ink); }
+.scale-track { height: 10px; background: var(--chip-bg); border-radius: 5px; overflow: hidden; border: 1px solid var(--border); }
+.scale-track > span { display: block; height: 100%; border-radius: 5px; transition: width 0.2s ease; }
+.scale-track.n > span { background: var(--faint); }
+.scale-track.unp > span { background: #d4d4d8; }
+.scale-track.pair > span { background: var(--emerald-br); }
+@media (prefers-reduced-motion: reduce) { .scale-track > span { transition: none; } }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL A ══════════════ -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <p class="eyebrow">McNemar, live</p>
+  <h2 id="panel-a-heading">Drag the discordant cells, watch the p-value</h2>
+  <p class="panel-subtitle">Two models graded on the same eval set. Only the items where they split (A right &amp; B wrong = b, B right &amp; A wrong = c) carry any signal; the rest are concordant and silent.</p>
+
+  <div class="hint">
+    <strong>Set b, c, and the eval-set size n.</strong> The concordant count (items both models agree on) fills in automatically as <code>n &minus; b &minus; c</code>.
+  </div>
+
+  <div class="controls">
+    <div class="ctrl">
+      <label for="b-slider">b &middot; A right, B wrong
+        <span class="ctrl-row"><input type="range" id="b-slider" min="0" max="12" step="1" value="4" /><span class="ctrl-read" id="b-read">4</span></span>
+      </label>
+    </div>
+    <div class="ctrl">
+      <label for="c-slider">c &middot; B right, A wrong
+        <span class="ctrl-row"><input type="range" id="c-slider" min="0" max="12" step="1" value="5" /><span class="ctrl-read" id="c-read">5</span></span>
+      </label>
+    </div>
+    <div class="ctrl">
+      <label for="n-slider">n &middot; total eval items
+        <span class="ctrl-row"><input type="range" id="n-slider" min="24" max="400" step="1" value="50" /><span class="ctrl-read" id="n-read">50</span></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="cell-row">
+    <div class="cell-box concordant">
+      <div class="cnt" id="concordant-cnt">41</div>
+      <div class="lbl">concordant &middot; silent</div>
+    </div>
+    <div class="cell-box b-cell">
+      <div class="cnt" id="b-cnt">4</div>
+      <div class="lbl">b &middot; A only</div>
+    </div>
+    <div class="cell-box c-cell">
+      <div class="cnt" id="c-cnt">5</div>
+      <div class="lbl">c &middot; B only</div>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div><div class="stat-name">Headline gap (B &minus; A)</div><span class="stat-formula" id="gap-f">(b&minus;c)/n</span></div>
+    <span class="stat-val" id="gap-val">+2.0 pts</span>
+  </div>
+  <div class="stat-row">
+    <div><div class="stat-name">chi-square, uncorrected</div><span class="stat-formula" id="chi-f">(b&minus;c)&sup2;/(b+c)</span></div>
+    <span class="stat-val" id="chi-val">0.111</span>
+  </div>
+  <div class="stat-row">
+    <div><div class="stat-name">chi-square, Yates corrected</div><span class="stat-formula" id="chiy-f">(|b&minus;c|&minus;1)&sup2;/(b+c)</span></div>
+    <span class="stat-val" id="chiy-val">0.000</span>
+  </div>
+  <div class="stat-row">
+    <div><div class="stat-name">approx p (chi-square, 1 df)</div><span class="stat-formula">erfc(&radic;(chi-square/2))</span></div>
+    <span class="stat-val" id="approxp-val">0.739</span>
+  </div>
+  <div class="stat-row">
+    <div><div class="stat-name">exact p (binomial, two-sided)</div><span class="stat-formula" id="exactp-f">2&middot;&Sigma;C(b+c,i) / 2^(b+c)</span></div>
+    <span class="stat-val" id="exactp-val">1.000</span>
+  </div>
+
+  <div class="verdict notsig" id="verdict-a">
+    <strong>NOT significant.</strong> p = 1.000 &#8811; 0.05. A 5-vs-4 split over 9 disagreements is exactly what a fair coin looks like.
+  </div>
+  <div class="sr-only" aria-live="polite" id="announcer-a"></div>
+</section>
+
+<!-- ══════════════ PANEL B ══════════════ -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <p class="eyebrow">How much data would it take?</p>
+  <h2 id="panel-b-heading">The set size a real gap needs, at 80% power</h2>
+  <p class="panel-subtitle">Same b, c, n from above. If the gap above were genuinely real, how many items would you need to catch it four times out of five?</p>
+
+  <div class="assume-note">
+    Baseline held fixed at <code>pA = 0.82</code> (Model A's true accuracy); <code>pB = pA + gap</code>. Target: <code>alpha = 0.05</code> (z = 1.96), <code>80% power</code> (z = 0.84), same as Part 7's worked example.
+  </div>
+
+  <div class="size-compare">
+    <div class="big-stat unp">
+      <div class="k">Unpaired, per model</div>
+      <div class="v" id="unpaired-val">5528</div>
+      <div class="sub">two independent evals</div>
+    </div>
+    <div class="big-stat pair">
+      <div class="k">Paired, total items</div>
+      <div class="v" id="paired-val">3515</div>
+      <div class="sub" id="paired-sub">633 discordant pairs needed</div>
+    </div>
+  </div>
+
+  <div class="scale-bars">
+    <div class="scale-row">
+      <div class="scale-label"><span>Your current eval (n)</span><b id="scale-n-lbl">50</b></div>
+      <div class="scale-track n"><span id="scale-n-bar" style="width:1%"></span></div>
+    </div>
+    <div class="scale-row">
+      <div class="scale-label"><span>Unpaired items needed</span><b id="scale-unp-lbl">5528</b></div>
+      <div class="scale-track unp"><span id="scale-unp-bar" style="width:100%"></span></div>
+    </div>
+    <div class="scale-row">
+      <div class="scale-label"><span>Paired items needed</span><b id="scale-pair-lbl">3515</b></div>
+      <div class="scale-track pair"><span id="scale-pair-bar" style="width:64%"></span></div>
+    </div>
+  </div>
+
+  <div class="verdict notsig" id="verdict-b">
+    Your 50-item set is about <strong>70&times;</strong> smaller than the ~3515 items a paired eval would need to reliably catch a +2.0 point gain. Pairing helps (3515 &lt; 5528), but a small eval simply cannot resolve a small gap.
+  </div>
+  <div class="sr-only" aria-live="polite" id="announcer-b"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── math helpers, mirror significance.py exactly ── */
+  function erf(x) {
+    var sign = x < 0 ? -1 : 1;
+    x = Math.abs(x);
+    var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
+        a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+    var t = 1 / (1 + p * x);
+    var y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    return sign * y;
+  }
+  function erfc(x) { return 1 - erf(x); }
+
+  function comb(n, k) {
+    if (k < 0 || k > n) return 0;
+    k = Math.min(k, n - k);
+    var res = 1;
+    for (var i = 0; i < k; i++) res = res * (n - i) / (i + 1);
+    return Math.round(res);
+  }
+
+  function exactP(b, c) {
+    var m = b + c;
+    if (m === 0) return 1;
+    var k = Math.min(b, c);
+    var sum = 0;
+    for (var i = 0; i <= k; i++) sum += comb(m, i);
+    return Math.min(1, 2 * sum / Math.pow(2, m));
+  }
+
+  function fmt3(x) { return x.toFixed(3); }
+  function fmt1(x) { return x.toFixed(1); }
+  function intFmt(x) { return Math.round(x).toLocaleString("en-US"); }
+
+  var bSlider = document.getElementById("b-slider");
+  var cSlider = document.getElementById("c-slider");
+  var nSlider = document.getElementById("n-slider");
+
+  var ZA = 1.96, ZB = 0.84;
+  var PA_BASELINE = 0.82;
+
+  function clampSliders() {
+    var b = parseInt(bSlider.value, 10);
+    var c = parseInt(cSlider.value, 10);
+    var n = parseInt(nSlider.value, 10);
+    var minN = b + c + 2; // keep at least 2 concordant items so the picture stays legible
+    if (parseInt(nSlider.min, 10) !== minN) {
+      nSlider.min = String(minN);
+    }
+    if (n < minN) {
+      n = minN;
+      nSlider.value = String(n);
+    }
+    return { b: b, c: c, n: n };
+  }
+
+  function render() {
+    var s = clampSliders();
+    var b = s.b, c = s.c, n = s.n;
+    var concordant = n - b - c;
+
+    document.getElementById("b-read").textContent = b;
+    document.getElementById("c-read").textContent = c;
+    document.getElementById("n-read").textContent = n;
+    document.getElementById("concordant-cnt").textContent = concordant;
+    document.getElementById("b-cnt").textContent = b;
+    document.getElementById("c-cnt").textContent = c;
+
+    /* ── Panel A: McNemar ── */
+    var m = b + c;
+    var chiUnc = m > 0 ? Math.pow(b - c, 2) / m : 0;
+    var chiYates = m > 0 ? Math.pow(Math.max(0, Math.abs(b - c) - 1), 2) / m : 0;
+    var approxP = Math.min(1, erfc(Math.sqrt(chiUnc / 2)));
+    var exP = exactP(b, c);
+
+    var gap = (b - c) / n; // Model B minus Model A, as a fraction
+    var gapPts = gap * 100;
+
+    document.getElementById("gap-val").textContent = (gapPts >= 0 ? "+" : "") + fmt1(gapPts) + " pts";
+    document.getElementById("gap-f").textContent = "(b−c)/n = (" + b + "−" + c + ")/" + n;
+    document.getElementById("chi-val").textContent = fmt3(chiUnc);
+    document.getElementById("chi-f").textContent = "(b−c)²/(b+c) = (" + b + "−" + c + ")²/" + m;
+    document.getElementById("chiy-val").textContent = fmt3(chiYates);
+    document.getElementById("chiy-f").textContent = "(|b−c|−1)²/(b+c)";
+    document.getElementById("approxp-val").textContent = m > 0 ? fmt3(approxP) : "-";
+    document.getElementById("exactp-val").textContent = fmt3(exP);
+    document.getElementById("exactp-f").textContent = "2·ΣC(" + m + ",i) / 2^" + m;
+
+    var vA = document.getElementById("verdict-a");
+    var sig = exP < 0.05;
+    vA.className = "verdict " + (sig ? "sig" : "notsig");
+    if (m === 0) {
+      vA.innerHTML = "<strong>No disagreements.</strong> With b = c = 0 every item is concordant, so there is nothing for McNemar's test to weigh.";
+    } else if (sig) {
+      vA.innerHTML = "<strong>Significant.</strong> p = " + fmt3(exP) + " &lt; 0.05. A " + Math.max(b, c) + "-vs-" + Math.min(b, c) + " split over " + m + " disagreements is unlikely from a fair coin alone.";
+    } else {
+      vA.innerHTML = "<strong>NOT significant.</strong> p = " + fmt3(exP) + " ≥ 0.05. A " + b + "-vs-" + c + " split over " + m + " disagreement" + (m === 1 ? "" : "s") + " is well within what a fair coin produces.";
+    }
+
+    document.getElementById("announcer-a").textContent =
+      "b " + b + ", c " + c + ", n " + n + ". Chi-square " + fmt3(chiUnc) +
+      ", exact p " + fmt3(exP) + ", " + (sig ? "significant" : "not significant") + ".";
+
+    /* ── Panel B: sample size for 80% power ── */
+    var pA = PA_BASELINE;
+    var delta = Math.abs(gap);
+    var pB = Math.min(1, Math.max(0, pA + (gap >= 0 ? delta : -delta)));
+    // keep pB on the "B ahead" side for the demo, mirroring the essay's pA=0.82, pB=0.84
+    pB = Math.min(0.999, Math.max(0.001, pA + delta));
+
+    var unpairedN, pairedDiscordant, pairedTotal;
+    if (delta === 0) {
+      unpairedN = Infinity;
+      pairedDiscordant = Infinity;
+      pairedTotal = Infinity;
+    } else {
+      var variance = pA * (1 - pA) + pB * (1 - pB);
+      unpairedN = Math.ceil(Math.pow(ZA + ZB, 2) * variance / Math.pow(delta, 2));
+
+      var psi = m / n; // discordant fraction, straight from the slider state
+      if (psi === 0) {
+        pairedDiscordant = Infinity;
+        pairedTotal = Infinity;
+      } else {
+        var pDisc = Math.min(0.999, Math.max(0.001, 0.5 + delta / (2 * psi)));
+        var numer = Math.pow(ZA * Math.sqrt(0.25) + ZB * Math.sqrt(pDisc * (1 - pDisc)), 2);
+        var denom = Math.pow(pDisc - 0.5, 2);
+        var pairedDiscordantRaw = denom > 0 ? numer / denom : Infinity;
+        pairedDiscordant = Math.ceil(pairedDiscordantRaw);
+        // divide the UNROUNDED discordant count by psi, then ceil once, so this
+        // matches the worked example (633 pairs, 3515 items) instead of drifting
+        // from rounding twice.
+        pairedTotal = isFinite(pairedDiscordantRaw) ? Math.ceil(pairedDiscordantRaw / psi) : Infinity;
+      }
+    }
+
+    var unpairedDisp = isFinite(unpairedN) ? intFmt(unpairedN) : "-";
+    var pairedDisp = isFinite(pairedTotal) ? intFmt(pairedTotal) : "-";
+    var pairedSubDisp = isFinite(pairedDiscordant) ? intFmt(pairedDiscordant) + " discordant pairs needed" : "gap is zero, undefined";
+
+    document.getElementById("unpaired-val").textContent = unpairedDisp;
+    document.getElementById("paired-val").textContent = pairedDisp;
+    document.getElementById("paired-sub").textContent = pairedSubDisp;
+
+    document.getElementById("scale-n-lbl").textContent = intFmt(n);
+    document.getElementById("scale-unp-lbl").textContent = unpairedDisp;
+    document.getElementById("scale-pair-lbl").textContent = pairedDisp;
+
+    var ceiling = Math.max(n, isFinite(unpairedN) ? unpairedN : n, isFinite(pairedTotal) ? pairedTotal : n, 1);
+    document.getElementById("scale-n-bar").style.width = Math.max(1, (n / ceiling) * 100) + "%";
+    document.getElementById("scale-unp-bar").style.width = (isFinite(unpairedN) ? Math.max(1, (unpairedN / ceiling) * 100) : 1) + "%";
+    document.getElementById("scale-pair-bar").style.width = (isFinite(pairedTotal) ? Math.max(1, (pairedTotal / ceiling) * 100) : 1) + "%";
+
+    var vB = document.getElementById("verdict-b");
+    if (delta === 0) {
+      vB.className = "verdict notsig";
+      vB.innerHTML = "With b = c the observed gap is <strong>0.0 pts</strong>, so there is no effect to detect and the required sample size is undefined.";
+    } else {
+      var ratio = n > 0 && isFinite(pairedTotal) ? pairedTotal / n : 0;
+      vB.className = "verdict " + (n >= pairedTotal ? "sig" : "notsig");
+      if (n >= pairedTotal) {
+        vB.innerHTML = "Your " + intFmt(n) + "-item set already meets or beats the ~" + pairedDisp + " items a paired eval needs for 80% power on a " + fmt1(delta * 100) + " point gap.";
+      } else {
+        vB.innerHTML = "Your " + intFmt(n) + "-item set is about <strong>" + fmt1(ratio) + "×</strong> smaller than the ~" + pairedDisp + " items a paired eval would need to reliably catch a " + (gapPts >= 0 ? "+" : "") + fmt1(gapPts) + " point gain. Pairing helps (" + pairedDisp + " < " + unpairedDisp + "), but a small eval simply cannot resolve a small gap.";
+      }
+    }
+
+    document.getElementById("announcer-b").textContent =
+      "Unpaired sample size " + unpairedDisp + " per model. Paired sample size " + pairedDisp + " items total.";
+  }
+
+  bSlider.addEventListener("input", render);
+  cSlider.addEventListener("input", render);
+  nSlider.addEventListener("input", render);
+
+  render();
+})();
+</script>
+</body>
+</html>

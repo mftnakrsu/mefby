@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent-Trajectory Evals: grade the path, not just the answer, Part 14</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+.hint code {
+  font-family: var(--font-mono);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+/* ── RUN PICKER ── */
+.run-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.run-btn {
+  text-align: left;
+  border: 1.5px solid var(--border);
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s, background 0.12s;
+}
+.run-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(24,24,27,0.07); }
+.run-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+@media (prefers-reduced-motion: reduce) {
+  .run-btn { transition: none; }
+  .run-btn:hover { transform: none; }
+}
+.run-btn.active { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.run-id { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--emerald); display: block; }
+.run-traj { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); display: block; margin-top: 2px; line-height: 1.4; }
+.run-btn.active .run-traj { color: var(--emerald-ink); }
+
+/* ── TOOL BUTTONS (build your own) ── */
+.tool-btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tool-btn {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--emerald-bd);
+  background: var(--emerald-bg);
+  color: var(--emerald-ink);
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.tool-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(5,150,105,0.15); }
+.tool-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+.tool-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .tool-btn { transition: none; } }
+.util-btn {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  color: var(--body);
+  cursor: pointer;
+  outline: none;
+}
+.util-btn:hover:not(:disabled) { background: var(--chip-bg); }
+.util-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+.util-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── TRAJECTORY DISPLAY ── */
+.traj-block { margin-bottom: 8px; }
+.traj-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--faint); margin-bottom: 6px;
+}
+.traj-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.step-chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  color: var(--body);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.step-chip .n { color: var(--faint); font-weight: 700; }
+.step-chip.match { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.step-chip.extra { background: var(--amber-bg); border-color: var(--amber-bd); color: var(--amber-ink); }
+.step-chip.missing { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); border-style: dashed; }
+.step-chip .tag {
+  font-family: var(--font-sans);
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 1px 5px; border-radius: 5px; color: #fff;
+}
+.step-chip.match .tag { background: var(--emerald); }
+.step-chip.extra .tag { background: var(--amber); }
+.step-chip.missing .tag { background: var(--rose); }
+.traj-empty { font-size: 12px; color: var(--faint); font-style: italic; padding: 6px 2px; }
+
+/* ── METRICS ROW ── */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+@media (max-width: 620px) {
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.metric-card {
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  padding: 12px;
+}
+.metric-name { font-size: 11.5px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.metric-val { font-family: var(--font-mono); font-size: 26px; font-weight: 700; color: var(--emerald); line-height: 1; }
+.metric-formula { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 6px; min-height: 26px; line-height: 1.4; }
+.meter { height: 6px; background: var(--chip-bg); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+.meter > span {
+  display: block; height: 100%;
+  background: var(--emerald-br);
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+@media (prefers-reduced-motion: reduce) { .meter > span { transition: none; } }
+
+/* ── PANEL B: kappa ── */
+.kappa-table { width: 100%; border-collapse: separate; border-spacing: 0 6px; margin-bottom: 16px; }
+.kappa-table th {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--faint); text-align: left; padding: 0 8px 4px;
+}
+.kappa-table td { padding: 6px 8px; background: #fff; border-top: 1.5px solid var(--border); border-bottom: 1.5px solid var(--border); }
+.kappa-table td:first-child { border-left: 1.5px solid var(--border); border-radius: 9px 0 0 9px; }
+.kappa-table td:last-child { border-right: 1.5px solid var(--border); border-radius: 0 9px 9px 0; }
+.run-name { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--body); }
+.grade-btn {
+  font-family: var(--font-mono);
+  font-size: 11px; font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1.5px solid var(--border);
+  background: var(--chip-bg);
+  color: var(--muted);
+  cursor: pointer;
+  outline: none;
+  min-width: 56px;
+}
+.grade-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+.grade-btn.pass { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.grade-btn.fail { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.agree-mark { font-size: 13px; text-align: center; }
+.agree-mark.yes { color: var(--emerald); }
+.agree-mark.no { color: var(--rose); font-weight: 700; }
+
+.kappa-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+@media (max-width: 560px) {
+  .kappa-summary { grid-template-columns: 1fr; }
+}
+.k-stat {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  background: #fff;
+}
+.k-stat .k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.k-stat .v { font-family: var(--font-mono); font-size: 30px; font-weight: 700; color: var(--ink); margin-top: 4px; line-height: 1.1; }
+.k-stat.kappa { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.k-stat.kappa .v { color: var(--emerald-ink); }
+
+.verdict {
+  font-size: 13px;
+  border-radius: 8px;
+  padding: 11px 13px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+  background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink);
+}
+.verdict strong { color: var(--emerald); }
+
+.reset-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s;
+  margin-bottom: 14px;
+}
+.reset-btn:hover { background: var(--chip-bg); }
+.reset-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL A ══════════════ -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <p class="eyebrow">Grade by hand</p>
+  <h2 id="panel-a-heading">Eight agent runs, four ways to score the path</h2>
+  <p class="panel-subtitle">The reference trajectory is <code style="font-family:var(--font-mono)">search &#8594; open &#8594; convert &#8594; answer</code>. Pick a run and watch exact-match, order-aware, set-overlap, and step credit update.</p>
+
+  <div class="hint">
+    <strong>Click a run</strong> to load a preset, or <strong>build your own</strong> with the tool buttons below. Each candidate step is labelled <code>MATCH</code> or <code>EXTRA</code>; any reference step the run never took is labelled <code>MISSING</code>.
+  </div>
+
+  <div class="run-grid" id="run-grid" role="group" aria-label="Eight agent runs, click to load as the candidate trajectory"></div>
+
+  <div class="traj-block">
+    <p class="traj-label">Reference</p>
+    <div class="traj-row" id="ref-row"></div>
+  </div>
+  <div class="traj-block">
+    <p class="traj-label">Candidate trajectory, step by step</p>
+    <div class="traj-row" id="cand-row"></div>
+  </div>
+
+  <div class="traj-block">
+    <p class="traj-label">Build your own: append a step</p>
+    <div class="tool-btn-row" id="tool-btn-row"></div>
+  </div>
+
+  <div class="metric-grid">
+    <div class="metric-card">
+      <div class="metric-name">Exact-match</div>
+      <div class="metric-val" id="m-exact">0.00</div>
+      <div class="metric-formula" id="m-exact-f"></div>
+      <div class="meter"><span id="m-exact-bar" style="width:0%"></span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-name">Order-aware</div>
+      <div class="metric-val" id="m-order">0.00</div>
+      <div class="metric-formula" id="m-order-f"></div>
+      <div class="meter"><span id="m-order-bar" style="width:0%"></span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-name">Set-overlap</div>
+      <div class="metric-val" id="m-set">0.00</div>
+      <div class="metric-formula" id="m-set-f"></div>
+      <div class="meter"><span id="m-set-bar" style="width:0%"></span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-name">Step credit</div>
+      <div class="metric-val" id="m-credit">0.00</div>
+      <div class="metric-formula" id="m-credit-f"></div>
+      <div class="meter"><span id="m-credit-bar" style="width:0%"></span></div>
+    </div>
+  </div>
+  <div class="sr-only" aria-live="polite" id="announcer-a"></div>
+</section>
+
+<!-- ══════════════ PANEL B ══════════════ -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <p class="eyebrow">Chance-correct the agreement</p>
+  <h2 id="panel-b-heading">Mock judge vs. human: toggle a grade, watch kappa move</h2>
+  <p class="panel-subtitle">Each run got a PASS/FAIL rubric grade from a lenient mock judge and from a human. Click any grade to flip it and see the 2&#215;2 table, observed agreement po, chance agreement pe, and Cohen's kappa recompute live.</p>
+
+  <button class="reset-btn" id="reset-btn" type="button">Reset to the original grades</button>
+
+  <table class="kappa-table" aria-label="Judge and human grades per run">
+    <thead>
+      <tr><th>Run</th><th>Human</th><th>Judge</th><th>Agree?</th></tr>
+    </thead>
+    <tbody id="kappa-body"></tbody>
+  </table>
+
+  <div class="kappa-summary">
+    <div class="k-stat">
+      <div class="k">Observed po</div>
+      <div class="v" id="po-val">0.00</div>
+    </div>
+    <div class="k-stat">
+      <div class="k">Chance pe</div>
+      <div class="v" id="pe-val">0.00</div>
+    </div>
+    <div class="k-stat kappa">
+      <div class="k">Cohen&#8217;s kappa</div>
+      <div class="v" id="kappa-val">0.00</div>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+  <div class="sr-only" aria-live="polite" id="announcer-b"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── trajectory scoring core, mirrors trajectory_evals.py ── */
+  function lcsBacktrack(a, b) {
+    var m = a.length, n = b.length;
+    var dp = [];
+    for (var i = 0; i <= m; i++) dp.push(new Array(n + 1).fill(0));
+    for (i = 1; i <= m; i++) {
+      for (var j = 1; j <= n; j++) {
+        if (a[i - 1] === b[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
+        else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+    i = m; var jj = n;
+    var matchedA = new Array(m).fill(false);
+    var matchedB = new Array(n).fill(false);
+    while (i > 0 && jj > 0) {
+      if (a[i - 1] === b[jj - 1]) { matchedA[i - 1] = true; matchedB[jj - 1] = true; i--; jj--; }
+      else if (dp[i - 1][jj] >= dp[i][jj - 1]) { i--; }
+      else { jj--; }
+    }
+    return { lcs: dp[m][n], matchedA: matchedA, matchedB: matchedB };
+  }
+  function exactMatch(a, b) { return a.join("|") === b.join("|") ? 1 : 0; }
+  function orderAware(a, b) { return lcsBacktrack(a, b).lcs / b.length; }
+  function setOverlap(a, b) {
+    var sa = uniq(a), sb = uniq(b);
+    var inter = sa.filter(function (x) { return sb.indexOf(x) !== -1; }).length;
+    var union = uniq(a.concat(b)).length;
+    return inter / union;
+  }
+  function uniq(arr) {
+    var out = [];
+    arr.forEach(function (x) { if (out.indexOf(x) === -1) out.push(x); });
+    return out;
+  }
+  function stepCredit(a, b) {
+    var r = lcsBacktrack(a, b);
+    var correct = r.lcs, missing = b.length - r.lcs, extra = a.length - r.lcs;
+    return { credit: correct / (correct + missing + extra), correct: correct, missing: missing, extra: extra };
+  }
+  function labeledSteps(a, b) {
+    var r = lcsBacktrack(a, b);
+    var steps = a.map(function (tool, idx) { return { tool: tool, label: r.matchedA[idx] ? "MATCH" : "EXTRA" }; });
+    var missing = b.filter(function (tool, idx) { return !r.matchedB[idx]; });
+    return { steps: steps, missing: missing };
+  }
+  function fmt(x) { return x.toFixed(2); }
+
+  /* ══════════════ PANEL A ══════════════ */
+  var REF = ["search", "open", "convert", "answer"];
+  var RUNS = [
+    { id: "R1", cand: ["search", "open", "convert", "answer"] },
+    { id: "R2", cand: ["open", "search", "convert", "answer"] },
+    { id: "R3", cand: ["search", "open", "search", "answer"] },
+    { id: "R4", cand: ["search", "open", "convert", "convert", "answer"] },
+    { id: "R5", cand: ["search", "answer"] },
+    { id: "R6", cand: ["search", "open", "convert", "answer", "answer"] },
+    { id: "R7", cand: ["search", "search", "open", "convert", "answer"] },
+    { id: "R8", cand: ["answer"] }
+  ];
+  var MAX_STEPS = 8;
+  var current = RUNS[1].cand.slice(); /* default: R2, the section-1 worked example */
+
+  var runGrid = document.getElementById("run-grid");
+  RUNS.forEach(function (run, idx) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "run-btn";
+    btn.setAttribute("data-idx", idx);
+    btn.innerHTML = '<span class="run-id">' + run.id + '</span><span class="run-traj">' + run.cand.join(" &#8594; ") + '</span>';
+    btn.addEventListener("click", function () { current = run.cand.slice(); renderA(); });
+    runGrid.appendChild(btn);
+  });
+
+  var refRow = document.getElementById("ref-row");
+  REF.forEach(function (tool, idx) {
+    var chip = document.createElement("span");
+    chip.className = "step-chip";
+    chip.innerHTML = '<span class="n">' + (idx + 1) + '</span>' + tool;
+    refRow.appendChild(chip);
+  });
+
+  var toolBtnRow = document.getElementById("tool-btn-row");
+  REF.forEach(function (tool) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tool-btn";
+    btn.textContent = "+ " + tool;
+    btn.addEventListener("click", function () {
+      if (current.length >= MAX_STEPS) return;
+      current.push(tool);
+      renderA();
+    });
+    toolBtnRow.appendChild(btn);
+  });
+  var undoBtn = document.createElement("button");
+  undoBtn.type = "button";
+  undoBtn.className = "util-btn";
+  undoBtn.textContent = "undo last step";
+  undoBtn.addEventListener("click", function () { current.pop(); renderA(); });
+  toolBtnRow.appendChild(undoBtn);
+  var clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "util-btn";
+  clearBtn.textContent = "clear";
+  clearBtn.addEventListener("click", function () { current = []; renderA(); });
+  toolBtnRow.appendChild(clearBtn);
+
+  function renderA() {
+    var buttons = runGrid.querySelectorAll(".run-btn");
+    var candKey = current.join("|");
+    buttons.forEach(function (b, idx) {
+      b.classList.toggle("active", RUNS[idx].cand.join("|") === candKey);
+    });
+    undoBtn.disabled = current.length === 0;
+    clearBtn.disabled = current.length === 0;
+    var toolBtns = toolBtnRow.querySelectorAll(".tool-btn");
+    toolBtns.forEach(function (b) { b.disabled = current.length >= MAX_STEPS; });
+
+    var cand = current;
+    var candRow = document.getElementById("cand-row");
+    if (cand.length === 0) {
+      candRow.innerHTML = '<span class="traj-empty">No steps yet. Pick a run or append a tool below.</span>';
+      ["m-exact", "m-order", "m-set", "m-credit"].forEach(function (k) { setMetric(k, 0, "no steps yet"); });
+      document.getElementById("announcer-a").textContent = "Candidate trajectory is empty.";
+      return;
+    }
+    var ex = exactMatch(cand, REF);
+    var lcsLen = lcsBacktrack(cand, REF).lcs;
+    var ord = orderAware(cand, REF);
+    var so = setOverlap(cand, REF);
+    var sc = stepCredit(cand, REF);
+    var lab = labeledSteps(cand, REF);
+
+    candRow.innerHTML = "";
+    lab.steps.forEach(function (s, idx) {
+      var chip = document.createElement("span");
+      chip.className = "step-chip " + (s.label === "MATCH" ? "match" : "extra");
+      chip.innerHTML = '<span class="n">' + (idx + 1) + '</span>' + s.tool + '<span class="tag">' + s.label + '</span>';
+      candRow.appendChild(chip);
+    });
+    lab.missing.forEach(function (tool) {
+      var chip = document.createElement("span");
+      chip.className = "step-chip missing";
+      chip.innerHTML = '<span class="n">ref</span>' + tool + '<span class="tag">MISSING</span>';
+      candRow.appendChild(chip);
+    });
+
+    setMetric("m-exact", ex, "cand == ref ? &#8594; " + (ex === 1 ? "True" : "False"));
+    setMetric("m-order", ord, "LCS=" + lcsLen + " / len(ref)=" + REF.length);
+    setMetric("m-set", so, "|&#8745;|=" + uniq(cand.filter(function (x) { return uniq(REF).indexOf(x) !== -1; })).length + " / |&#8746;|=" + uniq(cand.concat(REF)).length);
+    setMetric("m-credit", sc.credit, sc.correct + "/(" + sc.correct + "+" + sc.missing + "+" + sc.extra + ")");
+
+    document.getElementById("announcer-a").textContent =
+      "Candidate " + cand.join(" then ") + ". Exact " + fmt(ex) + ", order-aware " + fmt(ord) +
+      ", set-overlap " + fmt(so) + ", step credit " + fmt(sc.credit) + ".";
+  }
+
+  function setMetric(key, val, formula) {
+    document.getElementById(key).textContent = fmt(val);
+    document.getElementById(key + "-f").innerHTML = formula;
+    document.getElementById(key + "-bar").style.width = (val * 100) + "%";
+  }
+
+  renderA();
+
+  /* ══════════════ PANEL B ══════════════ */
+  var DEFAULT_GRADES = [
+    { id: "R1", human: "PASS", judge: "PASS" },
+    { id: "R2", human: "FAIL", judge: "PASS" },
+    { id: "R3", human: "FAIL", judge: "PASS" },
+    { id: "R4", human: "PASS", judge: "PASS" },
+    { id: "R5", human: "FAIL", judge: "FAIL" },
+    { id: "R6", human: "PASS", judge: "PASS" },
+    { id: "R7", human: "PASS", judge: "PASS" },
+    { id: "R8", human: "FAIL", judge: "FAIL" }
+  ];
+  var grades = DEFAULT_GRADES.map(function (g) { return { id: g.id, human: g.human, judge: g.judge }; });
+
+  var kappaBody = document.getElementById("kappa-body");
+
+  function buildKappaTable() {
+    kappaBody.innerHTML = "";
+    grades.forEach(function (g, idx) {
+      var tr = document.createElement("tr");
+      var tdRun = document.createElement("td");
+      tdRun.innerHTML = '<span class="run-name">' + g.id + '</span>';
+      var tdHuman = document.createElement("td");
+      var humanBtn = document.createElement("button");
+      humanBtn.type = "button";
+      humanBtn.className = "grade-btn";
+      humanBtn.setAttribute("data-role", "human");
+      humanBtn.setAttribute("data-idx", idx);
+      humanBtn.addEventListener("click", function () {
+        grades[idx].human = grades[idx].human === "PASS" ? "FAIL" : "PASS";
+        renderB();
+      });
+      tdHuman.appendChild(humanBtn);
+      var tdJudge = document.createElement("td");
+      var judgeBtn = document.createElement("button");
+      judgeBtn.type = "button";
+      judgeBtn.className = "grade-btn";
+      judgeBtn.setAttribute("data-role", "judge");
+      judgeBtn.setAttribute("data-idx", idx);
+      judgeBtn.addEventListener("click", function () {
+        grades[idx].judge = grades[idx].judge === "PASS" ? "FAIL" : "PASS";
+        renderB();
+      });
+      tdJudge.appendChild(judgeBtn);
+      var tdAgree = document.createElement("td");
+      tdAgree.className = "agree-mark";
+      tr.appendChild(tdRun);
+      tr.appendChild(tdHuman);
+      tr.appendChild(tdJudge);
+      tr.appendChild(tdAgree);
+      kappaBody.appendChild(tr);
+    });
+  }
+
+  function cohenKappa(items) {
+    var a = 0, b = 0, c = 0, d = 0;
+    items.forEach(function (g) {
+      if (g.judge === "PASS" && g.human === "PASS") a++;
+      else if (g.judge === "PASS" && g.human === "FAIL") b++;
+      else if (g.judge === "FAIL" && g.human === "PASS") c++;
+      else d++;
+    });
+    var n = a + b + c + d;
+    var po = (a + d) / n;
+    var pJudgePass = (a + b) / n, pJudgeFail = (c + d) / n;
+    var pHumanPass = (a + c) / n, pHumanFail = (b + d) / n;
+    var pe = pJudgePass * pHumanPass + pJudgeFail * pHumanFail;
+    var kappa = pe === 1 ? 1 : (po - pe) / (1 - pe);
+    return { a: a, b: b, c: c, d: d, po: po, pe: pe, kappa: kappa };
+  }
+
+  function kappaLabel(k) {
+    if (k < 0) return "poor";
+    if (k <= 0.20) return "slight";
+    if (k <= 0.40) return "fair";
+    if (k <= 0.60) return "moderate";
+    if (k <= 0.80) return "substantial";
+    return "almost perfect";
+  }
+
+  function renderB() {
+    var rows = kappaBody.querySelectorAll("tr");
+    grades.forEach(function (g, idx) {
+      var row = rows[idx];
+      var humanBtn = row.querySelector('[data-role="human"]');
+      var judgeBtn = row.querySelector('[data-role="judge"]');
+      humanBtn.textContent = g.human;
+      humanBtn.className = "grade-btn " + (g.human === "PASS" ? "pass" : "fail");
+      judgeBtn.textContent = g.judge;
+      judgeBtn.className = "grade-btn " + (g.judge === "PASS" ? "pass" : "fail");
+      var agreeCell = row.querySelector(".agree-mark");
+      var agree = g.human === g.judge;
+      agreeCell.textContent = agree ? "yes" : "NO";
+      agreeCell.className = "agree-mark " + (agree ? "yes" : "no");
+    });
+
+    var k = cohenKappa(grades);
+    document.getElementById("po-val").textContent = fmt(k.po);
+    document.getElementById("pe-val").textContent = fmt(k.pe);
+    document.getElementById("kappa-val").textContent = fmt(k.kappa);
+
+    var disagreements = grades.filter(function (g) { return g.human !== g.judge; }).map(function (g) { return g.id; });
+    var v = document.getElementById("verdict");
+    var label = kappaLabel(k.kappa);
+    if (disagreements.length === 0) {
+      v.innerHTML = "Judge and human agree on <strong>every run</strong>. po = " + fmt(k.po) + ", pe = " + fmt(k.pe) + ", kappa = <strong>" + fmt(k.kappa) + "</strong> (" + label + ").";
+    } else {
+      v.innerHTML = "Judge and human agree " + Math.round(k.po * 100) + "% of the time (po = " + fmt(k.po) + "), chance alone would hit pe = " + fmt(k.pe) + ", so kappa = <strong>" + fmt(k.kappa) + "</strong> (" + label + "). Disagreements: " + disagreements.join(", ") + ".";
+    }
+
+    document.getElementById("announcer-b").textContent =
+      "po " + fmt(k.po) + ", pe " + fmt(k.pe) + ", kappa " + fmt(k.kappa) + ", " + label + ". Disagreements: " + (disagreements.length ? disagreements.join(", ") : "none") + ".";
+  }
+
+  document.getElementById("reset-btn").addEventListener("click", function () {
+    grades = DEFAULT_GRADES.map(function (g) { return { id: g.id, human: g.human, judge: g.judge }; });
+    renderB();
+  });
+
+  buildKappaTable();
+  renderB();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+---
+title: "Calibration"
+description: "A confidence is a promise: of the answers a model tags 80% sure, about 80% should be right. Part 10 scores the same ten trivia confidences twice, once for an over-confident model and once for a well-calibrated one, builds the reliability curve by hand across three bins, and reduces the whole picture to ECE and the Brier score."
+date: 2026-07-23
+tags: ["Evals", "LLM", "AI", "Calibration", "ECE", "Brier"]
+seriesOrder: 10
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-10-calibration"
+lang: "en"
+translationSlug: "calibration-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 9 turned pairwise battles into a single ranking, so we can now say which model is better. This part asks a different question about a single model: when it tells you how sure it is, should you believe it? Modern models do not just answer, they often attach a **confidence**, a number like 0.8 that claims "I am 80% sure." That number is a promise, and the whole point of **calibration** is to check whether the promise is kept. A well-calibrated model that says 0.8 on a hundred questions should get about eighty of them right. An over-confident model says 0.8 and gets forty right, and a confidence you cannot trust is worse than no confidence at all, because it invites you to act on a certainty that was never there.
+
+We will make this concrete and small. A trivia model answers ten questions. For each one it states a confidence between 0.6 and 1.0, and afterward we learn whether it was actually right. We will take those ten confidences and score them twice, against two different sets of outcomes: an **over-confident** model whose results do not track its stated confidence, and a **well-calibrated** model whose results do. Same confidences both times, only the outcomes differ, which is exactly the point: calibration is not about the numbers a model says, it is about whether reality lives up to them. We will group the predictions into three confidence bins, build the **reliability curve** (mean confidence versus actual accuracy in each bin) by hand, and then reduce the whole curve to two headline numbers: the **Expected Calibration Error (ECE)** and the **Brier score**. By the end you will be able to look at a confident-sounding model and say, with an actual number, whether its confidence means anything.
+
+## Prerequisites
+
+You need basic Python: a list, a loop, a division, and squaring a number. No probability theory is assumed; we build every idea from counting and averaging, exactly as in the earlier parts. This part is fully self-contained and does not depend on Part 9 or any other. The companion file, [calibration.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-10-calibration), runs offline with no API key, no network, and no dependencies (it does not even need NumPy), so you can read every line and reproduce every number here yourself. Every figure in prose below is that file's printed output, unrounded and unedited.
+
+## A confidence is a promise
+
+Accuracy, the metric we started the series with, throws away something the model told us. When a model answers a trivia question, it can also report how sure it is, and two models with the same accuracy can be very different animals: one is quietly right, hedging when it should hedge, and the other bluffs at 0.99 on everything and happens to land 40% of them. Accuracy scores them the same. Calibration is the tool that pulls them apart.
+
+Here is the data, ten answers, straight from the companion file. `CONF[i]` is the confidence the model stated on question `i`. We will use the exact same confidences for both models:
+
+```python
+CONF = [0.6, 0.6, 0.7, 0.8, 0.8, 0.9, 0.9, 0.9, 1.0, 1.0]
+```
+
+Notice these are sorted and they climb: two answers at 0.6, one at 0.7, two at 0.8, three at 0.9, two at 1.0. Now the two different realities. `OUTCOME[i]` is `1` if the model was actually right on question `i` and `0` if it was wrong:
+
+```python
+OUTCOME_OVER = [1, 0, 0, 1, 0, 1, 0, 0, 1, 0]   # does NOT track confidence
+OUTCOME_CAL  = [1, 1, 0, 1, 1, 1, 1, 0, 1, 1]   # tracks confidence
+```
+
+Look at the two `1.0` answers at the end, the questions where the model swore it was certain. The over-confident model got one right and one wrong (`1, 0`), so its "I am 100% sure" was true only half the time. The well-calibrated model got both right (`1, 1`), so its certainty was earned. Same stated confidence of 1.0, two very different track records. That gap between what a model says and what it delivers is the entire subject of this part.
+
+## Two models that look identical at a glance
+
+Before we bin anything, compute the two crudest summaries: the mean confidence the model radiated, and the fraction it actually got right.
+
+The mean confidence is the same for both models because they share the `CONF` list. Add the ten confidences (1.9 in the low bin, 4.3 in the middle, 2.0 at the top, which is 8.2 total) and divide by ten:
+
+```text
+mean confidence = 0.82   (both models, identical confidences)
+```
+
+Now their accuracies, which are just the fraction of `1`s in each outcome list. The over-confident model has four `1`s out of ten, the well-calibrated model has eight:
+
+```text
+over-confident:  accuracy = 0.40
+well-calibrated: accuracy = 0.80
+```
+
+Here is the first jolt. Both models walk around announcing an average confidence of 0.82. One of them is right 40% of the time and the other 80% of the time. The over-confident model's headline promise (0.82) overshoots its delivery (0.40) by a mile, while the well-calibrated model's 0.82 sits close to its 0.80. A single gap between mean confidence and overall accuracy already tells you something is wrong with the first model. But that top-line gap is too blunt: it averages over questions the model was timid about and questions it was cocky about, and it cannot tell you *where* along the confidence scale the promise broke. For that we need to stop averaging over everything and start grouping.
+
+## The reliability curve, one bin at a time
+
+The idea is simple and you could do it with a pencil. Sort the predictions into a few buckets by their stated confidence. Inside each bucket, ask two questions: what confidence did the model claim on average (the promise), and what fraction did it actually get right (the delivery). If the model is honest, those two numbers match inside every bucket. Plot promise on one axis and delivery on the other, and an honest model traces the diagonal line where they are equal.
+
+We use three bins that cover the confidences we see. The first two are half-open intervals, and the last catches the perfect-certainty answers exactly at 1.0:
+
+- `[0.6, 0.8)`: confidences of 0.6 or 0.7
+- `[0.8, 1.0)`: confidences of 0.8 or 0.9
+- `[1.0]`: confidences of exactly 1.0
+
+Now walk the over-confident model through them by hand. **Bin `[0.6, 0.8)`** catches the three low-confidence answers (0.6, 0.6, 0.7). Their mean confidence is (0.6 + 0.6 + 0.7) / 3 = 0.633. The over-confident outcomes on those three were `1, 0, 0`, so one of three was right: accuracy 0.333. The **gap**, the distance between promise and delivery, is the absolute difference, 0.633 minus 0.333 = 0.300.
+
+**Bin `[0.8, 1.0)`** catches the five middle answers (0.8, 0.8, 0.9, 0.9, 0.9). Their mean confidence is 4.3 / 5 = 0.860. The over-confident outcomes there were `1, 0, 1, 0, 0`, two of five right: accuracy 0.400. The gap is 0.860 minus 0.400 = 0.460, wider than the first bin.
+
+**Bin `[1.0]`** catches the two certainty answers. Their mean confidence is 1.000, by definition. The over-confident outcomes were `1, 0`, one of two right: accuracy 0.500. The gap is a full 0.500, the widest of all. The model was surest exactly where it was least trustworthy.
+
+Lay those three rows out and you have the reliability curve for the over-confident model, the exact table the companion file prints:
+
+```text
+OVER-CONFIDENT model (outcomes do NOT track confidence):
+  mean confidence = 0.82   accuracy = 0.40
+  reliability curve (per confidence bin):
+    bin           n   mean_conf   accuracy   gap
+    [0.6, 0.8)   3      0.633      0.333   0.300
+    [0.8, 1.0)   5      0.860      0.400   0.460
+    [1.0]        2      1.000      0.500   0.500
+```
+
+Every accuracy sits below its mean confidence. Every bin is below the diagonal. That shape, the whole curve sagging under the line of honesty, is the visual signature of over-confidence, and the figure below draws it. The horizontal axis is stated confidence, the vertical axis is actual accuracy, the dashed diagonal is perfect calibration, and the over-confident model's three points hang beneath it with the gap in each bin marked. The well-calibrated model's points, which we compute next, ride right along the diagonal for comparison.
+
+<Diagram number={1} caption="The reliability curve for both models, built from the same ten confidences. The horizontal axis is stated confidence, the vertical axis is actual accuracy, and the dashed diagonal marks perfect calibration where the two are equal. The over-confident model's three binned points sit well below the diagonal, with gaps of 0.300, 0.460, and 0.500 in bins [0.6, 0.8) (n=3, mean 0.633), [0.8, 1.0) (n=5, mean 0.860), and [1.0] (n=2, mean 1.000); its curve sags under the line of honesty. The well-calibrated model's points, on the same bins, hug the diagonal with gaps of only 0.033, 0.060, and 0.000. The visual distance between the two curves is the difference between a confidence you can trust and one you cannot.">
+  <img src="/essays/calibration/part10-figure.svg" alt="A reliability diagram plotting stated confidence on the horizontal axis against actual accuracy on the vertical axis, both from 0.0 to 1.0, with a dashed diagonal for perfect calibration. Two curves are drawn from the same three confidence bins: [0.6, 0.8) with n=3 and mean 0.633, [0.8, 1.0) with n=5 and mean 0.860, and [1.0] with n=2 and mean 1.000. The over-confident curve sits far below the diagonal at accuracies 0.333, 0.400, and 0.500, with vertical gap markers labelled gap 0.300, gap 0.460, and gap 0.500. The well-calibrated curve hugs the diagonal at accuracies 0.667, 0.800, and 1.000. Each curve is labelled, over and cal, showing that identical confidences can keep or break their promise depending only on the outcomes." class="w-full rounded-lg" />
+</Diagram>
+
+## ECE: the whole curve in one number
+
+The reliability curve is honest and detailed, but you cannot put a three-row table into a CI gate or a leaderboard. We want one number that says "how far off, overall, is this model's confidence?" The **Expected Calibration Error** is that number, and it is nothing fancier than the average gap, weighted by how many predictions live in each bin.
+
+Why weight by bin size? Because a bin holding five predictions should count more toward the overall error than a bin holding two. A big gap in a bin nobody visits matters less than a small gap in a busy one. So each bin contributes its gap times its share of the total. For the over-confident model, the shares are 3/10, 5/10, and 2/10:
+
+```text
+ECE = (3/10)(0.300) + (5/10)(0.460) + (2/10)(0.500)
+    = 0.090 + 0.230 + 0.100
+    = 0.420
+```
+
+An ECE of 0.420 is enormous. It says that on average, weighted across the predictions, this model's stated confidence is off from reality by 42 percentage points. When it says 0.82, treat it as closer to 0.40. That is not a model whose confidence you can hand to a downstream decision.
+
+## Brier: rewarding being right AND appropriately unsure
+
+ECE grades the *shape* of the curve, but it has a blind spot worth naming. Because it averages within bins, a model could be wrong in a compensating way, over-confident on some answers in a bin and under-confident on others, and the bin's average could still look fine. ECE also cares only about whether confidence matches accuracy in aggregate, not about individual predictions. The **Brier score** closes that gap by scoring every single prediction directly.
+
+The Brier score is just the mean squared error between the confidence and the outcome, treating the outcome as 1 for right and 0 for wrong. For each prediction you take (confidence minus outcome), square it, and average over all ten. Squaring does two things: it makes every term positive, and it punishes confident mistakes far more than timid ones. Being 0.9 sure and wrong contributes `(0.9 - 0)^2 = 0.81`; being 0.6 sure and wrong contributes only `(0.6 - 0)^2 = 0.36`. The model is charged extra for swaggering into a wrong answer.
+
+Run it on the over-confident model's ten predictions. The confident wrongs pile up: the 0.9-sure misses each contribute 0.81, and the 1.0-sure miss contributes a full 1.00. Add the ten squared errors (they total 4.32) and divide by ten:
+
+```text
+Brier = mean of (conf - outcome)^2 over all 10 = 0.432
+```
+
+Lower is better for Brier, and 0.432 is bad. For intuition, a model that shrugged and said 0.5 on everything would score 0.25, so this over-confident model is *worse than a coin flip that admits it is a coin flip*. That is the cost of loud, wrong certainty, and Brier is the metric that charges for it.
+
+## The same confidences, kept honest
+
+Now the payoff. Take the exact same ten confidences and pair them with the well-calibrated outcomes, the ones that track the confidence. Nothing about what the model *says* has changed; only its results have. Walk the bins again: in `[0.6, 0.8)` the outcomes are `1, 1, 0`, so accuracy is 0.667 against a mean confidence of 0.633, a gap of just 0.033. In `[0.8, 1.0)` the outcomes are `1, 1, 1, 1, 0`, accuracy 0.800 against 0.860, a gap of 0.060. In `[1.0]` both certainty answers are right, accuracy 1.000, gap 0.000, a promise perfectly kept:
+
+```text
+WELL-CALIBRATED model (same confidences, outcomes track them):
+  mean confidence = 0.82   accuracy = 0.80
+  reliability curve (per confidence bin):
+    bin           n   mean_conf   accuracy   gap
+    [0.6, 0.8)   3      0.633      0.667   0.033
+    [0.8, 1.0)   5      0.860      0.800   0.060
+    [1.0]        2      1.000      1.000   0.000
+  ECE   = weighted avg gap  = 0.040
+  Brier = mean (conf-out)^2 = 0.172
+```
+
+Weight those gaps and the ECE collapses to `(3/10)(0.033) + (5/10)(0.060) + (2/10)(0.000) = 0.040`. The Brier score drops to 0.172. Put the two models side by side and the numbers tell the whole story:
+
+```text
+ECE   0.420 -> 0.040   (gap between promise and reality shrinks 10.5x)
+Brier 0.432 -> 0.172   (lower is better; rewards being right AND appropriately unsure)
+```
+
+The ECE shrank by a factor of **10.5x**. Both metrics agree, and neither could be fooled by the fact that the two models *say* precisely the same thing. Calibration is the eval that refuses to grade a model on its own press release.
+
+The interactive figure below lets you feel this rather than just read it. The top panel gives you the ten confidences and lets you flip each answer between right and wrong, watching the reliability curve bend and the ECE and Brier update live, so you can build the over-confident and well-calibrated curves yourself and see any curve in between. The bottom panel makes a sharper point about a model that is always right yet never sure: it shows how a model can have high accuracy and still be badly calibrated, because calibration is a separate axis from accuracy, and a model can fail on either one alone.
+
+<IframeFigure src="/essays/calibration/part10-interactive.html" title="Interactive calibration explorer: a top panel of ten trivia answers where flipping each outcome between right and wrong rebuilds the three-bin reliability curve and updates ECE and the Brier score live, and a bottom panel showing that accuracy and calibration are independent axes so a model can be accurate yet badly calibrated." height={860} />
+
+## Key takeaways
+
+- **A confidence is a promise, and calibration checks whether it is kept.** Of the answers a model tags 0.8, about 0.8 should be right. Calibration measures the distance between the confidence a model states and the accuracy it actually delivers, an axis entirely separate from accuracy itself.
+- **The reliability curve is the source object.** Bin the predictions by stated confidence, and in each bin compare mean confidence (the promise) against accuracy (the delivery). An honest model traces the diagonal; an over-confident model sags below it. On our ten answers the over-confident bins gapped by 0.300, 0.460, and 0.500, every point beneath the line.
+- **ECE reduces the curve to one number: the bin-size-weighted average gap.** The over-confident model scored ECE 0.420 (off by 42 points on average); the well-calibrated model, on the identical confidences, scored 0.040, a 10.5x shrink. Weighting by bin size stops a gap in an empty bin from dominating.
+- **Brier scores every prediction and punishes confident mistakes.** As the mean squared error of confidence against outcome, it charged the over-confident model 0.432 (worse than the 0.25 of a model that always says 0.5) and the well-calibrated model 0.172. Lower is better, and it rewards being right AND appropriately unsure.
+- **The two models said the same thing (mean confidence 0.82) yet delivered 0.40 versus 0.80 accuracy.** Calibration is the one eval that grades what a model delivers against what it claims, so it cannot be gamed by a model that simply sounds certain.
+
+## Glossary
+
+- **Confidence**: a probability a model attaches to its own answer, a number in [0, 1] claiming how likely it is to be right. Here the stated confidences ranged from 0.6 to 1.0. It is a claim, not a fact, which is why it must be checked.
+- **Calibration**: the property that stated confidences match observed accuracy, so that of the answers tagged with confidence p, a fraction p really are correct. A model can be accurate but poorly calibrated, or well calibrated but inaccurate; the two are independent.
+- **Reliability curve** (reliability diagram): predictions grouped into confidence bins, each bin plotted as mean confidence (horizontal) against accuracy (vertical). Perfect calibration is the diagonal where the two are equal; points below it are over-confidence, points above are under-confidence.
+- **Confidence bin**: a range of stated confidences grouped together so accuracy can be measured within it. We used three, `[0.6, 0.8)`, `[0.8, 1.0)`, and `[1.0]`, holding 3, 5, and 2 predictions.
+- **Gap**: within a bin, the absolute difference between mean confidence and accuracy, the local distance between promise and delivery. The over-confident bins gapped 0.300, 0.460, 0.500; the well-calibrated bins gapped 0.033, 0.060, 0.000.
+- **Expected Calibration Error (ECE)**: the average gap across bins, weighted by the fraction of predictions in each bin. One number summarizing the whole reliability curve. Over-confident 0.420, well-calibrated 0.040.
+- **Brier score**: the mean over all predictions of (confidence minus outcome) squared, treating a correct answer as 1 and a wrong one as 0. Lower is better; it rewards being right and appropriately unsure, and punishes confident mistakes hardest. Over-confident 0.432, well-calibrated 0.172.
+
+---
+
+We can now score a model, put a confidence interval on that score, say whether a difference is real, and check whether the model's own confidence is trustworthy. **Part 11, Regression Gates**, assembles all of it into a decision you would stake a deploy on: a score and its interval measured against a threshold, a contamination check that catches an eval leaking into training, and drift detection across two runs.

@@ -1,0 +1,155 @@
+---
+title: "Building a Golden Set"
+description: "A metric is only as good as the labeled set beneath it. Part 2 builds a trustworthy golden set by hand on 40 support tickets: stratified sampling pins a rare class at exactly 2 urgent per draw while simple random sampling swings from 0 to 4, a leakage trap inflates accuracy from an honest 0.667 up to 0.800, and a three-criteria rubric turns 'good answer?' into a countable pass-at-5 bar."
+date: 2026-07-15
+tags: ["Evals", "LLM", "AI", "Sampling", "Data Quality", "Rubrics"]
+seriesOrder: 2
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-02-building-a-golden-set"
+lang: "en"
+translationSlug: "building-a-golden-set-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+In Part 1 we scored a model against a set of human labels, then waved away the hardest part with a single sentence: "assume the human was careful." That assumption was doing enormous work. Every number in that essay, the accuracy of 0.70, the recall of 0.60, all of it, was computed against a set of gold labels we simply trusted. If that set is the wrong ten tickets, or the same tickets the model already memorized, or a set two people would grade differently, then every downstream statistic in this whole series is measuring the wrong thing precisely. A confidence interval on a rotten score is just a precise account of your own confusion. So before we build another metric, we have to build the thing every metric stands on: a **golden set** you can actually stake a decision on.
+
+This part is about earning that set. We work a concrete, painful constraint that every real team hits: a support team can hand-label only 10 of its 40 tickets, and "urgent" is rare (8 urgent, 32 not, a true rate of 0.20). Three things can quietly wreck the golden set built under that constraint, and we will watch each one happen numerically and then fix it. First, **how you sample** those 10 tickets: a naive draw can grab anywhere from 0 to 4 urgent tickets, while stratified sampling pins the share at exactly 2 every single time. Second, **leakage**: a few eval tickets that are near-duplicates of the model's training data inflate a measured accuracy of 0.800 down to an honest 0.667 once you strip the freebies out. Third, **the rubric**: turning a vague "was it a good answer?" into three criteria scored 0, 1, or 2, so that "pass" becomes a number anyone can re-count rather than a vibe you have to relitigate.
+
+## Prerequisites
+
+You need Part 1's vocabulary (task, gold label, metric, and the confusion matrix), plus basic Python: a list, a loop, a division. We add NumPy here for the resampling, but only as a fast way to repeat a draw ten thousand times; nothing in it is doing statistics you could not do by hand on paper. One idea from probability shows up, the **hypergeometric distribution**, and we do not assume you know it: we derive the two facts we need (the chance of drawing zero urgent tickets, and the spread of the urgent count) from plain counting, then use NumPy's simulation only to confirm the hand-derived numbers match. The companion file, [golden_set.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-02-building-a-golden-set), runs offline with no API key and no network, uses a fixed seed (`numpy.random.default_rng(0)`) so every number is reproducible, and ends with a verified expected-output block. Every figure quoted in this essay is that file's real printed output.
+
+## The sampling problem: a rare class you can easily miss
+
+Start with the population. There are 40 tickets. Eight of them are truly urgent and 32 are not, so the true urgent rate is `8/40 = 0.20`. That rare class is the whole point of the eval: urgent tickets are exactly the ones we cannot afford to get wrong, and they are exactly the ones there are fewest of. We can hand-label only 10 tickets for the golden set (labeling is slow and expensive, which is the realistic constraint), so we have to choose a sample. The question that decides everything downstream is: *which* 10?
+
+The obvious answer is "pick 10 at random." That is **simple random sampling**: draw 10 tickets uniformly from all 40, without replacement, and label those. It feels fair because it is unbiased, and it is unbiased, on average. The trouble is the phrase "on average" is hiding a lot of variance. Watch one actual draw from the companion file (seed fixed, so you can reproduce it):
+
+```text
+One SIMPLE-RANDOM sample of 10:
+  urgent picked = 4  ->  measured urgent rate = 0.40
+```
+
+This particular draw pulled 4 urgent tickets out of its 10. Half of all the urgent tickets that exist ended up in a sample of a quarter of the population, so the measured urgent rate reads 0.40, double the true 0.20. Nothing went wrong; the code is correct and the draw is fair. It is just that with only 8 urgent items in the pool, a random handful can easily over-represent or under-represent them. Your golden set would now claim urgent tickets are twice as common as they really are, and every rate you compute on it inherits that lie.
+
+Now the alternative. **Stratified sampling** does not draw from the whole pool at once. It splits the population into strata (here, the urgent tickets and the not-urgent tickets) and draws from each in proportion to its true size. We want 10 tickets and urgent is 20% of the population, so we take `round(10 * 8/40) = 2` urgent tickets and `10 - 2 = 8` not-urgent tickets, each drawn without replacement within its own stratum. Here is that draw:
+
+```text
+One STRATIFIED sample of 10 (share fixed at 0.20):
+  urgent picked = 2  ->  measured urgent rate = 0.20
+```
+
+Exactly 2 urgent, exactly the true rate of 0.20. And this is not luck: by construction, a stratified draw of 10 from this population *always* contains 2 urgent tickets, because we told it to. We removed the randomness from the one quantity we cared most about controlling.
+
+One draw each proves nothing about spread, though. To see the real difference we have to repeat the experiment many times and look at the distribution of outcomes, not a single point. So the companion file resamples both methods 10000 times under the fixed seed and tallies the urgent count each time:
+
+```text
+Over 10000 resamples (fixed seed):
+  simple-random : mean urgent = 1.997, std = 1.105
+  stratified    : mean urgent = 2.000, std = 0.000
+  simple-random samples with ZERO urgent: 743/10000 = 0.074
+```
+
+Read those three lines slowly, because they are the entire argument. Both methods have essentially the same *mean*: simple-random averages 1.997 urgent per sample and stratified averages exactly 2.000, both hugging the true expected count of 2. If you only looked at the average, you would conclude the two methods are interchangeable. They are not, and the difference lives entirely in the **standard deviation**, the spread around that mean. Simple random sampling has a std of 1.105, meaning a typical draw lands more than a full urgent ticket away from the expected 2, sometimes 4, sometimes 0. Stratified sampling has a std of 0.000: every one of the 10000 draws had exactly 2 urgent tickets. Zero spread. That is what stratification buys you: it does not change what you expect on average, it collapses the variance of the thing you stratified on down to nothing.
+
+The last line is the one that should scare you. In 743 of the 10000 simple-random draws, a rate of 0.074, the sample contained **zero** urgent tickets. Roughly one time in thirteen, a well-meaning random draw of 10 gives you a golden set with no urgent examples at all. On that golden set you cannot compute recall on the urgent class, because there is nothing to recall; the metric that matters most in Part 1 becomes literally undefined. You would not even get a wrong number, you would get a divide-by-zero where your most important measurement should be.
+
+<Diagram number={1} caption="Two ways to draw a 10-ticket golden set from a 40-ticket population that is only 20% urgent, compared over 10000 resamples. The left histogram is simple random sampling: the urgent count per draw spreads across 0, 1, 2, 3, and 4, centered near the true expected value of 2 (mean 1.997) but with a standard deviation of 1.105, and the leftmost bar shows the 743 draws (7.4%) that caught zero urgent tickets. The right histogram is stratified sampling: a single tall bar at exactly 2 urgent, mean 2.000 and standard deviation 0.000, because every draw is built to contain 2. Same average, radically different spread.">
+  <img src="/essays/building-a-golden-set/part2-figure.svg" alt="A side-by-side comparison of two sampling distributions over 10000 draws of 10 tickets from a population of 40 that is 20 percent urgent. On the left, headed 'simple random sampling', a histogram of the urgent count per draw with bars at 0, 1, 2, 3, and 4 urgent; the bar at 2 is tallest, the distribution is bell-shaped and centered near 2, and the bar at 0 is annotated '743 draws = 7.4% caught zero urgent'. Below the left histogram: mean urgent = 1.997, std = 1.105. On the right, headed 'stratified sampling', a single tall bar sitting at exactly 2 urgent with no other bars present. Below the right histogram: mean urgent = 2.000, std = 0.000. A caption between them reads 'same mean, zero spread': stratifying pins the rare-class share and drives its standard deviation to zero, while simple random sampling swings from 0 to 4 and can miss the rare class entirely." class="w-full rounded-lg" />
+</Diagram>
+
+### Cross-checking the simulation against exact math
+
+A simulation is only trustworthy if you can check it against something you derived independently, otherwise you are just admiring a random number generator. The spread of the urgent count in a simple random sample is not a mystery; it follows the **hypergeometric distribution**, the exact law for drawing without replacement from a finite pool with two kinds of item. We can compute the two facts we care about by hand and confirm the 10000-run simulation landed on the same place.
+
+First, the chance of drawing zero urgent tickets. To get zero urgent, all 10 of our picks must come from the 32 not-urgent tickets. The number of ways to choose 10 from those 32 is `C(32,10)`, and the number of ways to choose any 10 from all 40 is `C(40,10)`, so the probability is their ratio. Second, the standard deviation of the urgent count, which the hypergeometric law gives in closed form as `sqrt(n*p*(1-p)*(N-n)/(N-1))` with `n=10`, `p=0.20`, and `N=40`. The companion file computes both exactly with integer combinatorics:
+
+```text
+Exact (hypergeometric) cross-check of the simple-random draw:
+  P(zero urgent)      = C(32,10)/C(40,10) = 0.076
+  std of urgent count = sqrt(n*p*(1-p)*(N-n)/(N-1)) = 1.109
+```
+
+The exact probability of zero urgent is 0.076, and the simulation measured 0.074: they agree to within the wobble you would expect from 10000 random trials. The exact standard deviation is 1.109, and the simulation measured 1.105: again, a match. The simulation is not lying to us, and neither is the math, because they were derived independently and landed in the same spot. That is the discipline this whole series runs on. We never let a random simulation stand alone when a closed-form value can pin it down, and we never trust a formula we have not seen a simulation confirm. The takeaway is blunt: stratifying pins the rare-class share and drives its std to 0, while simple random sampling carries real, quantifiable spread and can miss the urgent class entirely about once every thirteen draws.
+
+## The leakage trap: gimmes that flatter the score
+
+Suppose you fixed the sampling. You now have a golden set with a sensible number of urgent tickets. There is a second, sneakier way the set can lie to you, and it does not announce itself in any rate or proportion. It is **leakage**: some of your eval tickets are near-duplicates of data the model already saw during training. The model did not solve those tickets, it memorized them, and when you grade it on them you are testing its memory, not its ability to handle a ticket it has never seen. Those items are free points. They inflate the score, and worse, they inflate it for a reason that has nothing to do with the capability you are trying to measure.
+
+Here is the trap made concrete. The model was "trained" on 6 training tickets. Our eval set has 10 tickets, and 4 of them are the same tickets as in training, lightly disguised by changes in case, punctuation, or spacing. `"How do I reset my password?"` from training reappears in the eval set as `"how do i reset my password"`. `"Cancel my subscription"` becomes `"cancel my subscription!"`. To a human they are obviously the same ticket; to a naive string comparison they look different, which is exactly how leakage slips past a casual check. The fix is to compare tickets after **normalizing** them: lowercase everything, strip punctuation, collapse runs of whitespace, and then check whether the cleaned eval text appears anywhere in the cleaned training set. Running that normalization catches all four:
+
+```text
+eval size = 10   train size = 6
+leaked eval items (normalized text found in train): 4
+  eval[0] 'how do i reset my password'  ==  a train ticket
+  eval[1] 'The app crashes on login.'  ==  a train ticket
+  eval[5] 'cancel my subscription!'  ==  a train ticket
+  eval[8] 'My invoice is wrong.'  ==  a train ticket
+```
+
+Four of the ten eval tickets are memorized duplicates. Now watch what they do to the score. The model got 8 of the 10 eval tickets right, so the accuracy you would proudly report is `8/10 = 0.800`. But of those 8 correct answers, the 4 leaked tickets are *all* correct, because the model memorized them: they contribute 4 out of 4. They are not evidence of skill, they are evidence of overlap. Strip the 4 leaked tickets out and grade the model only on the 6 tickets it genuinely had not seen, and the honest picture appears:
+
+```text
+measured accuracy WITH leakage  = 8/10 = 0.800
+  (the 4 memorized duplicates are all correct: 4/4)
+honest accuracy AFTER removing leaks = 4/6 = 0.667
+  -> leakage inflated the score by 0.133.
+```
+
+On the 6 clean tickets the model got 4 right, so the honest accuracy is `4/6 = 0.667`. Leakage inflated the reported score by `0.800 - 0.667 = 0.133`, more than thirteen points, and every one of those points came from gimme duplicates rather than from real performance on unseen tickets. Thirteen points is enormous. It is larger than most of the "improvements" teams ship and celebrate. If your golden set overlaps your training data even slightly, you can post a gain that is entirely an artifact of contamination, and no downstream statistic will save you, because the bootstrap and the significance test in later parts will faithfully compute confidence intervals around a number that is fundamentally wrong. The lesson is that a golden set must be disjoint from the training data, and the only way to be sure is to actually check the overlap, after normalizing, rather than assuming your eval and train sets are separate because you intended them to be. (In Part 11 we harden this same idea into a proper contamination gate using n-gram overlap; here it is the warning that motivates it.)
+
+## The rubric: turning "good answer?" into a number
+
+The third threat is not about which examples you pick, it is about how you grade them. So far our tickets had a clean binary answer: urgent or not, correct or not. Real evals are rarely that tidy. Ask "was that a good answer?" and two careful people will give you two different verdicts, not because either is wrong but because "good" is a bundle of different things that they are weighting differently in their heads. One reader forgives a thin answer if it is accurate; another cannot stand an answer that skips half the question. A **rubric** fixes this by refusing to grade "good" as a single gestalt judgment. It breaks quality into named criteria, scores each on a fixed scale, and defines "pass" as a threshold on the total. The verdict stops being a feeling and becomes a sum anyone can re-add.
+
+Our rubric has three criteria: **Correct** (is the answer factually right?), **Grounded** (is it supported by the source, not invented?), and **Complete** (does it actually answer the whole question?). Each is scored on a three-level scale: 0 means it fails that criterion, 1 means partial, 2 means full. The maximum possible score is `3 * 2 = 6`, and we set the pass bar at a total of at least 5. That bar is a policy choice, and making it an explicit number is precisely the value of the rubric: everyone can see exactly how good an answer has to be to count as passing, and can argue about the number 5 directly instead of arguing about the word "good." Here are three graded candidate answers:
+
+```text
+criteria: Correct, Grounded, Complete   (max 6, pass at total >= 5)
+  Answer A: Correct=2  Grounded=2  Complete=2  ->  total 6/6  PASS
+  Answer B: Correct=2  Grounded=2  Complete=1  ->  total 5/6  PASS
+  Answer C: Correct=1  Grounded=0  Complete=2  ->  total 3/6  FAIL
+```
+
+Answer A is right, grounded, and complete: a perfect 6, an easy pass. Answer B is right and grounded but only partially complete, scoring `2 + 2 + 1 = 5`, which clears the bar of 5 exactly. Answer C is the interesting one. It is fully complete (Complete=2, it addresses the whole question) but only half right (Correct=1) and completely ungrounded (Grounded=0, it made things up), totaling `1 + 0 + 2 = 3` and failing. Notice that Answer C might well survive a vibe check: it is long, it addresses everything the user asked, it reads confidently. A rushed reviewer skimming for "does this look like a good answer?" could easily wave it through. The rubric does not, because the rubric noticed that a confident, complete answer built on invented facts is a failure, and it wrote that failure down as a number: `3 < 5`.
+
+```text
+2/3 answers clear the bar. A vibe check might wave
+all three through; the rubric makes the bar a number anyone can re-count.
+```
+
+Two of the three answers clear the bar. That "2/3" is now a fact anyone can reproduce from the same rubric and the same answers, not a mood that shifts with the grader's coffee. This is the same move as the confusion matrix in Part 1: replace a global impression with a small set of countable cells, then define your headline number as a function of those cells. A rubric is just a confusion matrix for quality judgments that do not fit into a single yes or no, and it is what makes the LLM-as-judge in Part 4 possible at all: you cannot ask a model to grade "good" reliably, but you can ask it to fill in Correct, Grounded, and Complete on a 0-to-2 scale, and then you add the numbers yourself.
+
+The figure below lets you play with all three ideas at once. Draw fresh golden sets and watch the simple-random urgent count jump around while the stratified count stays welded to 2, toggle the leaked tickets in and out of the eval set and watch the accuracy slide between 0.800 and 0.667, and adjust the rubric scores to see which answers cross the pass bar. It is the whole part made tactile: sample, de-contaminate, and grade, three levers that together decide whether the number at the end means anything.
+
+<IframeFigure src="/essays/building-a-golden-set/part2-interactive.html" title="Interactive golden-set builder: draw stratified vs simple-random samples and watch the urgent count, toggle the four leaked eval tickets in and out to slide accuracy between 0.800 and 0.667, and score three answers against a Correct/Grounded/Complete rubric with a pass-at-5 bar." height={880} />
+
+## Key takeaways
+
+- **A metric is only as trustworthy as the golden set beneath it.** Part 1 assumed a careful human; this part earns that assumption. If the labeled set is badly sampled, contaminated, or graded by vibes, every statistic computed on it later in the series is precise nonsense.
+- **Stratified sampling controls the variance of a rare class; simple random sampling does not.** On a 40-ticket population that is 20% urgent, both draw about 2 urgent per sample of 10 on average (means 1.997 vs 2.000), but simple random sampling has a standard deviation of 1.105 (draws range from 0 to 4) while stratified sampling has a standard deviation of 0.000 (exactly 2 every time). About 7.4% of simple-random draws catch zero urgent tickets, which is confirmed by the exact hypergeometric probability of 0.076.
+- **Check simulations against exact math.** The hand-derived hypergeometric values (P of zero urgent = 0.076, std of the urgent count = 1.109) match the 10000-run simulation (0.074 and 1.105), so we trust both. Never let a random simulation stand alone when a closed-form value can pin it down.
+- **Leakage silently inflates scores.** Four near-duplicate training tickets hiding in a 10-item eval set, caught only after normalizing case and punctuation, pushed accuracy from an honest `4/6 = 0.667` up to a flattering `8/10 = 0.800`, a 0.133 inflation made entirely of memorized gimmes. A golden set must be disjoint from the training data, verified by actually checking the overlap.
+- **A rubric turns "good answer?" into a number anyone can re-count.** Three criteria (Correct, Grounded, Complete), each scored 0, 1, or 2, with a pass bar at a total of 5, graded three answers 6, 5, and 3, so 2 of 3 pass. The rubric flagged a long, complete, but ungrounded answer as a failure that a vibe check would have waved through.
+
+## Glossary
+
+- **Golden set**: the labeled set of examples you grade every model against. Its quality (how it was sampled, whether it overlaps training data, how consistently it was labeled) upper-bounds the trustworthiness of every metric computed on it.
+- **Simple random sampling**: drawing examples uniformly at random from the whole population without replacement. Unbiased on average, but with real spread, so a single draw can badly over- or under-represent a rare class.
+- **Stratified sampling**: splitting the population into groups (strata) and drawing from each in proportion to its true size. It keeps the average the same as simple random sampling but drives the variance of the stratified quantity toward zero, guaranteeing the rare class is represented.
+- **Rare class**: the label that appears far less often than the others (here, urgent at 20%). It is usually the one you care about most and the one a naive sample is most likely to miss entirely.
+- **Standard deviation**: a measure of spread around the mean. Two sampling methods can share a mean (about 2 urgent) yet differ completely in std (1.105 vs 0.000), and the std is what tells you how much a single draw can be trusted.
+- **Hypergeometric distribution**: the exact probability law for counting how many items of a given kind appear when you draw without replacement from a finite pool. Used here to compute, by hand, the chance of drawing zero urgent tickets (0.076) and the spread of the urgent count (1.109).
+- **Leakage (contamination)**: when eval examples overlap the model's training data, so the model answers them from memory rather than skill. It inflates the measured score for a reason unrelated to real capability; here it added 0.133 to accuracy.
+- **Normalization**: reducing text to a canonical form (lowercase, punctuation stripped, whitespace collapsed) so that near-duplicates compare as equal. It is how the leakage check catches `"cancel my subscription!"` as the same ticket as `"Cancel my subscription"`.
+- **Rubric**: a grading scheme that decomposes a fuzzy quality judgment into named criteria, each scored on a fixed scale, with a pass defined as a threshold on the total. It replaces "was it good?" with a reproducible sum.
+- **Pass threshold**: the explicit total score an answer must reach to count as passing (here, 5 out of 6). Making it a number lets people argue about the bar directly instead of about the word "good."
+
+---
+
+We now have a golden set that is well sampled, free of leakage, and graded by a rubric instead of a feeling. But that rubric still assumes something: that any two careful humans, handed the same answer, would score it the same way. **Part 3, Do Humans Even Agree?**, measures whether they actually do, and shows why raw agreement of 90% can hide a real agreement closer to 0.6 once you subtract out the agreement you would expect from pure chance.

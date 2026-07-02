@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Arenas: Elo vs Bradley-Terry, Part 9</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+.hint code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.btn {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--body);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 13px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.btn:hover { background: var(--chip-bg); }
+.btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+.btn.active { background: var(--emerald); border-color: var(--emerald-ink); color: #ffffff; }
+.btn.ghost { color: var(--emerald-ink); border-color: var(--emerald-bd); background: var(--emerald-bg); }
+
+/* ── Elo rating rows ── */
+.rating-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+.rating-row { display: grid; grid-template-columns: 22px 1fr 70px 56px; align-items: center; gap: 10px; }
+.rating-letter {
+  font-family: var(--font-mono); font-weight: 700; font-size: 13px; color: var(--body);
+  width: 22px; height: 22px; border-radius: 6px; background: var(--chip-bg);
+  display: flex; align-items: center; justify-content: center;
+}
+.rating-track {
+  position: relative; height: 22px; background: #ffffff;
+  border: 1px solid var(--border); border-radius: 11px; overflow: visible;
+}
+.rating-fill {
+  position: absolute; top: 0; left: 0; height: 100%; border-radius: 11px;
+  background: var(--emerald-bg); transition: width 0.35s ease;
+}
+.rating-dot {
+  position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
+  transform: translate(-50%, -50%); transition: left 0.35s ease;
+}
+.rating-dot.now { background: var(--emerald); border: 2px solid var(--emerald-ink); z-index: 2; }
+.rating-dot.compare { background: #ffffff; border: 2px solid var(--amber); z-index: 1; }
+.rating-tick { position: absolute; top: -3px; width: 1px; height: 28px; background: var(--border); }
+.rating-val { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--emerald-ink); text-align: right; }
+.rating-diff { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-align: right; }
+.rating-diff.up { color: var(--emerald-ink); }
+.rating-diff.down { color: var(--rose-ink); }
+
+.legend-row { display: flex; gap: 18px; align-items: center; margin: 14px 0 4px; font-size: 11.5px; color: var(--muted); }
+.legend-row .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.legend-row .dot.now { background: var(--emerald); border: 2px solid var(--emerald-ink); }
+.legend-row .dot.compare { background: #ffffff; border: 2px solid var(--amber); }
+
+.verdict {
+  font-size: 12.5px;
+  border-radius: 8px;
+  padding: 10px 13px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+  margin-top: 10px;
+}
+.verdict.calm { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.verdict.calm strong { color: var(--emerald); }
+.verdict.warn { background: var(--amber-bg); border-color: var(--amber-bd); color: var(--amber-ink); }
+.verdict.warn strong { color: var(--amber); }
+
+/* ── Panel B: Bradley-Terry ── */
+.bt-controls { margin-bottom: 14px; }
+.bt-controls label {
+  font-size: 12.5px; font-weight: 600; color: var(--body);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+input[type="range"] { flex: 1; min-width: 180px; accent-color: var(--emerald); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+.bt-read { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.bt-read b { color: var(--ink); }
+
+.bt-bars { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.bt-bar-row { display: grid; grid-template-columns: 20px 1fr 62px; align-items: center; gap: 10px; }
+.bt-bar-track { height: 18px; background: #ffffff; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.bt-bar-fill { height: 100%; background: linear-gradient(90deg, var(--emerald-br), var(--emerald)); border-radius: 9px 0 0 9px; transition: width 0.3s ease; }
+.bt-bar-val { font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; color: var(--emerald-ink); text-align: right; }
+
+.bt-probs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+.prob-card {
+  border: 1.5px solid var(--emerald-bd); background: var(--emerald-bg);
+  border-radius: 12px; padding: 12px 14px; text-align: center;
+}
+.prob-card .k { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: var(--emerald); text-transform: uppercase; }
+.prob-card .v { font-family: var(--font-mono); font-size: 26px; font-weight: 700; color: var(--emerald-ink); margin-top: 3px; }
+.prob-card .sub { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+
+.guard-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.guard-note code {
+  font-family: var(--font-mono);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL A: Elo, order-dependent ══════════════ -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <p class="eyebrow">Same battles, different numbers</p>
+  <h2 id="panel-a-heading">Elo replays the same 18 battles in two orders</h2>
+  <p class="panel-subtitle">Four chatbots (A, B, C, D) fought a round-robin: every pair battled 3 times, 18 battles total. Each battle updates ratings on the spot, starting at 1000, K=32.</p>
+
+  <div class="hint">
+    <strong>Pick a battle order</strong> below. Same 18 wins and losses every time, only the order the ratings get updated in changes.
+  </div>
+
+  <div class="btn-row" role="group" aria-label="Battle order">
+    <button class="btn active" id="btn-aslisted" type="button">As-listed order</button>
+    <button class="btn" id="btn-shuffled" type="button">Shuffled order (seed 0)</button>
+  </div>
+
+  <div class="rating-rows" id="rating-rows"></div>
+
+  <div class="legend-row">
+    <span><span class="dot now"></span>current order</span>
+    <span><span class="dot compare"></span>the other order</span>
+  </div>
+
+  <div class="verdict" id="elo-verdict"></div>
+  <div class="sr-only" aria-live="polite" id="announcer-a"></div>
+</section>
+
+<!-- ══════════════ PANEL B: Bradley-Terry, order-independent ══════════════ -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <p class="eyebrow">One matrix, one ranking</p>
+  <h2 id="panel-b-heading">Bradley-Terry fits the aggregate win matrix by iteration</h2>
+  <p class="panel-subtitle">Same win matrix as Panel A: A beat B 2, C 3, D 3; B beat A 1, C 2, D 3; C beat B 1, D 2; D beat C 1. Drag the slider through the Zermelo (MM) updates.</p>
+
+  <div class="bt-controls">
+    <label for="bt-slider">
+      Iteration
+      <input type="range" id="bt-slider" min="0" max="20" step="1" value="0" aria-describedby="bt-read" />
+      <span class="bt-read" id="bt-read"></span>
+    </label>
+  </div>
+
+  <div class="bt-bars" id="bt-bars"></div>
+
+  <div class="bt-probs">
+    <div class="prob-card">
+      <div class="k">P(A beats D)</div>
+      <div class="v" id="p-ad">0.500</div>
+      <div class="sub">pA / (pA + pD)</div>
+    </div>
+    <div class="prob-card">
+      <div class="k">P(B beats C)</div>
+      <div class="v" id="p-bc">0.500</div>
+      <div class="sub">pB / (pB + pC)</div>
+    </div>
+  </div>
+
+  <div class="verdict calm" id="bt-verdict"></div>
+
+  <p class="guard-note">
+    Reshuffle the battles in Panel A as many times as you like: this fit never
+    changes, because it only ever sees <code>WINS[i][j]</code>, the totals, never the sequence.
+  </p>
+  <div class="sr-only" aria-live="polite" id="announcer-b"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  var MODELS = ["A", "B", "C", "D"];
+  var COLORS = { A: "#059669", B: "#10b981", C: "#34d399", D: "#6ee7b7" };
+
+  /* ── Elo core, mirrors arenas.py exactly ── */
+  function expected(ra, rb) { return 1.0 / (1.0 + Math.pow(10, (rb - ra) / 400.0)); }
+  function eloUpdate(ra, rb, scoreA, k) {
+    var ea = expected(ra, rb);
+    var raNew = ra + k * (scoreA - ea);
+    var rbNew = rb + k * ((1 - scoreA) - (1 - ea));
+    return [raNew, rbNew];
+  }
+  function runElo(games, k, start) {
+    var r = [start, start, start, start];
+    for (var i = 0; i < games.length; i++) {
+      var w = games[i][0], l = games[i][1];
+      var upd = eloUpdate(r[w], r[l], 1.0, k);
+      r[w] = upd[0]; r[l] = upd[1];
+    }
+    return r;
+  }
+  function fmt1(x) { return x.toFixed(1); }
+
+  /* battle_log(), flattened in the exact order arenas.py produces it */
+  var AS_LISTED = [[0,1],[0,1],[0,2],[0,2],[0,2],[0,3],[0,3],[0,3],[1,0],[1,2],[1,2],[1,3],[1,3],[1,3],[2,1],[2,3],[2,3],[3,2]];
+  /* random.Random(0).shuffle(games) on that exact list, from the Python run */
+  var SHUFFLED = [[1,3],[1,2],[0,1],[2,3],[0,2],[2,3],[1,2],[0,2],[0,3],[3,2],[2,1],[0,3],[0,3],[1,0],[0,2],[0,1],[1,3],[1,3]];
+
+  var K = 32, START = 1000.0;
+  var rAsListed = runElo(AS_LISTED, K, START);
+  var rShuffled = runElo(SHUFFLED, K, START);
+
+  var order = "aslisted"; // or "shuffled"
+  var ratingRows = document.getElementById("rating-rows");
+
+  function buildRows() {
+    ratingRows.innerHTML = "";
+    for (var i = 0; i < MODELS.length; i++) {
+      var row = document.createElement("div");
+      row.className = "rating-row";
+      row.innerHTML =
+        '<span class="rating-letter">' + MODELS[i] + '</span>' +
+        '<span class="rating-track" id="track-' + i + '">' +
+          '<span class="rating-fill" id="fill-' + i + '"></span>' +
+          '<span class="rating-tick" style="left:50%"></span>' +
+          '<span class="rating-dot compare" id="dot-compare-' + i + '"></span>' +
+          '<span class="rating-dot now" id="dot-now-' + i + '"></span>' +
+        '</span>' +
+        '<span class="rating-val" id="val-' + i + '"></span>' +
+        '<span class="rating-diff" id="diff-' + i + '"></span>';
+      ratingRows.appendChild(row);
+    }
+  }
+
+  var RMIN = 880, RMAX = 1120;
+  function pctOf(r) {
+    var p = (r - RMIN) / (RMAX - RMIN);
+    return Math.max(2, Math.min(98, p * 100));
+  }
+
+  function renderA() {
+    var current = order === "aslisted" ? rAsListed : rShuffled;
+    var other = order === "aslisted" ? rShuffled : rAsListed;
+    var currentLabel = order === "aslisted" ? "as-listed" : "shuffled (seed 0)";
+    var otherLabel = order === "aslisted" ? "shuffled (seed 0)" : "as-listed";
+
+    document.getElementById("btn-aslisted").classList.toggle("active", order === "aslisted");
+    document.getElementById("btn-shuffled").classList.toggle("active", order === "shuffled");
+
+    for (var i = 0; i < MODELS.length; i++) {
+      var nowPct = pctOf(current[i]);
+      var cmpPct = pctOf(other[i]);
+      document.getElementById("fill-" + i).style.width = Math.min(nowPct, cmpPct) + "%";
+      document.getElementById("dot-now-" + i).style.left = nowPct + "%";
+      document.getElementById("dot-compare-" + i).style.left = cmpPct + "%";
+      document.getElementById("val-" + i).textContent = fmt1(current[i]);
+      var d = current[i] - other[i];
+      var diffEl = document.getElementById("diff-" + i);
+      diffEl.textContent = (d >= 0 ? "+" : "") + d.toFixed(1);
+      diffEl.className = "rating-diff " + (Math.abs(d) < 0.05 ? "" : (order === "aslisted" ? (d >= 0 ? "" : "") : ""));
+    }
+
+    var v = document.getElementById("elo-verdict");
+    var maxDiff = 0, maxLetter = "A";
+    for (var j = 0; j < MODELS.length; j++) {
+      var dd = Math.abs(rAsListed[j] - rShuffled[j]);
+      if (dd > maxDiff) { maxDiff = dd; maxLetter = MODELS[j]; }
+    }
+    v.className = "verdict warn";
+    v.innerHTML = "Showing the <strong>" + currentLabel + "</strong> order. Same 18 wins and losses as the <strong>" + otherLabel +
+      "</strong> order, but final ratings disagree by up to <strong>" + maxDiff.toFixed(1) + " points</strong> (model " + maxLetter +
+      "). Both orders still rank A &gt; B &gt; C &gt; D here, but the exact rating each model ends up with depends on who happened to play whom first.";
+
+    document.getElementById("announcer-a").textContent =
+      currentLabel + " order: A=" + fmt1(current[0]) + ", B=" + fmt1(current[1]) +
+      ", C=" + fmt1(current[2]) + ", D=" + fmt1(current[3]) + ".";
+  }
+
+  document.getElementById("btn-aslisted").addEventListener("click", function () { order = "aslisted"; renderA(); });
+  document.getElementById("btn-shuffled").addEventListener("click", function () { order = "shuffled"; renderA(); });
+
+  buildRows();
+  renderA();
+
+  /* ══════════════ PANEL B: Bradley-Terry ══════════════ */
+  var WINS = [
+    [0, 2, 3, 3],
+    [1, 0, 2, 3],
+    [0, 1, 0, 2],
+    [0, 0, 1, 0]
+  ];
+
+  function btFit(wins, iters) {
+    var n = wins.length;
+    var totalWins = wins.map(function (row) { return row.reduce(function (a, b) { return a + b; }, 0); });
+    var gamesBetween = [];
+    for (var i = 0; i < n; i++) {
+      gamesBetween.push([]);
+      for (var j = 0; j < n; j++) gamesBetween[i].push(wins[i][j] + wins[j][i]);
+    }
+    var p = new Array(n).fill(1.0 / n);
+    var snaps = [p.slice()];
+    for (var step = 1; step <= iters; step++) {
+      var nw = new Array(n).fill(0);
+      for (var a = 0; a < n; a++) {
+        var denom = 0;
+        for (var b = 0; b < n; b++) {
+          if (b !== a) denom += gamesBetween[a][b] / (p[a] + p[b]);
+        }
+        nw[a] = totalWins[a] / denom;
+      }
+      var s = nw.reduce(function (x, y) { return x + y; }, 0);
+      p = nw.map(function (x) { return x / s; });
+      snaps.push(p.slice());
+    }
+    return snaps; // snaps[0..iters]
+  }
+
+  var SNAPS = btFit(WINS, 20);
+
+  var btBars = document.getElementById("bt-bars");
+  function buildBars() {
+    btBars.innerHTML = "";
+    for (var i = 0; i < MODELS.length; i++) {
+      var row = document.createElement("div");
+      row.className = "bt-bar-row";
+      row.innerHTML =
+        '<span class="rating-letter">' + MODELS[i] + '</span>' +
+        '<span class="bt-bar-track"><span class="bt-bar-fill" id="bt-fill-' + i + '" style="width:25%"></span></span>' +
+        '<span class="bt-bar-val" id="bt-val-' + i + '">0.2500</span>';
+      btBars.appendChild(row);
+    }
+  }
+  buildBars();
+
+  var btSlider = document.getElementById("bt-slider");
+  function renderB() {
+    var step = parseInt(btSlider.value, 10);
+    var p = SNAPS[step];
+    for (var i = 0; i < MODELS.length; i++) {
+      document.getElementById("bt-fill-" + i).style.width = (p[i] * 100).toFixed(2) + "%";
+      document.getElementById("bt-val-" + i).textContent = p[i].toFixed(4);
+    }
+    document.getElementById("bt-read").innerHTML =
+      step === 0 ? "<b>start</b> (0.2500 each)" : "iteration <b>" + step + "</b> of 20";
+
+    var pad = p[0] / (p[0] + p[3]);
+    var pbc = p[1] / (p[1] + p[2]);
+    document.getElementById("p-ad").textContent = pad.toFixed(3);
+    document.getElementById("p-bc").textContent = pbc.toFixed(3);
+
+    var order = MODELS.slice().sort(function (x, y) {
+      return p[MODELS.indexOf(y)] - p[MODELS.indexOf(x)];
+    }).join(" > ");
+
+    var v = document.getElementById("bt-verdict");
+    v.innerHTML = "Ranking at this iteration: <strong>" + order + "</strong>. " +
+      (step >= 3 ? "Already settled by iteration 3, it will not move again no matter how the 18 battles were ordered." :
+       "Still moving: give it a few more iterations and it settles.");
+
+    document.getElementById("announcer-b").textContent =
+      "Iteration " + step + ": A=" + p[0].toFixed(4) + ", B=" + p[1].toFixed(4) +
+      ", C=" + p[2].toFixed(4) + ", D=" + p[3].toFixed(4) + ". Ranking " + order + ".";
+  }
+
+  btSlider.addEventListener("input", renderB);
+  renderB();
+})();
+</script>
+</body>
+</html>

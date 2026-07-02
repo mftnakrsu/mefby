@@ -1,0 +1,265 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 900" width="100%" style="height:auto" role="img" aria-labelledby="fw-title fw-desc">
+  <title id="fw-title">Mining 12 production traces into a golden set: hard-case sampling versus random sampling</title>
+  <desc id="fw-desc">A support assistant's production log holds 12 traces, T01 through T12, each carrying two cheap free signals (the model's self-reported confidence and a guardrail or thumbs-down flag) while the true correct-or-failure label stays hidden until a human annotates it. A priority score of (1 minus confidence) plus 0.5 times flag ranks the traces from most to least suspicious: T12 at 1.10 down to T01 at 0.04. Of the 12 traces, 4 are true failures: T08, T09, T11, and T12, a true production failure rate of 4/12 = 0.33. Spending a budget of 6 annotations on the top 6 by priority (T12, T11, T10, T09, T08, T07) catches all 4 failures, a failure density of 0.67 and a coverage of 4/4 = 1.00. Spending the same budget of 6 on a fixed-seed random draw (T01, T04, T05, T07, T08, T12) catches only 2 failures, a density of 0.33 and a coverage of 2/4 = 0.50, matching the expected value of 6 times 4 over 12 = 2.00. Hard-case sampling is roughly twice as failure-dense as random. A three-round flywheel that annotates 2 hard cases per round grows a golden set of 6 traces: round 1 adds T12 and T11 for 2 new failures, cumulative coverage 0.50, gold rate 1.00; round 2 adds T10 and T09 for 1 new failure, cumulative coverage 0.75, gold rate 0.75; round 3 adds T08 and T07 for 1 new failure, cumulative coverage 1.00, gold rate 0.67. The closing note: the golden set's 0.67 failure rate is deliberately enriched and is not the true production rate of 0.33; an unbiased estimate of production health still needs a random holdout alongside the mined set.</desc>
+
+  <!-- Page background -->
+  <rect width="1180" height="900" fill="#ffffff"/>
+  <rect width="1180" height="900" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 12, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 12 &#183; THE EVAL FLYWHEEL</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">Spend the same 6 annotations, catch 4 failures instead of 2</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">12 traces, cheap signals only. Rank by priority, then mine instead of sampling blind.</text>
+
+  <!-- ============================================================
+       LEFT: the ranked queue (priority, highest to lowest)
+  ============================================================ -->
+  <text x="40" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.1em">RANKED BY PRIORITY = (1 - CONF) + 0.5 &#215; FLAG</text>
+
+  <!-- hard-case bracket zone (top 6 rows) -->
+  <rect x="40" y="132" width="560" height="216" rx="12" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="592" y="240" text-anchor="middle" transform="rotate(-90 592 240)"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#52525b" letter-spacing="0.08em">HARD-CASE BATCH, TOP 6</text>
+
+  <!-- Column headers -->
+  <text x="60" y="150" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" font-weight="700" fill="#a1a1aa" letter-spacing="0.06em">ID</text>
+  <text x="118" y="150" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" font-weight="700" fill="#a1a1aa" letter-spacing="0.06em">PRIORITY</text>
+  <text x="560" y="150" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" font-weight="700" fill="#a1a1aa" letter-spacing="0.06em">TRUE LABEL</text>
+
+  <!-- Rows: id, priority, bar, true-label chip. R = also in random batch. -->
+  <!-- Row template y-start 176, step 36 -->
+
+  <!-- T12  priority 1.10  FAIL  in hard + random -->
+  <text x="60" y="182" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#18181b">T12</text>
+  <rect x="118" y="170" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="170" width="400" height="16" rx="4" fill="#fecdd3"/>
+  <text x="524" y="182" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#52525b">1.10</text>
+  <rect x="480" y="169" width="70" height="18" rx="6" fill="#fff1f2" stroke="#fda4af"/>
+  <text x="515" y="182" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#be123c">FAIL</text>
+  <circle cx="565" cy="178" r="8" fill="#ffffff" stroke="#a1a1aa" stroke-width="1.3"/>
+  <text x="565" y="181" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#71717a">R</text>
+
+  <!-- T11  priority 1.02  FAIL -->
+  <text x="60" y="218" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#18181b">T11</text>
+  <rect x="118" y="206" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="206" width="371" height="16" rx="4" fill="#fecdd3"/>
+  <text x="524" y="218" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#52525b">1.02</text>
+  <rect x="480" y="205" width="70" height="18" rx="6" fill="#fff1f2" stroke="#fda4af"/>
+  <text x="515" y="218" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#be123c">FAIL</text>
+
+  <!-- T10  priority 0.95  ok -->
+  <text x="60" y="254" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#18181b">T10</text>
+  <rect x="118" y="242" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="242" width="345" height="16" rx="4" fill="#d1fae5"/>
+  <text x="524" y="254" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#52525b">0.95</text>
+  <rect x="480" y="241" width="70" height="18" rx="6" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <text x="515" y="254" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#047857">ok</text>
+
+  <!-- T09  priority 0.88  FAIL -->
+  <text x="60" y="290" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#18181b">T09</text>
+  <rect x="118" y="278" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="278" width="320" height="16" rx="4" fill="#fecdd3"/>
+  <text x="524" y="290" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#52525b">0.88</text>
+  <rect x="480" y="277" width="70" height="18" rx="6" fill="#fff1f2" stroke="#fda4af"/>
+  <text x="515" y="290" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#be123c">FAIL</text>
+
+  <!-- T08  priority 0.32  FAIL, in hard + random -->
+  <text x="60" y="326" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#18181b">T08</text>
+  <rect x="118" y="314" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="314" width="116" height="16" rx="4" fill="#fecdd3"/>
+  <text x="524" y="326" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#52525b">0.32</text>
+  <rect x="480" y="313" width="70" height="18" rx="6" fill="#fff1f2" stroke="#fda4af"/>
+  <text x="515" y="326" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#be123c">FAIL</text>
+  <circle cx="565" cy="322" r="8" fill="#ffffff" stroke="#a1a1aa" stroke-width="1.3"/>
+  <text x="565" y="325" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#71717a">R</text>
+
+  <!-- rows below the dashed hard-case zone -->
+  <!-- T07 -->
+  <g transform="translate(0,20)">
+  <text x="60" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#18181b">T07</text>
+  <rect x="118" y="354" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="354" width="95" height="16" rx="4" fill="#d1fae5"/>
+  <text x="524" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#52525b">0.26</text>
+  <rect x="480" y="353" width="70" height="18" rx="6" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <text x="515" y="366" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="700" fill="#047857">ok</text>
+  <circle cx="565" cy="362" r="8" fill="#ffffff" stroke="#a1a1aa" stroke-width="1.3"/>
+  <text x="565" y="365" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#71717a">R</text>
+  </g>
+
+  <!-- T06 -->
+  <g transform="translate(0,52)">
+  <text x="60" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">T06</text>
+  <rect x="118" y="354" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="354" width="73" height="16" rx="4" fill="#e4e4e7"/>
+  <text x="524" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#71717a">0.20</text>
+  <text x="515" y="366" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#a1a1aa">ok</text>
+  </g>
+
+  <!-- T05 -->
+  <g transform="translate(0,84)">
+  <text x="60" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">T05</text>
+  <rect x="118" y="354" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="354" width="58" height="16" rx="4" fill="#e4e4e7"/>
+  <text x="524" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#71717a">0.16</text>
+  <text x="515" y="366" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#a1a1aa">ok</text>
+  <circle cx="565" cy="362" r="8" fill="#ffffff" stroke="#a1a1aa" stroke-width="1.3"/>
+  <text x="565" y="365" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#71717a">R</text>
+  </g>
+
+  <!-- T04 -->
+  <g transform="translate(0,116)">
+  <text x="60" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">T04</text>
+  <rect x="118" y="354" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="354" width="44" height="16" rx="4" fill="#e4e4e7"/>
+  <text x="524" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#71717a">0.12</text>
+  <text x="515" y="366" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#a1a1aa">ok</text>
+  <circle cx="565" cy="362" r="8" fill="#ffffff" stroke="#a1a1aa" stroke-width="1.3"/>
+  <text x="565" y="365" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#71717a">R</text>
+  </g>
+
+  <!-- T03 -->
+  <g transform="translate(0,148)">
+  <text x="60" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">T03</text>
+  <rect x="118" y="354" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="354" width="33" height="16" rx="4" fill="#e4e4e7"/>
+  <text x="524" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#71717a">0.09</text>
+  <text x="515" y="366" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#a1a1aa">ok</text>
+  </g>
+
+  <!-- T02 -->
+  <g transform="translate(0,180)">
+  <text x="60" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">T02</text>
+  <rect x="118" y="354" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="354" width="26" height="16" rx="4" fill="#e4e4e7"/>
+  <text x="524" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#71717a">0.07</text>
+  <text x="515" y="366" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#a1a1aa">ok</text>
+  </g>
+
+  <!-- T01 -->
+  <g transform="translate(0,212)">
+  <text x="60" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">T01</text>
+  <rect x="118" y="354" width="400" height="16" rx="4" fill="#ffffff" stroke="#e4e4e7"/>
+  <rect x="118" y="354" width="15" height="16" rx="4" fill="#e4e4e7"/>
+  <text x="524" y="366" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#71717a">0.04</text>
+  <text x="515" y="366" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#a1a1aa">ok</text>
+  <circle cx="565" cy="362" r="8" fill="#ffffff" stroke="#a1a1aa" stroke-width="1.3"/>
+  <text x="565" y="365" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="9" font-weight="700" fill="#71717a">R</text>
+  </g>
+
+  <!-- legend for left panel -->
+  <rect x="40" y="612" width="14" height="14" rx="4" fill="#fecdd3"/>
+  <text x="62" y="623" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#52525b">true failure (revealed on annotation)</text>
+  <circle cx="345" cy="619" r="8" fill="#ffffff" stroke="#a1a1aa" stroke-width="1.3"/>
+  <text x="360" y="623" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#52525b">also drawn in the random batch (seed 0)</text>
+
+  <!-- Divider between left and right -->
+  <line x1="632" y1="100" x2="632" y2="612" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       RIGHT: spend the budget, hard-case vs random
+  ============================================================ -->
+  <text x="672" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">SAME BUDGET OF 6 ANNOTATIONS, TWO STRATEGIES</text>
+
+  <!-- Hard-case card -->
+  <rect x="672" y="132" width="468" height="150" rx="12" fill="#fff1f2" stroke="#fda4af" stroke-width="2"/>
+  <text x="692" y="160" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="14" font-weight="700" fill="#18181b">Hard-case batch</text>
+  <text x="1120" y="160" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#71717a">T12 T11 T10 T09 T08 T07</text>
+  <text x="692" y="188" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="26" font-weight="700" fill="#be123c">4/6</text>
+  <text x="692" y="206" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#71717a">failures found &#8226; density 0.67</text>
+  <text x="1120" y="188" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="26" font-weight="700" fill="#be123c">1.00</text>
+  <text x="1120" y="206" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#71717a">coverage of all 4 real failures</text>
+  <rect x="692" y="218" width="428" height="8" rx="4" fill="#ffffff"/>
+  <rect x="692" y="218" width="428" height="8" rx="4" fill="#fb7185"/>
+  <text x="692" y="252" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11.5" fill="#9f1239">4 failures / 6 annotations = 0.67 density &#183; 4 / 4 real failures = 1.00 coverage</text>
+
+  <!-- Random card -->
+  <rect x="672" y="298" width="468" height="150" rx="12" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="2"/>
+  <text x="692" y="326" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="14" font-weight="700" fill="#18181b">Random batch (seed 0)</text>
+  <text x="1120" y="326" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" fill="#71717a">T01 T04 T05 T07 T08 T12</text>
+  <text x="692" y="354" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="26" font-weight="700" fill="#52525b">2/6</text>
+  <text x="692" y="372" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#71717a">failures found &#8226; density 0.33</text>
+  <text x="1120" y="354" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="26" font-weight="700" fill="#52525b">0.50</text>
+  <text x="1120" y="372" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#71717a">coverage of all 4 real failures</text>
+  <rect x="692" y="384" width="428" height="8" rx="4" fill="#ffffff"/>
+  <rect x="692" y="384" width="212" height="8" rx="4" fill="#a1a1aa"/>
+  <text x="692" y="418" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11.5" fill="#52525b">expected = 6 &#215; 4/12 = 2.00 &#183; matches: 2 found &#183; 2/4 real failures = 0.50 coverage</text>
+
+  <!-- verdict strip -->
+  <rect x="672" y="470" width="468" height="66" rx="10" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="692" y="494" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12.5" font-weight="700" fill="#047857">Same 6 annotations, very different yield</text>
+  <text x="692" y="514" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#065f46">Hard-case: 0.67 failure density vs 0.33 base rate &#8594; roughly 2&#215; denser</text>
+  <text x="692" y="530" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#065f46">Base rate: 4 true failures / 12 traces = 0.33</text>
+
+  <!-- ============================================================
+       BOTTOM, FULL WIDTH: the flywheel, 3 rounds
+  ============================================================ -->
+  <text x="40" y="674"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.1em">THE FLYWHEEL &#183; 2 HARD CASES PER ROUND, 3 ROUNDS</text>
+
+  <!-- table header -->
+  <text x="60" y="702" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#a1a1aa" letter-spacing="0.05em">ROUND</text>
+  <text x="180" y="702" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#a1a1aa" letter-spacing="0.05em">NEW TRACES</text>
+  <text x="380" y="702" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#a1a1aa" letter-spacing="0.05em">GOLDEN SET</text>
+  <text x="560" y="702" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#a1a1aa" letter-spacing="0.05em">CUM. FAIL</text>
+  <text x="760" y="702" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#a1a1aa" letter-spacing="0.05em">COVERAGE</text>
+  <text x="960" y="702" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#a1a1aa" letter-spacing="0.05em">GOLD RATE</text>
+
+  <!-- round 1 -->
+  <rect x="40" y="712" width="1100" height="44" rx="10" fill="#ffffff" stroke="#e4e4e7" stroke-width="1.3"/>
+  <circle cx="72" cy="734" r="14" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="72" y="738" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#047857">1</text>
+  <text x="180" y="738" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#3f3f46">T12 + T11 (2 new failures)</text>
+  <text x="420" y="738" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#18181b">2</text>
+  <text x="600" y="738" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#be123c">2</text>
+  <text x="800" y="738" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#18181b">0.50</text>
+  <text x="1000" y="738" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#059669">1.00</text>
+
+  <!-- round 2 -->
+  <rect x="40" y="762" width="1100" height="44" rx="10" fill="#ffffff" stroke="#e4e4e7" stroke-width="1.3"/>
+  <circle cx="72" cy="784" r="14" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="72" y="788" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#047857">2</text>
+  <text x="180" y="788" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#3f3f46">T10 + T09 (1 new failure)</text>
+  <text x="420" y="788" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#18181b">4</text>
+  <text x="600" y="788" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#be123c">3</text>
+  <text x="800" y="788" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#18181b">0.75</text>
+  <text x="1000" y="788" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#059669">0.75</text>
+
+  <!-- round 3 -->
+  <rect x="40" y="812" width="1100" height="44" rx="10" fill="#ffffff" stroke="#e4e4e7" stroke-width="1.3"/>
+  <circle cx="72" cy="834" r="14" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="72" y="838" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#047857">3</text>
+  <text x="180" y="838" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#3f3f46">T08 + T07 (1 new failure)</text>
+  <text x="420" y="838" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#18181b">6</text>
+  <text x="600" y="838" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#be123c">4</text>
+  <text x="800" y="838" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#18181b">1.00</text>
+  <text x="1000" y="838" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#059669">0.67</text>
+
+  <!-- closing caption -->
+  <rect x="40" y="868" width="1100" height="20" fill="none"/>
+  <text x="590" y="884" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">The golden set's 0.67 failure rate is deliberately enriched. It is not the production rate of 0.33: keep a random holdout too.</text>
+</svg>

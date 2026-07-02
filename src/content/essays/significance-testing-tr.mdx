@@ -1,0 +1,156 @@
+---
+title: "Fark Gercek mi?"
+description: "İki model aynı 50 öğelik küme üzerinde notlanır: A 41/50 (%82), B 42/50 (%84) alır, yani +2 puanlık bir manşet fark. Bölüm 7, uyumların eşleştirilmiş 2x2 tablosunu elle kurar, modellerin ayrıştığı 9 öğe üzerinde McNemar testini çalıştırır (hem elle sayılan tam binom p-değeri hem ki-kare yaklaşımı), anlamsız çıktığını bulur ve ardından gerçek bir 2 puanlık kazancı yakalamanın binlerce örnek gerektireceğini hesaplar."
+date: 2026-07-20
+tags: ["Değerlendirme", "LLM", "AI", "Anlamlılık", "McNemar", "İstatistiksel Güç", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-07-significance-testing"
+lang: "tr"
+translationSlug: "significance-testing"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 6 bize her skoru bir güven aralığına sarmayı öğretti, çünkü tek bir çalıştırmadan gelen tek bir sayı, oynayan bir nokta tahminidir. Bu parça, o oynamanın elinizde iki tane böyle sayı olduğu anda size dayattığı soruyu yanıtlıyor. Aynı değerlendirmeyi iki model üzerinde çalıştırıyorsunuz. Model A 50 üzerinden 41 alıyor ve Model B 50 üzerinden 42, yani A %82.0'de ve B %84.0'te, ve biri sürüm notlarına "+2 puan" yazıyor. Bu artı iki puan gerçek bir iyileşme mi, yoksa Bölüm 6'da saygı duymayı öğrenmek için harcadığımız aynı örnekleme gürültüsünün bir sonuç kılığına sokulmuş hali mi? Bu, değerlendirmelerdeki en yaygın tekil istatistiksel hatadır ve kesin bir yanıtı vardır.
+
+Yanıtın iki yarısı var ve ikisini de 50 notlanmış öğe üzerinde elle inşa ediyoruz. Önce bir **anlamlılık testi**: elimizdeki veri göz önüne alındığında, iki model gerçekten eşit olsaydı bir 2 puanlık farka ne kadar şaşırmalıydık? Bunu ham doğruluklar üzerinde çalıştırmayacağız. Uyumların **eşleştirilmiş 2x2 tablosunu** kuracağız, 50 öğenin çoğunun hangi modelin daha iyi olduğu hakkında hiçbir şey söylemediğini fark edeceğiz ve **McNemar testini** yalnızca iki modelin ayrıştığı bir avuç öğe üzerinde çalıştıracağız; hem elle sayılan tam bir binom p-değeri hem de ki-kare yaklaşımını hesaplayarak. Anlamsız çıkıyor. İkinci olarak, hayal kırıklığını bir plana çeviren bir **güç** hesabı: eğer gerçekten bir 2 puanlık kazanç varsa, bunu güvenilir biçimde yakalamak için kaç öğeye ihtiyacınız olurdu? Yanıt, binlerce, 50 öğe üzerindeki bir 2 puanlık manşetin bir sonuç olarak asla yazıya geçirilmemesi gerektiğinin tüm nedenidir.
+
+## Ön koşullar
+
+Bölüm 6'nın, bir skorun yayılımı olan bir örneklem istatistiği olduğu fikrine ve her zamanki gibi aynı temel Python'a ihtiyacınız var: bir döngü, bir liste, bir bölme. Bir yeni aritmetik parçası ortaya çıkıyor, binom katsayısı `C(n, k)` (n şeyin arasından k tanesini seçmenin yol sayısı), ve onu elle hesaplıyoruz ki asla inanç meselesi olarak kabul etmek zorunda kalmayasınız. Hiçbir istatistik dersi varsayılmıyor; her formül madeni para atışlarını saymaktan türetilir. Eşlik eden dosya, [significance.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-07-significance-testing), API anahtarı, ağ ve NumPy dışında hiçbir şey olmadan offline çalışır, ve bu yazıdaki her sayı doğrudan onun basılmış çıktısından kopyalanmıştır. Ki-kare yaklaşımını aktardığımız yerde, SciPy dosyada yalnızca elle türetilen değeri doğrulamak için kullanılır, asla onu üretmek için değil.
+
+## İki model, bir küme, bir cazip sayı
+
+Kurulumla başlayın, çünkü bütün püf noktası kurulumda saklı. İki ayrı örneklem üzerinde iki ayrı değerlendirme çalıştırmamız yok. **Tek** bir 50 öğelik kümemiz var ve her iki model **aynı** 50 öğe üzerinde notlandı. O "aynı" kelimesi muazzam bir iş görüyor ve ona geri döneceğiz, ama önce ham skorlar. Model A 50'nin 41'ini doğru yaptı, ki bu 41/50 = %82.0. Model B 50'nin 42'sini doğru yaptı, ki bu 42/50 = %84.0. Çıkarın, manşeti elde edersiniz: B eksi A, +2.0 puan. Gerçek mi, gürültü mü?
+
+Saf hamle, iki doğruluğu iki bağımsız ölçüm gibi ele alıp 0.82 ile 0.84'ün yeterince uzak olup olmadığını sormaktır. Bu, elimizdeki en değerli şeyi çöpe atar. Çünkü her iki model de aynı öğeleri gördü, öğe öğe, yalnızca her birinin kaçını doğru yaptığını değil, tam olarak *hangilerini* doğru yaptığını ve uyuşup uyuşmadıklarını biliyoruz. O eşleştirilmiş bilgi, iki yalnız yüzdeden çok daha güçlüdür ve onu kullanmak, küçük gerçek bir farkı saptayabilen bir test ile saptayamayan bir test arasındaki farktır. Yani 41'i 42'ye karşı karşılaştırmıyoruz. İki modeli her seferinde bir öğe olarak karşılaştırıyoruz.
+
+İki notlanmış çalıştırmayı yan yana dizdiğinizde çoğu öğe sıkıcıdır. 50 öğenin 41'inde iki model birbiriyle uyuştu, birlikte doğru ya da birlikte yanlış, ve her iki modelin aynı şeyi yaptığı bir öğe size hangisinin daha iyi olduğu hakkında hiçbir şey söylemez. Bütün sinyal, son kırıntısına kadar, iki modelin ayrıştığı öğelerde yaşar. Bu kümede tam olarak dokuz tane var:
+
+```text
+The 9 items where the models split (the rest, both agree):
+  item   A   B   who won
+    15   0   1   B only
+    20   1   0   A only
+    22   0   1   B only
+    24   1   0   A only
+    34   0   1   B only
+    36   1   0   A only
+    37   0   1   B only
+    41   1   0   A only
+    46   0   1   B only
+```
+
+"Who won" (kim kazandı) sütununu okuyun ve tüm soru kafanızda tutabileceğiniz bir şeye çöker: modellerin ayrıştığı dokuz öğede B beşini kazandı, A dördünü. İşte bu kadar. O beşe-karşı-dört bölünmesi, dokuz anlaşmazlık üzerinden, "B daha iyidir" için var olan tüm kanıttır. 50 öğedeki diğer her şey sessiz.
+
+## Eşleştirilmiş 2x2
+
+Bu yapıyı tam kılmak için tüm 50 öğeyi bir tabloya ayıralım, Bölüm 1'de hata matrisiyle yaptığımız aynı hamle, ancak şimdi iki eksen altın ve tahmin yerine iki model. Her öğe A altında ya doğru ya yanlış, ve bağımsız olarak B altında ya doğru ya yanlış, dolayısıyla tam olarak dört hücreden birine iner:
+
+- İkisi de doğru: **a** dediğimiz sayı. Bunlardan 37 tane var.
+- A doğru, B yanlış: **b** sayısı. 4 tane.
+- A yanlış, B doğru: **c** sayısı. 5 tane.
+- İkisi de yanlış: **d** sayısı. 4 tane.
+
+Toplamları 37 + 4 + 5 + 4 = 50, her öğenin bir yere indiğinin sağlaması. İşte tablo, dört hücre adlandırılmış halde:
+
+```text
+                     B correct   B wrong
+  A correct              37          4      (a, b)
+  A wrong                  5           4      (c, d)
+  cells: a=37  b=4  c=5  d=4   (n=50)
+```
+
+Şimdi kilit içgörü, ve eşleştirilmiş testin yüzdeleri karşılaştırmaktan neden daha güçlü olduğunun tüm nedeni. Köşegen üzerindeki iki hücre, a = 37 (ikisi de doğru) ve d = 4 (ikisi de yanlış), **uyumludur (concordant)**: modeller uyuştu, dolayısıyla hangisinin daha iyi olduğunu size söyleyemezler. Bu soru için ölü ağırlıktırlar. Yalnızca iki **uyumsuz (discordant)** hücre sinyal taşır: b = 4 (A doğru, B yanlışken) ve c = 5 (B doğru, A yanlışken). Ham skorların yalnızca bu hücrelerin toplamı olduğuna dikkat edin. Model A'nın 41 doğrusu a + b = 37 + 4. Model B'nin 42 doğrusu a + c = 37 + 5. Yani tüm 2 puanlık fark tek bir gerçekten kaynaklanır ve yalnızca ondan: c, b'den bir fazla, 5'e karşı 4. Test, dokuz anlaşmazlık içinde birlik bir farkın hiçbir anlam ifade edip etmediğini soracak.
+
+<Diagram number={1} caption="Aynı 50 öğelik küme üzerinde notlanan iki model için elle sayılmış eşleştirilmiş 2x2 tablo, McNemar testi ve bir güç paneliyle. Model A 41/50 (%82.0) ve Model B 42/50 (%84.0) aldı, +2.0 puanlık bir manşet fark. Dört hücre: ikisi-de-doğru a=37, A-yalnız b=4, B-yalnız c=5 ve ikisi-de-yanlış d=4, toplamı 50. Uyumlu köşegen hücreleri (a ve d) sessiz ve bilgisiz işaretlenir; yalnızca 9 uyumsuz öğe (b artı c) sinyal taşır. McNemar testi b=4, c=5 üzerinde düzeltilmemiş 0.111 ki-kare, Yates-düzeltilmiş 0.000 ki-kare, 0.739 yaklaşık ki-kare p ve tam iki-yönlü binom p 1.000 verir, dolayısıyla fark anlamlı değildir. Güç paneli, gerçek bir 2 puanlık kazancı %80 güçte saptamanın eşleştirilmemiş biçimde model başına yaklaşık 5528 öğe ya da eşleştirilmiş biçimde toplam yaklaşık 3515 öğe gerektirdiğini gösterir.">
+  <img src="/essays/significance-testing/part7-figure.svg" alt="Aynı 50 öğelik küme üzerinde notlanan iki model için 'The paired 2x2 table, counted by hand' başlıklı, Model A 41/50 = %82.0 ve Model B 42/50 = %84.0, manşet fark +2.0 puan olan bir eşleştirilmiş 2x2 tablo. Satırlar Model A doğru ve yanlış; sütunlar Model B doğru ve yanlış. Sol üst ikisi de doğru, sessiz, a=37; sağ üst yalnız A, uyumsuz, b=4; sol alt yalnız B, uyumsuz, c=5; sağ alt ikisi de yanlış, sessiz, d=4. Bir not şöyle der: n = a+b+c+d = 37+4+5+4 = 50, uyumlu hücreler (a, d) bilgisiz ve uyumsuz hücreler (b, c) sinyali taşır. b=4, c=5 üzerine bir McNemar paneli şunları listeler: düzeltilmemiş ki-kare 0.111, (4-5)^2/9'dan; Yates-düzeltilmiş ki-kare 0.000, 0^2/9'dan; yaklaşık p (ki-kare, 1 df) 0.739; ve tam iki-yönlü binom p 1.000, 2 çarpı [C(9,0)+...+C(9,4)] bölü 2^9 = 2 çarpı 256/512'den. p = 1.000'in 0.05'ten çok büyük olduğu ve farkın 50 öğe üzerinde anlamlı olmadığı sonucuna varır. Bir güç paneli gerçek bir +2 puanlık kazancı %80 güçte yakalamanın ne kadar büyük bir küme gerektirdiğini sorar ve eşleştirilmemiş biçimde model başına 5528 (7.84 çarpı 0.2820 / 0.0004'ten) ya da eşleştirilmiş biçimde 633 uyumsuz çift, toplam 3515 yanıtını verir." class="w-full rounded-lg" />
+</Diagram>
+
+## McNemar testi: anlaşmazlıklar madeni para atışlarıdır
+
+İşte testi bir kez gördüğünüzde neredeyse apaçık kılan akıl yürütme. İki modelin gerçekten eşit derecede iyi olduğunu varsayın, **sıfır hipotezi (null hypothesis)**. O halde ayrıştıkları dokuz öğenin her birinde, anlaşmazlığın bir yöne diğerinden daha çok düşmesi için hiçbir neden yok. A'nın o belirli öğeyi doğru ve B'nin yanlış yapması ya da tersi, bir madeni para atışıdır. Yani sıfır hipotezi altında, B'nin yönüne giden anlaşmazlıkların sayısı, dokuz adil madeni para atışındaki turaların sayısıdır: bir **Binom(9, 0.5)**. B'nin yönüne giden gözlenen sayımız c = 5. "+2 puan gerçek mi" sorusu "adil bir madeni para için 9'da 5 tura şaşırtıcı mı?" sorusuna dönüştü. Yüksek sesle söylendiğinde yanıtın hayır olduğunu zaten biliyorsunuz. Bunu iki yolla bir sayıya çevirelim.
+
+**Ki-kare yaklaşımı.** McNemar istatistiği iki uyumsuz hücreyi doğrudan karşılaştırır. Düzeltilmemiş sürüm, farkın karesinin toplama bölümüdür:
+
+```text
+chi-square (uncorrected) = (b - c)^2 / (b + c) = (4 - 5)^2 / 9 = 0.111
+```
+
+b ve c küçük sayımlar olduğundan, istatistikçiler kareye almadan önce mutlak farktan bir çıkaran bir süreklilik düzeltmesi (Yates) uygular, ki burada istatistiği tamamen silip süpürür:
+
+```text
+chi-square (Yates corr.) = (|b - c| - 1)^2 / (b + c) = 0^2 / 9 = 0.000
+```
+
+Her iki durumda da istatistik minik. Düzeltilmemiş 0.111'i 1 serbestlik dereceli bir ki-kare dağılımına karşı karşılaştırmak 0.739'luk bir p-değeri verir. Sözle: iki model eşit olsaydı, en az bu kadar büyük bir farkı yaklaşık %74 oranında görürdünüz. Bu şaşkınlık değil, havanın durumu.
+
+**Tam test.** Ki-kare yalnızca bir yaklaşımdır ve dokuz anlaşmazlıkla bir yaklaşıma ihtiyacımız yok, madeni para atışı sonuçlarını doğrudan sayabiliriz. Dokuzun 5'inin B'nin yönüne gittiğini gözlemledik. İki-yönlü p-değeri, herhangi bir yönde en az bu kadar dengesiz bir bölünmenin olasılığıdır. 5'e-karşı-4, dokuzun yapabileceği *en dengeli* bölünme olduğundan (diğer taraf 4'e-karşı-5), "en az bu kadar dengesiz" her olası sonuç demektir, dolayısıyla topladığımız kuyruk 0'dan 4'e kadar uzanır:
+
+```text
+exact p: 2 * [C(9,0)+...+C(9,4)] / 2^9
+       = 2 * 256 / 512 = 1.000
+```
+
+Parçaları elle doğrulayalım ki hiçbir şey sihir olmasın. Binom katsayıları C(9,0) = 1, C(9,1) = 9, C(9,2) = 36, C(9,3) = 84, C(9,4) = 126, ve 1 + 9 + 36 + 84 + 126 = 256. Dokuz atış için toplam sonuç sayısı 2'nin 9'uncu kuvveti, ki bu 512. Yani tek-yönlü kuyruk 256/512 = 0.5, ve iki-yönlü için ikiye katlamak 2 çarpı 256 bölü 512 = 1.000 verir. 1.000'lik tam bir p-değeri, "burada görülecek bir şey yok"un mümkün olan en güçlü ifadesidir: dokuz anlaşmazlık üzerinden 5'e-karşı-4 bölünme, adil bir madeni paranın ortalama olarak ürettiği şeyin *tam olarak* ta kendisidir. Daha az şaşırtıcı bir yapılanma yok.
+
+Yani her iki yol da aynı yere varıyor. p-değeri, ister 0.739 yaklaşımı ister tam 1.000 olsun, olağan 0.05 eşiğinin çok üzerinde oturur. Bu kümede gürültüyü dışlayamayız. +2.0 puan bir sonuç değil. B'nin daha kötü olduğunun kanıtı da değil; bu yalnızca 50 öğenin bir şey duymaya yetmeyecek kadar az olmasının sesi. O ayrım önemli: büyük bir p-değeri asla modellerin eşit olduğunu kanıtlamaz, yalnızca bu deneyin onları ayırt edecek çözünürlükten yoksun olduğunu söyler.
+
+## Güç: kaç öğe gerekirdi?
+
+Doğal, ve doğru, sonraki soru "B daha mı iyi" değil "bunu nasıl öğrenebiliriz?" Bu, **istatistiksel güçtür (statistical power)**: eğer belirli bir büyüklükte gerçek bir etki varsa, testinizin onu saptama olasılığı. 50 öğelik değerlendirmemizin neredeyse hiç yoktu. *Gerçek* bir 2 puanlık kazancı zamanın %80'inde yakalamak için, ki bu geleneksel güç hedefidir, aslında ne kadar büyük bir kümeye ihtiyacımız olacağını hesaplayalım.
+
+İki oranı karşılaştırmanın standart kuralı iki şeyi dengeler: bir sonucu gerçek diye adlandırmadan önce ne kadar güvenli olmakta ısrar ettiğiniz (anlamlılık düzeyi alfa, burada 0.05, ki `z_alpha = 1.96`'ya karşılık gelir) ve gerçek bir etkiyi ne sıklıkla yakalamak istediğiniz (%80 güç, ki `z_beta = 0.84`'e karşılık gelir). O iki z-değerini toplayın, toplamın karesini alın ve `(1.96 + 0.84)^2 = 7.84` elde edersiniz, güveninizin ve gücünüzün birlikte bedeli. Eşleştirilmemiş iki-oran örneklem büyüklüğü:
+
+```text
+n = (z_a + z_b)^2 * [pA(1-pA) + pB(1-pB)] / (pB - pA)^2
+```
+
+Sayıları yerleştirin. Varyans terimi pA çarpı (1 eksi pA) artı pB çarpı (1 eksi pB), ki bu 0.82 çarpı 0.18 artı 0.84 çarpı 0.16, eşittir 0.1476 + 0.1344 = 0.2820. Saptamak istediğimiz etki pB eksi pA = 0.02, ve paydanın karesini almak delta kare = 0.0004 verir. Yani:
+
+```text
+n = 7.84 * 0.2820 / 0.0004 = 5528 items PER MODEL
+```
+
+*Her* model için, bir 2 puanlık farkı güvenilir biçimde yakalamak için beş binden fazla notlanmış öğe. 50 öğelik kümemiz yüz kat daha küçüktü. Hiç şansı yoktu.
+
+Ancak eşleştirme yardımcı olur, ve her iki modeli de aynı öğeler üzerinde notlamış olmanın karşılığı budur. McNemar testi gücünü yalnızca uyumsuz çiftlere harcar, ve bu kümede 50 öğenin 9'u uyumsuzdu, %18'lik bir kesir. Eşleştirilmiş hesap, bir 2 puanlık farkın ima ettiği büyüklükte tutarlı bir eğilim görmek için kaç *uyumsuz* çift gerektiğini sorar, ki bu 633 uyumsuz çift olarak çıkar. Öğelerin yalnızca %18'i uyumsuzken 633 uyumsuz çift toplamak için, 633'ü o %18 oranına bölersiniz, yaklaşık toplam 3515 öğe verir:
+
+```text
+Paired (McNemar) rule, 18% of items discordant:
+  need 633 discordant pairs -> 3515 items total
+```
+
+3515'i 5528'e karşılaştırmaktan iki ders çıkar. Birincisi, eşleştirme gerçekten daha verimli: 3515 toplam öğe, model başına 5528'i geçer, çünkü çöpe attığınız uyumlu öğeler zaten yardım etmeyecekti ve aynı kümeyi iki kez notlamak etiketleme emeğinizi tekrar kullanır. İkincisi, ve daha önemlisi, *her iki* sayı da binlerce. Bir 2 puanlık iddiayı 50 öğelik bir değerlendirmeden kurtaran akıllı bir test yok. Etki gerçek ya da değil, ama 50 öğe onu basitçe göremez. Küçük bir değerlendirme üzerindeki bir 2 puanlık manşet bir sonuç değil, bir "hava"dır, ve dürüst olan şey +2'yi değil Bölüm 6'daki aralığı raporlamaktır, ki bu 50 öğe üzerinde rahatça sıfırı içerir.
+
+Aşağıdaki interaktif figür anlamlılık sınırının tam olarak nerede oturduğunu hissetmenizi sağlar. İki uyumsuz sayımı, b ve c'yi sürükleyin ve tam binom p-değerinin canlı güncellenmesini izleyin: bölünmenin p 0.05'in altına düşmeden önce oldukça dengesiz olması gerektiğini, 5'e-karşı-4'ten çok daha fazla, göreceksiniz, ve bunun kaç uyumsuz öğe daha gerektireceğini izleyebilirsiniz. İkinci bir panel, gerçek farkı ve küme büyüklüğünü ayarlamanıza izin verir ve n binlere geçtikçe gücün "neredeyse hiç"ten %80'e doğru tırmanmasını gösterir.
+
+<IframeFigure src="/essays/significance-testing/part7-interactive.html" title="İnteraktif anlamlılık ve güç gezgini: iki uyumsuz sayım b ve c'yi sürüklemenin McNemar'ın tam iki-yönlü binom p-değerini yeniden hesapladığı ve farkın 0.05 eşiğini geçip geçmediğini gösterdiği bir üst panel, ve gerçek doğruluk farkını ve değerlendirme kümesi büyüklüğünü kaydırmanın istatistiksel gücün yalnızca öğe sayısı binlere ulaştıkça %80'e doğru yükseldiğini gösterdiği bir alt panel." height={860} />
+
+## Özet / Çıkarımlar
+
+- **İki doğruluk arasındaki bir fark, bir test öyle diyene kadar bir sonuç değildir.** Aynı 50 öğe üzerinde Model A %82.0'de ve Model B %84.0'te bir +2.0 puanlık manşettir, ama tüm fark bir fazla uyumsuz öğeden gelir (c=5'e karşı b=4), ve dokuz anlaşmazlıktan bir öğe tam olarak bir madeni para atışının göründüğü şeydir.
+- **Karşılaştırmayı eşleştirin ve uyumları çöpe atın.** Her iki modeli de aynı küme üzerinde notlamak, eşleştirilmiş 2x2'yi (a=37, b=4, c=5, d=4, toplamı 50) kurmanıza izin verir. 37 ikisi-de-doğru ve 4 ikisi-de-yanlış öğe uyumludur ve sinyal taşımaz; yalnızca 9 uyumsuz öğe soruyu belirler.
+- **McNemar testi anlaşmazlıkları madeni para atışları olarak ele alır.** Modellerin eşit olduğu sıfır hipotezi altında, bir yöne giden sayım Binom(9, 0.5)'tir. Düzeltilmemiş ki-kare 0.111 ve Yates-düzeltilmiş ki-kare 0.000, 0.739'luk yaklaşık bir p verir; tam iki-yönlü p, 2 çarpı [C(9,0)+...+C(9,4)] bölü 2^9 = 2 çarpı 256/512 = 1.000. Anlamlılığa hiç yakın değil.
+- **Büyük bir p-değeri "söyleyemem" demektir, "fark yok" değil.** Test modellerin eşit olduğunu kanıtlamadı; 50 öğenin onları ayırma çözünürlüğünden yoksun olduğunu gösterdi. Doğru rapor güven aralığıdır, ki bu kümede sıfırı içerir.
+- **Güç size gerçekten ihtiyaç duyduğunuz küme büyüklüğünü söyler.** Gerçek bir 2 puanlık kazancı %80 güçte saptamak, eşleştirilmemiş biçimde model başına yaklaşık 5528 öğe gerektirir, 7.84 çarpı 0.2820 bölü 0.0004 olarak hesaplanır, ya da eşleştirilmiş biçimde toplam yaklaşık 3515 öğe (%18 uyumsuz oranda 633 uyumsuz çift). Eşleştirme daha verimlidir, ama her ikisi de binlerce, dolayısıyla küçük bir değerlendirme üzerindeki bir 2 puanlık iddia bir sonuç değil, bir "hava"dır.
+
+## Sözlük
+
+- **Sıfır hipotezi (null hypothesis)**: bir testin çürütmeye çalıştığı varsayılan varsayım. Burada "iki model eşit derecede iyi"dir, ki bu varsayım altında aralarındaki her anlaşmazlık adil bir madeni para atışıdır.
+- **Anlamlılık (p-değeri)**: sıfır hipotezi doğru olsaydı, gözlenen en az onun kadar büyük bir fark görme olasılığı. Küçük bir p (geleneksel olarak 0.05'in altında), verinin sıfır hipotezi altında şaşırtıcı olacağı anlamına gelir, dolayısıyla onu reddedersiniz. Burada p, 0.739 (yaklaşık) ya da 1.000 (tam), herhangi bir şeyi reddetmek için fazlasıyla büyük.
+- **Eşleştirilmiş karşılaştırma (paired comparison)**: iki sistemi tam olarak aynı öğeler üzerinde karşılaştırmak, böylece öğe öğe uyuşup uyuşmadıklarını bilirsiniz. İki bağımsız doğruluğu karşılaştırmaktan çok daha güçlüdür, çünkü uyumlar bir kenara konabilir ve yalnızca anlaşmazlıklar analiz edilir.
+- **Uyumlu vs uyumsuz (concordant vs discordant)**: her iki model de aynı sonucu aldığında (ikisi de doğru, ikisi de yanlış) bir öğe uyumludur ve ayrıştıklarında uyumsuzdur. Yalnızca uyumsuz öğeler (burada 50'nin 9'u) hangi modelin daha iyi olduğu hakkında bilgi taşır.
+- **McNemar testi**: eşleştirilmiş bir 2x2 tablo için anlamlılık testi. Uyumlu hücreleri yok sayar ve iki uyumsuz hücre (b ve c) arasındaki bölünmenin adil bir madeni paranın üreteceğinden daha dengesiz olup olmadığını sorar.
+- **Binom katsayısı C(n, k)**: madeni para atışı sonuçlarını saymak için kullanılan, n'in arasından k öğeyi seçmenin yol sayısı. Burada C(9,0)'dan C(9,4)'e kadar toplamı 256, ve tüm sonuçlar 2^9 = 512 tanedir.
+- **Yates süreklilik düzeltmesi**: kareye almadan önce mutlak farktan 1 çıkaran, küçük sayımlar için ki-kare yaklaşımını daha dürüst kılan bir düzeltme. İstatistiğimizi 0.111'den 0.000'e indirir.
+- **İstatistiksel güç (statistical power)**: bir testin belirli bir büyüklükteki gerçek bir etkiyi saptama olasılığı. Düşük güç, gerçek bir farkın gürültü olarak saklanabileceği anlamına gelir; 50 öğelik kümemizin bir 2 puanlık kazancı saptamaya neredeyse hiç gücü yoktu.
+- **Örneklem büyüklüğü / z-değerleri**: bir hedef güç için gereken öğe sayısı. Talep ettiğiniz güven ve güçle (z_alpha = 1.96 ve z_beta = 0.84 aracılığıyla, ki toplamlarının karesi 7.84'tür) ve sonuç varyansıyla (burada 0.2820) büyür, ve yakalamak istediğiniz etkinin karesiyle (delta^2 = 0.0004) küçülür, eşleştirilmemiş biçimde model başına 5528 ya da eşleştirilmiş biçimde toplam 3515 verir.
+
+---
+
+pass@k, herkesin kod üretimi için alıntıladığı ve neredeyse hiç kimsenin doğru hesaplamadığı metriktir: k kez örnekleyin, herhangi biri geçerse bir başarı sayın, ve saf ortalama yanlıdır. **Bölüm 8, pass@k**, yansız tahminciyi tek bir kombinatorik özdeşlikten türetir ve onu n=5'te kaba kuvvet bir sayıma karşı denetler.

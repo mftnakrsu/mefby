@@ -1,0 +1,175 @@
+---
+title: "Kalibrasyon"
+description: "Bir güven skoru bir vaattir: bir modelin %80 emin diye etiketlediği yanıtlardan yaklaşık %80'i doğru olmalıdır. Bölüm 10, aynı on trivia güven skorunu iki kez notlar, bir kez aşırı-güvenli bir model için ve bir kez iyi-kalibre bir model için, üç kova boyunca güvenilirlik eğrisini elle kurar ve bütün resmi ECE ile Brier skoruna indirger."
+date: 2026-07-23
+tags: ["Değerlendirme", "LLM", "AI", "Kalibrasyon", "ECE", "Brier", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-10-calibration"
+lang: "tr"
+translationSlug: "calibration"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 9, ikili çarpışmaları tek bir sıralamaya dönüştürdü; artık hangi modelin daha iyi olduğunu söyleyebiliyoruz. Bu bölüm tek bir model hakkında farklı bir soru soruyor: size ne kadar emin olduğunu söylediğinde, ona inanmalı mısınız? Modern modeller yalnızca yanıtlamakla kalmaz, sık sık bir **güven (confidence)** de iliştirir, 0.8 gibi "%80 eminim" diyen bir sayı. O sayı bir vaattir ve **kalibrasyonun (calibration)** bütün amacı vaadin tutulup tutulmadığını denetlemektir. Yüz soruda 0.8 diyen iyi-kalibre bir model bunların yaklaşık seksenini doğru yapmalıdır. Aşırı-güvenli bir model 0.8 der ve kırkını doğru yapar; güvenemeyeceğiniz bir güven skoru, hiç güven skoru olmamasından daha kötüdür, çünkü sizi hiçbir zaman var olmayan bir kesinliğe göre hareket etmeye davet eder.
+
+Bunu somut ve küçük tutalım. Bir trivia modeli on soru yanıtlar. Her biri için 0.6 ile 1.0 arasında bir güven skoru belirtir ve sonradan gerçekten doğru olup olmadığını öğreniriz. O on güven skorunu alıp iki kez, iki farklı sonuç kümesine karşı notlayacağız: sonuçları belirttiği güvenle uyuşmayan bir **aşırı-güvenli** model ve sonuçları uyuşan bir **iyi-kalibre** model. Her iki seferde de aynı güven skorları, yalnızca sonuçlar farklı, ki tam da mesele budur: kalibrasyon, bir modelin söylediği sayılarla ilgili değildir, gerçekliğin onlara ayak uydurup uydurmadığıyla ilgilidir. Tahminleri üç güven kovasına ayıracak, **güvenilirlik eğrisini (reliability curve)** (her kovada ortalama güven skoruna karşı gerçek doğruluk) elle kuracak ve sonra bütün eğriyi iki manşet sayıya indirgeyeceğiz: **Beklenen Kalibrasyon Hatası (Expected Calibration Error, ECE)** ve **Brier skoru**. Sonunda kendinden emin görünen bir modele bakıp, gerçek bir sayıyla, güveninin bir anlam ifade edip etmediğini söyleyebileceksiniz.
+
+## Ön koşullar
+
+Temel Python yeterli: bir liste, bir döngü, bir bölme ve bir sayının karesini almak. Hiçbir olasılık teorisi varsayılmıyor; her fikri saymadan ve ortalama alarak inşa ediyoruz, tıpkı önceki bölümlerdeki gibi. Bu bölüm tamamen kendi içinde bütünlüklü ve Bölüm 9'a ya da başka herhangi birine bağlı değil. Eşlik eden dosya, [calibration.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-10-calibration), API anahtarı, ağ ve bağımlılık olmadan offline çalışır (NumPy'a bile ihtiyaç duymaz), böylece her satırı okuyup buradaki her sayıyı kendiniz yeniden üretebilirsiniz. Aşağıdaki nesirdeki her rakam, o dosyanın basılmış çıktısıdır, yuvarlanmamış ve düzenlenmemiş.
+
+## Bir güven skoru bir vaattir
+
+Seriye başladığımız metrik olan doğruluk, modelin bize söylediği bir şeyi çöpe atar. Bir model bir trivia sorusunu yanıtladığında, ne kadar emin olduğunu da bildirebilir ve aynı doğruluğa sahip iki model çok farklı hayvanlar olabilir: biri sessizce doğrudur, gerektiğinde çekingen davranır, diğeri her şeyde 0.99'la blöf yapar ve tesadüfen %40'ını tutturur. Doğruluk onları aynı notlar. Kalibrasyon, onları birbirinden ayıran araçtır.
+
+İşte veri, on yanıt, doğrudan eşlik eden dosyadan. `CONF[i]`, modelin `i` sorusunda belirttiği güven skorudur. Her iki model için de tam olarak aynı güven skorlarını kullanacağız:
+
+```python
+CONF = [0.6, 0.6, 0.7, 0.8, 0.8, 0.9, 0.9, 0.9, 1.0, 1.0]
+```
+
+Bunların sıralı olduğuna ve yükseldiğine dikkat edin: 0.6'da iki yanıt, 0.7'de bir, 0.8'de iki, 0.9'da üç, 1.0'da iki. Şimdi iki farklı gerçeklik. `OUTCOME[i]`, model `i` sorusunda gerçekten doğru yaptıysa `1`, yanlış yaptıysa `0`'dır:
+
+```python
+OUTCOME_OVER = [1, 0, 0, 1, 0, 1, 0, 0, 1, 0]   # güvenle uyuşmuyor
+OUTCOME_CAL  = [1, 1, 0, 1, 1, 1, 1, 0, 1, 1]   # güvenle uyuşuyor
+```
+
+Sondaki iki `1.0` yanıtına bakın, modelin kesinlikle emin olduğuna yemin ettiği sorular. Aşırı-güvenli model birini doğru, birini yanlış yaptı (`1, 0`), dolayısıyla "%100 eminim" ifadesi yalnızca zamanın yarısında doğruydu. İyi-kalibre model ikisini de doğru yaptı (`1, 1`), dolayısıyla kesinliği hak edilmişti. Aynı belirtilen 1.0 güven skoru, iki çok farklı sicil. Bir modelin söylediği ile teslim ettiği arasındaki o boşluk, bu bölümün bütün konusudur.
+
+## İlk bakışta aynı görünen iki model
+
+Herhangi bir şeyi kovalamadan önce, en kaba iki özeti hesaplayın: modelin yaydığı ortalama güven skoru ve gerçekten doğru yaptığı oran.
+
+Ortalama güven skoru her iki model için de aynıdır çünkü `CONF` listesini paylaşırlar. On güven skorunu toplayın (alt kovada 1.9, ortada 4.3, tepede 2.0, ki bu toplamda 8.2 eder) ve ona bölün:
+
+```text
+mean confidence = 0.82   (her iki model, aynı güven skorları)
+```
+
+Şimdi doğrulukları, ki bunlar her sonuç listesindeki `1`'lerin oranından ibaret. Aşırı-güvenli modelin onda dört `1`'i var, iyi-kalibre modelin sekiz:
+
+```text
+over-confident:  accuracy = 0.40
+well-calibrated: accuracy = 0.80
+```
+
+İşte ilk sarsıntı. Her iki model de ortalama 0.82 güven skoru duyurarak dolaşır. Biri zamanın %40'ında doğru, diğeri %80'inde. Aşırı-güvenli modelin manşet vaadi (0.82) teslimatını (0.40) fersah fersah aşarken, iyi-kalibre modelin 0.82'si 0.80'ine yakın oturur. Ortalama güven skoru ile genel doğruluk arasındaki tek bir boşluk bile size ilk modelde bir şeylerin yanlış olduğunu söyler. Ama o üst-satır boşluğu fazla künt: modelin çekingen olduğu sorularla horoz gibi kabaran olduğu soruların üzerinden ortalama alır ve size vaadin *nerede* bozulduğunu söyleyemez. Bunun için her şeyin üzerinden ortalama almayı bırakıp gruplamaya başlamamız gerekir.
+
+## Güvenilirlik eğrisi, bir kova bir kova
+
+Fikir basit ve kalemle yapabilirsiniz. Tahminleri belirtilen güven skoruna göre birkaç kovaya ayırın. Her kovanın içinde iki soru sorun: model ortalama hangi güven skorunu iddia etti (vaat) ve gerçekte hangi oranı doğru yaptı (teslimat). Model dürüstse, o iki sayı her kovanın içinde eşleşir. Vaadi bir eksende, teslimatı diğerinde çizin; dürüst bir model, ikisinin eşit olduğu köşegen çizgiyi izler.
+
+Gördüğümüz güven skorlarını kapsayan üç kova kullanıyoruz. İlk ikisi yarı-açık aralıklar, sonuncusu ise mükemmel-kesinlik yanıtlarını tam olarak 1.0'da yakalar:
+
+- `[0.6, 0.8)`: 0.6 ya da 0.7 güven skorları
+- `[0.8, 1.0)`: 0.8 ya da 0.9 güven skorları
+- `[1.0]`: tam olarak 1.0 güven skorları
+
+Şimdi aşırı-güvenli modeli elle bunların içinden yürütün. **Kova `[0.6, 0.8)`** üç düşük-güvenli yanıtı yakalar (0.6, 0.6, 0.7). Ortalama güven skorları (0.6 + 0.6 + 0.7) / 3 = 0.633. Bu üçündeki aşırı-güvenli sonuçlar `1, 0, 0` idi, dolayısıyla üçte biri doğruydu: doğruluk 0.333. **Boşluk (gap)**, vaat ile teslimat arasındaki mesafe, mutlak farktır, 0.633 eksi 0.333 = 0.300.
+
+**Kova `[0.8, 1.0)`** beş orta yanıtı yakalar (0.8, 0.8, 0.9, 0.9, 0.9). Ortalama güven skorları 4.3 / 5 = 0.860. Oradaki aşırı-güvenli sonuçlar `1, 0, 1, 0, 0` idi, beşte iki doğru: doğruluk 0.400. Boşluk 0.860 eksi 0.400 = 0.460, ilk kovadan daha geniş.
+
+**Kova `[1.0]`** iki kesinlik yanıtını yakalar. Ortalama güven skorları, tanım gereği 1.000. Aşırı-güvenli sonuçlar `1, 0` idi, ikide bir doğru: doğruluk 0.500. Boşluk tam 0.500, hepsinin en genişi. Model, en az güvenilir olduğu yerde tam olarak en emindi.
+
+O üç satırı yan yana dizin ve elinizde aşırı-güvenli modelin güvenilirlik eğrisi olur, eşlik eden dosyanın bastığı tam tablo:
+
+```text
+OVER-CONFIDENT model (outcomes do NOT track confidence):
+  mean confidence = 0.82   accuracy = 0.40
+  reliability curve (per confidence bin):
+    bin           n   mean_conf   accuracy   gap
+    [0.6, 0.8)   3      0.633      0.333   0.300
+    [0.8, 1.0)   5      0.860      0.400   0.460
+    [1.0]        2      1.000      0.500   0.500
+```
+
+Her doğruluk, kendi ortalama güven skorunun altında oturuyor. Her kova köşegenin altında. O şekil, bütün eğrinin dürüstlük çizgisinin altına sarkması, aşırı-güvenin görsel imzasıdır ve aşağıdaki figür bunu çizer. Yatay eksen belirtilen güven skoru, dikey eksen gerçek doğruluk, kesikli köşegen mükemmel kalibrasyon ve aşırı-güvenli modelin üç noktası, her kovadaki boşluk işaretlenmiş olarak onun altında asılı duruyor. İyi-kalibre modelin noktaları, ki bunları birazdan hesaplıyoruz, karşılaştırma için tam köşegen boyunca ilerliyor.
+
+<Diagram number={1} caption="Aynı on güven skorundan kurulan, her iki model için güvenilirlik eğrisi. Yatay eksen belirtilen güven skoru, dikey eksen gerçek doğruluk ve kesikli köşegen, ikisinin eşit olduğu mükemmel kalibrasyonu işaretler. Aşırı-güvenli modelin üç kovalanmış noktası köşegenin epey altında oturur, [0.6, 0.8) (n=3, ortalama 0.633), [0.8, 1.0) (n=5, ortalama 0.860) ve [1.0] (n=2, ortalama 1.000) kovalarında 0.300, 0.460 ve 0.500 boşluklarıyla; eğrisi dürüstlük çizgisinin altına sarkar. İyi-kalibre modelin noktaları, aynı kovalarda, yalnızca 0.033, 0.060 ve 0.000 boşluklarıyla köşegene sarılır. İki eğri arasındaki görsel mesafe, güvenebileceğiniz bir güven skoru ile güvenemeyeceğiniz bir güven skoru arasındaki farktır.">
+  <img src="/essays/calibration/part10-figure.svg" alt="Yatay eksende belirtilen güven skorunu, dikey eksende gerçek doğruluğu, ikisi de 0.0'dan 1.0'a, çizen ve mükemmel kalibrasyon için kesikli bir köşegeni olan bir güvenilirlik diyagramı. Aynı üç güven kovasından iki eğri çizilir: [0.6, 0.8) n=3 ve ortalama 0.633, [0.8, 1.0) n=5 ve ortalama 0.860 ve [1.0] n=2 ve ortalama 1.000. Aşırı-güvenli eğri köşegenin epey altında 0.333, 0.400 ve 0.500 doğruluklarında oturur, gap 0.300, gap 0.460 ve gap 0.500 etiketli dikey boşluk işaretleriyle. İyi-kalibre eğri 0.667, 0.800 ve 1.000 doğruluklarında köşegene sarılır. Her eğri, over ve cal olarak etiketlidir, aynı güven skorlarının yalnızca sonuçlara bağlı olarak vaadini tutabileceğini ya da bozabileceğini gösterir." class="w-full rounded-lg" />
+</Diagram>
+
+## ECE: bütün eğri tek bir sayıda
+
+Güvenilirlik eğrisi dürüst ve ayrıntılıdır, ama üç satırlık bir tabloyu bir CI kapısına ya da bir liderlik tablosuna koyamazsınız. "Genel olarak, bu modelin güven skoru gerçeklikten ne kadar sapıyor?" diyen tek bir sayı istiyoruz. **Beklenen Kalibrasyon Hatası** o sayıdır ve her kovada kaç tahmin yaşadığına göre ağırlıklandırılmış ortalama boşluktan daha süslü bir şey değildir.
+
+Neden kova boyutuna göre ağırlıklandıralım? Çünkü beş tahmin tutan bir kova, iki tahmin tutan bir kovadan genel hataya daha çok katkıda bulunmalıdır. Kimsenin uğramadığı bir kovadaki büyük boşluk, işlek bir kovadaki küçük boşluktan daha az önem taşır. Yani her kova, boşluğunu toplamdaki payıyla çarparak katkıda bulunur. Aşırı-güvenli model için paylar 3/10, 5/10 ve 2/10:
+
+```text
+ECE = (3/10)(0.300) + (5/10)(0.460) + (2/10)(0.500)
+    = 0.090 + 0.230 + 0.100
+    = 0.420
+```
+
+0.420'lik bir ECE devasadır. Der ki, ortalama olarak, tahminler boyunca ağırlıklandırılmış, bu modelin belirttiği güven skoru gerçeklikten 42 yüzde puanı sapıyor. 0.82 dediğinde, onu 0.40'a daha yakın kabul edin. Bu, güven skorunu aşağı akıştaki bir karara teslim edebileceğiniz bir model değildir.
+
+## Brier: hem doğru olmayı HEM DE uygun ölçüde emin-olmamayı ödüllendirmek
+
+ECE eğrinin *şeklini* notlar, ama adını koymaya değer bir kör noktası var. Kovaların içinde ortalama aldığı için, bir model telafi edici bir biçimde yanılabilir, bir kovadaki bazı yanıtlarda aşırı-güvenli ve diğerlerinde yetersiz-güvenli, ve kovanın ortalaması yine de iyi görünebilir. ECE ayrıca yalnızca güvenin toplamda doğrulukla eşleşip eşleşmediğini önemser, tek tek tahminleri değil. **Brier skoru**, her tek tahmini doğrudan notlayarak o boşluğu kapatır.
+
+Brier skoru, güven skoru ile sonuç arasındaki ortalama karesel hatadan ibarettir, sonucu doğru için 1 ve yanlış için 0 sayarak. Her tahmin için (güven skoru eksi sonuç) alır, karesini alır ve onun üzerinden ortalarsınız. Kare almak iki şey yapar: her terimi pozitif kılar ve emin hataları çekingen olanlardan çok daha sert cezalandırır. 0.9 emin ve yanlış olmak `(0.9 - 0)^2 = 0.81` katkıda bulunur; 0.6 emin ve yanlış olmak yalnızca `(0.6 - 0)^2 = 0.36` katkıda bulunur. Model, yanlış bir yanıta caka satarak girdiği için fazladan cezalandırılır.
+
+Aşırı-güvenli modelin on tahmininde çalıştırın. Emin yanlışlar birikir: 0.9-emin ıskalar her biri 0.81 katkıda bulunur ve 1.0-emin ıska tam 1.00 katkıda bulunur. On karesel hatayı toplayın (toplamları 4.32) ve ona bölün:
+
+```text
+Brier = mean of (conf - outcome)^2 over all 10 = 0.432
+```
+
+Brier için düşük olan daha iyidir ve 0.432 kötüdür. Sezgi için, omuz silkip her şeyde 0.5 diyen bir model 0.25 alırdı, dolayısıyla bu aşırı-güvenli model *bir yazı-tura atışı olduğunu kabul eden bir yazı-tura atışından daha kötüdür*. Yüksek sesli, yanlış kesinliğin bedeli budur ve Brier, bunun ücretini kesen metriktir.
+
+## Aynı güven skorları, dürüst tutulmuş
+
+Şimdi ödül. Tam olarak aynı on güven skorunu alın ve onları iyi-kalibre sonuçlarla, güveni izleyenlerle eşleştirin. Modelin *söylediği* hiçbir şey değişmedi; yalnızca sonuçları değişti. Kovaları tekrar yürüyün: `[0.6, 0.8)`'de sonuçlar `1, 1, 0`, dolayısıyla doğruluk 0.667, ortalama güven skoru 0.633'e karşı, yalnızca 0.033'lük bir boşluk. `[0.8, 1.0)`'de sonuçlar `1, 1, 1, 1, 0`, doğruluk 0.800, 0.860'a karşı, 0.060'lık bir boşluk. `[1.0]`'de her iki kesinlik yanıtı da doğru, doğruluk 1.000, boşluk 0.000, mükemmelce tutulmuş bir vaat:
+
+```text
+WELL-CALIBRATED model (same confidences, outcomes track them):
+  mean confidence = 0.82   accuracy = 0.80
+  reliability curve (per confidence bin):
+    bin           n   mean_conf   accuracy   gap
+    [0.6, 0.8)   3      0.633      0.667   0.033
+    [0.8, 1.0)   5      0.860      0.800   0.060
+    [1.0]        2      1.000      1.000   0.000
+  ECE   = weighted avg gap  = 0.040
+  Brier = mean (conf-out)^2 = 0.172
+```
+
+O boşlukları ağırlıklandırın ve ECE `(3/10)(0.033) + (5/10)(0.060) + (2/10)(0.000) = 0.040`'a çöker. Brier skoru 0.172'ye düşer. İki modeli yan yana koyun ve sayılar bütün hikayeyi anlatsın:
+
+```text
+ECE   0.420 -> 0.040   (vaat ile gerçeklik arasındaki boşluk 10.5x küçülür)
+Brier 0.432 -> 0.172   (düşük olan daha iyi; doğru olmayı VE uygun ölçüde emin-olmamayı ödüllendirir)
+```
+
+ECE **10.5x**'lik bir çarpanla küçüldü. Her iki metrik de uyuşuyor ve hiçbiri, iki modelin tam olarak aynı şeyi *söylemesiyle* kandırılamadı. Kalibrasyon, bir modeli kendi basın bültenine göre notlamayı reddeden değerlendirmedir.
+
+Aşağıdaki interaktif figür bunu yalnızca okumak yerine hissetmenizi sağlar. Üst panel size on güven skorunu verir ve her yanıtı doğru ile yanlış arasında çevirmenize izin verir, güvenilirlik eğrisinin büküldüğünü ve ECE ile Brier'in canlı güncellendiğini izleyerek, böylece aşırı-güvenli ve iyi-kalibre eğrileri kendiniz kurabilir ve aralarındaki herhangi bir eğriyi görebilirsiniz. Alt panel, her zaman doğru olan ama asla emin olmayan bir model hakkında daha keskin bir nokta koyar: bir modelin nasıl yüksek doğruluğa sahip olup yine de kötü kalibre olabileceğini gösterir, çünkü kalibrasyon doğruluktan ayrı bir eksendir ve bir model ikisinden yalnızca birinde başarısız olabilir.
+
+<IframeFigure src="/essays/calibration/part10-interactive.html" title="İnteraktif kalibrasyon gezgini: her sonucu doğru ile yanlış arasında çevirmenin üç-kovalı güvenilirlik eğrisini yeniden kurduğu ve ECE ile Brier skorunu canlı güncellediği on trivia yanıtından oluşan bir üst panel, ve doğruluk ile kalibrasyonun bağımsız eksenler olduğunu, dolayısıyla bir modelin doğru ama kötü kalibre olabileceğini gösteren bir alt panel." height={860} />
+
+## Özet / Çıkarımlar
+
+- **Bir güven skoru bir vaattir ve kalibrasyon onun tutulup tutulmadığını denetler.** Bir modelin 0.8 diye etiketlediği yanıtlardan yaklaşık 0.8'i doğru olmalıdır. Kalibrasyon, bir modelin belirttiği güven skoru ile gerçekten teslim ettiği doğruluk arasındaki mesafeyi ölçer, doğruluğun kendisinden tümüyle ayrı bir eksen.
+- **Güvenilirlik eğrisi kaynak nesnedir.** Tahminleri belirtilen güven skoruna göre kovalayın ve her kovada ortalama güven skorunu (vaat) doğrulukla (teslimat) karşılaştırın. Dürüst bir model köşegeni izler; aşırı-güvenli bir model onun altına sarkar. On yanıtımızda aşırı-güvenli kovalar 0.300, 0.460 ve 0.500 boşluk verdi, her nokta çizginin altında.
+- **ECE eğriyi tek bir sayıya indirger: kova-boyutuyla-ağırlıklandırılmış ortalama boşluk.** Aşırı-güvenli model ECE 0.420 aldı (ortalama 42 puan sapma); iyi-kalibre model, aynı güven skorlarında, 0.040 aldı, 10.5x'lik bir küçülme. Kova boyutuna göre ağırlıklandırmak, boş bir kovadaki bir boşluğun baskın çıkmasını engeller.
+- **Brier her tahmini notlar ve emin hataları cezalandırır.** Güven skorunun sonuca karşı ortalama karesel hatası olarak, aşırı-güvenli modeli 0.432 ile suçladı (her zaman 0.5 diyen bir modelin 0.25'inden daha kötü) ve iyi-kalibre modeli 0.172 ile. Düşük olan daha iyidir ve hem doğru olmayı hem de uygun ölçüde emin-olmamayı ödüllendirir.
+- **İki model aynı şeyi söyledi (ortalama güven skoru 0.82) ama 0.40'a karşı 0.80 doğruluk teslim etti.** Kalibrasyon, bir modelin teslim ettiğini iddia ettiğine karşı notlayan tek değerlendirmedir, dolayısıyla yalnızca emin *görünen* bir modelle oyunla geçilemez.
+
+## Sözlük
+
+- **Güven (confidence)**: bir modelin kendi yanıtına iliştirdiği bir olasılık, doğru olma olasılığını iddia eden [0, 1] aralığında bir sayı. Burada belirtilen güven skorları 0.6'dan 1.0'a değişti. Bir olgu değil, bir iddiadır, bu yüzden denetlenmesi gerekir.
+- **Kalibrasyon (calibration)**: belirtilen güven skorlarının gözlenen doğrulukla eşleşmesi özelliği, öyle ki güven skoru p ile etiketlenen yanıtların p oranı gerçekten doğrudur. Bir model doğru ama kötü kalibre olabilir, ya da iyi kalibre ama yanlış olabilir; ikisi bağımsızdır.
+- **Güvenilirlik eğrisi (reliability curve, güvenilirlik diyagramı)**: güven kovalarına gruplanmış tahminler, her kova ortalama güven skoru (yatay) ile doğruluk (dikey) olarak çizilir. Mükemmel kalibrasyon, ikisinin eşit olduğu köşegendir; altındaki noktalar aşırı-güven, üstündeki noktalar yetersiz-güvendir.
+- **Güven kovası (confidence bin)**: içinde doğruluğun ölçülebilmesi için birlikte gruplanmış belirtilen güven skorları aralığı. Üç tane kullandık, `[0.6, 0.8)`, `[0.8, 1.0)` ve `[1.0]`, 3, 5 ve 2 tahmin tutuyor.
+- **Boşluk (gap)**: bir kova içinde, ortalama güven skoru ile doğruluk arasındaki mutlak fark, vaat ile teslimat arasındaki yerel mesafe. Aşırı-güvenli kovalar 0.300, 0.460, 0.500 boşluk verdi; iyi-kalibre kovalar 0.033, 0.060, 0.000.
+- **Beklenen Kalibrasyon Hatası (Expected Calibration Error, ECE)**: kovalar boyunca ortalama boşluk, her kovadaki tahminlerin oranına göre ağırlıklandırılmış. Bütün güvenilirlik eğrisini özetleyen tek bir sayı. Aşırı-güvenli 0.420, iyi-kalibre 0.040.
+- **Brier skoru**: bütün tahminler üzerinden (güven skoru eksi sonuç) karesinin ortalaması, doğru bir yanıtı 1 ve yanlış bir yanıtı 0 sayarak. Düşük olan daha iyidir; doğru olmayı ve uygun ölçüde emin-olmamayı ödüllendirir ve emin hataları en sert cezalandırır. Aşırı-güvenli 0.432, iyi-kalibre 0.172.
+
+---
+
+Artık bir modeli skorlayabilir, o skora bir güven aralığı koyabilir, bir farkın gerçek olup olmadığını söyleyebilir ve modelin kendi güveninin güvenilir olup olmadığını denetleyebiliriz. **Bölüm 11, Regresyon Kapıları (Regression Gates)**, bunların hepsini bir dağıtıma güvenip bahis oynayacağınız bir karara toplar: bir eşiğe karşı ölçülen bir skor ve aralığı, bir değerlendirmenin eğitime sızdığını yakalayan bir kontaminasyon denetimi ve iki çalıştırma arasında kayma (drift) tespiti.
