@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>What Is a Score? — grade the model by hand, Part 1</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+/* ── TICKET GRID ── */
+.ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.ticket {
+  text-align: left;
+  border: 1.5px solid var(--border);
+  background: #ffffff;
+  border-radius: 11px;
+  padding: 10px 11px 11px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s, background 0.12s;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.ticket:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(24,24,27,0.07); }
+.ticket:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+@media (prefers-reduced-motion: reduce) {
+  .ticket { transition: none; }
+  .ticket:hover { transform: none; }
+}
+.ticket.correct { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.ticket.fp      { background: var(--amber-bg);   border-color: var(--amber-bd); }
+.ticket.fn      { background: var(--rose-bg);     border-color: var(--rose-bd); }
+
+.ticket-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ticket-id { font-family: var(--font-mono); font-size: 11px; color: var(--faint); font-weight: 600; }
+.cat-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.03em;
+}
+.cat-badge.correct { background: var(--emerald); color: #fff; }
+.cat-badge.fp      { background: var(--amber);   color: #fff; }
+.cat-badge.fn      { background: var(--rose);     color: #fff; }
+
+.ticket-subject {
+  font-size: 12px;
+  color: var(--ink);
+  font-weight: 500;
+  line-height: 1.35;
+  min-height: 32px;
+}
+.ticket-labels { display: flex; flex-direction: column; gap: 3px; }
+.lab-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.lab-key { color: var(--faint); font-weight: 600; width: 34px; flex-shrink: 0; }
+.lab-val {
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.lab-val.pos { color: var(--emerald-ink); background: rgba(5,150,105,0.10); }
+.lab-val.neg { color: var(--muted); background: rgba(113,113,122,0.10); }
+.lab-key.pred::after { content: ""; }
+.flip-hint { font-size: 10px; color: var(--faint); margin-left: auto; }
+
+.reset-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s;
+}
+.reset-btn:hover { background: var(--chip-bg); }
+.reset-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+
+/* ── RESULTS ROW (matrix + metrics) ── */
+.results {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  gap: 22px;
+  margin-top: 18px;
+  align-items: start;
+}
+@media (max-width: 560px) {
+  .results { grid-template-columns: 1fr; }
+}
+
+.mini-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* mini confusion matrix */
+.cm { border-collapse: separate; border-spacing: 5px; }
+.cm .axis {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+.cm .hdr { font-size: 11px; font-weight: 600; color: var(--body); padding: 0 2px; }
+.cm-cell {
+  width: 66px; height: 54px;
+  border-radius: 9px;
+  text-align: center;
+  vertical-align: middle;
+  border: 1.5px solid var(--border);
+  position: relative;
+}
+.cm-cell .cnt { font-family: var(--font-mono); font-size: 22px; font-weight: 700; line-height: 1; }
+.cm-cell .tag { font-family: var(--font-mono); font-size: 9px; font-weight: 700; display: block; margin-top: 2px; }
+.cm-cell.correct { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.cm-cell.correct .cnt, .cm-cell.correct .tag { color: var(--emerald-ink); }
+.cm-cell.fp { background: var(--amber-bg); border-color: var(--amber-bd); }
+.cm-cell.fp .cnt, .cm-cell.fp .tag { color: var(--amber-ink); }
+.cm-cell.fn { background: var(--rose-bg); border-color: var(--rose-bd); }
+.cm-cell.fn .cnt, .cm-cell.fn .tag { color: var(--rose-ink); }
+
+/* metric rows */
+.metric { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.metric:last-child { border-bottom: none; }
+.metric-head { display: flex; align-items: baseline; justify-content: space-between; }
+.metric-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+.metric-val { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--emerald); }
+.metric-formula { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.metric-formula .guard { color: var(--amber); }
+.meter { height: 6px; background: var(--chip-bg); border-radius: 3px; margin-top: 7px; overflow: hidden; }
+.meter > span {
+  display: block; height: 100%;
+  background: var(--emerald-br);
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+@media (prefers-reduced-motion: reduce) { .meter > span { transition: none; } }
+
+/* ── PANEL B: balance ── */
+.balance-controls { margin-bottom: 16px; }
+.balance-controls label {
+  font-size: 12.5px; font-weight: 600; color: var(--body);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+input[type="range"] { flex: 1; min-width: 180px; accent-color: var(--emerald); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+.balance-read { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.balance-read b { color: var(--ink); }
+
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 14px 0;
+}
+.big-stat {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+.big-stat.acc { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.big-stat.rec { background: var(--rose-bg); border-color: var(--rose-bd); }
+.big-stat .k { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.big-stat.acc .k { color: var(--emerald); }
+.big-stat.rec .k { color: var(--rose); }
+.big-stat .v { font-family: var(--font-mono); font-size: 40px; font-weight: 700; line-height: 1.1; margin-top: 4px; }
+.big-stat.acc .v { color: var(--emerald-ink); }
+.big-stat.rec .v { color: var(--rose-ink); }
+.big-stat .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.baseline-cm {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+}
+.baseline-cm b { color: var(--ink); }
+
+.verdict {
+  font-size: 13px;
+  border-radius: 8px;
+  padding: 11px 13px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+.verdict.warn { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.verdict.warn strong { color: var(--rose); }
+.verdict.calm { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+
+.guard-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.guard-note code {
+  font-family: var(--font-mono);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL A ══════════════ -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <p class="eyebrow">Grade by hand</p>
+  <h2 id="panel-a-heading">Ten tickets, one confusion matrix</h2>
+  <p class="panel-subtitle">A classifier tagged each support ticket "urgent" or not. The gold label is the human's call. Flip a prediction and watch every score move.</p>
+
+  <div class="hint">
+    <strong>Click a ticket</strong> to flip the model's prediction between <em>urgent</em> and <em>not urgent</em>. Its cell (TP / FP / FN / TN) and all four scores update live.
+  </div>
+
+  <div class="ticket-grid" id="ticket-grid" role="group" aria-label="Support tickets, click to flip the prediction"></div>
+
+  <button class="reset-btn" id="reset-btn" type="button">Reset to the model's predictions</button>
+
+  <div class="results">
+    <div>
+      <p class="mini-label">Confusion matrix</p>
+      <table class="cm" aria-hidden="true">
+        <tr>
+          <td></td><td></td>
+          <td colspan="2" class="axis" style="text-align:center;padding-bottom:2px;">Predicted</td>
+        </tr>
+        <tr>
+          <td></td><td></td>
+          <td class="hdr">urgent</td><td class="hdr">not</td>
+        </tr>
+        <tr>
+          <td rowspan="2" class="axis"><span style="writing-mode:vertical-rl;transform:rotate(180deg);display:inline-block;">Gold</span></td>
+          <td class="hdr">urgent</td>
+          <td class="cm-cell correct" id="cell-tp"><span class="cnt">0</span><span class="tag">TP</span></td>
+          <td class="cm-cell fn" id="cell-fn"><span class="cnt">0</span><span class="tag">FN</span></td>
+        </tr>
+        <tr>
+          <td class="hdr">not</td>
+          <td class="cm-cell fp" id="cell-fp"><span class="cnt">0</span><span class="tag">FP</span></td>
+          <td class="cm-cell correct" id="cell-tn"><span class="cnt">0</span><span class="tag">TN</span></td>
+        </tr>
+      </table>
+    </div>
+
+    <div>
+      <p class="mini-label">Scores</p>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">Accuracy</span><span class="metric-val" id="acc-val">0.00</span></div>
+        <div class="metric-formula" id="acc-f"></div>
+        <div class="meter"><span id="acc-bar" style="width:0%"></span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">Precision</span><span class="metric-val" id="prec-val">0.00</span></div>
+        <div class="metric-formula" id="prec-f"></div>
+        <div class="meter"><span id="prec-bar" style="width:0%"></span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">Recall</span><span class="metric-val" id="rec-val">0.00</span></div>
+        <div class="metric-formula" id="rec-f"></div>
+        <div class="meter"><span id="rec-bar" style="width:0%"></span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">F1</span><span class="metric-val" id="f1-val">0.00</span></div>
+        <div class="metric-formula" id="f1-f"></div>
+        <div class="meter"><span id="f1-bar" style="width:0%"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="sr-only" aria-live="polite" id="announcer-a"></div>
+</section>
+
+<!-- ══════════════ PANEL B ══════════════ -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <p class="eyebrow">Why accuracy lies</p>
+  <h2 id="panel-b-heading">The lazy baseline that never says "urgent"</h2>
+  <p class="panel-subtitle">A model of 20 tickets that always predicts "not urgent." Slide how many are truly urgent and watch accuracy stay high while recall sits at zero.</p>
+
+  <div class="balance-controls">
+    <label for="pos-slider">
+      Truly urgent tickets
+      <input type="range" id="pos-slider" min="0" max="20" step="1" value="2" aria-describedby="balance-read" />
+      <span class="balance-read" id="balance-read"></span>
+    </label>
+  </div>
+
+  <div class="baseline-cm" id="baseline-cm"></div>
+
+  <div class="compare">
+    <div class="big-stat acc">
+      <div class="k">Accuracy</div>
+      <div class="v" id="b-acc">0.00</div>
+      <div class="sub">looks great</div>
+    </div>
+    <div class="big-stat rec">
+      <div class="k">Recall</div>
+      <div class="v" id="b-rec">0.00</div>
+      <div class="sub">catches nothing</div>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+
+  <p class="guard-note">
+    Precision here is <code>0 / 0</code> — the baseline never predicts "urgent," so there is nothing to be right about — and it is guarded to <b>0.00</b>. When zero tickets are urgent, recall is <code>0 / 0</code> too, also guarded to <b>0.00</b>. Same rule as the code: an empty denominator scores <b>0.00</b>, never a crash.
+  </p>
+  <div class="sr-only" aria-live="polite" id="announcer-b"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── metric core, mirrors scoring_basics.py exactly ── */
+  function confusion(gold, pred) {
+    var tp = 0, fp = 0, fn = 0, tn = 0;
+    for (var i = 0; i < gold.length; i++) {
+      var g = gold[i], p = pred[i];
+      if (g === 1 && p === 1) tp++;
+      else if (g === 0 && p === 1) fp++;
+      else if (g === 1 && p === 0) fn++;
+      else tn++;
+    }
+    return { tp: tp, fp: fp, fn: fn, tn: tn };
+  }
+  function accuracy(c) { var t = c.tp + c.fp + c.fn + c.tn; return t ? (c.tp + c.tn) / t : 0; }
+  function precision(c) { return (c.tp + c.fp) ? c.tp / (c.tp + c.fp) : 0; }
+  function recall(c) { return (c.tp + c.fn) ? c.tp / (c.tp + c.fn) : 0; }
+  function f1(p, r) { return (p + r) ? 2 * p * r / (p + r) : 0; }
+  function fmt(x) { return x.toFixed(2); }
+  function pct(x) { return (x * 100).toFixed(0) + "%"; }
+
+  /* ══════════════ PANEL A ══════════════ */
+  var GOLD = [1, 1, 1, 0, 0, 1, 0, 0, 1, 0];
+  var PRED0 = [1, 1, 0, 0, 1, 1, 0, 0, 0, 0];
+  var SUBJECTS = [
+    "Card declined at checkout",
+    "App crashes on every login",
+    "Refund missing after 10 days",
+    "How do I change my avatar?",
+    "Typo on the pricing page",
+    "Data export keeps failing",
+    "Feature request: dark mode",
+    "Thanks for the great support!",
+    "Account locked, can't reset",
+    "Please unsubscribe me"
+  ];
+  var pred = PRED0.slice();
+
+  function catOf(g, p) {
+    if (g === 1 && p === 1) return { cls: "correct", tag: "TP" };
+    if (g === 0 && p === 1) return { cls: "fp", tag: "FP" };
+    if (g === 1 && p === 0) return { cls: "fn", tag: "FN" };
+    return { cls: "correct", tag: "TN" };
+  }
+
+  var grid = document.getElementById("ticket-grid");
+  function buildTickets() {
+    grid.innerHTML = "";
+    for (var i = 0; i < GOLD.length; i++) {
+      (function (idx) {
+        var g = GOLD[idx];
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ticket";
+        btn.setAttribute("data-i", idx);
+        btn.innerHTML =
+          '<div class="ticket-top">' +
+            '<span class="ticket-id">#' + (idx + 1) + '</span>' +
+            '<span class="cat-badge" data-role="badge"></span>' +
+          '</div>' +
+          '<div class="ticket-subject">' + SUBJECTS[idx] + '</div>' +
+          '<div class="ticket-labels">' +
+            '<div class="lab-row"><span class="lab-key">gold</span>' +
+              '<span class="lab-val ' + (g ? "pos" : "neg") + '">' + (g ? "urgent" : "not urgent") + '</span></div>' +
+            '<div class="lab-row"><span class="lab-key">pred</span>' +
+              '<span class="lab-val" data-role="pred"></span>' +
+              '<span class="flip-hint">flip &#8646;</span></div>' +
+          '</div>';
+        btn.addEventListener("click", function () {
+          pred[idx] = pred[idx] === 1 ? 0 : 1;
+          renderA();
+        });
+        grid.appendChild(btn);
+      })(i);
+    }
+  }
+
+  function renderA() {
+    var c = confusion(GOLD, pred);
+    // tickets
+    var cards = grid.querySelectorAll(".ticket");
+    cards.forEach(function (card) {
+      var i = parseInt(card.getAttribute("data-i"), 10);
+      var cat = catOf(GOLD[i], pred[i]);
+      card.classList.remove("correct", "fp", "fn");
+      card.classList.add(cat.cls === "correct" ? "correct" : cat.cls);
+      var badge = card.querySelector('[data-role="badge"]');
+      badge.className = "cat-badge " + (cat.cls === "correct" ? "correct" : cat.cls);
+      badge.textContent = cat.tag;
+      var predEl = card.querySelector('[data-role="pred"]');
+      predEl.className = "lab-val " + (pred[i] ? "pos" : "neg");
+      predEl.textContent = pred[i] ? "urgent" : "not urgent";
+      card.setAttribute("aria-pressed", pred[i] ? "true" : "false");
+      card.setAttribute("aria-label",
+        "Ticket " + (i + 1) + ": " + SUBJECTS[i] +
+        ". Gold " + (GOLD[i] ? "urgent" : "not urgent") +
+        ", predicted " + (pred[i] ? "urgent" : "not urgent") +
+        ". " + cat.tag + ". Activate to flip the prediction.");
+    });
+    // matrix
+    setCell("cell-tp", c.tp);
+    setCell("cell-fn", c.fn);
+    setCell("cell-fp", c.fp);
+    setCell("cell-tn", c.tn);
+    // metrics
+    var acc = accuracy(c), prec = precision(c), rec = recall(c), f = f1(prec, rec);
+    var n = c.tp + c.fp + c.fn + c.tn;
+    setMetric("acc", acc, "(TP+TN)/n = (" + c.tp + "+" + c.tn + ")/" + n, n === 0);
+    setMetric("prec", prec, "TP/(TP+FP) = " + c.tp + "/(" + c.tp + "+" + c.fp + ")", (c.tp + c.fp) === 0);
+    setMetric("rec", rec, "TP/(TP+FN) = " + c.tp + "/(" + c.tp + "+" + c.fn + ")", (c.tp + c.fn) === 0);
+    setMetric("f1", f, "2PR/(P+R) = 2(" + fmt(prec) + ")(" + fmt(rec) + ")/(" + fmt(prec) + "+" + fmt(rec) + ")", (prec + rec) === 0);
+
+    document.getElementById("announcer-a").textContent =
+      "TP " + c.tp + ", FP " + c.fp + ", FN " + c.fn + ", TN " + c.tn +
+      ". Accuracy " + fmt(acc) + ", precision " + fmt(prec) +
+      ", recall " + fmt(rec) + ", F1 " + fmt(f) + ".";
+  }
+
+  function setCell(id, val) {
+    document.getElementById(id).querySelector(".cnt").textContent = val;
+  }
+  function setMetric(key, val, formula, guarded) {
+    document.getElementById(key + "-val").textContent = fmt(val);
+    var fEl = document.getElementById(key + "-f");
+    if (guarded) {
+      fEl.innerHTML = formula + ' = <span class="guard">0.00 (guarded 0/0)</span>';
+    } else {
+      fEl.textContent = formula + " = " + fmt(val);
+    }
+    document.getElementById(key + "-bar").style.width = (val * 100) + "%";
+  }
+
+  document.getElementById("reset-btn").addEventListener("click", function () {
+    pred = PRED0.slice();
+    renderA();
+  });
+
+  buildTickets();
+  renderA();
+
+  /* ══════════════ PANEL B ══════════════ */
+  var N = 20;
+  var slider = document.getElementById("pos-slider");
+
+  function renderB() {
+    var posCount = parseInt(slider.value, 10);
+    // always-negative baseline: gold has posCount ones, pred all zeros
+    var c = { tp: 0, fp: 0, fn: posCount, tn: N - posCount };
+    var acc = accuracy(c), rec = recall(c);
+
+    document.getElementById("balance-read").innerHTML =
+      "<b>" + posCount + "</b> of " + N + " urgent &#183; " + (N - posCount) + " not";
+
+    document.getElementById("baseline-cm").innerHTML =
+      "Baseline always predicts <b>not urgent</b> &nbsp;&#8594;&nbsp; " +
+      "TP=<b>0</b> &nbsp; FP=<b>0</b> &nbsp; FN=<b>" + c.fn + "</b> &nbsp; TN=<b>" + c.tn + "</b>";
+
+    document.getElementById("b-acc").textContent = fmt(acc);
+    document.getElementById("b-rec").textContent = fmt(rec);
+
+    var v = document.getElementById("verdict");
+    if (posCount === 0) {
+      v.className = "verdict calm";
+      v.innerHTML = "No urgent tickets exist, so a do-nothing model is <strong>100% accurate</strong> — and recall is <code style=\"font-family:var(--font-mono)\">0/0</code>, guarded to 0.00. There is simply nothing to catch.";
+    } else if (acc >= 0.8) {
+      v.className = "verdict warn";
+      v.innerHTML = pct(acc) + " accurate, <strong>" + pct(rec) + " recall</strong>. With only " + posCount + " urgent ticket" + (posCount === 1 ? "" : "s") + " in " + N + ", ignoring them all still looks near-perfect on accuracy — yet it catches <strong>zero</strong> of the ones that matter.";
+    } else {
+      v.className = "verdict warn";
+      v.innerHTML = pct(acc) + " accurate, <strong>" + pct(rec) + " recall</strong>. As the classes balance out, accuracy finally drops — but recall was zero the whole time. Accuracy only ever measured the easy majority.";
+    }
+
+    document.getElementById("announcer-b").textContent =
+      posCount + " urgent of " + N + ". Accuracy " + fmt(acc) + ", recall " + fmt(rec) + ".";
+  }
+
+  slider.addEventListener("input", renderB);
+  renderB();
+})();
+</script>
+</body>
+</html>
