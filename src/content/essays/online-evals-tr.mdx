@@ -1,0 +1,178 @@
+---
+title: "Cevrimici Degerlendirme"
+description: "Cevrimdisi skorlar gereklidir ama yeterli degildir: nihai yargic canli trafiktir. Bolum 13, bir destek sohbet botunun bir haftalik oturumlarini 50/50 boler, cozum-orani lift'ini ve elle iki-oranli bir z-testini hesaplar, sonra bir reddetme-orani korkuluguna gercek ve anlamli bir +8 pp kazanci DO-NOT-SHIP (GONDERME) kararina cevirtir."
+date: 2026-07-26
+tags: ["Değerlendirme", "LLM", "AI", "A/B Testi", "Anlamlılık", "Korkuluklar", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-13-online-evals"
+lang: "tr"
+translationSlug: "online-evals"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 12, bir altın kümeyi üretim loglarindan büyüttü; böylece cevrimdisi degerlendirmeniz nihayet gerçek kullanicilarin çarptigi hatalari yansitir hale geldi. Ama bu seride şimdiye kadar olan her şey, her skor, her güven araligi, her kapi, loglanmis örnekler üzerinde iş işten geçtikten sonra ölçüldü. Hiçbiri bir ürün sahibinin lansman günü gerçekten sordugu soruyu yanitlamiyor: bu yeni istem canli kullanicilarla buluşunca, işleri iyileştiriyor mu yoksa kötüleştiriyor mu? Bu, farkli türden bir ölçümdür ve bu bölümün konusudur.
+
+Bir **çevrimiçi değerlendirme (online eval)**, degişikligi üretimde çalistirir ve sonucu gerçek trafikten okur. Klasik enstrüman **A/B testi**dir: canli kullanicilari iki kola böl, birine eski sürümü diğerine yeni sürümü göster ve iş degerine karşilik gelen bir metrigi karşilaştir. Bu bölümde tek bir somut vakayi ele aliyoruz, yeni bir yanit-üretme istemi henüz göndermiş bir destek sohbet botu, bir haftalik oturumlari 50/50 böl, ve üç şeyi elle hesapla: **lift** (birincil metrigin ne kadar hareket ettigi), o lift'in **gerçek mi gürültü mü** oldugu (sifirdan türetilmiş bir iki-oranli z-testi ve p-degeri), ve asla geriletmeyecegimize söz verdigimiz bir **korkuluk metriginin** marjini içinde kalip kalmadigi. İşin cilvesi, ve bütün ders, bu üç yanitin birbiriyle çelişebilecek olmasidir. Yeni istemimiz birincil metrigi gerçekten anlamli bir farkla kazanir ve yine de hiçbir şey göndermez, çünkü korkulugu kirar. Bir çevrimdişi zafer, hatta bir çevrimiçi birincil zafer bile, gereklidir ama yeterli degildir.
+
+## Ön koşullar
+
+Temel Python yeterli: bir bölme ve bir karekök. İstatistiksel olan her şey burada sayilardan inşa edilir, tam olarak Bölüm 1'deki gibi. Anlamlilik testiyle ilk tanistigimiz Bölüm 7'yi (Fark Gerçek mi?) okumuş olmak yardimci olur, çünkü aşagidaki z-testi ayni fikrin eşleşmiş bir küme yerine iki orana uygulanmiş halidir; ama bu bölüm kendi içinde bütünlüklüdür ve ihtiyaç duydugu şeyi yeniden türetir. Eşlik eden dosya, [online_evals.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-13-online-evals), API anahtari, ağ olmadan ve yalnizca NumPy ile çevrimdişi çalişir; böylece bu yazidaki her sayiyi kendiniz yeniden üretebilirsiniz. Buradaki nesirde geçen her rakam, o dosyanin basilmiş çiktisidir, yuvarlanmamiş ve düzenlenmemiş.
+
+## Kurulum: iki kol canlı trafik
+
+İşte durum, doğrudan eşlik eden dosyadan. Bir destek sohbet botu aylardir müşterilere tek bir istemle yanit veriyor. Ekip daha iyi olduguna inandiklari yeni bir yanit-üretme istemi yazdi ve bunu bir toplantida tartişmak yerine trafigin yarisina gönderiyor. Bir hafta boyunca, gelen her oturum iki koldan birine atanir:
+
+- **Kontrol** (eski istem): 400 oturum, bunlarin 168'i **çözüldü (resolved)** ve 20'si bir **reddetme (refusal)** ile bitti.
+- **Deney (treatment)** (yeni istem): 400 oturum, bunlarin 200'ü **çözüldü** ve 40'i bir **reddetme** ile bitti.
+
+```text
+Two arms of live traffic, one week, 50/50 split:
+  control  (old prompt):  n=400  resolved=168  refused=20
+  treatment(new prompt):  n=400  resolved=200  refused=40
+```
+
+Bu sayilarin üzerinde iki metrik yaşar ve herhangi bir aritmetiğe dokunmadan önce rollerinde titiz olmak deger taşir, çünkü onlari birbirine karistirmak ekiplerin gerilemeleri nasil gönderdigidir.
+
+**Birincil metrik (primary metric)** **çözüm oranidir (resolution rate)**: müşterinin sorununun bir insana yükseltilmeden çözüldügü oturumlarin orani. Bu, degişikligin iyileştirmesi amaçlanan sayidir, paraya ve müşteri mutlulugona karşilik gelen. Yüksek daha iyidir. Deneyi hareket ettirmek için çalistirdigimiz şey odur.
+
+**Korkuluk metrigi (guardrail metric)** **reddetme oranidir (refusal rate)**: botun hiç yanit vermeyi reddettigi oturumlarin orani ("Bununla yardimci olamam"). Bu deneyde kimse reddetmeleri iyileştirmeye çalişmiyor. Korkuluk, belirli bir arizayi yakalamak için var: birincil sayisina hile yaparak ulaşan bir istem. Daha sik reddeden bir bot çözümde daha iyi görünebilir (eskiden beceremedigi zor vakalar artik yalnizca savuşturulur) ama sessizce ürünü bozarken. Korkuluk, deneyden önce verdigimiz bir sözdür: bu metrik, birincil ne kadar iyi görünürse görünsün, geriLEMEMELIDIR. Düşük daha iyidir ve ona yalnizca küçücük bir esneme marji taniriz.
+
+Bu ayrim, hareket ettirilecek bir metrik ve korunacak bir metrik, sorumlu çevrimiçi değerlendirmenin kalbidir. İkisini de elle hesaplayalim.
+
+## Birincil metrik: lift ve gerçek mi?
+
+Bir **oran (rate)** yalnizca bir toplam üzerinden bir sayidir, mümkün olan en mütevazi metrik ve bu bütün bölümün üzerine oturdugu. Kontrol kolu 400 oturumunun 168'ini çözdü ve deney kolu 400'ünün 200'ünü çözdü:
+
+```text
+  control   = 168/400 = 0.420
+  treatment = 200/400 = 0.500
+```
+
+Yani yeni istem oturumlarin %50.0'ini, eski istemin %42.0'ine karşi çözer. İki oran arasindaki fark **lift**tir ve insanlarin sürekli birbirine karistirdigi iki tatta gelir. **Mutlak lift (absolute lift)** düz farktir:
+
+```text
+absolute lift = 0.500 - 0.420 = +0.080  (+8.0 pp)
+```
+
+Yüzde yüzün sekizi, ki bunu **+8.0 yüzde puani (pp)** olarak okuruz. Yüzde puanlari, iki yüzde arasindaki bir farkin birimidir ve burada "yüzde" yerine "puan" demek bilgiçlik degildir: bir sonraki satirin gösterdigi gibi, dogru ve yanliş bir ifade arasindaki farktir. **Görece lift (relative lift)** o kazanci nereden başladigimiza böler:
+
+```text
+relative lift = 0.080/0.420 = +19.0%
+```
+
+Ayni iyileştirme, kontrolün 0.420 taban çizgisine görece ifade edildiginde, **+19.0%**tur. Her iki sayi da dogrudur ve ayni degişikligi tanimlarlar; +8.0 puandadir, +19.0 eski oranin yüzdesindedir. "Yeni istem %19 daha iyi" diyen bir manşet ile "çözüm 8 puan yükseldi" diyen bir manşet, farkli kiyafetler giymiş ayni gerçektir. Pazarlama daha büyük duran görece sayiyi sever; dürüst bir gösterge paneli ikisini de gösterir ve birimleri etiketler.
+
+Şimdi bir deneyi bir tesadüften ayiran soru: o +8 puan **gerçek** mi, yoksa deney kolu şansla biraz daha kolay bir müşteri haftasi mi geçirdi? Her kol yalnizca 400 oturum. Adil bir parayi iki kez 400'er kez atsaniz, iki tura sayisi nadiren birbirinin ayni olurdu; salt şanstan bir fark belirir. 8 puanlik bir farkin, şans dalgalanmasindan daha büyük olup olmadigini bilmemiz gerekir. Bir anlamlilik testinin ölçtügü tam da budur.
+
+### İki-oranlı bir z-testi, elle
+
+İki orani (iki oran) karşilaştiriyoruz, dolayisiyla dogru araç **iki-oranli z-testidir (two-proportion z-test)**. Mantik, Bölüm 7'deki ayni sifir-hipotezi akil yürütmesidir: tartişma ugruna, yeni istemin eskisinden gerçekten farksiz oldugunu, her iki kolun da tek bir temel çözüm oranindan çektigini varsay. Bu varsayim altinda, 8 puanlik bir fark ne kadar şaşirticidir? Çok şaşirticiysa, varsayimi reddederiz ve sonucu gerçek diye adlandiririz.
+
+Birinci adim: iki kol gerçekten tek bir orani paylaşiyorsa, o paylaşilan oranin en iyi tahminimiz tüm başarilari tüm oturumlar üzerinden havuzlamaktir. Bu **havuzlanmiş orandir (pooled rate)**:
+
+```text
+pooled rate p = (168+200)/(400+400) = 0.460
+```
+
+İki kolu birleştirin ve 800 oturumun 368'i çözüldü, 0.460'lik bir havuzlanmiş oran. İkinci adim: bu örneklem boyutlari verildiginde, sifir dogru olsaydi iki oranin bir farkinin dogal olarak ne kadar zipladigini bul. O yayilim, farkin **standart hatasidir (standard error)** ve pooled sifir altinda iki oran için temiz bir kapali formu vardir. Havuzlanmiş oran `p`'yi alin, `1 - p` ile çarpin (tek bir evet/hayir çekilişinin varyansi), iki örneklem boyutuyla ölçekleyin ve karekökünü alin:
+
+```text
+SE = sqrt( p * (1 - p) * (1/n_c + 1/n_t) )
+   = sqrt( 0.460 * 0.540 * (1/400 + 1/400) )
+   = 0.03524
+```
+
+Yani sifir altinda, iki kolun oranlari arasindaki farklarin tipik bir büyüklügü yaklaşik 0.03524'tür, kabaca 3.5 puan. Gözlemlenen farkimiz 8 puandir. Üçüncü adim: gözlemlenen farki o standart hatanin birimlerinde ifade edin. O oran **z istatistigidir (z statistic)**:
+
+```text
+z = (p_t - p_c) / SE = +0.080 / 0.03524 = 2.270
+```
+
+Gözlemlenen fark sifirdan **2.270** standart hata uzaktadir. Yaklaşik 2'lik bir z, "olağandişi"nin halk siniridir; 2.270 onu geçmiştir. Bunu bir olasiliga çevirmek için sorariz: sifir dogru olsaydi, yalnizca şans, iki yönden herhangi birinde, sifirdan en az bu kadar çok standart hata uzakta bir farki ne siklikta üretirdi? O kuyruk olasiligi **p-degeridir (p-value)** ve standart normal dagilimdan gelir. Onu normal CDF'ten hesapliyoruz (eşlik eden dosya `normal_cdf`'i hata fonksiyonundan elle inşa eder, böylece gerçek işi yapmak için hiçbir şey içe aktarilmaz), üst kuyrugu ikiye katlayarak çünkü her iki yöndeki bir fark sayilirdi:
+
+```text
+p-value (two-sided) = 2 * (1 - normal_cdf(2.270)) = 0.0232
+```
+
+**0.0232**'lik bir p-degeri şu anlama gelir: yeni istem gerçekten daha iyi olmasaydi, bu kadar büyük ya da daha büyük bir farki salt şansla yalnizca zamanin yaklaşik %2.3'ünde görürdük. Eşigimizi, **alpha**yi, bakmadan önce geleneksel 0.05'te sabitledik. 0.0232, 0.05'in altinda oldugu için sifiri reddederiz:
+
+```text
+  at alpha=0.05: SIGNIFICANT  (p < 0.05)
+```
+
++8 puanlik lift **anlamlidir (significant)**. Şansli bir haftanin tesadüfü olmasi çok olasi degildir. Umursadigimiz tek şey çözüm orani olsaydi, şimdi gönderirdik. Aşagidaki statik figür bu bütün birincil-metrik hesabini tek bir akiş olarak serer, dört ham sayidan havuzlanmiş oran, standart hata ve z üzerinden p-degeri ve alpha karşilaştirmasina kadar, böylece bütün kararin o sayilarin bölünüp karekökü alinmiş halinden başka bir şey olmadigini görebilirsiniz.
+
+<Diagram number={1} caption="Destek-sohbet-botu A/B testi için bütün çevrimiçi-değerlendirme hesabi, tek bir soldan saga akiş olarak serilmiş. Solda iki kol: kontrol (eski istem) 400 oturum, 168 çözüldü, 20 reddedildi; deney (yeni istem) 400 oturum, 200 çözüldü, 40 reddedildi. Orta sütun birincil metrigi türetir: kontrol çözüm 0.420, deney 0.500, mutlak lift +0.080 (+8.0 pp), görece lift +19.0%, sonra havuzlanmiş oran 0.460, standart hata 0.03524, z 2.270 ve iki-yönlü p-degeri 0.0232 olan iki-oranli z-testi, alpha 0.05'e karşi SIGNIFICANT (ANLAMLI) işaretli. Sag sütun korkuluk metrigini gösterir: kontrol reddetme 0.050, deney reddetme 0.100, degişim +0.050 (+5.0 pp), izin verilen +2 pp marjina karşi, gül renginde BREACHED (İHLAL) işaretli. Alttaki bir karar çubugu şöyle okur: birincil anlamli True, korkuluk ok False, dolayisiyla DO NOT SHIP (GONDERME).">
+  <img src="/essays/online-evals/part13-figure.svg" alt="Bir destek sohbet botu için bir A/B testinin akiş diyagrami. Solda iki üst üste kutu: kontrol (eski istem), n=400, resolved=168, refused=20; ve deney (yeni istem), n=400, resolved=200, refused=40. Orta sütun, PRIMARY METRIC resolution rate başlikli, kontrol 168/400 = 0.420 ve deney 200/400 = 0.500'ü zümrüt yeşilinde gösterir, mutlak lift +0.080 (+8.0 pp) ve görece lift +19.0%, sonra bir iki-oranli z-testi: havuzlanmiş oran 0.460, SE 0.03524, z 2.270, p-degeri 0.0232, alpha 0.05'te SIGNIFICANT etiketli. Sag sütun, GUARDRAIL METRIC refusal rate başlikli, kontrol 20/400 = 0.050 ve deney 40/400 = 0.100'ü gösterir, izin verilen +2 pp marjina karşi +0.050 (+5.0 pp)'lik bir degişim, gül renginde BREACHED etiketli. Alttaki geniş bir çubuk şunu belirtir: primary significant? True, guardrail ok? False, ve koyu harflerle: DO NOT SHIP." class="w-full rounded-lg" />
+</Diagram>
+
+## Korkuluk metriği: zafer olmayan bir zafer
+
+Kimse gönder düğmesine dokunmadan önce, verdigimiz sözü kontrol ederiz: reddetme orani gerilemMEMELI. Birincil ile ayni aritmetik, bir oran bir toplam üzerinden bir sayidir, ama şimdi sayi reddetmelerdir ve "iyi"nin yönü ters çevrilir, çünkü düşük daha iyidir.
+
+```text
+  control   = 20/400 = 0.050
+  treatment = 40/400 = 0.100
+  change = 0.100 - 0.050 = +0.050  (+5.0 pp)
+```
+
+Eski istem 400 oturumun 20'sini reddetti, 0.050'lik bir reddetme orani. Yeni istem 400'ün 40'ini reddetti, 0.100'lük bir oran: **iki kat sik** reddeder. Degişim +0.050, ya da yanliş yönde **+5.0 yüzde puani**. Ve şimdi korkuluk ekmegini kazanir. Deneyden önce bu metrik için **+2 pp**'lik bir **izin verilen marj (allowed margin)** belirledik: herhangi bir şeyi göndermenin gürültüsü olarak birkaç puanlik reddetme kaymasina tahammül etmeye raziyiz, ama daha fazlasina degil. +5.0 pp'lik bir degişim +2 pp'yi dümdüz aşar:
+
+```text
+  allowed margin = +2 pp  ->  BREACHED
+```
+
+Korkuluk **ihlal edilmiştir (breached)**. +8 puanlik birincil zaferimize ne oldugunu fark edin. Yeni istem daha fazla sorunu tekdüze biçimde daha akilli olarak çözmedi; görünen kazancinin iyi bir kismi zor vakalari dogrudan reddetmekten geldi. Bot "Bununla yardimci olamam" deyip oturum bittiginde, gerçek bir yaniti beceriksizce becermeye asla firsat bulamaz, dolayisiyla denedigi vakalarda çözüm orani daha temiz görünür. Korkuluk, birincil metrigin gizledigi mekanizmayi açiga çikardi. Bu, Bölüm 1'deki dersin çevrimiçi-degerlendirme versiyonudur, orada sinif dengesizligi altinda doğruluk yalan söylemişti: tek bir manşet sayi, istatistiksel olarak anlamli bile olsa, yanliş şey hakkinda dogru olabilir.
+
+Korkuluk gerilemesinin kendisinin istatistiksel olarak anlamli olup olmadigi adil bir sorudur (ayni z-testini iki reddetme orani üzerinde çalistirabilirsiniz), ama bu bir korkulugun konusu değildir. Bir korkuluk, kazanmayi umdugunuz bir hipotez testi degildir; ürün sahibinin önceden çizdigi kati bir çizgidir. Bir ihlali bir p-degeriyle tartişip savuşturamazsiniz. Marj, sözleşmedir.
+
+## Karar: gerekli, yeterli değildir
+
+Şimdi iki yaniti bir gönderme kararinda birleştiririz ve kural kasitli olarak birleşiktir (conjunctive): yalnizca birincil anlamli VE korkuluk OK ise gönder. İkisi de dogru olmali. Herhangi birinin yanliş olmasi sürümü engeller.
+
+```text
+VERDICT: ship only if primary is SIGNIFICANT and guardrail is OK.
+  primary significant? True   guardrail ok? False
+  -> DO NOT SHIP. The new prompt resolves more issues (a real,
+     significant +8 pp gain) but refuses twice as often, breaching
+     the guardrail. An offline win is necessary, not sufficient.
+```
+
+`primary significant? True` ve `guardrail ok? False`, dolayisiyla VE yanliştir, dolayisiyla **göndermeyiz**. Bunun bir an için ne kadar sezgiye aykiri oldugunu düşünün. Deneyin hareket ettirmek için tasarlandigi tam metrikte gerçek, istatistiksel olarak anlamli, +8 puanlik bir iyileştirmemiz var ve onu firlatip atiyoruz. Bu çekingenlik degil; bütün disiplinin ta kendisi. Korkuluk, birincil metrigin göremedigi bir degeri kodlar, daha fazlasini daha fazla reddederek çözen bir sohbet botunun daha kötü bir ürün oldugu, ve sayilarin hangi yöne düşecegini bilmeden önce o degeri onurlandirmaya raziolduk. Anlamli bir birincilin ihlal edilmiş bir korkulugu geçersiz kilmasina izin verirsek, korkuluk asla gerçek olmadi.
+
+Bu ayni zamanda bütün serinin doruk dersidir, somutlaştirilmiş. Bölüm 1'den 12'ye kadar güvenebileceginiz bir çevrimdişi degerlendirme inşa ettiniz: bir altin küme, uzlaşma, bir LLM yargici, güven araliklari, anlamlilik, kalibrasyon, bir gerileme kapisi. Hepsi **gereklidir**. Hiçbiri **yeterli degildir**. Bir çevrimdişi degerlendirme, ne kadar titiz olursa olsun, sizin seçtiginiz örnekler üzerinde, sizin yazdiginiz bir rubrikle, hareketsiz duran bir dünyada ölçülür. Üretim hareketsiz durmaz. Bir degişikligin gerçek kullanicilara yardim edip etmedigini ögrenmenin tek yeri gerçek kullanicilardir, ve orada bile birincil metrik son söz degildir: belirlediginiz korkuluklardir. Çevrimdişi degerlendirmeler bir degişikligin çevrimiçi test edilme hakkini kazandirir; çevrimiçi birincil metrikler onun korkuluklara karşi test edilme hakkini kazandirir; ve yalnizca üçünü de geçen bir degişiklik gönderilir.
+
+Aşagidaki interaktif figür birleşimi (conjunction) hissetmenizi saglar. Deneyin çözülen ve reddedilen sayilarini sürükleyin ve bütün boru hattinin canli yeniden hesaplanmasini izleyin: lift, standart hata, z, alpha çizgisinin karşisinda çevrilen p-degeri ve marjinin karşisinda çevrilen korkuluk. Birincilin anlamli ve korkulugun saglam kaldigi bir ayar bulmaya çalişin; karari SHIP (GONDER)'e çeviren tek bölge odur, ve sezginizin bekledigenden daha küçüktür.
+
+<IframeFigure src="/essays/online-evals/part13-interactive.html" title="İnteraktif çevrimiçi-değerlendirme gezgini: sabit kontrol sayilari (400'ün 168'i çözüldü ve 20'si reddedildi) ayarlanabilir deney sayilarinin yaninda, çözüm-orani lift'i, havuzlanmiş oran, standart hata, z istatistigi, alpha'ya karşi iki-yönlü p-degeri ve marjina karşi reddetme-orani korkulugonun hepsi canli yeniden hesaplanir, ve yalnizca birincil anlamli ve korkuluk saglam kaldiginda SHIP okuyan bir karar afişi." height={860} />
+
+## Özet / Çıkarımlar
+
+- **Çevrimdışı gereklidir, çevrimiçi karardır.** Bölüm 1'den 12'ye kadar her skor, CI ve kapi sizin seçtiginiz örnekler ve sizin yazdiginiz rubrikler üzerinde ölçülür. Bir degişikligin gerçek kullanicilara yardim edip etmediginin tek testi canli trafiktir. Bir A/B testi kullanicilari kontrol ve deneye böler ve her kolda bir iş metrigini karşilaştirir.
+- **Lift'i her iki birimde raporlayin ve etiketleyin.** Yeni istem çözümü 0.420'den 0.500'e hareket ettirdi: +0.080 (+8.0 pp)'lik bir mutlak lift ve +19.0%'lik bir görece lift. Ayni gerçek, farkli birimler. Puanlar iki yüzde arasindaki farktir; yüzde o farkin taban çizgisine görecelidir. Onlari karistirmak yaniltir.
+- **İki-oranlı bir z-testi yalnizca havuzlanmiş ve karekökü alinmiş sayilardir.** Kollari tek bir orana havuzla (0.460), sifir altinda standart hatayi al (0.03524), gözlemlenen +0.080 farki o birimlerde ifade et (z = 2.270), ve iki-yönlü kuyrugu oku (p = 0.0232). Alpha = 0.05'in altinda, dolayisiyla lift anlamlidir, şans degil.
+- **Korkuluklar birincil metrikten üstündür.** Reddetme orani iki katina çikti, 0.050'den 0.100'e, izin verilen +2 pp marjina karşi +5.0 pp'lik bir degişim, dolayisiyla korkuluk ihlal edildi. Bir istem birincil metrigini hile yaparak (zor vakalari reddederek) kazanabilir, ve korkuluk bunu yakalayan önceden taahhüt edilmiş çizgidir. Bir ihlali bir p-degeriyle tartişip savuşturamazsiniz.
+- **Gönderme kurali bir birleşimdir: anlamli VE güvenli.** Burada birincil anlamli True ama korkuluk ok False, dolayisiyla karar DO NOT SHIP'tir, gerçek bir +8 puanlik kazanca ragmen. Gerekli, yeterli degildir. Çevrimdişi degerlendirmeler bir çevrimiçi test hakkini kazandirir; çevrimiçi birincil metrikler korkuluklara yüzleşme hakkini kazandirir; yalnizca üçünü de geçen bir degişiklik gönderilir.
+
+## Sözlük
+
+- **Çevrimiçi değerlendirme (online eval)**: sabit bir loglanmiş veri kümesi üzerinde çalişan bir çevrimdişi degerlendirmenin aksine, üretimde canli trafik üzerinde çalişan bir degerlendirme. Degişikligi gerçekten çalistigi yerde, gerçek kullanicilar üzerinde ölçer, böylece bir çevrimdişi degerlendirmenin göremedigi etkileri yakalayabilir.
+- **A/B testi**: canli kullanicilari bir kontrol koluna (mevcut sürüm) ve bir deney koluna (degişiklik) bölen ve iki kolda bir metrigi karşilaştiran bir deney. Burada, 400 + 400 oturumluk bir hafta, 50/50 bölünmüş.
+- **Birincil metrik (primary metric)**: degişikligin iyileştirmesi amaçlanan, deneyden önce üzerinde anlaşilan tek iş-degeri metrigi. Burada çözüm orani (yükseltme olmadan çözülen oturumlarin orani), yüksek daha iyidir.
+- **Korkuluk metriği (guardrail metric)**: hile yaparak elde edilen bir birincil zafere karşi koruyan, degişikligin geriletmemesi gereken bir metrik. Burada reddetme orani, düşük daha iyidir, önceden ayarlanmiş +2 pp'lik bir izin verilen marj ile. Bir ihlal, birincilden bagimsiz olarak göndermeyi engeller.
+- **Mutlak lift / görece lift (absolute lift / relative lift)**: mutlak lift iki oranin düz farkidir (+0.080, +8.0 yüzde puani olarak okunur); görece lift o farkin taban çizgisine bölünmesidir (+19.0%). Ayni degişim, farkli birimler.
+- **İki-oranlı z-testi (two-proportion z-test)**: iki oran arasindaki fark için bir anlamlilik testi. Sifir altinda paylaşilan orani tahmin etmek için kollari havuzla, farkin standart hatasini hesapla, z = fark / SE oluştur ve normal dagilim yoluyla bir p-degerine çevir.
+- **Havuzlanmış oran (pooled rate)**: her iki kolun başarilarini her iki kolun toplamlari üzerinden birleştirerek elde ettiginiz tek oran ((168+200)/(400+400) = 0.460). Ortak oranin sifir-hipotezi tahminidir ve standart hatayi besler.
+- **Standart hata (SE)**: sifir dogru olsaydi iki kolun oranlari arasindaki farkin tipik büyüklügü, burada sqrt(p(1-p)(1/n_c + 1/n_t)) = 0.03524. Gözlemlenen farkin karşisinda ölçüldügü cetveldir.
+- **z istatistiği (z statistic)**: standart hatalarda ifade edilen gözlemlenen fark, +0.080 / 0.03524 = 2.270. Daha büyük büyüklük, sifir altinda daha şaşirtici demektir.
+- **p-değeri (p-value)**: sifir dogru olsaydi, gözlemlenen kadar aşiri bir farkin, iki yönden herhangi birinde (iki-yönlü), olma olasiligi, burada 0.0232. Alpha'ya karşi karşilaştirilir.
+- **alpha**: önceden sabitlenen anlamlilik eşigi, burada 0.05. Alpha'nin altindaki bir p-degeri sonucun anlamli oldugu anlamina gelir.
+
+---
+
+Artik bir degişikligi canli trafikte tek bir birincil metrik ve bir korkulukla yargilayabiliriz. Ama bazi sistemlerin skorlanacak tek bir nihai yaniti yoktur: bir ajan bir yanita ulaşmak için bir bütün adim dizisi atar, ve dogru bir nihai yanit pervasiz bir yolu gizleyebilir. **Bölüm 14, Ajan-Yörünge Değerlendirmeleri (Agent-Trajectory Evals)**, yolun kendisini notlar: yörünge-eşleşme skorlamasi, adim düzeyinde kredi atamasi ve bir uzlaşmasi ölçülmüş çok adimli transkript üzerinde yargic-notlanmiş bir rubrik.

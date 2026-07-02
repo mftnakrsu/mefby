@@ -1,0 +1,139 @@
+---
+title: "LLM-as-Judge by Hand"
+description: "When you cannot afford a human grader for every output, you hand the rubric to a model instead. Part 4 runs twelve labeled support answers through a deterministic mock judge, parses each free-text verdict into PASS, FAIL, or ABSTAIN, and scores the judge against human gold on the ten it could grade."
+date: 2026-07-17
+tags: ["Evals", "LLM", "AI", "LLM-as-Judge", "Precision", "Recall"]
+seriesOrder: 4
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-04-llm-as-judge"
+lang: "en"
+translationSlug: "llm-as-judge-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 3 measured how much two humans disagree when they grade the same answers, and the honest conclusion was that even careful people are a noisy instrument. So here is the uncomfortable follow-up: humans are also slow and expensive, and you cannot put a person behind every output a production system emits. The modern reflex is to hand the grading job to a model. You write a rubric, feed it the question and the candidate answer, and let an **LLM judge** return a verdict. This is now the workhorse of applied evaluation, and it is also where a great many eval pipelines quietly go wrong, because people treat the judge's verdict as ground truth instead of as one more noisy grader that itself needs to be measured.
+
+This part builds that judge by hand and then does the thing almost nobody does: it scores the judge against human gold. We take twelve labeled support-QA items, each with a question, a required key fact, a candidate answer, and a human PASS or FAIL. We run all twelve through a deterministic mock judge that emits raw free-text, we parse each verdict into `PASS`, `FAIL`, or `ABSTAIN`, and we discover that only ten of the twelve are actually scorable because three real failure modes (a tie, a candidate refusal, and format drift with no verdict tag) force the parser's hand. On the ten it can grade, we lay out the judge-vs-human confusion matrix (positive class is `PASS`) and read off accuracy, precision, recall, and F1. Every number below is the companion file's printed output, unrounded.
+
+## Prerequisites
+
+You need Part 1's confusion matrix, because we reuse it wholesale: TP, FP, FN, TN, and the four formulas `(TP+TN)/n`, `TP/(TP+FP)`, `TP/(TP+FN)`, and `2PR/(P+R)`. If those are hazy, reread Part 1 first; this part adds no new arithmetic, only a new source of predictions. You need basic Python: a list of records, a loop, and simple string matching. No API key and no network are required. The companion file, [llm_judge.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-04-llm-as-judge), replaces the real model with a deterministic rule-based mock judge so the whole run is reproducible byte for byte. That mock is a teaching device, not a cop-out: the point of this part is the plumbing around the judge (the rubric, the parser, the scoring), and that plumbing is identical whether the verdict comes from a rule or from a frontier model behind a flag.
+
+## The judge is just another grader
+
+Start with the mental model, because it is the one thing most teams get wrong. An LLM judge is not an oracle. It is a grader, exactly like the human annotators of Part 3, and like them it makes mistakes, disagrees with the gold, and sometimes refuses to answer at all. The only difference is that it is cheap enough to run on every output. That cheapness is seductive, and it tempts people to skip the step that makes the whole thing trustworthy: comparing the judge's verdicts to a human-labeled set before you rely on them. If you never do that comparison, you have no idea whether your "90% pass rate" reflects your system or reflects a judge that rubber-stamps anything with the right keyword in it.
+
+So we treat the judge the way we treated the model in Part 1: it produces predictions, humans hold the gold, and we score one against the other. The task is support-answer grading. For each item we have a question, a required key fact the answer must contain to be correct, and a candidate answer. A human read each candidate and recorded PASS or FAIL. That human column is our gold. The judge's job is to reproduce it.
+
+## The rubric we hand the judge
+
+A judge is only as good as its instructions. Here is the rubric the companion file hands to the mock judge, reproduced exactly as it prints it:
+
+```text
+You are grading one answer. Reply on ONE line as: VERDICT: PASS
+or VERDICT: FAIL.
+  - FAIL if the answer refuses or declines to respond.
+  - PASS only if the answer contains the required key fact.
+  - Otherwise FAIL.
+```
+
+Read that rubric like an engineer, not a prompt enthusiast. It does three things. It fixes the **output format** ("Reply on ONE line as: VERDICT: PASS or VERDICT: FAIL"), which is what makes the raw text parseable at all. It states a **hard rule** for refusals (a candidate that declines is an automatic FAIL, independent of content). And it states the **substantive rule**: PASS only when the required key fact is present, otherwise FAIL. Our mock judge implements exactly this logic deterministically, so its verdicts are a stand-in for what a well-behaved real model would say when it follows the rubric. The helper `is_refusal` detects a declining candidate, `mock_judge` applies the three rules to produce the raw verdict string, and (as we will see) real models do not always obey the format, which is the entire reason the parser exists.
+
+## Raw verdicts, then parsed labels
+
+Here is the heart of the pipeline. `mock_judge` returns a line of free text per item; `parse_verdict` turns that text into one of three labels. Crucially the parser can return a **third** value beyond PASS and FAIL: `ABSTAIN`, meaning "this verdict is not a gradable PASS/FAIL and I refuse to guess." The `grade` function pairs each parsed label with the human gold, and `shorten` is just a display helper that truncates a long raw string so the table fits on one line. Running all twelve items prints this:
+
+```text
+  Q01  gold=PASS  judge->PASS      raw: VERDICT: PASS
+  Q02  gold=PASS  judge->ABSTAIN   raw: VERDICT: TIE  (too little content to grade...
+  Q03  gold=FAIL  judge->FAIL      raw: VERDICT: FAIL  (the answer refuses to resp...
+  Q04  gold=PASS  judge->PASS      raw: VERDICT: PASS
+  Q05  gold=FAIL  judge->PASS      raw: VERDICT: PASS
+  Q06  gold=PASS  judge->FAIL      raw: VERDICT: FAIL
+  Q07  gold=PASS  judge->ABSTAIN   raw: After weighing both sides, this answer loo...
+  Q08  gold=PASS  judge->PASS      raw: VERDICT: PASS
+  Q09  gold=PASS  judge->FAIL      raw: VERDICT: FAIL
+  Q10  gold=PASS  judge->PASS      raw: VERDICT: PASS
+  Q11  gold=FAIL  judge->FAIL      raw: VERDICT: FAIL
+  Q12  gold=FAIL  judge->FAIL      raw: VERDICT: FAIL
+```
+
+Walk it slowly, because every interesting thing in this part is visible in those twelve lines. Most rows are clean: `VERDICT: PASS` parses to PASS, `VERDICT: FAIL` parses to FAIL. But three rows are not clean, and they are the reason a naive pipeline (grab the word after "VERDICT:", trust it) silently corrupts your score.
+
+Q02's judge wrote `VERDICT: TIE`. That is not a PASS and it is not a FAIL; the judge is refusing to commit. A lazy parser might coerce it to FAIL and move on, but that would be inventing a verdict the judge never gave. The honest move is to mark it `ABSTAIN` and drop it. Q07 is worse: the raw text is `After weighing both sides, this answer loo...` with no `VERDICT:` tag anywhere. This is **format drift**, the single most common real-world failure of LLM judges, where the model ignores your output contract and just narrates. There is nothing to parse, so it too becomes `ABSTAIN`. Q03 is a different creature: the candidate answer refused to respond, `is_refusal` caught it, and the judge correctly returned FAIL per the rubric's first rule. That row is a clean, gradable FAIL and it stays in the matrix. The refusal was in the thing being graded, not in the judge.
+
+## Failure modes shrink the evaluable set
+
+Now we count those failure modes explicitly, because the size of the set you can actually score is itself a number worth reporting. The companion file tallies them:
+
+```text
+FAILURE MODES the parser had to survive:
+  refusals (candidate declined) : 1   -> judge said FAIL, kept in the matrix
+  ties     (judge won't commit) : 1   -> ABSTAIN, dropped from the matrix
+  format drift (no VERDICT tag) : 1   -> ABSTAIN, dropped from the matrix
+  scorable by the judge         : 10 of 12   (2 abstained)
+```
+
+Read the arithmetic carefully, because the three "1"s do not all subtract. Of twelve total items, exactly two abstained (the tie in Q02 and the format drift in Q07), leaving ten scorable. The one refusal (Q03) is a third failure mode, but it does not shrink the set: it is a candidate that declined, the judge followed the rubric and failed it, and that verdict is a legitimate FAIL we keep. So the counts are total items 12, abstained 2, scorable 10, with the refusal count of 1 living inside the scorable ten, not outside it. This distinction matters in production: an abstain is the judge admitting it cannot grade this item, and you must decide what to do with abstains (route to a human, treat as a soft fail, or exclude). What you must not do is pretend they were PASS or FAIL. Every abstain you silently coerce is a fabricated data point in your eval.
+
+The figure below lays out all twelve items as a single pipeline: the raw verdict on the left, the parse step in the middle, and the landing bucket on the right, with the two abstains peeling off before the confusion matrix and the one refusal flowing through into a TN cell.
+
+<Diagram number={1} caption="The twelve-item judging pipeline, from raw verdict to scored cell. Each of the twelve support items (Q01 to Q12) carries a human gold label (PASS or FAIL) and a raw free-text judge verdict. The parse_verdict step maps clean 'VERDICT: PASS' or 'VERDICT: FAIL' lines to PASS or FAIL, and maps the three failure modes to ABSTAIN or a kept FAIL: Q02's 'VERDICT: TIE' abstains (judge won't commit), Q07's untagged narration abstains (format drift), and Q03's refusal is failed per the rubric and kept. Two abstains (Q02, Q07) drop out, leaving ten scorable items that sort into the judge-vs-human confusion matrix with positive class PASS: TP=4, FP=1, FN=2, TN=3. The one false positive Q05 is highlighted amber as keyword-gaming; the two false negatives Q06 and Q09 are highlighted rose as correct answers failed on a synonym or a digit.">
+  <img src="/essays/llm-as-judge/part4-figure.svg" alt="A left-to-right pipeline diagram for twelve support-QA items labeled Q01 through Q12. Column one lists each item's human gold label, PASS or FAIL. Column two shows the raw judge verdict text, such as 'VERDICT: PASS', 'VERDICT: TIE', 'VERDICT: FAIL', and one untagged narration line 'After weighing both sides...'. A middle parse_verdict node maps each verdict to a parsed label: clean PASS or FAIL rows pass straight through, Q02's TIE and Q07's untagged line become ABSTAIN and are drawn peeling off downward, and Q03's refusal becomes a kept FAIL. The remaining ten scorable items feed a 2x2 confusion matrix on the right with rows for human gold PASS and FAIL and columns for judge PASS and FAIL. The four cells read TP=4, FP=1, FN=2, TN=3. The FP cell (Q05) is shaded amber and labeled keyword-gaming; the FN cell (Q06, Q09) is shaded rose and labeled synonym or digit; the TP and TN cells are emerald. A caption strip notes 12 items in, 2 abstained, 10 scored." class="w-full rounded-lg" />
+</Diagram>
+
+## Scoring the judge against human gold
+
+Now the part that most teams skip. We have ten scorable items, each with a human gold label and a judge label. Treat `PASS` as the positive class and drop them into the same 2x2 from Part 1: TP is judge PASS on a human PASS, FP is judge PASS on a human FAIL, FN is judge FAIL on a human PASS, TN is judge FAIL on a human FAIL. The `confusion` function counts the four cells; the metric functions are unchanged from Part 1. The output:
+
+```text
+JUDGE vs HUMAN on the scorable set (positive = PASS):
+  n = 10  (human PASS: 6, human FAIL: 4)
+  confusion:  TP=4  FP=1  FN=2  TN=3
+  accuracy  = (TP+TN)/n  = (4+3)/10 = 0.70
+  precision = TP/(TP+FP) = 4/(4+1) = 0.80
+  recall    = TP/(TP+FN) = 4/(4+2) = 0.67
+  F1        = 2PR/(P+R)  = 0.73
+```
+
+Ten items, six of them human PASS and four human FAIL. The judge got seven of ten right, so **accuracy is 0.70**. Of the five items it called PASS, four really were, so **precision is 0.80**. Of the six items that truly were PASS, it caught four, so **recall is 0.67**. And **F1 is 0.73**, the harmonic mean sitting between the two. These are not the numbers of an oracle. A judge that agrees with the human 70% of the time, and misses a third of the genuinely good answers, is a real instrument with real error, and now you have that error quantified instead of assumed.
+
+It helps to name the individual mistakes, because they tell you *how* the judge fails, not just how often. The one false positive is Q05: a human FAIL that the judge passed. Look back at the data and it is **keyword-gaming**, a wrong answer that happened to contain the required key word, so the judge's substring rule fired and it waved a bad answer through. The two false negatives are Q06 and Q09: correct answers the human passed but the judge failed, because the answer expressed the key fact with a synonym or wrote a number as a digit instead of the word the judge was matching against. Both failure directions come from the same brittleness, a judge that matches surface strings rather than meaning, and both are exactly the kind of thing you only discover by scoring the judge against humans on a labeled set.
+
+The interactive figure lets you feel this directly. You can toggle each of the twelve items between the clean and failure-mode verdicts, watch abstains peel the item out of the scorable set, and see all four metrics recompute live as the confusion matrix fills. Flip Q05 back to an honest FAIL and precision jumps; fix Q06 and Q09 and recall climbs toward the human, which is the whole story of judge improvement in one panel.
+
+<IframeFigure src="/essays/llm-as-judge/part4-interactive.html" title="Interactive LLM-as-judge scorer: twelve support items you can toggle between clean and failure-mode verdicts, showing how abstains shrink the scorable set from twelve to ten and how the judge-vs-human confusion matrix and its accuracy, precision, recall, and F1 recompute live as you fix the keyword-gaming false positive and the two synonym false negatives." height={860} />
+
+## Why this is the discipline, not the trick
+
+It is worth stepping back to see why the scoring step is the entire point. Anyone can prompt a model to say PASS or FAIL; that is a five-minute job. What separates a trustworthy eval from a vibe is the sentence at the bottom of the companion file: a judge is just another noisy grader, so measure it against humans before you trust its score. The confusion matrix you just built is not a one-time diagnostic. It is the thing you rerun whenever you change the rubric, swap the model, or move to a new domain, because a judge that is 0.70-accurate on support answers may be 0.50-accurate on code review, and you will never know unless you keep a human-labeled slice to grade the judge against. Part 3 taught you that humans are noisy; this part shows that swapping in a model does not remove the noise, it relocates it, and the only honest response is to measure it in the same units.
+
+## Key takeaways
+
+- **An LLM judge is a grader, not an oracle.** It produces predictions with real error, so you score it against a human-labeled set exactly as you scored a model in Part 1. Skipping that comparison means your pass rate measures the judge, not your system.
+- **The parser is as important as the prompt.** Raw verdicts arrive dirty: a tie the judge won't commit to (Q02), an answer that never emits a `VERDICT:` tag (Q07, format drift). `parse_verdict` maps those to `ABSTAIN` rather than fabricating a PASS or FAIL. Of 12 items, 2 abstained, leaving 10 scorable.
+- **Not every failure mode shrinks the set.** The one candidate refusal (Q03) is failed by the rubric and kept in the matrix as a clean TN; only the tie and the format drift drop out. Counting the three modes (1 refusal, 1 tie, 1 format drift) keeps the shrinkage honest.
+- **On the scorable ten the judge scores TP=4, FP=1, FN=2, TN=3**, giving accuracy 0.70, precision 0.80, recall 0.67, F1 0.73 with positive class PASS (human PASS: 6, human FAIL: 4). The judge agrees with the human 70% of the time and misses a third of the good answers.
+- **The named mistakes reveal the mechanism.** The false positive (Q05) is keyword-gaming, a wrong answer carrying the key word; the false negatives (Q06, Q09) are right answers failed on a synonym or a digit. Both come from surface-string matching, and both are invisible until you score the judge against gold.
+
+## Glossary
+
+- **LLM-as-judge**: using a language model, guided by a rubric prompt, to grade candidate outputs in place of a human. Cheap enough to run on every output, but noisy, so it must itself be measured against human gold.
+- **Rubric**: the instruction set handed to the judge, fixing the output format, the hard rules (here, refusals are an automatic FAIL), and the substantive pass condition (here, the answer must contain the required key fact).
+- **Verdict**: the raw free-text the judge emits for one item, ideally `VERDICT: PASS` or `VERDICT: FAIL`, but in practice sometimes a tie, an untagged narration, or other drift.
+- **parse_verdict**: the function that turns a raw verdict into one of `PASS`, `FAIL`, or `ABSTAIN`. Its job is to refuse to guess when the verdict is not a clean PASS or FAIL.
+- **ABSTAIN**: the parser's third label, meaning the verdict is not gradable. Abstained items are dropped from the confusion matrix rather than coerced into a PASS or FAIL. Here 2 of 12 items abstain.
+- **Refusal**: a candidate answer that declines to respond, detected by `is_refusal`. Per the rubric it is failed by the judge, so it stays in the matrix (a kept FAIL), unlike an abstain.
+- **Format drift**: a judge output that ignores the required `VERDICT:` contract and narrates instead, leaving nothing to parse. The most common real-world judge failure; it forces an ABSTAIN (Q07 here).
+- **Scorable set**: the items with a clean PASS or FAIL from both human and judge, over which the confusion matrix and metrics are computed. Here 10 of the 12 items.
+- **Keyword-gaming**: a wrong answer that happens to contain the required key word, fooling a surface-matching judge into a PASS. The cause of the single false positive (Q05).
+- **Judge-vs-human confusion matrix**: the 2x2 (positive class PASS) that scores the judge's labels against the human gold, yielding TP=4, FP=1, FN=2, TN=3 and the metrics accuracy 0.70, precision 0.80, recall 0.67, F1 0.73.
+
+---
+
+We now have a judge and a number for how well it matches humans, but that number hides a subtler danger: a judge can be systematically unfair in ways accuracy never catches. **Part 5, Judging the Judge**, measures position bias, verbosity bias, and self-preference on a dozen paired comparisons, then corrects them and shows the corrected number.

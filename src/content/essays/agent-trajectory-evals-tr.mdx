@@ -1,0 +1,205 @@
+---
+title: "Ajan Yorungesi Degerlendirmesi"
+description: "Bir ajanin yalnizca nihai yanitini notlamak, oraya nasil vardigini kacirir. Bolum 14, sekiz calismanin arac-cagri yolunu, onaylanmis bir referans yorungesine karsi dort sekilde skorlar (kesin eslesme, sira-duyarli, kume-ortusmesi ve adim-duzeyi kredi), sonra gecti/kaldi rubrigini bir mock yargicla ve bir insanla notlayip anlasmalarini Cohen kappasiyla sansa gore duzeltir."
+date: 2026-07-27
+tags: ["Değerlendirme", "LLM", "AI", "Ajanlar", "Yörünge", "Cohen Kappa", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-14-agent-trajectory-evals"
+lang: "tr"
+translationSlug: "agent-trajectory-evals"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 13'te laboratuvarı terk edip bir değişikliği yaşadığı yerde ölçtük: üretimde tek bir A/B testi çalıştırdık ki güvendiğimiz sayı geçmişin bir fotoğrafı değil, gerçek bir kullanıcı sonucu olsun. Bu bölüm tek bir çalışmanın içine geri dönüyor ve nihai-yanıt skorunun asla yanıtlayamayacağı bir soruyu soruyor: yalnızca *yanıt doğru muydu* değil, *ajan oraya doğru yoldan mı vardı*. Tahmin ederek doğru bir sayıya tökezleyen bir ajan ile arayan, sayfayı okuyan, para birimini çeviren ve toplamı raporlayan bir ajan, aynı nihai dizeyi yazdırabilir. Yalnızca o dizeyi notlarsanız birbirlerinin aynısı görünürler. Değildirler, ve bu fark, yolu notlamamızın bütün sebebidir.
+
+Agents serisi tam bu uçurumda bitti. Onun Bölüm 17'si, "Ajanı Notlamak", ajanin nihai yanıtının altın yanıtla eşleşip eşleşmediğini skorluyordu, ve bu, ajanları *inşa etmeye* dair bir seriyi durdurmak için doğru yerdi. Bu bölüm ipin ucunu ölçüm tarafından yeniden alıyor. Somut tek bir görev alıyoruz, "Paris'teki en yüksek puanlı otelde 3 gecenin USD cinsinden maliyeti nedir?" sorusunu yanıtlaması gereken bir ajan, ve bir insanın onayladığı, uzunluğu 4 olan bir **referans yörünge**: `search > open > convert > answer` arac sirasi. Sonra sekiz gerçek ajan çalışması alıyoruz, kimi temiz kimi dağınık, ve her çalışmanın yolunu dört farklı şekilde skorluyoruz: kesin eşleşme, en uzun ortak alt dizi üzerine kurulu sıra-duyarlı bir skor, Jaccard üzerine kurulu bir kume-ortusmesi skoru, ve her bir adımı MATCH, EXTRA ya da MISSING olarak etiketleyen bir adım-düzeyi kredi skoru. Son olarak sekiz çalışmanın hepsi üzerinde basit bir geçti/kaldı rubriğini deterministik bir mock yargıçla ve bir insanla notluyoruz, ve anlaşmalarını Bölüm 3'teki aynı istatistikle, Cohen kappasıyla, sansa göre düzeltip görünürdeki anlaşmalarının ne kadarının gerçek olduğunu buluyoruz. Vurucu nokta: yörünge, hoşgörülü yargıcın dosdoğru geçirdiği iki başarısızlığı yakalıyor.
+
+## Ön koşullar
+
+Temel Python yeterli: bir liste, bir dict, bir döngü ve bir bölme. Önceki bölümlerden iki fikir devreye giriyor ama her ikisini de burada sıfırdan yeniden kuruyoruz, dolayısıyla ne formülü hatırlamanıza gerek var. Birincisi **en uzun ortak alt dizi (LCS)**, iki dizi arasındaki en uzun sıralı örtüşmeyi bulan, her iki tarafta fazladan ya da eksik adımlara tolerans gösteren diff-tarzı hizalama. İkincisi Bölüm 3'ten **Cohen kappası**, iki değerlendirici arasındaki sansa göre düzeltilmiş anlaşma. Eşlik eden dosya, [trajectory_evals.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-14-agent-trajectory-evals), API anahtarı, ağ ve bağımlılık olmadan offline çalışır: "yargıç", bir LLM notlayıcısının yerine geçen şeffaf bir kuraldır, dolayısıyla her sayı elle izlenebilir. Bu yazıdaki her figür, o dosyanın basılmış çıktısıdır, yuvarlanmamış ve düzenlenmemiş.
+
+## Görev ve referans yörünge
+
+Bir yörünge değerlendirmesi üç şeye ihtiyaç duyar, ve bunlar Bölüm 1'deki aynı üç atomun yeni kılıklara bürünmüş halidir. **Görev**, notlanan şeydir: ajanımız "Paris'teki en yüksek puanlı otelde 3 gecenin USD cinsinden maliyeti nedir?" sorusunu yanıtlamalı. **Altın etiket** artık tek bir doğru yanıt değildir; bir *doğru yol*, bir insanın görevi çözmenin kabul edilebilir bir yolu olarak karar verdiği sıralı arac-cagri listesidir. Ve **metrik**, "ajanin yolu onaylanan yola ne kadar yakındı"yi bir sayıya çeviren kuraldır.
+
+İşte referans yörünge, bir insanın onayladığı yol, dört arac-cagri uzunluğunda:
+
+```text
+  1.search > 2.open > 3.convert > 4.answer
+```
+
+Onu bir plan olarak okuyun. Üç geceyi dolar cinsinden fiyatlandırmak için ajan, en yüksek puanlı Paris oteli için webde `search` yapmalı, gecelik euro fiyatını okumak için otel sayfasını `open` etmeli, o euro rakamını USD'ye `convert` etmeli ve sonra `answer` vermeli. Her adım yük taşır: `convert`'i atlarsanız sayı yanlış para biriminde olur; `open`'ı atlarsanız gerçek bir fiyatı hiç okumazsınız. Sıra da önemlidir, çünkü henüz okumadığınız bir fiyatı çeviremezsiniz. Bir yörüngeyi nihai bir yanıttan daha zengin kılan şey budur. Yalnızca varış noktasını değil, akıl yürütmeyi de kodlar, ve iyi bir yol değerlendirmesi, bir çalışmanın yalnızca *hata yaptığını* değil, *nasıl* hata yaptığını söyleyebilmelidir.
+
+Bu referansa karşı sekiz çalışmayı tutacağız, R1'den R8'e etiketli. R1 ders kitabı yolunda yürür. R2'nin tüm araçları doğrudur ama sıra yanlıştır. R3, para birimi çevirisini atlar ve onun yerine yeniden arar. R4 iki kez çevirir. R5 tembeldir ve arama'dan doğruca yanıt'a atlar. R6 iki kez yanıtlar. R7 baştan gereksiz bir arama yapar. R8 hiç araç kullanmadan sadece tahmin eder. Her çalışma bir arac-adlari dizisidir, ve işimiz her birinin onaylanan yoldan ne kadar saptığını skorlamaktır.
+
+## Bir yörüngeyi eşlemenin üç yolu
+
+Tek bir "yörünge eşleşmesi" skoru yoktur, çünkü "referansa yakın" üç gerçekten farklı şey anlamına gelebilir, ve bunlar birbirine katılmaz. Anlaşmazlığı açıkça görmek için en öğretici çalışmayı, R2'yi alın, araçları tam doğru ama sırası karıştırılmış olan:
+
+```text
+  candidate : open > search > convert > answer
+  reference : search > open > convert > answer
+```
+
+R2, referansla aynı dört aracı, `search`, `open`, `convert` ve `answer`'ı kullandı, ama arama yapmadan önce bir sayfa açtı. Şimdi üç metriğin bu tek çalışma üzerinde üç farklı hüküm verdiğini izleyin.
+
+**Kesin eşleşme (exact-match)** olası en katı kuraldır: yalnızca aday, referansla adım adım özdeşse `1.00`, değilse `0.00`. R2 özdeş değildir (ilk iki adım yer değiştirmiş), dolayısıyla:
+
+```text
+  exact-match  : cand == ref ?           -> 0.00
+```
+
+Dümdüz bir sıfır. Kesin eşleşme tasarım gereği bağışlamazdır: ne kadar küçük olursa olsun herhangi bir sapmayı tam başarısızlık sayar. Bu bazen istediğiniz şeydir (yeniden sıralanmış bir yola asla izin vermemesi gereken bir regresyon kapısı) ve genellikle çok fazla körelmiştir, çünkü tek adımlık bir yer değiştirmeyi saf çöpten ayıramaz.
+
+**Sıra-duyarlı (order-aware)** kuralı gevşeterek şunu sorar: çalışma, referans yolunun ne kadarını *sırasıyla* geri kazandı? Adayın ve referansın en uzun ortak alt dizisini hesaplar, sonra uzunluğunu referansın uzunluğuna böleriz. R2 ile referansın LCS'si `search, convert, answer`'dır, üç araç uzunluğunda (alt dizi, referansın sırasını korumak zorundadır, ve R2'nin yersiz `open`'ı o sırayı bozmadan ona katılamaz). Dolayısıyla:
+
+```text
+  order-aware  : LCS=3 / len(ref)=4       -> 0.75
+```
+
+Dört referans adımının üçü doğru sırada hayatta kaldı, `0.75` veriyor. Bu, "çoğunlukla doğru, tek bir şey yerinde değil"i en iyi yakalayan skordur. Sıralı kısmi ilerlemeyi ödüllendirir ve yeniden sıralamanın bozduğu tam o adımı düşer.
+
+**Kume-ortusmesi (set-overlap)** sırayı tamamen atar ve yalnızca şunu sorar: çalışma, sıraya bakılmaksızın doğru *araçları* kullandı mı? Bu, Jaccard indeksidir, iki arac kumesinin kesişiminin büyüklüğünün, birleşimlerinin büyüklüğüne oranı. R2'nin arac kumesi ile referans arac kumesi tam olarak `search, open, convert, answer`'dır, dolayısıyla kesişimde 4 araç ve birleşimde 4 araç vardır:
+
+```text
+  set-overlap  : |cap|=4 / |cup|=4          -> 1.00
+```
+
+Kusursuz bir `1.00`. Kume-ortusmesinin bakış açısından R2 kusursuzdur, çünkü her doğru aracı kullandı ve hiç yanlış araç kullanmadı. Bu hem doğru hem de yanıltıcıdır: onları işe yaramayacak bir sırada kullandı.
+
+Yani tek bir çalışmada üç skor: kesin `0.00` diyor, sıra-duyarlı `0.75` diyor, kume-ortusmesi `1.00` diyor. Bu üç sayı arasında R2 hakkında hiçbir şey değişmedi; yalnızca soru değişti. Seçtiğiniz metrik *hükümdür*. Kume-ortusmesi, yalnızca ajanin araç kutusunda doğru araçlar olmasını umursadığınızda doğrudur; sıra-duyarlı, sıra önemli olduğunda doğrudur (ajanlar için neredeyse her zaman öyledir); kesin eşleşme, kozmetik bir sapma bile bir hata olduğunda doğrudur. Aralarında seçim yapmak, en az göze alabileceğiniz yol hatasının ne olduğuna dair bir karardır, tıpkı Bölüm 1'de kesinliği duyarlılığa tercih etmek gibi.
+
+## Adım-düzeyi kredi: her adımı etiketlemek
+
+Yukarıdaki üç skorun her biri, koca bir yolu tek bir sayıya çökertir. Çoğu zaman tersini istersiniz: hangi adımların doğru olduğunu, çalışmanın hangilerini uydurduğunu ve hangilerini atladığını tam olarak söyleyen adım başına bir döküm. İşte **adım-düzeyi kredi (step-level credit)** budur, ve aynı LCS hizalamasından, daha ince tanede okunarak kurulur.
+
+Çevirmeyi atlayıp onun yerine yeniden arayan R3'ü alın:
+
+```text
+  R3 : search > open > search > answer
+```
+
+R3'ü referans `search > open > convert > answer`'a karşı LCS ile hizalayın ve her adımı etiketleyin. Hizalamaya oturan bir aday adımı bir **MATCH**'tir; hiçbir şeyle eşleşmeyen bir aday adımı bir **EXTRA**'dır; ve hiçbir aday adımın karşılamadığı herhangi bir referans adımı **MISSING**'tir:
+
+```text
+  step 1: search   -> MATCH
+  step 2: open     -> MATCH
+  step 3: search   -> EXTRA
+  step 4: answer   -> MATCH
+  (ref)   convert  -> MISSING
+```
+
+Yukarıdan aşağıya okuyun ve öykü tam olarak şu: R3 aradı (iyi), sayfayı açtı (iyi), sonra çevirmek yerine ikinci kez aradı (iş görmeyen bir EXTRA adım) ve yanıtladı (iyi). Referans `convert` adımı R3'te hiçbir yerde görünmez, dolayısıyla MISSING'tir, ve o eksik çevirme, R3'ün yanıtının dolar değil euro cinsinden olduğu anlamına gelir: çalışma "bitmiş" olsa bile yanlış. Etiket kümesi, hiçbir tekil skaların yapamayacağı bir şekilde *neyi düzelteceğinizi* söyler.
+
+Şimdi etiketleri tek bir sayıya çökertin. Kredi, doğru adımların, onlara karşı sayılabilecek her şeye, yani doğru artı eksik artı fazlaya oranıdır:
+
+```text
+  credit = correct/(correct+missing+extra) = 3/(3+1+1) = 0.60
+```
+
+Üç doğru adım, bir eksik (`convert`), bir fazla (ikinci `search`), `0.60` veriyor. Dikkat edin, bu R3'ün `0.75`'lik sıra-duyarlı skorundan daha katıdır, ve bilerek öyledir: sıra-duyarlı yalnızca referans uzunluğuna böler, dolayısıyla bir çalışmayı eklediği çöp adımlar için asla suçlamaz, oysa kredi hem eksik adımı *hem de* fazla adımı paydaya koyar. Doğru adımlara isabet eden ama yolu gürültüyle dolduran bir çalışma sıra-duyarlıda iyi, kredide daha kötü skor alır, ki bu genellikle dürüst sıralamadır. Aşağıdaki figür bu hizalamayı bir ızgara olarak gösterir, R3'ün dört adımı bir eksende ve referansın dört adımı diğerinde, böylece MATCH adımlarının köşegende oturduğunu, EXTRA ve MISSING adımlarınsa dışına düştüğünü görebilirsiniz.
+
+<Diagram number={1} caption="R3 çalışması (search, open, search, answer) için, referans yörüngeye (search, open, convert, answer) karşı hizalanmış adım-düzeyi kredi. En uzun ortak alt dizi üç adımı eşler: search, open ve answer, MATCH hücrelerinden oluşan bir zümrüt köşegen olarak çizilir. R3'ün üçüncü adımı, ikinci bir search, referansta hiçbir şeyle eşleşmez ve kehribar renginde EXTRA etiketlenir. Referansın convert adımı hiçbir aday adım tarafından karşılanmaz ve gül renginde MISSING etiketlenir. Kredi formülü doğru / (doğru + eksik + fazla) = 3 / (3 + 1 + 1) = 0.60 okunur, sıra-duyarlı skoru olan 0.75'ten daha katıdır çünkü çalışmayı hem atlanan hem de uydurulan adım için suçlar.">
+  <img src="/essays/agent-trajectory-evals/part14-figure.svg" alt="'Adım-düzeyi kredi: R3, referansa hizalanmış' başlıklı bir adım-düzeyi hizalama diyagramı. R3 çalışmasının dört arac-cagrisi (search, open, search, answer) solda aşağı iner; referans yörüngenin dört arac-cagrisi (search, open, convert, answer) üstte enine gider. Üç hücre köşegen üzerinde zümrüt renginde ve MATCH etiketlidir: search-search, open-open ve answer-answer. R3'ün üçüncü adımı, search, köşegen dışında kehribar renginde kutulanmış ve EXTRA etiketlidir çünkü hiçbir referans adımıyla eşleşmez. Referansın convert adımı üstte gül renginde kutulanmış ve MISSING etiketlidir çünkü hiçbir aday adım onu karşılamaz. Aşağıdaki bir panel şöyle okur: doğru = 3, eksik = 1, fazla = 1, kredi = doğru / (doğru + eksik + fazla) = 3 / (3 + 1 + 1) = 0.60. Bir dipnot, kredinin R3'ün sıra-duyarlı 0.75'inden daha katı olduğunu belirtir çünkü fazla adımı çalışmaya karşı sayar." class="w-full rounded-lg" />
+</Diagram>
+
+## Sekiz çalışmanın hepsi, dört şekilde skorlanmış
+
+Dört skoru sekiz çalışmanın hepsi boyunca yan yana koyun ve metriklerin kişilikleri netleşir. İşte eşlik eden dosyadan doğrudan gelen tam tablo:
+
+```text
+  run trajectory                         exact  order   set  credit
+  R1  search>open>convert>answer          1.00   1.00  1.00    1.00
+  R2  open>search>convert>answer          0.00   0.75  1.00    0.60
+  R3  search>open>search>answer           0.00   0.75  0.75    0.60
+  R4  search>open>convert>convert>answer  0.00   1.00  1.00    0.80
+  R5  search>answer                       0.00   0.50  0.50    0.50
+  R6  search>open>convert>answer>answer   0.00   1.00  1.00    0.80
+  R7  search>search>open>convert>answer   0.00   1.00  1.00    0.80
+  R8  answer                              0.00   0.25  0.25    0.25
+```
+
+R1 ders kitabı yoludur ve dördünde de temiz bir `1.00` alır, tek kusursuz çalışmamız ve bir çalışma gerçekten kusursuz olduğunda metriklerin hemfikir olduğunun sağlaması. Kesin eşleşme sütunundan aşağı bakın ve diğer her çalışma için `0.00`: sekiz çalışmanın yedisi referanstan *bir şekilde* sapar, ki bu tam olarak kesin eşleşmenin tek başına kusurlu ajanları sıralamak için neden işe yaramaz olduğudur. R4'ü (bir fazladan çevirdi, esasen sorun yok) R8'den (tahmin etti, hiçbir şey yapmadı) ayıramaz.
+
+İlginç satırlar kıl payı kaçıranlardır. R4, R6 ve R7'nin hepsi sıra-duyarlı `1.00` ama kredi `0.80` alır: her biri referans yolunun tamamını sırasıyla geri kazandı, dolayısıyla sıra-duyarlı kusursuzdur, ama her biri yolu bir zararsız fazla adımla doldurdu (yinelenen bir `convert`, yinelenen bir `answer`, gereksiz bir `search`), ve kredi onları bunun için suçlayan tek sütundur, `0.20` düşerek. Kusursuz bir sıra skoru ile `0.80`lik bir kredi arasındaki o boşluk, her şeyi doğru yapıp üstüne biraz daha ekleyen bir çalışmanın parmak izidir. `search > answer`'a atlayan tembel çalışma R5, sıra-duyarlıda `0.50` alır (dört referans adımının ikisini sırasıyla geri kazandı) ve kume-ortusmesi ile kredide de `0.50`. Ve hiç araç kullanmayıp sadece yanıtlayan R8, sıra-duyarlı `0.25`te dibe vurur: tek `answer` adımı, dört adımlık bir referansla tek örtüşmedir, dolayısıyla yolun dörtte birini geri kazanır ve daha fazlasını değil.
+
+R2 ile R3'ü karşılaştırın, sıra-duyarlı skoru `0.75`i paylaşan ama kume-ortusmesinde ayrılan iki çalışma. R2 doğru araçları yanlış sırada kullandı, dolayısıyla kume-ortusmesi kusursuz `1.00`; R3 `convert` yerine yanlış bir araç (ikinci bir `search`) kullandı, dolayısıyla kume-ortusmesi `0.75`e düşer. Bir sütundan aşağı yerine bir satır boyunca okumak, bir çalışmanın hatasının *biçimini* söyler: daha düşük bir sıra-duyarlıyla birlikte yüksek bir kume-ortusmesi "doğru araçlar, yanlış sıra" demektir, oysa kume-ortusmesinin de düşmesi "yanlış araçlar kullanıldı" demektir. Aşağıdaki interaktif figür, adım adım herhangi bir yörünge kurmanıza ve dört skorun hepsini, artı MATCH / EXTRA / MISSING etiketlerini canlı yeniden hesaplarken izlemenize izin verir, böylece her metriğin bir yer değiştirmeye, bir atlamaya ya da doldurulmuş bir adıma nasıl tepki verdiğini hissedebilirsiniz.
+
+<IframeFigure src="/essays/agent-trajectory-evals/part14-interactive.html" title="İnteraktif yörünge skorlayıcı: bir arac-cagrilari dizisi seçin ya da düzenleyin ve kesin eşleşme, sıra-duyarlı (referans uzunluğu üzerinden LCS), kume-ortusmesi (Jaccard) ve adım-düzeyi kredinin referans search > open > convert > answer'a karşı canlı yeniden hesaplanmasını izleyin, her adım MATCH, EXTRA ya da MISSING etiketli ve R1 ile R8 arası sekiz hazır çalışma seçilebilir." height={820} />
+
+## Rubrik: mock yargıç vs insan, ve Cohen kappası
+
+Skorlar çalışmaları sıralar, ama sevkiyat kararları genellikle ikilidir: bu çalışma geçti mi kaldı mı? Dolayısıyla son adım bir **rubrik**, her çalışmaya uygulanan bir geçti/kaldı kuralı, iki kez notlanmış: bir kez bir insanla ve bir kez bir LLM notlayıcısının yerine geçen deterministik bir **mock yargıçla**. İnsanın kuralı umacağınız şeydir: bir çalışma, yanlış-sıra ya da atlanan-adım hatası olmadan, kabul edilebilir bir yol izlediyse, gereken her adıma makul bir sırada isabet ederek, geçer, zararsız bir yinelemeye tolerans göstererek. Bu kurala göre insan R1, R4, R6 ve R7'yi geçirir (hepsi geçerli bir yolla hedefe ulaştı, kimi zararsız bir fazla adımla) ve R2, R3, R5 ile R8'i geçmez (yanlış sıra, atlanan adım, tembel ve araç yok).
+
+Mock yargıç bilerek kusurludur, gerçek bir otomatik notlayıcının çoğu zaman olduğu gibi: bir çalışmayı, referans yolunun tamamını sırasıyla geri kazandıysa (sıra-duyarlı en az `0.75`) ve en fazla bir fazla adım eklediyse geçirir. Bu kural makul gibi geliyor ve fazla hoşgörülü, çünkü `0.75`lik bir sıra-duyarlı skoru, yalnızca çoğunlukla-tamam bir yoldan değil, *yeniden sıralanmış* bir yoldan da gelebilir. İşte iki notlayıcı nasıl sıralanıyor:
+
+```text
+  run   human  judge    agree?
+  R1     PASS   PASS       yes
+  R2     FAIL   PASS        NO
+  R3     FAIL   PASS        NO
+  R4     PASS   PASS       yes
+  R5     FAIL   FAIL       yes
+  R6     PASS   PASS       yes
+  R7     PASS   PASS       yes
+  R8     FAIL   FAIL       yes
+```
+
+Sekiz çalışmanın altısında hemfikirler ve tam olarak ikisinde ayrılırlar: R2 ve R3. Her ikisi de insanın geçmediği (R2 yanlış sıra için, R3 atlanan bir adım için) ama yargıcın geçirdiği çalışmalardır, çünkü her ikisi de yargıcın `0.75`lik sıra-duyarlı barajını en fazla bir fazla adımla aşar. Bunlar tam olarak bir nihai-yanıt notlayıcısının da kaçıracağı yol hatalarıdır, ve yörünge değerlendirmesinin var olma sebebi olan iki çalışmadır.
+
+Peki, o sekizde-altı anlaşma gerçekten ne kadar iyi? Ham anlaşma kendini pohpohlar, çünkü çoğu zaman ikisi de PASS diyen iki notlayıcı *yalnızca şans eseri* çok anlaşacaktır. Bu tam olarak Cohen kappasının Bölüm 3'te çözdüğü problemdir, ve onu burada yeniden kullanıyoruz. Önce iki notlayıcının hükümlerinin 2x2 tablosunu kurun, yargıç satırlarda ve insan sütunlarda:
+
+```text
+                human=PASS  human=FAIL
+    judge=PASS      4           2
+    judge=FAIL      0           2
+```
+
+Dört hücre: `a = 4` her iki notlayıcının da geçirdiği çalışma, `b = 2` yargıcın geçirip insanın geçmediği çalışma (R2 ve R3), `c = 0` yargıcın geçmeyip insanın geçirdiği çalışma, ve `d = 2` her ikisinin de geçmediği çalışma. Gözlenen anlaşma, köşegenin toplama oranıdır:
+
+```text
+  observed agreement po = (a+d)/n = (4+2)/8 = 0.75
+```
+
+Yani notlayıcılar zamanın yüzde 75'inde hemfikir. Ama marjinallere bakın: yargıç sekiz çalışmanın altısında PASS dedi, insan sekizde dördünde, dolayısıyla o aynı oranlarla dart atan iki notlayıcı bile zamanın iyi bir kısmında anlaşırdı. Şans anlaşması `pe`, o beklenen örtüşmeyi marjinallerden hesaplar ve şuraya iner:
+
+```text
+  chance agreement   pe = 0.50
+```
+
+Olası anlaşmanın yarısı bedavaydı. Cohen kappası, gözlenen anlaşmayı o tabana göre yeniden ölçeklendirir, notlayıcıların *şans-dışı* alanın hangi kısmını gerçekten kapattığını sorar:
+
+```text
+  Cohen's kappa = (po-pe)/(1-pe) = (0.75-0.50)/(1-0.50) = 0.50
+```
+
+Kappa `0.50`, geleneksel olarak yalnızca "orta" (moderate) okunur. Bu, güven veren "zamanın yüzde 75'inde hemfikirler"den çok farklı bir öykü. O yüzde 75'in yarısı şanstı. Ve kappayı kusursuzdan aşağı çeken iki çalışma rastgele gürültü değildir: bunlar R2 ve R3, hoşgörülü yargıcın göremediği yanlış-sıra ve atlanan-adım yollarıdır. Bir nihai-yanıt değerlendirmesi ikisine de omuz silkerdi. Yörüngeyi notlamak, ve sonra notlayıcıları sansa göre düzeltmek, onları yüzeye çıkaran şeydir.
+
+## Özet / Çıkarımlar
+
+- **Yalnızca yanıtı değil, yolu notlayın.** İki ajan aynı nihai dizeyi yazdırabilir, biri akıl yürüterek biri tahmin ederek. Bir nihai-yanıt skoru (Agents Bölüm 17) onları birbirinden ayıramaz; bir yörünge değerlendirmesi, arac-cagrilari dizisini bir insanın onayladığı referans yola karşı skorlar, burada uzunluğu 4 olan `search > open > convert > answer`, böylece ajanin oraya *nasıl* vardığı ölçülebilir hale gelir.
+- **Tek bir yörünge-eşleşme skoru yoktur.** R2 çalışmasında (doğru araçlar, yanlış sıra), kesin eşleşme `0.00` der, sıra-duyarlı `0.75` der (referans uzunluğu 4 üzerinden LCS 3), ve kume-ortusmesi `1.00` der (4 üzerinden Jaccard 4). Aynı çalışma, üç hüküm. Seçtiğiniz metrik hükümdür: kume-ortusmesi sırayı yoksayar, sıra-duyarlı sıralı ilerlemeyi ödüllendirir, kesin eşleşme hiçbir şeyi bağışlamaz.
+- **Adım-düzeyi kredi size neyi düzelteceğinizi söyler.** Bir çalışmayı referansa LCS ile hizalamak her adımı MATCH, EXTRA ya da MISSING etiketler. R3 çalışması (convert atlandı, yeniden arandı) kredi `0.60` = 3 doğru / (3 + 1 eksik + 1 fazla) alır, `0.75`lik sıra-duyarlısından daha katıdır çünkü kredi çalışmayı hem atlanan adım hem de uydurulan adım için suçlar. R4, R6 ve R7 çalışmalarının her biri sıra-duyarlı `1.00` ama kredi `0.80` alır, bir zararsız fazla adımla doldurulmuş doğru bir yolun parmak izi.
+- **Notlayıcıları her zaman sansa göre düzeltin.** Bir mock yargıç ve bir insan sekiz çalışmanın altısında hemfikirdi (`po = 0.75`), ama ikisi de çoğunlukla PASS dedi, dolayısıyla şans anlaşması zaten `pe = 0.50`di. Cohen kappası `= (0.75-0.50)/(1-0.50) = 0.50`, anlaşmanın yalnızca "orta" olduğunu ortaya çıkarır, ve iki anlaşmazlık (R2, R3) tam olarak hoşgörülü yargıcın dosdoğru geçirdiği yanlış-sıra ve atlanan-adım yollarıdır. Yörünge notlaması, bir nihai-yanıt notlayıcısının kaçıracağı başarısızlıkları yakaladı.
+
+## Sözlük
+
+- **Yörünge (trajectory)**: bir ajanin bir görevi çözmek için yaptığı, arac-adlarina indirgenmiş sıralı arac-cagrilari dizisi (örneğin `search > open > convert > answer`). Bir yörünge değerlendirmesinin notladığı nesne, nihai yanıttan daha zengindir çünkü akıl yürütme yolunu kodlar.
+- **Referans yörünge (reference trajectory)**: bir insanın görevi çözmenin kabul edilebilir bir yolu olarak onayladığı arac sirasi, bir yol değerlendirmesinin "altın etiketi". Burada uzunluğu 4'tür: `search > open > convert > answer`.
+- **Kesin eşleşme (exact-match)**: en katı yörünge skoru, yalnızca çalışma referansla adım adım özdeşse `1.00`, değilse `0.00`. Sert bir kapı olarak yararlı, kusurlu çalışmaları sıralamak için çok körelmiş.
+- **Sıra-duyarlı skor (order-aware score)**: çalışma ile referansın en uzun ortak alt dizisinin (LCS) uzunluğu, referans uzunluğuna bölünmüş. Referans adımlarını *sırasıyla* geri kazanmayı ödüllendirirken fazla ya da eksik adımlara tolerans gösterir. R2 `0.75` alır.
+- **Kume-ortusmesi skoru (set-overlap score)**: iki arac kumesinin Jaccard indeksi, kesişimlerinin büyüklüğünün birleşimlerinin büyüklüğüne oranı, sırayı tamamen yoksayar. Yalnızca doğru araçların kullanılıp kullanılmadığını sorar. R2 `1.00` alır, R3 `0.75` alır.
+- **En uzun ortak alt dizi (LCS)**: hem çalışmada hem referansta aynı göreli sırada, boşluklara izin vererek görünen en uzun adım dizisi. Hem sıra-duyarlı skorun hem de adım-düzeyi kredinin altındaki hizalama.
+- **Adım-düzeyi kredi (step-level credit)**: LCS hizalamasından gelen adım başına döküm, her adımı MATCH, EXTRA (hiçbir şeyle eşleşmeyen bir çalışma adımı) ya da MISSING (asla karşılanmayan bir referans adımı) etiketler, artı `doğru / (doğru + eksik + fazla)` skaları. R3 `0.60` alır.
+- **Rubrik (rubric)**: her çalışmaya uygulanan bir geçti/kaldı kuralı. Burada hem bir insan hem de bir mock yargıç tarafından notlanır ki anlaşmaları ölçülebilsin.
+- **Mock yargıç (mock judge)**: bir LLM notlayıcısının yerine geçen deterministik bir kural, böylece her not izlenebilir ve offline'dır. Bizimki bilerek fazla hoşgörülüdür (en fazla bir fazla adımla sıra-duyarlı `0.75`te geçirir), ki bu yüzden R2 ile R3'ü kaçırır.
+- **Cohen kappası (Cohen's kappa)**: iki değerlendirici arasındaki sansa göre düzeltilmiş anlaşma, `(po - pe) / (1 - pe)`, Bölüm 3'ten. Gözlenen anlaşma `po = 0.75` eksi şans anlaşması `pe = 0.50`, kappa `0.50`, "orta", her iki değerlendirici de çoğunlukla aynı etiketi seçtiğinde ham anlaşmadan daha doğru bir resim verir.
+
+---
+
+Dört metrik, bir yargıç, bir insan ve bir kappa, ve bunları tek bir görev için elle bir araya getirdik. **Bölüm 15, Küçük Bir Değerlendirme Koşum Takımı (A Tiny Eval Harness)**, bütün seriyi tek bir saf-Python çerçevesine bağlar: bir veri kümesi, bir metrik, bir yargıç, bir güven aralığı ve bir kapı, gerçekten çalıştırabileceğiniz, RAG ve Agents değerlendirmelerinin içinde yeniden ifade edildiği bir çerçeve.

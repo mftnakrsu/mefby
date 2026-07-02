@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Regression Gates: push the CI and drift checks by hand, Part 11</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --zinc-bar: #e4e4e7;
+  --zinc-bar-bd: #d4d4d8;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.panel:last-child { margin-bottom: 0; }
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+.hint code {
+  font-family: var(--font-mono);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.mini-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* ── locked-sum sliders for run B's three buckets ── */
+.bucket-sliders {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+@media (max-width: 560px) { .bucket-sliders { grid-template-columns: 1fr; } }
+.bslider {
+  border: 1.5px solid var(--border);
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.bslider .lab { font-size: 11.5px; font-weight: 700; color: var(--body); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; }
+.bslider .lab .tag { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; text-transform: uppercase; }
+.bslider.wrong .lab .tag { background: var(--rose-bg); color: var(--rose-ink); }
+.bslider.partial .lab .tag { background: var(--amber-bg); color: var(--amber-ink); }
+.bslider.correct .lab .tag { background: var(--emerald-bg); color: var(--emerald-ink); }
+.bslider .n { font-family: var(--font-mono); font-size: 17px; font-weight: 700; color: var(--ink); display: block; margin-top: 2px; margin-bottom: 6px; }
+input[type="range"] { width: 100%; accent-color: var(--emerald); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+.bslider.wrong input[type="range"] { accent-color: var(--rose); }
+.bslider.partial input[type="range"] { accent-color: var(--amber); }
+.bslider.correct input[type="range"] { accent-color: var(--emerald); }
+.sum-read { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-align: right; margin-bottom: 16px; }
+.sum-read b { color: var(--ink); }
+
+.reset-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s;
+}
+.reset-btn:hover { background: var(--chip-bg); }
+.reset-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+
+/* ── number-line: two whiskers + threshold ── */
+.axis-block {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  margin: 18px 0 8px;
+}
+.axis-row-labels { display: grid; grid-template-rows: 34px 34px 32px; }
+.axis-row-labels span {
+  display: flex; align-items: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+}
+.axis-row-labels span.a { color: var(--emerald-ink); }
+.axis-row-labels span.b { color: var(--rose-ink); }
+.gate-plot {
+  position: relative;
+  height: 100px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.threshold-line {
+  position: absolute; top: 0; height: 68px; width: 2px;
+  background: repeating-linear-gradient(to bottom, var(--amber) 0 5px, transparent 5px 9px);
+  transition: left 0.1s linear;
+}
+.threshold-line::after {
+  content: "0.70 bar";
+  position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-sans); font-size: 9.5px; font-weight: 700; color: var(--amber-ink);
+  white-space: nowrap;
+}
+.gwhisker { position: absolute; height: 6px; border-radius: 3px; top: 14px; transition: left 0.12s, width 0.12s, background 0.12s; }
+.gwhisker.row-b { top: 48px; }
+.gwhisker.pass { background: var(--emerald-br); }
+.gwhisker.fail { background: var(--rose); }
+.gpoint {
+  position: absolute; top: 17px; width: 12px; height: 12px; border-radius: 50%;
+  transform: translateX(-50%); border: 2px solid #fff; box-shadow: 0 0 0 1.5px currentColor;
+  transition: left 0.12s, background 0.12s, color 0.12s;
+}
+.gpoint.row-b { top: 51px; }
+.gpoint.pass { background: var(--emerald-ink); color: var(--emerald-ink); }
+.gpoint.fail { background: var(--rose-ink); color: var(--rose-ink); }
+.gaxis-ticks { position: absolute; left: 0; right: 0; top: 70px; height: 30px; }
+.gtick { position: absolute; top: 0; width: 1px; height: 7px; background: var(--zinc-bar-bd); }
+.gtick-label { position: absolute; top: 9px; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; color: var(--faint); }
+
+/* ── stat rows ── */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+@media (max-width: 560px) { .stat-row { grid-template-columns: 1fr; } }
+.stat {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  background: #fff;
+  transition: background 0.12s, border-color 0.12s;
+}
+.stat .k { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.stat .v { font-family: var(--font-mono); font-size: 17px; font-weight: 700; color: var(--ink); margin-top: 2px; }
+.stat.pass { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.stat.pass .v { color: var(--emerald-ink); }
+.stat.fail { background: var(--rose-bg); border-color: var(--rose-bd); }
+.stat.fail .v { color: var(--rose-ink); }
+
+/* ── bucket bar comparison for PSI ── */
+.bucket-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 26px;
+  height: 120px;
+  border-bottom: 1.5px solid var(--border);
+  padding: 0 10px;
+  margin: 18px 0 4px;
+}
+.bucket-group { display: flex; align-items: flex-end; gap: 6px; flex: 1; justify-content: center; height: 100%; }
+.bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; width: 34px; }
+.bar-col .val { font-family: var(--font-mono); font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+.bar-col .bar { width: 100%; border-radius: 4px 4px 0 0; transition: height 0.15s ease; }
+.bar-col.a .bar { background: var(--emerald-lt); }
+.bar-col.a .val { color: var(--emerald-ink); }
+.bar-col.b .bar { background: var(--rose); }
+.bar-col.b .val { color: var(--rose-ink); }
+.bucket-labels { display: flex; gap: 26px; padding: 0 10px; margin-bottom: 14px; }
+.bucket-labels span { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
+.legend-row { display: flex; gap: 18px; align-items: center; margin-bottom: 4px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
+.legend-swatch { width: 11px; height: 11px; border-radius: 3px; }
+.legend-swatch.a { background: var(--emerald-lt); }
+.legend-swatch.b { background: var(--rose); }
+
+/* ── final verdict banner ── */
+.verdict {
+  font-size: 13.5px;
+  border-radius: 10px;
+  padding: 13px 15px;
+  line-height: 1.5;
+  border: 1.5px solid transparent;
+  margin-top: 16px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.verdict .headline { font-weight: 700; font-family: var(--font-mono); font-size: 15px; margin-bottom: 3px; display: block; }
+.verdict.block { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.verdict.ship { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+
+.guard-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 14px;
+  line-height: 1.5;
+}
+.guard-note code {
+  font-family: var(--font-mono);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <p class="eyebrow">Push the gate</p>
+  <h2 id="panel-heading">Can you build a run B that ships?</h2>
+  <p class="panel-subtitle">Run A stays fixed at counts <b>1 / 2 / 17</b> (mean 0.900), the trusted baseline. Drag run B's buckets, its 20 items redistribute across wrong, partial and correct, and all three checks recompute live.</p>
+
+  <div class="hint">
+    <strong>Drag any slider.</strong> The other two rebalance so run B always totals 20 items. Watch the mean, the 95% bootstrap confidence interval against the 0.70 bar, the PSI drift against run A, and the final gate verdict move together.
+  </div>
+
+  <div class="bucket-sliders">
+    <div class="bslider wrong">
+      <div class="lab"><span>Wrong</span><span class="tag">0.0</span></div>
+      <span class="n" id="wrong-val">3</span>
+      <input type="range" id="wrong-slider" min="0" max="20" step="1" value="3" aria-label="Run B wrong-item count" />
+    </div>
+    <div class="bslider partial">
+      <div class="lab"><span>Partial</span><span class="tag">0.5</span></div>
+      <span class="n" id="partial-val">5</span>
+      <input type="range" id="partial-slider" min="0" max="20" step="1" value="5" aria-label="Run B partial-item count" />
+    </div>
+    <div class="bslider correct">
+      <div class="lab"><span>Correct</span><span class="tag">1.0</span></div>
+      <span class="n" id="correct-val">12</span>
+      <input type="range" id="correct-slider" min="0" max="20" step="1" value="12" aria-label="Run B correct-item count" />
+    </div>
+  </div>
+  <div class="sum-read">run B total: <b id="sum-val">20</b> / 20 items &#183; <button class="reset-btn" id="reset-btn" type="button">Reset to 3 / 5 / 12</button></div>
+
+  <p class="mini-label">Check 1 &#183; CI threshold gate (bar = 0.70)</p>
+  <div class="axis-block" aria-hidden="true">
+    <div class="axis-row-labels">
+      <span class="a">run A</span>
+      <span class="b">run B</span>
+      <span></span>
+    </div>
+    <div class="gate-plot" id="gate-plot">
+      <div class="threshold-line" id="threshold-line"></div>
+      <div class="gwhisker pass" id="whisker-a"></div>
+      <div class="gpoint pass" id="point-a"></div>
+      <div class="gwhisker row-b" id="whisker-b"></div>
+      <div class="gpoint row-b" id="point-b"></div>
+      <div class="gaxis-ticks" id="gaxis-ticks"></div>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat" id="stat-mean"><div class="k">Run B mean</div><div class="v" id="mean-val">0.725</div></div>
+    <div class="stat" id="stat-ci"><div class="k">95% bootstrap CI</div><div class="v" id="ci-val">[0.550, 0.875]</div></div>
+    <div class="stat" id="stat-ci-verdict"><div class="k">CI threshold gate</div><div class="v" id="ci-verdict-val">FAIL</div></div>
+  </div>
+
+  <p class="mini-label" style="margin-top:20px;">Check 3 &#183; drift (PSI against run A)</p>
+  <div class="legend-row">
+    <div class="legend-item"><span class="legend-swatch a"></span>run A (fixed)</div>
+    <div class="legend-item"><span class="legend-swatch b"></span>run B (from the sliders)</div>
+  </div>
+  <div class="bucket-chart" id="bucket-chart">
+    <div class="bucket-group">
+      <div class="bar-col a"><span class="val" id="a0-val">1</span><span class="bar" id="a0-bar"></span></div>
+      <div class="bar-col b"><span class="val" id="b0-bar-val">3</span><span class="bar" id="b0-bar"></span></div>
+    </div>
+    <div class="bucket-group">
+      <div class="bar-col a"><span class="val" id="a1-val">2</span><span class="bar" id="a1-bar"></span></div>
+      <div class="bar-col b"><span class="val" id="b1-bar-val">5</span><span class="bar" id="b1-bar"></span></div>
+    </div>
+    <div class="bucket-group">
+      <div class="bar-col a"><span class="val" id="a2-val">17</span><span class="bar" id="a2-bar"></span></div>
+      <div class="bar-col b"><span class="val" id="b2-bar-val">12</span><span class="bar" id="b2-bar"></span></div>
+    </div>
+  </div>
+  <div class="bucket-labels"><span>0.0</span><span>0.5</span><span>1.0</span></div>
+
+  <div class="stat-row" style="grid-template-columns: 1fr 1fr;">
+    <div class="stat" id="stat-psi"><div class="k">PSI</div><div class="v" id="psi-val">0.334</div></div>
+    <div class="stat" id="stat-drift"><div class="k">Drift verdict</div><div class="v" id="drift-val">SIGNIFICANT</div></div>
+  </div>
+
+  <div class="verdict" id="verdict-box">
+    <span class="headline" id="verdict-headline">DECISION: BLOCK THE DEPLOY</span>
+    <span id="verdict-reason">CI threshold gate FAILs and drift is SIGNIFICANT: either signal alone is enough to stop this deploy.</span>
+  </div>
+
+  <p class="guard-note">
+    This panel resamples run B's current 20 items <code>2,500</code> times per update to build a live 95% bootstrap interval, so its numbers land close to, but not always bit-identical to, the companion script's fixed-seed <code>n_boot=10,000</code> run (which reads <code>[0.550, 0.875]</code> for the 3/5/12 example). PSI floors every bucket proportion at <code>1e-6</code> so an empty bucket never sends <code>ln(pA/pB)</code> to negative infinity. Drift reads <b>stable</b> below <code>0.10</code>, <b>moderate</b> from <code>0.10</code> to <code>0.25</code>, and <b>significant</b> above <code>0.25</code>; the gate blocks whenever the CI check fails or drift is significant.
+  </p>
+  <div class="sr-only" aria-live="polite" id="announcer"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+  function fmt3(x) { return x.toFixed(3); }
+  function fmt2(x) { return x.toFixed(2); }
+
+  var N = 20;
+  var THRESHOLD = 0.70;
+  var A_COUNTS = [1, 2, 17];       // run A, fixed: [wrong, partial, correct]
+  var A_MEAN = 0.900, A_LO = 0.775, A_HI = 1.000; // run A's fixed 95% bootstrap CI
+  var DEFAULT_B = [3, 5, 12];
+  var AXIS_LO = 0.48, AXIS_HI = 1.02;
+  var N_BOOT = 2500;
+  var MAX_BAR_PX = 96;
+  var MAX_COUNT = 20;
+
+  var counts = { wrong: DEFAULT_B[0], partial: DEFAULT_B[1], correct: DEFAULT_B[2] };
+
+  var wrongSlider = document.getElementById("wrong-slider");
+  var partialSlider = document.getElementById("partial-slider");
+  var correctSlider = document.getElementById("correct-slider");
+  var sliders = { wrong: wrongSlider, partial: partialSlider, correct: correctSlider };
+
+  function toPct(v) { return ((v - AXIS_LO) / (AXIS_HI - AXIS_LO)) * 100; }
+
+  /* keep run B's three counts always summing to N: when one slider moves,
+     redistribute the remainder across the other two, proportional to their
+     current values (even split if both are currently zero) */
+  function adjustOthers(changedKey, newValue) {
+    newValue = Math.max(0, Math.min(N, newValue));
+    var keys = ["wrong", "partial", "correct"];
+    var others = keys.filter(function (k) { return k !== changedKey; });
+    var remaining = N - newValue;
+    var sumOthers = counts[others[0]] + counts[others[1]];
+    var a, b;
+    if (sumOthers === 0) {
+      a = Math.floor(remaining / 2);
+      b = remaining - a;
+    } else {
+      a = Math.round((remaining * counts[others[0]]) / sumOthers);
+      a = Math.max(0, Math.min(remaining, a));
+      b = remaining - a;
+    }
+    counts[changedKey] = newValue;
+    counts[others[0]] = a;
+    counts[others[1]] = b;
+    sliders[others[0]].value = a;
+    sliders[others[1]].value = b;
+  }
+
+  /* ── axis ticks, built once ── */
+  var ticksEl = document.getElementById("gaxis-ticks");
+  [0.5, 0.6, 0.7, 0.8, 0.9, 1.0].forEach(function (t) {
+    var pct = toPct(t);
+    var tick = document.createElement("div");
+    tick.className = "gtick";
+    tick.style.left = pct + "%";
+    ticksEl.appendChild(tick);
+    var lab = document.createElement("div");
+    lab.className = "gtick-label";
+    lab.style.left = pct + "%";
+    lab.textContent = t.toFixed(2);
+    ticksEl.appendChild(lab);
+  });
+  document.getElementById("threshold-line").style.left = toPct(THRESHOLD) + "%";
+
+  /* run A's whisker never changes; draw once */
+  var whiskerA = document.getElementById("whisker-a");
+  var pointA = document.getElementById("point-a");
+  whiskerA.style.left = toPct(A_LO) + "%";
+  whiskerA.style.width = (toPct(A_HI) - toPct(A_LO)) + "%";
+  pointA.style.left = toPct(A_MEAN) + "%";
+
+  /* run A's bars never change; draw once */
+  var aVal = [document.getElementById("a0-val"), document.getElementById("a1-val"), document.getElementById("a2-val")];
+  var aBar = [document.getElementById("a0-bar"), document.getElementById("a1-bar"), document.getElementById("a2-bar")];
+  for (var i = 0; i < 3; i++) {
+    aVal[i].textContent = A_COUNTS[i];
+    aBar[i].style.height = (A_COUNTS[i] / MAX_COUNT * MAX_BAR_PX) + "px";
+  }
+
+  var whiskerB = document.getElementById("whisker-b");
+  var pointB = document.getElementById("point-b");
+  var bVal = [document.getElementById("wrong-val"), document.getElementById("partial-val"), document.getElementById("correct-val")];
+  var bBarVal = [document.getElementById("b0-bar-val"), document.getElementById("b1-bar-val"), document.getElementById("b2-bar-val")];
+  var bBar = [document.getElementById("b0-bar"), document.getElementById("b1-bar"), document.getElementById("b2-bar")];
+
+  function bootstrapCI(scores) {
+    var n = scores.length;
+    var reps = new Array(N_BOOT);
+    for (var r = 0; r < N_BOOT; r++) {
+      var sum = 0;
+      for (var j = 0; j < n; j++) sum += scores[Math.floor(Math.random() * n)];
+      reps[r] = sum / n;
+    }
+    reps.sort(function (x, y) { return x - y; });
+    return { lo: percentile(reps, 2.5), hi: percentile(reps, 97.5) };
+  }
+
+  function percentile(sorted, p) {
+    var m = sorted.length;
+    var pos = (p / 100) * (m - 1);
+    var lo = Math.floor(pos), hi = Math.ceil(pos);
+    if (lo === hi) return sorted[lo];
+    var frac = pos - lo;
+    return sorted[lo] * (1 - frac) + sorted[hi] * frac;
+  }
+
+  function psi(countsA, countsB) {
+    var total = 0;
+    for (var k = 0; k < 3; k++) {
+      var pa = Math.max(countsA[k] / N, 1e-6);
+      var pb = Math.max(countsB[k] / N, 1e-6);
+      total += (pa - pb) * Math.log(pa / pb);
+    }
+    return total;
+  }
+
+  function render() {
+    var b = [counts.wrong, counts.partial, counts.correct];
+    var scoresB = [];
+    for (var k = 0; k < b[0]; k++) scoresB.push(0.0);
+    for (k = 0; k < b[1]; k++) scoresB.push(0.5);
+    for (k = 0; k < b[2]; k++) scoresB.push(1.0);
+    var meanB = scoresB.reduce(function (s, x) { return s + x; }, 0) / N;
+    var ci = bootstrapCI(scoresB);
+    var ciPass = ci.lo >= THRESHOLD;
+
+    document.getElementById("sum-val").textContent = b[0] + b[1] + b[2];
+
+    /* whisker + point for run B */
+    whiskerB.style.left = toPct(ci.lo) + "%";
+    whiskerB.style.width = Math.max(0.5, toPct(ci.hi) - toPct(ci.lo)) + "%";
+    whiskerB.className = "gwhisker row-b " + (ciPass ? "pass" : "fail");
+    pointB.style.left = toPct(meanB) + "%";
+    pointB.className = "gpoint row-b " + (ciPass ? "pass" : "fail");
+
+    document.getElementById("mean-val").textContent = fmt3(meanB);
+    document.getElementById("ci-val").textContent = "[" + fmt3(ci.lo) + ", " + fmt3(ci.hi) + "]";
+    document.getElementById("ci-verdict-val").textContent = ciPass ? "PASS" : "FAIL";
+    document.getElementById("stat-mean").className = "stat " + (meanB >= THRESHOLD ? "pass" : "fail");
+    document.getElementById("stat-ci").className = "stat " + (ciPass ? "pass" : "fail");
+    document.getElementById("stat-ci-verdict").className = "stat " + (ciPass ? "pass" : "fail");
+
+    /* bucket bars for run B */
+    for (var i2 = 0; i2 < 3; i2++) {
+      bBarVal[i2].textContent = b[i2];
+      bBar[i2].style.height = (b[i2] / MAX_COUNT * MAX_BAR_PX) + "px";
+    }
+
+    var drift = psi(A_COUNTS, b);
+    var driftCls, driftTag;
+    if (drift >= 0.25) { driftCls = "fail"; driftTag = "SIGNIFICANT"; }
+    else if (drift >= 0.10) { driftCls = "moderate"; driftTag = "MODERATE"; }
+    else { driftCls = "pass"; driftTag = "stable"; }
+    document.getElementById("psi-val").textContent = fmt3(drift);
+    document.getElementById("drift-val").textContent = driftTag;
+    document.getElementById("stat-psi").className = "stat " + (driftCls === "moderate" ? "" : driftCls);
+    document.getElementById("stat-drift").className = "stat " + (driftCls === "moderate" ? "" : driftCls);
+
+    var significant = drift >= 0.25;
+    var block = (!ciPass) || significant;
+    var box = document.getElementById("verdict-box");
+    var headline = document.getElementById("verdict-headline");
+    var reason = document.getElementById("verdict-reason");
+    if (block) {
+      box.className = "verdict block";
+      headline.textContent = "DECISION: BLOCK THE DEPLOY";
+      var reasons = [];
+      if (!ciPass) reasons.push("the CI threshold gate FAILs (lower bound " + fmt3(ci.lo) + " < " + fmt2(THRESHOLD) + ")");
+      if (significant) reasons.push("drift is SIGNIFICANT (PSI " + fmt3(drift) + " ≥ 0.25)");
+      reason.textContent = reasons.join(" and ") + ".";
+    } else {
+      box.className = "verdict ship";
+      headline.textContent = "DECISION: SHIP THE DEPLOY";
+      reason.textContent = "The CI threshold gate PASSes (lower bound " + fmt3(ci.lo) + " ≥ " + fmt2(THRESHOLD) + ") and drift is " + driftTag.toLowerCase() + " (PSI " + fmt3(drift) + ").";
+    }
+
+    document.getElementById("announcer").textContent =
+      "Run B counts " + b.join(", ") + ". Mean " + fmt3(meanB) + ", 95 percent CI " +
+      fmt3(ci.lo) + " to " + fmt3(ci.hi) + ", CI gate " + (ciPass ? "pass" : "fail") +
+      ". PSI " + fmt3(drift) + ", " + driftTag + " drift. " + (block ? "Block the deploy." : "Ship the deploy.");
+  }
+
+  function onSlide(key) {
+    return function () {
+      adjustOthers(key, parseInt(sliders[key].value, 10));
+      render();
+    };
+  }
+  wrongSlider.addEventListener("input", onSlide("wrong"));
+  partialSlider.addEventListener("input", onSlide("partial"));
+  correctSlider.addEventListener("input", onSlide("correct"));
+
+  document.getElementById("reset-btn").addEventListener("click", function () {
+    counts.wrong = DEFAULT_B[0];
+    counts.partial = DEFAULT_B[1];
+    counts.correct = DEFAULT_B[2];
+    wrongSlider.value = DEFAULT_B[0];
+    partialSlider.value = DEFAULT_B[1];
+    correctSlider.value = DEFAULT_B[2];
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

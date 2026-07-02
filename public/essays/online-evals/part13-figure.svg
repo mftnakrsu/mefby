@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 740" width="100%" style="height:auto" role="img" aria-labelledby="oe-title oe-desc">
+  <title id="oe-title">An A/B test with a guardrail: resolution rate lifts but refusal rate breaches</title>
+  <desc id="oe-desc">One week of live chatbot traffic split 50/50 between an old prompt (control, n=400) and a new prompt (treatment, n=400). Primary metric, resolution rate: control 168/400 = 0.420, treatment 200/400 = 0.500, an absolute lift of +0.080 (+8.0 pp) and a relative lift of +19.0%. A two-proportion z-test gives pooled rate p = (168+200)/(400+400) = 0.460, standard error SE = 0.03524, z = 2.270, and a two-sided p-value of 0.0232, which is below alpha = 0.05, so the primary lift is statistically significant. Guardrail metric, refusal rate: control 20/400 = 0.050, treatment 40/400 = 0.100, a change of +0.050 (+5.0 pp) against an allowed margin of +2 pp, so the guardrail is breached. Verdict: do not ship, because a significant primary gain is necessary but not sufficient when the guardrail regresses.</desc>
+
+  <!-- Page background -->
+  <rect width="1180" height="740" fill="#ffffff"/>
+  <rect width="1180" height="740" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 13, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 13 &#183; ONLINE EVALS</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">An A/B test with a guardrail, worked by hand</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">One week of live traffic, 50/50 split: n=400 control (old prompt) vs n=400 treatment (new prompt).</text>
+
+  <!-- ============================================================
+       LEFT: two bar charts, primary metric and guardrail metric
+  ============================================================ -->
+
+  <!-- PRIMARY METRIC section -->
+  <text x="40" y="122"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.08em">PRIMARY METRIC &#183; RESOLUTION RATE (HIGHER IS BETTER)</text>
+
+  <!-- lift pill -->
+  <rect x="230" y="132" width="240" height="40" rx="12" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="350" y="150" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="14" font-weight="700" fill="#047857">+0.080 lift (+8.0 pp)</text>
+  <text x="350" y="165" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" fill="#059669">+19.0% relative</text>
+
+  <!-- chart axis -->
+  <line x1="100" y1="310" x2="560" y2="310" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- control bar -->
+  <rect x="150" y="226" width="120" height="84" rx="8" fill="#f4f4f5" stroke="#a1a1aa" stroke-width="2"/>
+  <text x="210" y="214" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#3f3f46">0.420</text>
+  <text x="210" y="330" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="600" fill="#3f3f46">control (old prompt)</text>
+  <text x="210" y="346" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#71717a">168/400 resolved</text>
+
+  <!-- treatment bar -->
+  <rect x="430" y="210" width="120" height="100" rx="8" fill="#34d399" stroke="#059669" stroke-width="2"/>
+  <text x="490" y="198" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="20" font-weight="700" fill="#047857">0.500</text>
+  <text x="490" y="330" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="600" fill="#3f3f46">treatment (new prompt)</text>
+  <text x="490" y="346" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#71717a">200/400 resolved</text>
+
+  <!-- GUARDRAIL METRIC section -->
+  <text x="40" y="386"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.08em">GUARDRAIL METRIC &#183; REFUSAL RATE (MUST NOT REGRESS)</text>
+
+  <!-- allowed-margin dashed line -->
+  <line x1="100" y1="484" x2="560" y2="484" stroke="#d97706" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="105" y="478"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="9.5" font-weight="600" fill="#b45309">allowed margin = control + 2 pp = 0.070</text>
+
+  <!-- chart axis -->
+  <line x1="100" y1="560" x2="560" y2="560" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- control refusal bar -->
+  <rect x="150" y="506" width="120" height="54" rx="8" fill="#f4f4f5" stroke="#a1a1aa" stroke-width="2"/>
+  <text x="210" y="494" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="18" font-weight="700" fill="#3f3f46">0.050</text>
+  <text x="210" y="580" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="600" fill="#3f3f46">control</text>
+  <text x="210" y="596" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#71717a">20/400 refused</text>
+
+  <!-- treatment refusal bar (breach) -->
+  <rect x="430" y="452" width="120" height="108" rx="8" fill="#fda4af" stroke="#e11d48" stroke-width="2"/>
+  <text x="490" y="440" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="18" font-weight="700" fill="#be123c">0.100</text>
+  <text x="490" y="580" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="600" fill="#3f3f46">treatment</text>
+  <text x="490" y="596" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" fill="#71717a">40/400 refused</text>
+
+  <!-- breach badge -->
+  <rect x="428" y="408" width="140" height="24" rx="8" fill="#e11d48"/>
+  <text x="498" y="424" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" font-weight="700" fill="#ffffff">+5.0 pp &#8594; BREACHED</text>
+
+  <!-- ============================================================
+       Divider between left charts and right z-test panel
+  ============================================================ -->
+  <line x1="630" y1="110" x2="630" y2="600" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       RIGHT: two-proportion z-test worked by hand
+  ============================================================ -->
+  <text x="670" y="122"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">TWO-PROPORTION Z-TEST</text>
+
+  <!-- Pooled rate -->
+  <text x="670" y="156"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="15.5" font-weight="700" fill="#18181b">Pooled rate (p)</text>
+  <text x="1140" y="159" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="26" font-weight="700" fill="#059669">0.460</text>
+  <text x="670" y="176"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" fill="#71717a">(168 + 200) / (400 + 400)</text>
+  <line x1="670" y1="192" x2="1140" y2="192" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- Standard error -->
+  <text x="670" y="224"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="15.5" font-weight="700" fill="#18181b">Standard error (SE)</text>
+  <text x="1140" y="227" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="24" font-weight="700" fill="#059669">0.03524</text>
+  <text x="670" y="244"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" fill="#71717a">sqrt(0.460 &#215; 0.540 &#215; (1/400 + 1/400))</text>
+  <line x1="670" y1="260" x2="1140" y2="260" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- z statistic -->
+  <text x="670" y="292"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="15.5" font-weight="700" fill="#18181b">z statistic</text>
+  <text x="1140" y="295" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="26" font-weight="700" fill="#059669">2.270</text>
+  <text x="670" y="312"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" fill="#71717a">(0.500 - 0.420) / 0.03524</text>
+  <line x1="670" y1="328" x2="1140" y2="328" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- p-value -->
+  <text x="670" y="360"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="15.5" font-weight="700" fill="#18181b">p-value (two-sided)</text>
+  <text x="1140" y="363" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="26" font-weight="700" fill="#059669">0.0232</text>
+  <text x="670" y="380"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" fill="#71717a">P(|Z| &gt; 2.270), from the normal CDF</text>
+
+  <!-- significance number line -->
+  <line x1="670" y1="412" x2="1070" y2="412" stroke="#e4e4e7" stroke-width="2"/>
+  <line x1="670" y1="406" x2="670" y2="418" stroke="#a1a1aa" stroke-width="1.5"/>
+  <line x1="1070" y1="406" x2="1070" y2="418" stroke="#a1a1aa" stroke-width="1.5"/>
+  <text x="670" y="432" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#a1a1aa">0</text>
+  <text x="1070" y="432" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10" fill="#a1a1aa">0.10</text>
+
+  <!-- alpha marker -->
+  <line x1="870" y1="402" x2="870" y2="422" stroke="#71717a" stroke-width="2"/>
+  <text x="870" y="398" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#52525b">&#945; = 0.05</text>
+
+  <!-- p-value marker -->
+  <circle cx="763" cy="412" r="6" fill="#059669"/>
+  <text x="763" y="446" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#047857">p = 0.0232</text>
+
+  <text x="670" y="470"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13.5" font-weight="700" fill="#059669">p = 0.0232 &lt; &#945; = 0.05 &#8594; SIGNIFICANT</text>
+
+  <!-- verdict chips -->
+  <rect x="670" y="490" width="205" height="34" rx="10" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="772" y="512" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#047857">primary significant: True</text>
+
+  <rect x="885" y="490" width="205" height="34" rx="10" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="987" y="512" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" font-weight="700" fill="#be123c">guardrail ok: False</text>
+
+  <!-- ============================================================
+       Bottom verdict banner
+  ============================================================ -->
+  <rect x="40" y="630" width="1100" height="76" rx="12" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="60" y="656"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="15" font-weight="700" fill="#be123c">VERDICT: DO NOT SHIP</text>
+  <text x="60" y="676"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#52525b">The new prompt resolves more issues (a real, significant +8 pp gain) but refuses twice as often,</text>
+  <text x="60" y="694"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#52525b">breaching the guardrail. An offline win is necessary, not sufficient.</text>
+</svg>

@@ -1,0 +1,126 @@
+---
+title: "Belirsizlik"
+description: "Bir değerlendirme çalışması 30 çıktıyı notladı ve doğruluk 0.70 verdi; farklı bir örneklemde ne kadar sallanacağını sorana kadar sağlam görünen tek bir sayı. Bölüm 6 bootstrap'i elle kurar: 30 öğeyi 10000 kez yerine koyarak yeniden örnekle, 2.5. ve 97.5. yüzdelikleri [0.53, 0.87] olan bir %95 güven aralığı olarak oku, ve küme büyüdükçe o aralığın yarıya inmesini izle."
+date: 2026-07-19
+tags: ["Değerlendirme", "LLM", "AI", "Bootstrap", "Güven Aralıkları", "İstatistik"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-06-bootstrap-uncertainty"
+lang: "tr"
+translationSlug: "bootstrap-uncertainty"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 5 bize yargıçtan (judge) şüphelenmeyi ve onun yanlılıklarını düzeltmeyi öğretti, ama kusursuzca yanlılıktan arındırılmış bir yargıç bile size hep tek bir çalışmadan tek bir sayı verir. Bu bölüm o sayının kendisinden şüphelenmekle ilgili. Bir değerlendirme çalıştırırsınız, 30 çıktı notlanmış olarak geri döner, 21'i doğrudur, ve "doğruluk = 0.70" diye yazarsınız. O 0.70 bir olgu gibi hissettirir. Değildir. Bir **nokta tahminidir**: farklı bir 30 öğe üzerinde yeniden çalıştırılsa size 0.63'ü ya da 0.77'yi de aynı kolaylıkla verebilecek bir sürecin tek bir çekilişidir. Değerlendirmenin bütün disiplini, gerçek bir kazanımla o sallanmayı ayırt edip edemediğinize bağlı olarak yaşar ya da ölür; ve her skora bir aralık iliştirmeyi öğrenene kadar buna başlayamazsınız bile.
+
+Bunu yapan araç, yalnızca zaten elinizde olan veriyi kullanarak, **bootstrap**'tir. Fikir neredeyse şüphe uyandıracak kadar basit: değerlendirmeyi taze örneklemler üzerinde yeniden çalıştırabilseniz skorunuzun ne kadar oynayacağını bulmak için, kendi 30 öğenizi **yerine koyarak** yeniden örnekleyerek taze örneklemleri taklit edersiniz, her sahte örneklemde skoru yeniden hesaplarsınız ve sonuçların dağılımına bakarsınız. Bu bölümde tam olarak bunu elle yapıyoruz. Tek bir 30 öğelik doğru/yanlış kümesini alıyoruz, mekaniği kendi gözlerinizle görebilesiniz diye üç gerçek yeniden örnekleme çekilişini (tekrarlar dahil) basıyoruz, 10000 yeniden örneklemelik tam bootstrap'i çalıştırıyoruz ve 2.5. ile 97.5. yüzdelikleri bir **%95 güven aralığı** olarak okuyoruz. Sonra bütün olayı yerine oturtan tek deneyi yapıyoruz: doğruluğu 0.70'te sabit tutuyoruz ama kümeyi 30'dan 120'ye, 480'e büyütüyoruz ve aralığın işe yaramaz 0.3333 genişliğinden 0.0833'e çöküşünü, küme her dörde katlandığında yarıya inişini izliyoruz.
+
+## Ön koşullar
+
+Bölüm 1'deki temel Python'un aynısına ihtiyacınız var (bir liste, bir döngü, bir bölme), artı yalnızca rastgele-sayı üreteci ve `percentile` fonksiyonu için kullandığımız NumPy'a ilk bir bakış; her satır açıklanıyor. Hiçbir olasılık teorisi varsayılmıyor. Güven aralığı kavramının tamamını, tıpkı Bölüm 1'de hata matrisini kurduğumuz gibi, saymadan inşa ediyoruz. Eşlik eden dosya, [bootstrap_ci.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-06-bootstrap-uncertainty), API anahtarı ve ağ olmadan offline çalışır ve tamamen deterministiktir: yeniden örnekleme sabit bir tohum (`numpy.random.default_rng(0)`) kullanır, dolayısıyla buradaki tam çekilişler ve okuduğunuz her aralık, dosyayı çalıştırdığınızda bit be bit yeniden üretilir. Her zamanki gibi, bu yazıdaki her sayı o dosyanın basılmış çıktısıdır, yuvarlanmamış ve düzenlenmemiş.
+
+## Elinizdeki skor tek bir örneklemdir
+
+Kümeyle başlayın. Bir değerlendirme çalışması 30 model çıktısını altına karşı notladı ve her çıktı ya doğru (`1`) ya da yanlış (`0`):
+
+```text
+The labeled set (30 items, 1 = correct, 0 = incorrect):
+  1 1 0 1 1 1 0 1 1 0 1 1 1 0 1 1 0 1 1 1 0 1 1 0 0 1 1 0 1 1
+  correct: 21 / 30
+  point estimate:  accuracy = 21/30 = 0.7000
+```
+
+Otuzun yirmi biri doğru, dolayısıyla doğruluk `21/30 = 0.7000`. Bir rapora koyacağınız sayı budur ve tek başına dürüsttür. Sorun, neyi gizlediğidir. Bu 30 öğe bir **örneklemdir**. Modelinizin göreceği bütün girdi evreni üzerinde gerçek, bilinmeyen bir doğruluğu vardır ve 0.70 buna dair en iyi tek tahmininizdir, ama yalnızca 30 zar atışından çekilmiş bir tahmindir. Yarın farklı bir 30 öğe notlayın, farklı bir kesir elde edersiniz. Bootstrap'in yanıtladığı soru şudur: ne kadar farklı? Bir yeniden çalıştırma makul biçimde 0.55 ile 0.85 arasında herhangi bir yere düşebiliyorsa, "0.70"i sanki çakılmış gibi belirtmek küçük bir yalandır ve onu rakip bir sistemin "0.72"siyle karşılaştırmak çok daha büyük bir yalandır.
+
+O sallanmayı ölçmenin temiz yolu, 30'ar öğelik çok daha fazla bağımsız örneklem toplamak, her birini notlamak ve doğruluğun bunlar arasında nasıl saçıldığına bakmak olurdu. Ama yapamazsınız: etiketleme pahalıdır ve daha fazla etiketli veriniz olsaydı zaten en başta onu kullanırdınız. Bootstrap'in numarası, o saçılmayı zaten sahip olduğunuz tek örneklemden imal etmektir.
+
+## Mekanik: yerine koyarak yeniden örnekle
+
+İşte hamle, ve bütün fikir bu. 30 öğeniz, bildiğiniz kadarıyla, evrenin bir vekilidir. O halde onları öyle sayın: "evrenden taze bir 30 örneklemi çekmeyi" simüle etmek için, kendi 30 öğenizden **yerine koyarak** taze bir 30 örneklemi çekin. "Yerine koyarak" yük taşıyan ibaredir. Yeni örneklemdeki 30 yuvanın her biri, orijinal öğelerden birini eşit olasılıkla rastgele seçip sonra geri koyarak doldurulur, dolayısıyla aynı öğe iki, üç kez seçilebilir ya da hiç seçilmeyebilir. Sonuç, orijinalinizle örtüşen ama onu yeniden ağırlıklandıran 30 etiketten oluşan bir kümedir: bazı çıktılar iki kez sayılır, bazıları düşer. O yeniden karıştırılmış kümede doğruluğu yeniden hesaplayın, elinizde bir **kopya (replicate)** olur, "bir yeniden çalıştırma ne demiş olabilirdi?"ye makul bir yanıt.
+
+Bunu inanca dayanarak kabul etmeyin. Eşlik eden dosya, tekrarları kendiniz görebilesiniz diye seçtiği gerçek 30 indisin (her indis orijinal kümedeki `0` ile `29` arası bir konumdur) listesini göstererek ilk üç gerçek çekilişi basar:
+
+```text
+THE MECHANIC: resample 30 items WITH REPLACEMENT, recompute accuracy.
+Three example resamples (fixed seed, numpy default_rng(0)):
+  draw 1: indices = [25, 19, 15, 8, 9, 1, 2, 0, 5, 24, 19, 27, 15, 18, 29, 21, 18, 16, 16, 28, 8, 24, 20, 0, 11, 25, 16, 1, 22, 21]
+          correct in resample: 21 / 30  ->  accuracy = 0.7000
+  draw 2: indices = [25, 5, 2, 25, 0, 16, 2, 8, 14, 12, 12, 0, 0, 3, 0, 20, 15, 19, 7, 18, 22, 11, 13, 29, 24, 29, 11, 20, 28, 19]
+          correct in resample: 23 / 30  ->  accuracy = 0.7667
+  draw 3: indices = [25, 20, 21, 11, 26, 4, 17, 21, 25, 15, 11, 9, 12, 14, 21, 26, 2, 28, 15, 10, 20, 17, 7, 9, 21, 17, 15, 10, 22, 11]
+          correct in resample: 25 / 30  ->  accuracy = 0.8333
+```
+
+Çekiliş 1'in indis listesini okuyun ve yeniden ağırlıklandırmanın gerçekleştiğini görebilirsiniz. `16` indisi üç kez, `19` iki kez, `15` iki kez, `0` iki kez ve böyle sürer, orijinal konumların çoğu ise hiç ortaya çıkmaz. "Yerine koyarak"ın size satın aldığı tam olarak budur: her yeniden örneklemin bileşimi birazcık farklıdır, dolayısıyla ürettiği doğruluk da birazcık farklıdır. Çekiliş 1 tesadüfen `21/30 = 0.7000`'e, orijinalle aynı yere düştü. Çekiliş 2 daha çok doğru öğe çekti ve `23/30 = 0.7667`'de çıktı. Çekiliş 3 daha da yaslandı ve `25/30 = 0.8333`'e vurdu. *Aynı 30 çıktının* üç yeniden örneklemesi, üç farklı doğruluk. Zaten sahip olduğunuz öğeler arasında ağırlığı yeniden karıştırmaktan başka hiçbir şeyle gerçek kılınan o saçılma, skorunuzdaki belirsizliğin görünür hale gelmesidir.
+
+Tek bir çekiliş size neredeyse hiçbir şey söylemez; bootstrap'in değeri bunu binlerce kez yapmakta ve bütün o kopyaların şeklinin ortaya çıkmasına izin vermektedir.
+
+## Kopyalardan bir aralığa
+
+O halde bunu 10000 kez çalıştırıyoruz. 10000 yeniden örneklemenin her biri yerine koyarak kendi 30 indisini çeker ve kendi doğruluğunu üretir; bize 0.70 çevresinde kümelenmiş 10000 kopya skoru verir. Şimdi aralık sorusunu doğrudan soruyoruz: o 10000 sayıyı sıralayın ve her iki uçtan uç %2.5'i kesip atın. 2.5. yüzdelikteki değer ile 97.5. yüzdelikteki değer, bootstrap'in ürettiği her şeyin orta %95'ini kuşatır, ve o kuşak bizim **%95 güven aralığımızdır**:
+
+```text
+FULL BOOTSTRAP: B = 10000 resamples, then read the percentiles.
+  bootstrap replicates    = 10000
+  mean of replicates      = 0.6998
+  2.5th percentile        = 0.5333
+  97.5th percentile       = 0.8667
+  95% CI                  = [0.5333, 0.8667]  (width 0.3333)
+  -> report: accuracy = 0.70, 95% CI [0.53, 0.87]
+```
+
+Dikkat edilecek iki şey. Birincisi, 10000 kopyanın hepsinin ortalaması 0.6998, esasen orijinal 0.70. Bu güven verici bir sağlamadır: bootstrap yanlı değildir, başladığınız skorda merkezlenir, yalnızca onun çevresinde yayılır. İkincisi, ve bütün bölümün asıl noktası bu, o yayılmanın ne kadar geniş olduğuna bakın. Aralık 0.5333'ten 0.8667'ye, 0.3333 genişlikte uzanır. Bir rapor için yuvarlanınca, dürüst ifadeniz "doğruluk 0.70" değil, "doğruluk 0.70, %95 GA `[0.53, 0.87]`"dir. Sıfır-bir ölçeğinin tam üçte biri masadadır. Nokta tahmini tek başına bu kümenin ne kadar sallanabileceğini gizledi, ve sallanma muazzam, çünkü 30 öğe çok az kanıt.
+
+Bir sayı ile bir ölçüm arasındaki fark budur. Bir sayı 0.70'tir. Bir ölçüm, bir aralık iliştirilmiş 0.70'tir, ve buradaki aralık sayıyı utandıracak kadar dürüsttür. Rakip bir sistem 0.75 bildirseydi, iki aralık o kadar ağır örtüşürdü ki rakibinizin daha iyi olduğunu iddia etmek bu kanıtla savunulamaz olurdu. Aşağıdaki figür tüm şekli gösterir: 10000 kopya 0.70 çevresinde bir histograma yığılmış, 2.5. ve 97.5. yüzdelik kesimleri işaretli; böylece güven aralığının tam anlamıyla o yığının orta %95'i olduğunu görebilirsiniz.
+
+<Diagram number={1} caption="30 öğelik küme için bootstrap dağılımı. Sol: notlanmış 30 çıktının orijinal örneklemi (21 doğru, 9 yanlış) 0.7000 nokta tahmini doğruluğu verir. Orta: her biri 30 öğeyi yerine koyarak yeniden örnekleyip ortalamayı alarak hesaplanan 10000 bootstrap kopya doğruluğunun histogramı; yığın 0.6998'de, esasen orijinal 0.70'te merkezlidir. İki dikey zümrüt çizgi 2.5. yüzdeliği 0.5333'te ve 97.5. yüzdeliği 0.8667'de işaretler, aralarındaki gölgeli bant 0.3333 genişliğindeki %95 güven aralığıdır. Sağ: bildirilen sonuç, %95 GA [0.53, 0.87] ile doğruluk 0.70, aralığın bütün ölçeğin kabaca üçte birini kapladığını gösterir.">
+  <img src="/essays/bootstrap-uncertainty/part6-figure.svg" alt="Bootstrap üzerine üç panelli bir figür. Sol panel, 21'i doğru için zümrüt dolu ve 9'u yanlış için gri, 'nokta tahmini doğruluk = 21/30 = 0.7000' etiketli, 30 hücrelik orijinal etiketli kümeyi gösterir. Orta panel, 0.70 yakınında merkezlenmiş çan biçimli bir yığın oluşturan 10000 bootstrap kopya doğruluğunun histogramıdır; yatay eksen yaklaşık 0.4'ten 1.0'a uzanır. İki dikey çizgi yığını 0.5333'te (2.5. yüzdelik) ve 0.8667'de (97.5. yüzdelik) keser, aralarındaki bölge %95 güven aralığını işaretlemek için gölgelidir ve 'genişlik 0.3333' diye açıklanır. Kopyaların ortalaması 0.6998 tepede işaretlidir. Sağ panel bildirilen sonucu belirtir: doğruluk = 0.70, %95 GA [0.53, 0.87], aralığı 0-1 aralığının kabaca üçte birini kaplayan bir çubukla." class="w-full rounded-lg" />
+</Diagram>
+
+Kendi verinizi yeniden örneklemek neden hiç işe yarıyor? Sezgi şudur: 30 öğeniz evrenin ne kadar değişken olduğuna dair bilgiyi zaten taşır. Gerçek doğruluk 0.5 civarında olsaydı, tek tek çıktılar neredeyse yazı-tura olurdu ve yeniden örneklemeler geniş biçimde saçılırdı; 0.99 civarında olsaydı, neredeyse her yeniden örnekleme neredeyse kusursuz olurdu ve saçılma minik olurdu. Gerçek örnekleminizdeki doğru ve yanlış etiketlerin karışımı o değişkenliği kodlar, ve aralarında ağırlığı karıştırmak onu yeniden oynatır. Bootstrap yoktan bilgi yaratmıyor; 30 etiketinizde zaten gizil olan değişkenliği görünür bir aralığa sıkıştırıp çıkarıyor.
+
+## n=30'da geniş, n büyüdükçe daha dar
+
+Aralık utandırıcı derecede genişti, ama bu örneklem boyutuna dair bir olgu, yöntemdeki bir kusur değil, ve düzeltmesi bu bölümdeki en önemli pratik derstir. Aynı 30'da 21'lik örüntüyü daha büyük kümelere döşeyerek doğruluğu tam olarak 0.70'te sabit tutun: `n=120`, 30 öğelik kümenin dört kez tekrarıdır (hâlâ 120'de 84 doğru, hâlâ 0.70), ve `n=480` onun on altı kez tekrarıdır. Nokta tahmini hiç kımıldamaz. Her kümeyi bootstrap'leyin ve genişliği okuyun:
+
+```text
+WIDE AT n=30, NARROWER AS n GROWS (same 0.70 accuracy, bigger set):
+      n   95% CI                  width
+     30   [0.5333, 0.8667]   0.3333
+    120   [0.6167, 0.7833]   0.1667  (2.00x tighter)
+    480   [0.6583, 0.7417]   0.0833  (2.00x tighter)
+```
+
+Doğruluk üç satırın hepsinde aynı, ve aralık yine de küçülüyor. n=30'da `[0.5333, 0.8667]`, genişlik 0.3333. Veriyi n=120'ye dörde katlayın, `[0.6167, 0.7833]`'e, genişlik 0.1667'ye, tam olarak 2.00 kat daha dar hale gelir. Yine dörde katlayıp n=480'e çıkın, `[0.6583, 0.7417]`'e, genişlik 0.0833'e, bir 2.00 kat daha dar hale gelir. Örüntü tesadüf değildir: bir güven aralığının genişliği `1/sqrt(n)` ile orantılı olarak küçülür, dolayısıyla aralığı yarıya indirmek için örneklemi **dörde katlamanız** gerekir. O karekök yasası, değerlendirmenin tepeye yakın neden bu kadar veri-aç olduğunun sebebidir. 0.33 genişlikte bir aralıktan 0.08 genişlikte birine geçmek etiketli örneklerde on altı kat artışa mal oldu, ve bu yalnızca aralığı sekiz puana indirmek içindi.
+
+n=30 satırının gerçek kararlar için ne anlama geldiği üzerinde durun. 0.3333 genişlikte bir aralık 2 puanlık bir farkı gürültüden ayırt edemez; hatta 20 puanlık bir farkı bile fazla güvenle gürültüden ayıramaz. Biri size 30'ar örnek üzerinde 0.70 ve 0.72 alan iki sistem gösterip ikincisinin daha iyi olduğunu ilan ederse, kahve telvesi okuyorlardır, çünkü iki sayı da ölçeğin üçte biri genişlikte bir aralık taşır ve o aralıklar farkı bütünüyle yutar. Bu Bölüm 7'ye köprüdür: her skora bir aralık koyabildiğinizde, "B gerçekten A'dan iyi mi?" iki nokta tahminini göz kararı tartmak olmaktan çıkıp kesin, yanıtlanabilir bir soru haline gelir.
+
+İnteraktif figür bunun iki yarısını da elle sürmenizi sağlar. Üst panel 30 öğelik kümeden başlar ve talep üzerine yeniden örnekleme çeker: tek bir çekilişi inceleyebilmeniz için önce birer birer, sonra yüz, sonra on bin, ve histogramın dolmasını ve kopya sayısı tırmandıkça %95 GA'nın `[0.53, 0.87]`'ye yerleşmesini izlersiniz. Alt panel parmağınızın altındaki ölçekleme yasasıdır: bir küme-boyutu çarpanı aynı 0.70 doğruluklu kümeyi n=30'dan n=480'e kaydırır, ve her zaman 0.70'te merkezli olan aralık, n büyüdükçe gözle görülür biçimde kısılır; akan bir gösterge her dörde katlanmada genişliğin yarıya inişini gösterir.
+
+<IframeFigure src="/essays/bootstrap-uncertainty/part6-interactive.html" title="İnteraktif bootstrap gezgini: 30 öğelik kümeden birer, yüzer ya da on biner çekerek bootstrap yeniden örneklemeleri alan ve kopya doğruluklarının canlı histogramını, ortalaması ve %95 GA'sıyla kuran bir üst panel, ve küme-boyutu çarpanı aynı 0.70 doğruluklu kümeyi n=30'dan n=480'e büyüten, güven aralığının bir bölü karekök n eğrisi boyunca daraldığını, küme her dörde katlandığında yarıya indiğini gösteren bir alt panel." height={820} />
+
+## Özet / Çıkarımlar
+
+- **Tek bir skor bir nokta tahminidir, bir olgu değil.** 30 öğelik çalışma `21/30 = 0.7000` doğruluk verdi, ama bu gürültülü bir sürecin tek bir örneklemidir. Değerlendirmeyi farklı öğeler üzerinde yeniden çalıştırın, sayı kayardı. Her zaman yalnızca noktayı değil, bir aralık bildirin.
+- **Bootstrap tek bir örneklemi bir aralığa çevirir.** Kendi kümenizi *yerine koyarak* birçok kez yeniden örnekleyin, her yeniden örneklemede metriği yeniden hesaplayın ve 2.5. ile 97.5. yüzdelikleri okuyun. 30 öğelik kümede, 10000 yeniden örnekleme 0.6998 ortalama (orijinal 0.70'te merkezli, dolayısıyla yöntem yansız) ve `[0.5333, 0.8667]` %95 GA verdi.
+- **Yerine koyarak, bütün mekaniğin ta kendisi.** Her yeniden örnekleme 30 yuvanın hepsini yerine koyarak çekerek yeniden doldurur, dolayısıyla öğeler iki kez ya da hiç görünmez (çekiliş 1, `16` indisini üç kez kullandı). O yeniden ağırlıklandırma her kopyanın farklı olmasını sağlayan şeydir: aynı 30 çıktı üç çekilişte 0.7000, 0.7667 ve 0.8333 doğruluk üretti.
+- **n=30 güvenmek için çok az.** 0.3333 genişlikte bir %95 GA ölçeğin üçte birini kaplar. 2 puanlık bir farkı gürültüden ayıramaz, dolayısıyla herhangi bir "A, 30 örnekte B'yi 2 puan geçiyor" iddiası desteksizdir.
+- **Aralık genişliği 1/sqrt(n) gibi küçülür.** Doğruluğu 0.70'te tutarak, genişlik 0.3333'ten (n=30) 0.1667'ye (n=120), 0.0833'e (n=480) düştü, küme her dörde katlandığında yarıya inerek. Kesinlik pahalıdır: aralığı yarıya indirmek etiketli verinin dört katına mal olur.
+
+## Sözlük
+
+- **Nokta tahmini (point estimate)**: bir niceliğin tek bir örneklemden hesaplanan tek, en iyi tahmin değeri. Burada, doğruluk `21/30 = 0.7000`. Farklı bir örneklemde ne kadar değişeceğine dair hiçbir bilgi taşımaz, ki bu tam olarak bir güven aralığının eklediği şeydir.
+- **Bootstrap**: gözlemlenen veriyi yerine koyarak defalarca yeniden örnekleyerek, her yeniden örneklemede istatistiği yeniden hesaplayarak ve sonuçların dağılımını inceleyerek bir istatistiğin belirsizliğini kestiren bir yeniden örnekleme yöntemi. Örnekleme dağılımı için bir formüle ve sahip olduğunuz örneklemin ötesinde fazladan veriye ihtiyaç duymaz.
+- **Yerine koyarak yeniden örnekleme (resample with replacement)**: verinizden aynı boyutta yeni bir örneklemi, öğeleri eşit olasılıkla rastgele seçip her birini seçtikten sonra geri koyarak çekmek, böylece aynı öğe birden çok kez görünebilir ya da hiç görünmez. Bunun yarattığı yeniden ağırlıklandırma, her bootstrap kopyasına farklı bir değer veren şeydir.
+- **Kopya (replicate)**: bir yeniden örneklenmiş veri kümesi ve onun üzerinde hesaplanan istatistik. Buradaki tam bootstrap 10000 kopya kullandı; üç örnek kopya doğruluğu 0.7000, 0.7667 ve 0.8333'tü.
+- **Güven aralığı (%95)**: niceliğin makul değerlerini kuşatan bir aralık. Bootstrap sürümü doğrudan kopyalardan, 2.5. ile 97.5. yüzdelikler arasındaki aralık olarak okunur, ki bu onların orta %95'ini içerir. Burada `[0.5333, 0.8667]`.
+- **Yüzdelik (percentile)**: sıralanmış verinin belirli bir kesrinin altına düştüğü değer. Kopyaların 2.5. yüzdeliği (0.5333) onların %2.5'inden büyük değerdir; 97.5. yüzdelik (0.8667) %97.5'inden büyüktür.
+- **Aralık genişliği ve 1/sqrt(n) kuralı**: bir güven aralığının genişliği kabaca örneklem boyutunun karekökünün bir bölünmüşü ile orantılı olarak küçülür, dolayısıyla n'i dörde katlamak genişliği yarıya indirir. Burada n=30'da 0.3333, n=120'de 0.1667 ve n=480'de 0.0833 olarak, her adım 2.00 kat daha dar olarak gözlemlendi.
+
+---
+
+İki sistem, 0.70 ve 0.72, örtüşen aralıklarla: ikincisi gerçekten daha mı iyi, yoksa sadece daha şanslı bir örneklem mi çektiniz? **Bölüm 7, Fark Gerçek mi?**, o soruyu bir teste dönüştürür.

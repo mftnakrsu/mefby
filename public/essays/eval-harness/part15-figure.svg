@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 720" width="100%" style="height:auto" role="img" aria-labelledby="eh-title eh-desc">
+  <title id="eh-title">One harness, three evals: dataset, scorer, bootstrap CI, and a ship/hold gate</title>
+  <desc id="eh-desc">The same five-piece harness runs three times. Run 1 scores a 10-item capital-cities QA set with strict exact match: mean 0.60, 95% bootstrap CI [0.30, 0.90], bar 0.35, CI lower bound 0.30 is below the bar, verdict HOLD. Run 2 scores the identical QA set with a lenient mock LLM judge: mean 0.70, 95% CI [0.40, 1.00], bar 0.35, CI lower bound 0.40 clears the bar, verdict SHIP. Run 3 scores a 5-item agent tool-call trajectory set with step-level trajectory match: mean 0.70, 95% CI [0.47, 0.93], bar 0.40, CI lower bound 0.47 clears the bar, verdict SHIP. Swapping only the scorer flips the same QA data from HOLD to SHIP; the gate always compares the CI lower bound to the bar, never the mean alone.</desc>
+
+  <rect width="1180" height="720" fill="#ffffff"/>
+  <rect width="1180" height="720" fill="#fafafa"/>
+
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 15, Figure 1</text>
+
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 15 &#183; A TINY EVAL HARNESS</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">One harness, three evals: swap the scorer, not the pipeline</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">Dataset &#8594; scorer &#8594; bootstrap 95% CI (B=2000, seed=0) &#8594; gate: ship iff CI_lo &#8805; bar.</text>
+
+  <!-- Pipeline strip -->
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+    <rect x="40" y="98" width="150" height="46" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+    <text x="115" y="118" text-anchor="middle" font-size="11.5" font-weight="700" fill="#3f3f46">1&#183; DATASET</text>
+    <text x="115" y="134" text-anchor="middle" font-size="10" fill="#71717a">labeled items</text>
+
+    <text x="200" y="126" text-anchor="middle" font-size="16" fill="#a1a1aa">&#8594;</text>
+
+    <rect x="215" y="98" width="150" height="46" rx="10" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="290" y="118" text-anchor="middle" font-size="11.5" font-weight="700" fill="#059669">2&#183; SCORER</text>
+    <text x="290" y="134" text-anchor="middle" font-size="10" fill="#059669">metric or judge</text>
+
+    <text x="375" y="126" text-anchor="middle" font-size="16" fill="#a1a1aa">&#8594;</text>
+
+    <rect x="390" y="98" width="150" height="46" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+    <text x="465" y="118" text-anchor="middle" font-size="11.5" font-weight="700" fill="#3f3f46">3&#183; BOOTSTRAP</text>
+    <text x="465" y="134" text-anchor="middle" font-size="10" fill="#71717a">95% CI, B=2000</text>
+
+    <text x="550" y="126" text-anchor="middle" font-size="16" fill="#a1a1aa">&#8594;</text>
+
+    <rect x="565" y="98" width="150" height="46" rx="10" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+    <text x="640" y="118" text-anchor="middle" font-size="11.5" font-weight="700" fill="#b45309">4&#183; GATE</text>
+    <text x="640" y="134" text-anchor="middle" font-size="10" fill="#b45309">CI_lo &#8805; bar ?</text>
+
+    <text x="725" y="126" text-anchor="middle" font-size="16" fill="#a1a1aa">&#8594;</text>
+
+    <rect x="740" y="98" width="150" height="46" rx="10" fill="#18181b"/>
+    <text x="815" y="118" text-anchor="middle" font-size="11.5" font-weight="700" fill="#ffffff">5&#183; VERDICT</text>
+    <text x="815" y="134" text-anchor="middle" font-size="10" fill="#d4d4d8">SHIP / HOLD</text>
+  </g>
+
+  <!-- Three run lanes: CI number-line cards -->
+  <!-- Shared scale: 0.0 to 1.0 mapped to x=350..1100 -->
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+
+    <!-- Column header -->
+    <text x="40" y="182" font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">RUN</text>
+    <text x="350" y="182" font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">MEAN &#183; 95% BOOTSTRAP CI &#183; RELEASE BAR &#183; VERDICT</text>
+
+    <!-- axis ticks helper: reused per row -->
+    <!-- Row 1: QA / exact match -->
+    <text x="40" y="222" font-size="14" font-weight="700" fill="#18181b">QA</text>
+    <text x="40" y="240" font-size="11" fill="#71717a">exact match</text>
+    <text x="40" y="256" font-size="10" fill="#a1a1aa">n = 10</text>
+
+    <line x1="350" y1="222" x2="1100" y2="222" stroke="#e4e4e7" stroke-width="1.5"/>
+    <!-- CI band [0.30,0.90] -->
+    <rect x="575" y="214" width="450" height="16" rx="8" fill="#fee2e2" stroke="#fca5a5" stroke-width="1.5"/>
+    <!-- bar marker at 0.35 -->
+    <line x1="612.5" y1="200" x2="612.5" y2="244" stroke="#b45309" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="612.5" y="196" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">bar 0.35</text>
+    <!-- mean marker at 0.60 -->
+    <circle cx="800" cy="222" r="6" fill="#e11d48"/>
+    <text x="575" y="252" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#71717a">CI_lo 0.30</text>
+    <text x="1025" y="252" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#71717a">CI_hi 0.90</text>
+    <text x="800" y="245" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#be123c">mean 0.60</text>
+    <rect x="1030" y="209" width="70" height="26" rx="7" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+    <text x="1065" y="226" text-anchor="middle" font-size="12" font-weight="700" fill="#be123c">HOLD</text>
+
+    <line x1="40" y1="272" x2="1140" y2="272" stroke="#e4e4e7" stroke-width="1"/>
+
+    <!-- Row 2: QA / judge -->
+    <text x="40" y="312" font-size="14" font-weight="700" fill="#18181b">QA</text>
+    <text x="40" y="330" font-size="11" fill="#71717a">mock LLM judge</text>
+    <text x="40" y="346" font-size="10" fill="#a1a1aa">n = 10</text>
+
+    <line x1="350" y1="312" x2="1100" y2="312" stroke="#e4e4e7" stroke-width="1.5"/>
+    <!-- CI band [0.40,1.00] -->
+    <rect x="650" y="304" width="450" height="16" rx="8" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <line x1="612.5" y1="290" x2="612.5" y2="334" stroke="#b45309" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="612.5" y="286" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">bar 0.35</text>
+    <circle cx="875" cy="312" r="6" fill="#059669"/>
+    <text x="650" y="342" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#71717a">CI_lo 0.40</text>
+    <text x="1100" y="342" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#71717a">CI_hi 1.00</text>
+    <text x="875" y="335" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#047857">mean 0.70</text>
+    <rect x="1030" y="299" width="70" height="26" rx="7" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="1065" y="316" text-anchor="middle" font-size="12" font-weight="700" fill="#047857">SHIP</text>
+
+    <line x1="40" y1="362" x2="1140" y2="362" stroke="#e4e4e7" stroke-width="1"/>
+
+    <!-- Row 3: agent trajectory -->
+    <text x="40" y="402" font-size="14" font-weight="700" fill="#18181b">Agent</text>
+    <text x="40" y="420" font-size="11" fill="#71717a">trajectory match</text>
+    <text x="40" y="436" font-size="10" fill="#a1a1aa">n = 5</text>
+
+    <line x1="350" y1="402" x2="1100" y2="402" stroke="#e4e4e7" stroke-width="1.5"/>
+    <!-- CI band [0.47,0.93] -->
+    <rect x="702.5" y="394" width="345" height="16" rx="8" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <!-- bar marker at 0.40 -->
+    <line x1="650" y1="380" x2="650" y2="424" stroke="#b45309" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="650" y="376" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">bar 0.40</text>
+    <circle cx="875" cy="402" r="6" fill="#059669"/>
+    <text x="702.5" y="432" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#71717a">CI_lo 0.47</text>
+    <text x="1047.5" y="432" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#71717a">CI_hi 0.93</text>
+    <text x="875" y="425" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#047857">mean 0.70</text>
+    <rect x="1030" y="389" width="70" height="26" rx="7" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="1065" y="406" text-anchor="middle" font-size="12" font-weight="700" fill="#047857">SHIP</text>
+  </g>
+
+  <!-- Shared axis, 0..1 -->
+  <g font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#a1a1aa">
+    <line x1="350" y1="452" x2="1100" y2="452" stroke="#d4d4d8" stroke-width="1"/>
+    <line x1="350" y1="448" x2="350" y2="456" stroke="#d4d4d8" stroke-width="1"/>
+    <text x="350" y="470" text-anchor="middle">0.0</text>
+    <line x1="537.5" y1="448" x2="537.5" y2="456" stroke="#d4d4d8" stroke-width="1"/>
+    <text x="537.5" y="470" text-anchor="middle">0.25</text>
+    <line x1="725" y1="448" x2="725" y2="456" stroke="#d4d4d8" stroke-width="1"/>
+    <text x="725" y="470" text-anchor="middle">0.50</text>
+    <line x1="912.5" y1="448" x2="912.5" y2="456" stroke="#d4d4d8" stroke-width="1"/>
+    <text x="912.5" y="470" text-anchor="middle">0.75</text>
+    <line x1="1100" y1="448" x2="1100" y2="456" stroke="#d4d4d8" stroke-width="1"/>
+    <text x="1100" y="470" text-anchor="middle">1.00</text>
+  </g>
+
+  <!-- Legend -->
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#52525b">
+    <circle cx="47" cy="497" r="6" fill="#e11d48"/>
+    <text x="60" y="501">mean score</text>
+    <line x1="205" y1="491" x2="205" y2="503" stroke="#b45309" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="216" y="501">release bar</text>
+    <rect x="330" y="491" width="14" height="10" rx="3" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="352" y="501">CI clears the bar &#8594; SHIP</text>
+    <rect x="565" y="491" width="14" height="10" rx="3" fill="#fee2e2" stroke="#fca5a5" stroke-width="1.5"/>
+    <text x="587" y="501">CI dips below the bar &#8594; HOLD</text>
+  </g>
+
+  <!-- Bottom summary table (matches the printed SUMMARY block) -->
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+    <rect x="40" y="530" width="1100" height="150" rx="12" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+    <text x="60" y="558" font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">SUMMARY &#183; ONE HARNESS, THREE EVALS</text>
+
+    <text x="60" y="584" font-size="11" font-weight="700" fill="#71717a">eval</text>
+    <text x="430" y="584" text-anchor="end" font-size="11" font-weight="700" fill="#71717a">mean</text>
+    <text x="640" y="584" text-anchor="end" font-size="11" font-weight="700" fill="#71717a">95% CI</text>
+    <text x="760" y="584" text-anchor="end" font-size="11" font-weight="700" fill="#71717a">bar</text>
+    <text x="900" y="584" text-anchor="end" font-size="11" font-weight="700" fill="#71717a">verdict</text>
+    <line x1="60" y1="594" x2="1120" y2="594" stroke="#e4e4e7" stroke-width="1"/>
+
+    <text x="60" y="618" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">QA / exact-match</text>
+    <text x="430" y="618" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">0.60</text>
+    <text x="640" y="618" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">[0.30, 0.90]</text>
+    <text x="760" y="618" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">0.35</text>
+    <text x="900" y="618" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#be123c">HOLD</text>
+
+    <text x="60" y="642" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">QA / judge</text>
+    <text x="430" y="642" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">0.70</text>
+    <text x="640" y="642" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">[0.40, 1.00]</text>
+    <text x="760" y="642" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">0.35</text>
+    <text x="900" y="642" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#047857">SHIP</text>
+
+    <text x="60" y="666" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">agent / trajectory</text>
+    <text x="430" y="666" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">0.70</text>
+    <text x="640" y="666" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">[0.47, 0.93]</text>
+    <text x="760" y="666" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#18181b">0.40</text>
+    <text x="900" y="666" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#047857">SHIP</text>
+  </g>
+
+  <text x="590" y="705" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">The gate reads the interval, never the point estimate. Swapping only the scorer flips the same QA data from HOLD to SHIP.</text>
+</svg>

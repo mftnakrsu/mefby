@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Building a Golden Set, draw it by hand, Part 2</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+.mini-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* ── population strip ── */
+.pop-strip {
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 3px;
+  margin-bottom: 16px;
+  max-width: 480px;
+}
+.pop-tile {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--chip-bg);
+}
+.pop-tile.urgent { background: var(--emerald-lt); border-color: var(--emerald); }
+
+/* ── draw controls & buttons ── */
+.draw-controls, .leak-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.action-btn {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  cursor: pointer;
+  outline: none;
+  transition: filter 0.12s, transform 0.12s;
+}
+.action-btn:hover { filter: brightness(1.08); }
+.action-btn:active { transform: translateY(1px); }
+.action-btn:focus-visible { box-shadow: 0 0 0 2px var(--ink); }
+.action-btn.simple { background: var(--amber); }
+.action-btn.strat { background: var(--emerald); }
+@media (prefers-reduced-motion: reduce) { .action-btn { transition: none; } }
+
+.reset-btn {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 14px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s;
+}
+.reset-btn:hover { background: var(--chip-bg); }
+.reset-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+
+/* ── draw result rows ── */
+.draw-result {
+  border: 1.5px solid var(--border);
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.draw-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+.draw-row + .draw-row { border-top: 1px solid var(--border); }
+.draw-row-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  text-transform: uppercase;
+  width: 96px;
+  flex-shrink: 0;
+}
+.draw-tiles { display: flex; gap: 3px; flex-shrink: 0; }
+.draw-tile {
+  width: 16px; height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--chip-bg);
+}
+.draw-tile.urgent { background: var(--emerald-lt); border-color: var(--emerald); }
+.draw-readout {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--body);
+}
+
+/* ── tally cards ── */
+.tally-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+@media (max-width: 520px) { .tally-grid { grid-template-columns: 1fr; } }
+.tally-card {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff;
+}
+.tally-card.simple { border-color: var(--amber-bd); background: var(--amber-bg); }
+.tally-card.strat { border-color: var(--emerald-bd); background: var(--emerald-bg); }
+.tally-head { font-size: 12.5px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+.tally-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); padding: 2px 0; }
+.tally-row b { font-family: var(--font-mono); color: var(--ink); font-weight: 700; }
+.tally-exact, .tally-note { font-size: 10.5px; color: var(--muted); margin-top: 6px; font-family: var(--font-mono); }
+
+/* ── histogram ── */
+.hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 120px;
+  border-bottom: 1.5px solid var(--border);
+  padding: 0 4px 4px;
+  margin-bottom: 6px;
+}
+.hist-col { display: flex; flex-direction: column; align-items: center; flex: 1; height: 100%; justify-content: flex-end; position: relative; }
+.hist-bar {
+  width: 100%;
+  max-width: 34px;
+  background: var(--amber);
+  border-radius: 4px 4px 0 0;
+  transition: height 0.18s ease;
+}
+.hist-col.pinned .hist-bar { background: var(--emerald); }
+.hist-expect {
+  position: absolute;
+  left: -2px; right: -2px;
+  height: 2px;
+  background: var(--rose);
+  border-radius: 1px;
+}
+@media (prefers-reduced-motion: reduce) { .hist-bar { transition: none; } }
+.hist-count { font-family: var(--font-mono); font-size: 10px; color: var(--body); margin-top: 3px; }
+.hist-k { font-family: var(--font-mono); font-size: 10px; color: var(--faint); margin-top: 2px; }
+.hist-legend { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+.hist-legend .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+/* ── ticket list (leakage panel) ── */
+.ticket-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.ticket-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+}
+.ticket-item.excluded { opacity: 0.45; }
+.ticket-item.leak { background: var(--rose-bg); border-color: var(--rose-bd); }
+.ticket-item.leak.excluded { background: #fff; opacity: 0.45; }
+.ticket-item input[type="checkbox"] { accent-color: var(--emerald); width: 15px; height: 15px; flex-shrink: 0; cursor: pointer; }
+.ticket-text { font-size: 12.5px; color: var(--ink); flex: 1; }
+.ticket-badges { display: flex; gap: 5px; flex-shrink: 0; }
+.badge { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 5px; letter-spacing: 0.02em; }
+.badge.leak { background: var(--rose); color: #fff; }
+.badge.correct { background: var(--emerald); color: #fff; }
+.badge.wrong { background: var(--faint); color: #fff; }
+
+/* ── big stat (accuracy) ── */
+.compare { display: grid; grid-template-columns: 1fr; gap: 14px; margin: 4px 0 0; }
+.big-stat {
+  border: 1.5px solid var(--emerald-bd);
+  background: var(--emerald-bg);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+.big-stat .k { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--emerald); }
+.big-stat .v { font-family: var(--font-mono); font-size: 40px; font-weight: 700; line-height: 1.1; margin-top: 4px; color: var(--emerald-ink); transition: color 0.2s; }
+.big-stat .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.big-stat.low { border-color: var(--rose-bd); background: var(--rose-bg); }
+.big-stat.low .k { color: var(--rose); }
+.big-stat.low .v { color: var(--rose-ink); }
+
+/* ── rubric panel ── */
+.threshold-row { margin-bottom: 16px; }
+.threshold-row label { font-size: 12.5px; font-weight: 600; color: var(--body); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+input[type="range"] { flex: 1; min-width: 160px; accent-color: var(--emerald); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+.thresh-read { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.thresh-read b { color: var(--ink); }
+
+.answer-card {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 13px 14px;
+  background: #fff;
+  margin-bottom: 10px;
+}
+.answer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.answer-head .name { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.answer-head .total { font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--ink); }
+.crit-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; }
+.crit-name { font-size: 12px; color: var(--muted); width: 84px; flex-shrink: 0; }
+.crit-btns { display: flex; gap: 5px; }
+.crit-btn {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  width: 26px; height: 26px; border-radius: 7px;
+  border: 1.5px solid var(--border); background: #fff; color: var(--muted);
+  cursor: pointer; outline: none;
+}
+.crit-btn[aria-pressed="true"] { background: var(--emerald); border-color: var(--emerald); color: #fff; }
+.crit-btn:focus-visible { box-shadow: 0 0 0 2px var(--ink); }
+.pill {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+  padding: 3px 9px; border-radius: 999px;
+}
+.pill.pass { background: var(--emerald-bg); color: var(--emerald-ink); border: 1px solid var(--emerald-bd); }
+.pill.fail { background: var(--rose-bg); color: var(--rose-ink); border: 1px solid var(--rose-bd); }
+
+.summary-strip {
+  border: 1.5px solid var(--emerald-bd);
+  background: var(--emerald-bg);
+  border-radius: 11px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--emerald-ink);
+  margin-top: 4px;
+}
+.summary-strip b { font-family: var(--font-mono); font-size: 15px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL A: sampling ══════════════ -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <p class="eyebrow">Draw by hand</p>
+  <h2 id="panel-a-heading">Two ways to draw 10 from 40</h2>
+  <p class="panel-subtitle">40 tickets, 8 urgent (20%, rare). Only 10 can be hand-labelled for the golden set. Draw it two ways and watch the measured urgent count spread.</p>
+
+  <div class="hint">
+    <strong>Click a button</strong> to draw a fresh sample of 10. Simple-random draws from all 40 at once and can miss the rare class; stratified always takes 2 from the 8 urgent and 8 from the 32 not. Draw several times and watch the tally build toward the exact numbers.
+  </div>
+
+  <p class="mini-label">Population &#183; 8 urgent (emerald) + 32 not (gray) = 40</p>
+  <div class="pop-strip" id="pop-strip" aria-hidden="true"></div>
+
+  <div class="draw-controls">
+    <button class="action-btn simple" id="draw-simple-btn" type="button">Draw simple-random (10)</button>
+    <button class="action-btn strat" id="draw-strat-btn" type="button">Draw stratified (10)</button>
+    <button class="reset-btn" id="reset-tally-btn" type="button">Reset tally</button>
+  </div>
+
+  <div class="draw-result">
+    <div class="draw-row">
+      <span class="draw-row-label">simple-random</span>
+      <div class="draw-tiles" id="tiles-simple"></div>
+      <span class="draw-readout" id="readout-simple"></span>
+    </div>
+    <div class="draw-row">
+      <span class="draw-row-label">stratified</span>
+      <div class="draw-tiles" id="tiles-strat"></div>
+      <span class="draw-readout" id="readout-strat"></span>
+    </div>
+  </div>
+
+  <div class="tally-grid">
+    <div class="tally-card simple">
+      <div class="tally-head">Simple-random tally</div>
+      <div class="tally-row"><span>draws</span><b id="sr-n">1</b></div>
+      <div class="tally-row"><span>mean urgent</span><b id="sr-mean">4.000</b></div>
+      <div class="tally-row"><span>std urgent</span><b id="sr-std">0.000</b></div>
+      <div class="tally-row"><span>zero-urgent draws</span><b id="sr-zero">0/1 = 0.000</b></div>
+      <div class="tally-exact">exact: P(zero)=0.076 &#183; std=1.109 &#183; mean=2.000</div>
+    </div>
+    <div class="tally-card strat">
+      <div class="tally-head">Stratified tally</div>
+      <div class="tally-row"><span>draws</span><b id="st-n">1</b></div>
+      <div class="tally-row"><span>mean urgent</span><b id="st-mean">2.000</b></div>
+      <div class="tally-row"><span>std urgent</span><b id="st-std">0.000</b></div>
+      <div class="tally-note">always exactly 2 &#183; std pinned to 0</div>
+    </div>
+  </div>
+
+  <p class="mini-label" style="margin-top:18px;">Simple-random running histogram (urgent count per draw)</p>
+  <div class="hist-legend"><span class="sw" style="background:var(--amber)"></span>your draws &nbsp;&nbsp;<span class="sw" style="background:var(--rose)"></span>exact expected count at this many draws &nbsp;&nbsp;<span class="sw" style="background:var(--emerald)"></span>k=2, where stratified always lands</div>
+  <div class="hist" id="hist"></div>
+  <div class="sr-only" aria-live="polite" id="announcer-a"></div>
+</section>
+
+<!-- ══════════════ PANEL B: leakage ══════════════ -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <p class="eyebrow">Why measured accuracy lies</p>
+  <h2 id="panel-b-heading">Leakage: memorized duplicates inflate the score</h2>
+  <p class="panel-subtitle">4 of these 10 eval tickets are near-duplicates of tickets the model was trained on. It gets all 4 right for free. Toggle them out to see the honest number.</p>
+
+  <div class="hint">
+    <strong>Click "Remove leaked duplicates"</strong> to uncheck the 4 memorized items, or toggle any ticket by hand to explore.
+  </div>
+
+  <div class="ticket-list" id="ticket-list"></div>
+
+  <div class="leak-controls">
+    <button class="action-btn strat" id="remove-leaks-btn" type="button">Remove leaked duplicates</button>
+    <button class="reset-btn" id="reset-leak-btn" type="button">Reset (include all 10)</button>
+  </div>
+
+  <div class="compare">
+    <div class="big-stat" id="leak-stat">
+      <div class="k">Accuracy on included tickets</div>
+      <div class="v" id="leak-acc">0.800</div>
+      <div class="sub" id="leak-frac">8/10 correct (4 of them memorized)</div>
+    </div>
+  </div>
+  <div class="sr-only" aria-live="polite" id="announcer-b"></div>
+</section>
+
+<!-- ══════════════ PANEL C: rubric ══════════════ -->
+<section class="panel" aria-labelledby="panel-c-heading">
+  <p class="eyebrow">Score with a rubric</p>
+  <h2 id="panel-c-heading">Three answers, three criteria, one bar</h2>
+  <p class="panel-subtitle">Each answer is scored 0, 1, or 2 on Correct, Grounded, and Complete (max 6). Click a score to change it, slide the pass bar, and watch who clears it.</p>
+
+  <div class="threshold-row">
+    <label for="thresh-slider">
+      Pass at total &#8805;
+      <input type="range" id="thresh-slider" min="0" max="6" step="1" value="5" aria-describedby="thresh-read" />
+      <span class="thresh-read" id="thresh-read"><b>5</b> / 6</span>
+    </label>
+  </div>
+
+  <div id="answers-wrap"></div>
+
+  <div class="summary-strip" id="rubric-summary"></div>
+  <div class="sr-only" aria-live="polite" id="announcer-c"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  function fmt3(x) { return x.toFixed(3); }
+  function fmt2(x) { return x.toFixed(2); }
+
+  /* ══════════════ PANEL A: sampling ══════════════ */
+  var POP_URGENT = 8, POP_NOT = 32, POP_N = 40, SAMPLE_N = 10;
+  var EXACT_STD = 1.109, EXACT_PZERO = 0.076;
+  // exact hypergeometric P(X=k) for k=0..8, N=40 K=8 n=10
+  var EXACT_PROBS = [0.0761, 0.2647, 0.3474, 0.2224, 0.0748, 0.0133, 0.0012, 0.0000468, 0.0000006];
+
+  var popStrip = document.getElementById("pop-strip");
+  // fixed population layout: 8 urgent tiles spread across 40, step-of-5 pattern (mirrors the static figure)
+  var URGENT_IDX = {2:1, 7:1, 12:1, 17:1, 22:1, 27:1, 32:1, 37:1};
+  for (var i = 0; i < POP_N; i++) {
+    var t = document.createElement("div");
+    t.className = "pop-tile" + (URGENT_IDX[i] ? " urgent" : "");
+    popStrip.appendChild(t);
+  }
+
+  function drawTiles(containerId, urgentCount, total) {
+    var el = document.getElementById(containerId);
+    el.innerHTML = "";
+    // spread urgent tiles evenly through the row for a natural look
+    var positions = {};
+    if (urgentCount > 0) {
+      var step = total / urgentCount;
+      for (var k = 0; k < urgentCount; k++) {
+        positions[Math.min(total - 1, Math.round(k * step))] = true;
+      }
+    }
+    for (var i = 0; i < total; i++) {
+      var d = document.createElement("div");
+      d.className = "draw-tile" + (positions[i] ? " urgent" : "");
+      el.appendChild(d);
+    }
+  }
+
+  // Fisher-Yates shuffle of the 40-item population, sample first 10
+  function drawSimpleRandomCount() {
+    var arr = [];
+    var i;
+    for (i = 0; i < POP_URGENT; i++) arr.push(1);
+    for (i = 0; i < POP_NOT; i++) arr.push(0);
+    for (i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    var sum = 0;
+    for (i = 0; i < SAMPLE_N; i++) sum += arr[i];
+    return sum;
+  }
+
+  // stratified draw always takes 2 of 8 urgent + 8 of 32 not -> sum is always 2
+  function drawStratifiedCount() { return 2; }
+
+  // tallies, seeded with the one worked-example draw each (matches the essay's numbers)
+  var srCounts = [4];
+  var stCounts = [2];
+
+  function mean(arr) { return arr.reduce(function (a, b) { return a + b; }, 0) / arr.length; }
+  function std(arr) {
+    var m = mean(arr);
+    var v = arr.reduce(function (a, b) { return a + (b - m) * (b - m); }, 0) / arr.length;
+    return Math.sqrt(v);
+  }
+
+  function renderSimple() {
+    var last = srCounts[srCounts.length - 1];
+    drawTiles("tiles-simple", last, SAMPLE_N);
+    document.getElementById("readout-simple").textContent =
+      "urgent picked = " + last + "  ->  rate " + fmt2(last / SAMPLE_N);
+    document.getElementById("sr-n").textContent = srCounts.length;
+    document.getElementById("sr-mean").textContent = fmt3(mean(srCounts));
+    document.getElementById("sr-std").textContent = fmt3(std(srCounts));
+    var zeros = srCounts.filter(function (c) { return c === 0; }).length;
+    document.getElementById("sr-zero").textContent = zeros + "/" + srCounts.length + " = " + fmt3(zeros / srCounts.length);
+    renderHist();
+  }
+
+  function renderStrat() {
+    var last = stCounts[stCounts.length - 1];
+    drawTiles("tiles-strat", last, SAMPLE_N);
+    document.getElementById("readout-strat").textContent =
+      "urgent picked = " + last + "  ->  rate " + fmt2(last / SAMPLE_N) + " (exact)";
+    document.getElementById("st-n").textContent = stCounts.length;
+    document.getElementById("st-mean").textContent = fmt3(mean(stCounts));
+    document.getElementById("st-std").textContent = fmt3(std(stCounts));
+  }
+
+  var hist = document.getElementById("hist");
+  function renderHist() {
+    hist.innerHTML = "";
+    var counts = new Array(9).fill(0);
+    srCounts.forEach(function (c) { counts[c]++; });
+    var total = srCounts.length;
+    var maxBar = Math.max.apply(null, counts.concat([1]));
+    for (var k = 0; k <= 8; k++) {
+      var col = document.createElement("div");
+      col.className = "hist-col" + (k === 2 ? " pinned" : "");
+      var barWrap = document.createElement("div");
+      barWrap.style.position = "relative";
+      barWrap.style.width = "100%";
+      barWrap.style.height = "84px";
+      barWrap.style.display = "flex";
+      barWrap.style.alignItems = "flex-end";
+      barWrap.style.justifyContent = "center";
+
+      var bar = document.createElement("div");
+      bar.className = "hist-bar";
+      var h = counts[k] > 0 ? Math.max(3, (counts[k] / maxBar) * 84) : 0;
+      bar.style.height = h + "px";
+      barWrap.appendChild(bar);
+
+      var expectH = (EXACT_PROBS[k] * total / maxBar) * 84;
+      if (expectH > 1) {
+        var tick = document.createElement("div");
+        tick.className = "hist-expect";
+        tick.style.bottom = Math.min(83, expectH) + "px";
+        barWrap.appendChild(tick);
+      }
+
+      col.appendChild(barWrap);
+      var cnt = document.createElement("div");
+      cnt.className = "hist-count";
+      cnt.textContent = counts[k];
+      col.appendChild(cnt);
+      var kl = document.createElement("div");
+      kl.className = "hist-k";
+      kl.textContent = "k=" + k;
+      col.appendChild(kl);
+      hist.appendChild(col);
+    }
+  }
+
+  document.getElementById("draw-simple-btn").addEventListener("click", function () {
+    srCounts.push(drawSimpleRandomCount());
+    renderSimple();
+    document.getElementById("announcer-a").textContent =
+      "New simple-random draw: " + srCounts[srCounts.length - 1] + " urgent of 10.";
+  });
+  document.getElementById("draw-strat-btn").addEventListener("click", function () {
+    stCounts.push(drawStratifiedCount());
+    renderStrat();
+    document.getElementById("announcer-a").textContent = "New stratified draw: 2 urgent of 10, as always.";
+  });
+  document.getElementById("reset-tally-btn").addEventListener("click", function () {
+    srCounts = [4];
+    stCounts = [2];
+    renderSimple();
+    renderStrat();
+  });
+
+  renderSimple();
+  renderStrat();
+
+  /* ══════════════ PANEL B: leakage ══════════════ */
+  // mirrors EVAL_TICKETS in golden_set.py: (text, correct, isLeak)
+  var TICKETS = [
+    { text: "how do i reset my password", correct: 1, leak: true },
+    { text: "The app crashes on login.", correct: 1, leak: true },
+    { text: "How do I export my data?", correct: 1, leak: false },
+    { text: "Is there a mobile app?", correct: 1, leak: false },
+    { text: "What are your business hours?", correct: 0, leak: false },
+    { text: "cancel my subscription!", correct: 1, leak: true },
+    { text: "How do I change my email?", correct: 1, leak: false },
+    { text: "Do you offer discounts?", correct: 0, leak: false },
+    { text: "My invoice is wrong.", correct: 1, leak: true },
+    { text: "Can I get a receipt?", correct: 1, leak: false }
+  ];
+  var included = TICKETS.map(function () { return true; });
+
+  var list = document.getElementById("ticket-list");
+  function buildList() {
+    list.innerHTML = "";
+    TICKETS.forEach(function (t, i) {
+      var row = document.createElement("label");
+      row.className = "ticket-item" + (t.leak ? " leak" : "") + (included[i] ? "" : " excluded");
+      row.setAttribute("data-i", i);
+
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = included[i];
+      cb.addEventListener("change", function () {
+        included[i] = cb.checked;
+        row.className = "ticket-item" + (t.leak ? " leak" : "") + (included[i] ? "" : " excluded");
+        renderLeak();
+      });
+      row.appendChild(cb);
+
+      var txt = document.createElement("span");
+      txt.className = "ticket-text";
+      txt.textContent = '"' + t.text + '"';
+      row.appendChild(txt);
+
+      var badges = document.createElement("span");
+      badges.className = "ticket-badges";
+      if (t.leak) {
+        var lb = document.createElement("span");
+        lb.className = "badge leak";
+        lb.textContent = "LEAK";
+        badges.appendChild(lb);
+      }
+      var cb2 = document.createElement("span");
+      cb2.className = "badge " + (t.correct ? "correct" : "wrong");
+      cb2.textContent = t.correct ? "correct" : "wrong";
+      badges.appendChild(cb2);
+      row.appendChild(badges);
+
+      list.appendChild(row);
+    });
+  }
+
+  function renderLeak() {
+    var n = 0, correct = 0;
+    TICKETS.forEach(function (t, i) {
+      if (included[i]) { n++; if (t.correct) correct++; }
+    });
+    var acc = n ? correct / n : 0;
+    var stat = document.getElementById("leak-stat");
+    document.getElementById("leak-acc").textContent = fmt3(acc);
+    document.getElementById("leak-frac").textContent = correct + "/" + n + " correct" +
+      (n === 10 ? " (4 of them memorized)" : n === 6 ? " (the honest number, leaks removed)" : "");
+    if (n <= 6 && acc < 0.8) {
+      stat.className = "big-stat low";
+    } else {
+      stat.className = "big-stat";
+    }
+    document.getElementById("announcer-b").textContent =
+      "Accuracy " + fmt3(acc) + ", " + correct + " of " + n + " included tickets correct.";
+  }
+
+  document.getElementById("remove-leaks-btn").addEventListener("click", function () {
+    TICKETS.forEach(function (t, i) { if (t.leak) included[i] = false; });
+    buildList();
+    renderLeak();
+  });
+  document.getElementById("reset-leak-btn").addEventListener("click", function () {
+    included = TICKETS.map(function () { return true; });
+    buildList();
+    renderLeak();
+  });
+
+  buildList();
+  renderLeak();
+
+  /* ══════════════ PANEL C: rubric ══════════════ */
+  var CRITERIA = ["Correct", "Grounded", "Complete"];
+  var ANSWERS = [
+    { name: "Answer A", scores: [2, 2, 2] },
+    { name: "Answer B", scores: [2, 2, 1] },
+    { name: "Answer C", scores: [1, 0, 2] }
+  ];
+  var threshold = 5;
+
+  var wrap = document.getElementById("answers-wrap");
+  ANSWERS.forEach(function (ans, ai) {
+    var card = document.createElement("div");
+    card.className = "answer-card";
+    card.setAttribute("data-ai", ai);
+    var critsHtml = "";
+    CRITERIA.forEach(function (cname, ci) {
+      critsHtml +=
+        '<div class="crit-row">' +
+          '<span class="crit-name">' + cname + '</span>' +
+          '<div class="crit-btns" data-ci="' + ci + '">' +
+            [0, 1, 2].map(function (v) {
+              return '<button type="button" class="crit-btn" data-v="' + v + '" aria-pressed="' + (ans.scores[ci] === v ? "true" : "false") + '">' + v + '</button>';
+            }).join("") +
+          '</div>' +
+        '</div>';
+    });
+    card.innerHTML =
+      '<div class="answer-head">' +
+        '<span class="name">' + ans.name + '</span>' +
+        '<span><span class="total" id="total-' + ai + '"></span> <span class="pill" id="pill-' + ai + '"></span></span>' +
+      '</div>' +
+      critsHtml;
+    wrap.appendChild(card);
+  });
+
+  wrap.addEventListener("click", function (e) {
+    var btn = e.target.closest(".crit-btn");
+    if (!btn) return;
+    var card = e.target.closest(".answer-card");
+    var ai = parseInt(card.getAttribute("data-ai"), 10);
+    var group = e.target.closest(".crit-btns");
+    var ci = parseInt(group.getAttribute("data-ci"), 10);
+    var v = parseInt(btn.getAttribute("data-v"), 10);
+    ANSWERS[ai].scores[ci] = v;
+    group.querySelectorAll(".crit-btn").forEach(function (b) {
+      b.setAttribute("aria-pressed", parseInt(b.getAttribute("data-v"), 10) === v ? "true" : "false");
+    });
+    renderRubric();
+  });
+
+  var threshSlider = document.getElementById("thresh-slider");
+  threshSlider.addEventListener("input", function () {
+    threshold = parseInt(threshSlider.value, 10);
+    document.getElementById("thresh-read").innerHTML = "<b>" + threshold + "</b> / 6";
+    renderRubric();
+  });
+
+  function renderRubric() {
+    var passCount = 0;
+    ANSWERS.forEach(function (ans, ai) {
+      var total = ans.scores[0] + ans.scores[1] + ans.scores[2];
+      var pass = total >= threshold;
+      if (pass) passCount++;
+      document.getElementById("total-" + ai).textContent = total + "/6";
+      var pill = document.getElementById("pill-" + ai);
+      pill.textContent = pass ? "PASS" : "FAIL";
+      pill.className = "pill " + (pass ? "pass" : "fail");
+    });
+    document.getElementById("rubric-summary").innerHTML =
+      "<b>" + passCount + "/3</b> answers clear the bar of total &#8805; " + threshold + ". A vibe check might wave all three through; the rubric makes the bar a number anyone can re-count.";
+    document.getElementById("announcer-c").textContent =
+      passCount + " of 3 answers pass at threshold " + threshold + ".";
+  }
+  renderRubric();
+})();
+</script>
+</body>
+</html>

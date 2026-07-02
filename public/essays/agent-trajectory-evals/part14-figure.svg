@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 640" width="100%" style="height:auto" role="img" aria-labelledby="tr-title tr-desc">
+  <title id="tr-title">Step-level credit: run R3 aligned to the reference trajectory</title>
+  <desc id="tr-desc">Run R3 (search, open, search, answer) is aligned against the reference trajectory (search, open, convert, answer) with the longest common subsequence. Three cells lie on the true diagonal of the 4 by 4 grid and are labelled MATCH in emerald: search-to-search, open-to-open, and answer-to-answer. R3's third step, a second search, matches nothing in the reference; its row header is boxed in amber and labelled EXTRA. The reference's convert step is covered by no candidate step; its column header is boxed in rose and labelled MISSING. Step counts: correct = 3, missing = 1, extra = 1. Credit = correct divided by (correct plus missing plus extra) = 3 divided by (3 plus 1 plus 1) = 0.60. For contrast, R3's order-aware score, the longest common subsequence length divided by the reference length, is 3 divided by 4 = 0.75. Credit is stricter than order-aware because it also charges the run for the extra step.</desc>
+
+  <!-- Page background -->
+  <rect width="1180" height="640" fill="#ffffff"/>
+  <rect width="1180" height="640" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 14, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 14 &#183; AGENT-TRAJECTORY EVALS</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">Step-level credit: R3 aligned to the reference</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">R3 skipped convert and re-searched instead. Three steps land in order; one is extra, one is missing.</text>
+
+  <!-- ============================================================
+       LEFT: the 4x4 alignment grid
+  ============================================================ -->
+
+  <!-- REFERENCE axis title (columns) -->
+  <text x="446" y="118" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.14em">REFERENCE (LEN 4)</text>
+
+  <!-- R3 axis title (rows), rotated -->
+  <text x="70" y="325" text-anchor="middle" transform="rotate(-90 70 325)"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.14em">R3 (CANDIDATE)</text>
+
+  <!-- Column headers: search, open, convert (MISSING), answer -->
+  <rect x="270" y="130" width="82" height="22" rx="7" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="311" y="145" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#3f3f46">search</text>
+
+  <rect x="360" y="130" width="82" height="22" rx="7" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="401" y="145" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#3f3f46">open</text>
+
+  <rect x="450" y="126" width="82" height="26" rx="7" fill="#fff1f2" stroke="#e11d48" stroke-width="1.8"/>
+  <text x="491" y="143" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#be123c">convert</text>
+  <rect x="465" y="104" width="52" height="17" rx="5" fill="#e11d48"/>
+  <text x="491" y="116" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#ffffff" letter-spacing="0.02em">MISSING</text>
+
+  <rect x="540" y="130" width="82" height="22" rx="7" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="581" y="145" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#3f3f46">answer</text>
+
+  <!-- Row headers: search, open, search (EXTRA), answer -->
+  <rect x="150" y="165" width="106" height="74" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="203" y="207" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#3f3f46">search</text>
+
+  <rect x="150" y="247" width="106" height="74" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="203" y="289" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#3f3f46">open</text>
+
+  <rect x="150" y="329" width="106" height="74" rx="9" fill="#fffbeb" stroke="#d97706" stroke-width="1.8"/>
+  <text x="203" y="367" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#b45309">search</text>
+  <rect x="177" y="378" width="52" height="17" rx="5" fill="#d97706"/>
+  <text x="203" y="390" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#ffffff" letter-spacing="0.02em">EXTRA</text>
+
+  <rect x="150" y="411" width="106" height="74" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="203" y="453" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#3f3f46">answer</text>
+
+  <!-- Dashed diagonal guide, behind the cells -->
+  <line x1="311" y1="202" x2="581" y2="448" stroke="#d4d4d8" stroke-width="1.5" stroke-dasharray="3 5"/>
+
+  <!-- 4x4 grid background cells (empty = not compared) -->
+  <g fill="#fafafa" stroke="#eeeeef" stroke-width="1">
+    <rect x="270" y="165" width="82" height="74" rx="9"/>
+    <rect x="360" y="165" width="82" height="74" rx="9"/>
+    <rect x="450" y="165" width="82" height="74" rx="9"/>
+    <rect x="540" y="165" width="82" height="74" rx="9"/>
+    <rect x="270" y="247" width="82" height="74" rx="9"/>
+    <rect x="360" y="247" width="82" height="74" rx="9"/>
+    <rect x="450" y="247" width="82" height="74" rx="9"/>
+    <rect x="540" y="247" width="82" height="74" rx="9"/>
+    <rect x="270" y="329" width="82" height="74" rx="9"/>
+    <rect x="360" y="329" width="82" height="74" rx="9"/>
+    <rect x="450" y="329" width="82" height="74" rx="9"/>
+    <rect x="540" y="329" width="82" height="74" rx="9"/>
+    <rect x="270" y="411" width="82" height="74" rx="9"/>
+    <rect x="360" y="411" width="82" height="74" rx="9"/>
+    <rect x="450" y="411" width="82" height="74" rx="9"/>
+    <rect x="540" y="411" width="82" height="74" rx="9"/>
+  </g>
+
+  <!-- MATCH cells on the true diagonal: (search,search) (open,open) (answer,answer) -->
+  <rect x="270" y="165" width="82" height="74" rx="9" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text x="311" y="196" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700" fill="#047857">&#10003;</text>
+  <text x="311" y="224" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10.5" font-weight="700" fill="#059669" letter-spacing="0.04em">MATCH</text>
+
+  <rect x="360" y="247" width="82" height="74" rx="9" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text x="401" y="278" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700" fill="#047857">&#10003;</text>
+  <text x="401" y="306" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10.5" font-weight="700" fill="#059669" letter-spacing="0.04em">MATCH</text>
+
+  <rect x="540" y="411" width="82" height="74" rx="9" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text x="581" y="442" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700" fill="#047857">&#10003;</text>
+  <text x="581" y="470" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10.5" font-weight="700" fill="#059669" letter-spacing="0.04em">MATCH</text>
+
+  <!-- The (search,convert) cell where the diagonal breaks: neither matches -->
+  <text x="491" y="371" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700" fill="#d4d4d8">&#8213;</text>
+
+  <!-- Legend -->
+  <rect x="150" y="510" width="14" height="14" rx="4" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+  <text x="172" y="521" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#52525b">MATCH &#183; on the diagonal</text>
+  <rect x="360" y="510" width="14" height="14" rx="4" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+  <text x="382" y="521" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#52525b">EXTRA &#183; candidate only</text>
+  <rect x="558" y="510" width="14" height="14" rx="4" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/>
+  <text x="580" y="521" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="12" fill="#52525b">MISSING &#183; reference only</text>
+
+  <!-- Divider between grid and credit panel -->
+  <line x1="655" y1="100" x2="655" y2="500" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       RIGHT: step counts -> credit, contrasted with order-aware
+  ============================================================ -->
+  <text x="685" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">STEP COUNTS &#8594; CREDIT</text>
+
+  <!-- Three count chips -->
+  <rect x="685" y="130" width="138" height="80" rx="11" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.6"/>
+  <text x="754" y="176" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="30" font-weight="700" fill="#047857">3</text>
+  <text x="754" y="198" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10.5" font-weight="600" fill="#059669">correct (MATCH)</text>
+
+  <rect x="836" y="130" width="138" height="80" rx="11" fill="#fff1f2" stroke="#fda4af" stroke-width="1.6"/>
+  <text x="905" y="176" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="30" font-weight="700" fill="#be123c">1</text>
+  <text x="905" y="198" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10.5" font-weight="600" fill="#e11d48">missing (ref only)</text>
+
+  <rect x="987" y="130" width="138" height="80" rx="11" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.6"/>
+  <text x="1056" y="176" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="30" font-weight="700" fill="#b45309">1</text>
+  <text x="1056" y="198" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="10.5" font-weight="600" fill="#d97706">extra (cand only)</text>
+
+  <!-- Credit metric -->
+  <text x="685" y="252" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="16" font-weight="700" fill="#18181b">Credit</text>
+  <text x="1140" y="255" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="30" font-weight="700" fill="#059669">0.60</text>
+  <text x="685" y="274" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#71717a">correct/(correct+missing+extra) = 3/(3+1+1)</text>
+  <rect x="685" y="286" width="455" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="685" y="286" width="273" height="7" rx="3.5" fill="#34d399"/>
+  <line x1="685" y1="312" x2="1140" y2="312" stroke="#e4e4e7" stroke-width="1"/>
+
+  <!-- Order-aware, for contrast -->
+  <text x="685" y="346" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="16" font-weight="700" fill="#18181b">Order-aware (R3)</text>
+  <text x="1140" y="349" text-anchor="end" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="30" font-weight="700" fill="#a1a1aa">0.75</text>
+  <text x="685" y="368" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" fill="#71717a">LCS=3 / len(ref)=4</text>
+  <rect x="685" y="380" width="455" height="7" rx="3.5" fill="#f4f4f5"/>
+  <rect x="685" y="380" width="341" height="7" rx="3.5" fill="#d4d4d8"/>
+
+  <!-- Footnote -->
+  <rect x="685" y="412" width="455" height="76" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="700" y="436" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#52525b">Order-aware only divides by the reference length, so it never</text>
+  <text x="700" y="453" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#52525b">charges a run for junk it added. Credit puts the extra search</text>
+  <text x="700" y="470" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#52525b">in the denominator too, so it drops 0.75 &#8594; <tspan font-weight="700" fill="#059669">0.60</tspan>.</text>
+
+  <!-- Bottom caption strip -->
+  <rect x="40" y="560" width="1100" height="44" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="590" y="587" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">Credit counts both sides of a mistake: the step nothing covered (MISSING) and the step covering nothing (EXTRA).</text>
+</svg>

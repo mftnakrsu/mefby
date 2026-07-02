@@ -1,0 +1,137 @@
+---
+title: "Yargıcı Yargılamak"
+description: "Bir LLM yargıcı bir modeldir, dolayısıyla sistematik, ölçülebilir önyargılar taşır. Bölüm 5, deterministik bir sahte yargıcı bir slot-A bonusu ve kelime başına bir ödülle tuzağa düşürür; onun konum önyargısını (kimin önce gittiğini değiştirdiğinizde 12 kararın 7'si döner) ve ayrıntı önyargısını (uzun yanıt 5 eşit-kaliteli sondanın hepsini kazanır) ölçer, sonra iki sıralamayı ortalayarak konum önyargısını düzeltir ve gerçekle uyuşmazlığın 5/12'den 1/12'ye düşmesini izler."
+date: 2026-07-18
+tags: ["Değerlendirme", "LLM", "AI", "LLM-as-Judge", "Önyargı", "Konum Önyargısı", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-05-judging-the-judge"
+lang: "tr"
+translationSlug: "judging-the-judge"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 4 bir LLM yargıcı kurdu ve onu insan altınına karşı skorladı; dersi, bir yargıcın ölçmek zorunda olduğunuz bir başka gürültülü notçudan başka bir şey olmadığıydı. Bu bölüm o notçunun daha ince ve daha tehlikeli bir özelliğini ölçüyor: ne kadar *sık* yanıldığını değil, *sistematik* bir yönde yanılıp yanılmadığını. Rastgele hata yapan bir yargıç yalnızca gürültülüdür, ve gürültü yeterince örnek üzerinde ortalanarak yok olur. Her zaman önce gösterilen yanıtı, ya da her zaman daha uzun yanıtı kayıran bir yargıç **önyargılıdır**, ve önyargı ortalanarak yok olmaz. Her karşılaştırmayı sessizce aynı yöne eğer; öyle ki bir sistem, daha iyi olduğu için değil de şanslı slota denk geldiği ya da yanıtlarını kelimelerle şişirdiği için değerlendirmenizi kazanabilir. Bu bölümün konusu işte bu başarısızlık, ve bu manşet doğruluğun asla yakalayamadığı türden bir başarısızlık.
+
+Modern yargılamanın çoğunu çalıştıran biçim olan eşli karşılaştırmalar üzerinde çalışıyoruz: iki sistem aynı istemi yanıtlar, ve yargıç bir kazanan seçer. İçine bilerek gömülü iki kusur olan deterministik bir sahte yargıç kuruyoruz, böylece gerçek doğruyu tam olarak biliyoruz. Slot A'da oturan (önce gösterilen) hangi yanıtsa ona `POS_BIAS = 1.00` kalite-puanı sabit bir bonus verir, ve herhangi bir yanıta kelime başına `VERB_PER_WORD = 0.02` ekler, böylece daha uzun yanıtlar öne sürünür. Sonra elle üç şey yapıyoruz. **Konum önyargısını**, 12 çift boyunca kimin önce gittiğini değiştirip kaç kararın döndüğünü sayarak ölçüyoruz (12'de 7, 0.58 oranı). **Ayrıntı önyargısını**, yanıtları kalitede eşit olan ve yalnızca uzunlukta farklılaşan 5 sonda çiftiyle ölçüyoruz, ve daha uzun yanıtın beşinin de kazanmasını izliyoruz (1.00 oranı). Sonra iki sıralamayı çalıştırıp ortalayarak konum önyargısını **düzeltiyoruz**, böylece slot-A bonusu birbirini götürür, ve gerçek kazananla uyuşmazlığın 5/12'den 1/12'ye düşmesini izliyoruz. Aşağıdaki her sayı, eşlik eden dosyanın basılmış çıktısıdır, yuvarlanmamış.
+
+## Ön koşullar
+
+Bölüm 4'e ihtiyacınız var, çünkü bu bölüm onun yargıcını devralıp bir sonraki soruyu sorar: o yargıç adil mi? Burada Bölüm 1'in tam hata-matrisi makinesine ihtiyacınız yok; bu bölümdeki aritmetik kesinlik ve duyarlılık değil, karşılaştırma ve saymadır. Temel Python yeterli: bir kayıt listesi, bir döngü, bir `if` ve bir bölme. Hiçbir istatistik geçmişi varsayılmıyor. Eşlik eden dosya, [judge_bias.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-05-judging-the-judge), API anahtarı, ağ ve hiçbir bağımlılık olmadan (NumPy bile değil) offline çalışır; böylece her satırı okuyup her sayıyı kendiniz yeniden üretebilirsiniz. Yargıç, rastgeleliği olmayan saf bir fonksiyondur, ki bu tam da önyargıyı kanıtlamamızı sağlayan şeydir: iki çalıştırma arasında değişen tek şey sıralama olduğuna göre, dönen herhangi bir karar yalnızca sıranın sonucudur, başka hiçbir şeyin değil.
+
+## Yargıç bir modeldir, dolayısıyla önyargıları vardır
+
+İşte bu bölümü yerine oturtan zihinsel kayma. Bölüm 4'te yargıcı hata yapan bir notçu olarak ele aldık. Şimdi onu, hataları *yapısı* olan bir notçu olarak ele alıyoruz. Yanıt A ile yanıt B'yi karşılaştırması istenen gerçek bir LLM yargıcı, herhangi bir modelin çalıştırdığı aynı sonraki-token makinesini çalıştırır, ve o makine alışkanlıklar öğrenmiştir. Bir listedeki ilk seçeneğin seçilen olduğu sayısız örnek görmüştür, dolayısıyla slot A'ya eğilir. Daha uzun, daha ayrıntılı metnin çoğu zaman daha iyi yanıtlarla ilişkili olduğunu öğrenmiştir, dolayısıyla uzunluk hiçbir şey katmasa bile uzunluğa eğilir. Bunlar bir istemdeki hatalar değil; ağırlıklardaki eğilimlerdir, ve onları istemle tamamen defedemezsiniz. *Yapabileceğiniz* şey, onları ölçmek ve değerlendirmenizi birbirlerini götürecek biçimde tasarlamaktır.
+
+Bir eğilimi ölçmek için, eğilimlerini zaten bildiğiniz bir yargıca ihtiyacınız var, o yüzden bir tane kuruyoruz. Sahte yargıcımız tek bir satırla bir yanıtı skorlar:
+
+```python
+score = quality + (POS_BIAS if in_slot_a else 0) + VERB_PER_WORD * words
+```
+
+*Adil* bir yargıç yalnızca `quality`'yi kullanırdı: yanıtın dürüst değeri, dikkatli bir insanın not vereceği şey. Bizimki iki bulaşan ekler. `POS_BIAS` terimi, gördüğü ilk konum olan slot A'da oturan neyse ona tam bir kalite-puanı (`1.00`) ekler. `VERB_PER_WORD` terimi her kelime için `0.02` ekler, böylece 50 kelimelik bir yanıt, 30 kelimeliğine karşı tam bir ekstra uzunluk puanı taşır. `answer_score(quality, words, in_slot_a)` fonksiyonu tam olarak bunu hesaplar, ve `judge(slot_a, slot_b)` iki yanıtı skorlar ve kazanan slotu (`A` ya da `B`) döndürür, beraberlikler A'ya giderek (ki bu da konum önyargısının bir kez daha ortaya çıkması demektir). Aşağı akıştaki her şey bu iki küçük fonksiyondan kurulur.
+
+Her karşılaştırma bir `Pair`: bir istem üzerinde sistem X'e karşı sistem Y, her yanıt yalnızca kendi `(quality, words)`'ü olacak biçimde. Kalite, adil bir yargıcın vereceği skordur; kelime sayısı ise uzunluğudur. Önemlisi, **gerçek kazanan** bizim için tanımlıdır: `true_winner(pair)` daha yüksek kaliteye sahip olan sistemi döndürür, nokta. Kaliteleri biz yazdığımız için, her karşılaştırmanın doğru yanıtını önceden biliriz, ve yargıcı suçüstü yakalamamızı sağlayan da budur.
+
+## Konum önyargısı: kimin önce gittiğini değiştirin, dönenleri sayın
+
+Konum önyargısı için en temiz test neredeyse utandırıcı derecede basit: her çifti iki kez yargılayın, bir kez X önce gösterilerek ve bir kez Y önce gösterilerek, ve kararın değişip değişmediğine bakın. *Adil* bir yargıç sıraya kayıtsızdır, dolayısıyla her seferinde iki kez de aynı kazananı döndürür ve sıfır karar döner. Herhangi bir dönme, sonucu yalnızca sıranın belirlediğinin kanıtıdır. `verdict(pair, x_first)` fonksiyonu defter tutmayı halleder: `x_first` doğru olduğunda X'i slot A'ya ve Y'yi slot B'ye koyar, yanlış olduğunda onları değiştirir, her zaman kazanan *slotu* değil kazanan *sistemi* döndürür, böylece iki çalıştırma doğrudan karşılaştırılabilir olur.
+
+12 çiftin hepsini iki yönde de çalıştırın ve sayın. Yedi karar döner:
+
+```text
+pair   X(q,words)   Y(q,words)  X-1st  Y-1st  flip  true
+ p01       (5,40)       (6,20)      X      Y   YES     Y
+ p02       (6,50)       (7,25)      X      Y   YES     Y
+ p03       (3,45)       (4,30)      X      Y   YES     Y
+ p04       (7,35)       (8,25)      X      Y   YES     Y
+ p05       (9,30)       (4,40)      X      X     .     X
+ p06       (8,20)       (5,30)      X      X     .     X
+ p07       (3,30)       (8,20)      Y      Y     .     Y
+ p08       (4,25)       (7,35)      Y      Y     .     Y
+ p09       (7,25)       (6,40)      X      Y   YES     X
+ p10       (8,20)       (7,45)      X      Y   YES     X
+ p11       (5,70)       (6,15)      X      Y   YES     Y
+ p12       (6,35)       (5,25)      X      X     .     X
+
+  position-bias rate = flips / pairs = 7/12 = 0.58
+```
+
+Mekanizmayı görmek için dönen bir satırı ve sabit bir satırı yan yana okuyun. p01'i alın: X'in kalitesi 5, Y'nin kalitesi 6, dolayısıyla Y gerçekten daha iyi ve `true` Y'dir. X önce gittiğinde slot A'da oturur ve `1.00` bonusu toplar, ki bu Y'nin bir puanlık kalite üstünlüğünü silmeye fazlasıyla yeter, dolayısıyla yargıç X'i taçlandırır. Onları değiştirin, ve şimdi Y slot A'da oturur, kalite önderliğini korur *ve* bonusu kazanır, dolayısıyla yargıç Y'yi taçlandırır. Kazanan ilk slotu izledi, değeri değil. İşte bu bir dönme, ve iki yanıtın bir puanlık slot bonusunun sonucu devirebileceği kadar yakın olduğu her çiftte olur: p01'den p04'e (Y biraz daha iyi), ve p09 ile p10 (X biraz daha iyi, Y daha uzun). Yedi dönmenin altısı bu neredeyse-beraberliklerdir.
+
+Şimdi p05 gibi sabit bir satıra bakın: X'in kalitesi 9, Y'nin 4'üne karşı, beş puanlık bir uçurum. Slot-A bonusu yalnızca bir puandır, o boşluğu köprülemek için çok küçük, dolayısıyla X önce de gitse sonra da gitse kazanır. Karar sabittir *çünkü* gerçek fark önyargıyı cüce bırakır. İşte bu konum önyargısının imzası ve onu bu kadar sinsi yapan şeyin sebebi: kolay kararlara asla dokunmaz, dolayısıyla değerlendirmenize şöyle bir bakış, ezici galibiyetlerin doğru karara bağlandığını görür ve yargıcın iyi olduğu sonucuna varır. Önyargı, yakın karşılaştırmalarda saklanır, ki bunlar tam da değerlendirmeyi karar vermek için kurduğunuz karşılaştırmalardır. Bu kümede konum önyargısı oranı `7/12 = 0.58`: yargıç çiftlerin yarısından epeyce fazlasında döner, ve adil bir yargıç hiçbirinde dönmezdi.
+
+p11'e dikkat edin, biraz farklı bir sebeple döner ve şimdiden işaretlemeye değer: X kalitede daha kötüdür (5'e karşı 6) ama devasa derecede daha uzundur (70 kelimeye karşı 15). X önce gittiğinde, slot bonusu *ve* uzunluk ödülü ikisi de X'i iter, ve X kazanır; Y önce gittiğinde, Y'nin slot bonusu artı kalite üstünlüğü onu güçbela geri alır. Yani p11'in dönmesi gerçek konum önyargısıdır, ama aynı zamanda teraziye basan bir ayrıntı başparmağı da taşır, ki bu da bir sonraki adımda izole ettiğimiz tam olarak o bulaşandır.
+
+<Diagram number={1} caption="12 eşli karşılaştırma boyunca sırayı değiştirerek ölçülen konum önyargısı, ve onu kaldıran düzeltme. Sol panel değiştirme tablosudur: 12 çiftin (p01'den p12'ye) her biri, sistem X ve sistem Y'yi (kalite, kelime) demetleri olarak listeler, X önce gösterildiğinde kararı, Y önce gösterildiğinde kararı, ikisinin uyuşmayıp uyuşmadığını (bir dönme) ve gerçek daha-yüksek-kaliteli kazananı. Yedi satır döner (p01'den p04'e, p09, p10, p11), hepsi de bir puanlık slot-A bonusunun küçük bir kalite boşluğuna ağır bastığı yakın karşılaştırmalardır; beş ezici galibiyet çifti sabit kalır. Sağ panel, gerçekle 12'de 5 çiftte uyuşmayan naif yargıcı (X her zaman önce), yalnızca 12'de 1'de uyuşmayan düzeltilmiş yargıçla (iki sıralama ortalanmış) karşılaştırır, düzeltilmiş konum önyargısı oranı 12'de 0 olarak çünkü sıra artık bir kararı döndüremez. Zümrüt yeşili doğru ve sabit sonuçları işaretler, kehribar dönmeleri işaretler, ve düzeltilmiş tek hayatta kalan hata bir ayrıntı hatası olarak belirtilir.">
+  <img src="/essays/judging-the-judge/part5-figure.svg" alt="'Yargıcı yargılamak: konum önyargısı ve düzeltmesi' başlıklı iki panelli bir figür. Sol panel, p01'den p12'ye etiketlenmiş 12 eşli karşılaştırmanın bir tablosudur. Her satır sistem X'i bir (kalite, kelime) çifti olarak, sistem Y'yi bir (kalite, kelime) çifti olarak, X önce gösterildiğinde kararı, Y önce gösterildiğinde kararı, bir dönme bayrağını ve gerçek kazananı gösterir. p01, p02, p03, p04, p09, p10 ve p11 satırları kehribar renkle gölgelenmiş ve dönme sütununda YES ile işaretlenmiş, çünkü sıra değiştirildiğinde kararları X'ten Y'ye değişir; p05, p06, p07, p08 ve p12 satırları zümrüt yeşiliyle gölgelenmiş ve bir noktayla işaretlenmiş, sabit kalır. Bir altbilgi şöyle okunur: 'position-bias rate = flips / pairs = 7/12 = 0.58.' Sağ panel, gerçekle uyuşmazlığı karşılaştıran iki yatay çubuk gösterir: X her zaman önce olan naif yargıç 12'de 5 çiftte uyuşmaz (0.42), kehribar renkte gösterilir; iki sıralamayı ortalayan düzeltilmiş yargıç yalnızca 12'de 1'de uyuşmaz (0.08), zümrüt yeşilinde gösterilir, düzeltilmiş konum önyargısı oranının 12'de 0 olduğu ve kalan tek hatanın ortalamanın düzeltemeyeceği bir ayrıntı hatası olduğu notuyla." class="w-full rounded-lg" />
+</Diagram>
+
+## Ayrıntı önyargısı: eşit kalite, daha uzun yanıt kazanır mı?
+
+Konum önyargısını izole etmek kolaydı çünkü sırayı değiştirmek slottan başka hiçbir şeyi değiştirmez. Ayrıntı daha zordur, çünkü ham karşılaştırmalarda uzunluk ve kalite birbirine dolanmıştır, ve bir kalite farkını yanlışlıkla uzunluğa mal etmek istemiyoruz. Bu yüzden temiz bir sonda kuruyoruz: iki yanıtı **kalitede eşit** olan ve *yalnızca* kelime sayısında farklılaşan 5 yeni çift. Kalite eşitse, adil bir yargıç bir kazanan seçemez (ya da rastgele seçer), ve uzunluk hiçbir şeye karar vermez. Bu arada konum önyargısını da temizliyoruz, her sondayı düzeltilmiş, sıra-ortalanmış kararla (bir sonraki bölümde tanıtılıyor) skorlayarak, böylece bir kalite beraberliğini bozabilen *tek* geri kalan şey kelime sayısı olur. Bu da ayrıntıyı sahnenin ışığında tek başına bırakır.
+
+Sonuç çarpıcı. Daha uzun yanıt beşinin de kazanır:
+
+```text
+   pair  X words  Y words  longer  winner
+    q01       50       20       X       X
+    q02       20       45       Y       Y
+    q03       55       25       X       X
+    q04       30       60       Y       Y
+    q05       40       15       X       X
+
+  verbosity-bias rate = longer-wins / pairs = 5/5 = 1.00
+```
+
+Her satır aynı hikayeyi anlatır. q01'de her iki yanıtın kalitesi aynı, ama X, Y'nin 20 kelimesine karşı 50 kelime yazmış, dolayısıyla X, Y'nin `0.02 * 20 = 0.40`'ına karşı `0.02 * 50 = 1.00` uzunluk kredisi toplar, ve X yalnızca şişirmeyle kazanır. q02'de uzunluklar tersine döner (Y daha uzun olandır) ve kazanan da öyle, uzunluğu tam olarak izler. Beş sondanın hepsinde `longer` sütunu ve `winner` sütunu aynıdır, `5/5 = 1.00` ayrıntı önyargısı oranı verir. Kalite her seferinde ölesiye beraberdi, ve uzunluk her seferinde beraberliği bozdu. Bu, iyi bilinen bir gerçek dünya patolojisinin altındaki mekanizmadır: yargıçlar (ve onların tercihleri üzerinde eğitilen modeller) daha uzun, daha ayrıntılı çıktılara doğru kayar, uzunluk daha iyi olduğu için değil, notçu onu ödüllendirdiği için. Eğer değerlendirmeniz bu önyargılı bir yargıç kullanıyorsa, sisteminizi sessizce gevezeliğe eğitiyorsunuzdur.
+
+Ayrıntı önyargısı, konum düzeltmesinden de sağ çıkar, ki sondayı düzeltilmiş kararla çalıştırmanın bütün amacı budur. İki sıralamayı ortalamak slot-A bonusunu götürür çünkü her yanıt slot A'da tam olarak bir kez oturur, ama *her iki* yanıt da *her iki* sıralamada uzunluk ödülünü korur, dolayısıyla ortalama onu tamamen dokunmadan bırakır. Konum önyargısı, bir yanıtın *nerede* oturduğunun bir özelliğidir; ayrıntı önyargısı, yanıtın *ne olduğunun* bir özelliğidir. Az sonra kuracağımız düzeltme birincisini onarır ve ikincisine dokunamaz, ve sonda bunu kanıtlar.
+
+## Düzeltme: iki sıralamayı ortala
+
+İşte çözüm, ve hastalık kadar basit. Yargıç haksızca slot A'yı ödüllendiriyorsa, o zaman her yanıta slot-A muamelesini eşit olarak verin: her çifti *her iki* sıralamada yargılayın ve her sistemin iki skorunu ortalayın. `corrected_winner(pair)` fonksiyonu tam olarak bunu yapar. Sistem X'in skorunu bir kez X slot A'dayken ve bir kez X slot B'deyken hesaplar, ikisini ortalar, Y için aynısını yapar, ve daha yüksek ortalamayı seçer. Her yanıt iki çalıştırmanın tam olarak birinde slot A'yı işgal ettiği için, `1.00` bonusu X'e bir kez ve Y'ye bir kez eklenir, dolayısıyla ortaladığınızda aynı sabit iki tarafa da iner ve birbirini götürür. Geriye kalan, konum terimi gitmiş olarak, `quality` artı uzunluk terimidir.
+
+Naif yargıcı (X her zaman önce gösterilir, tembel bir hattın çalıştırdığı gibi) düzeltilmiş yargıçla karşılaştırın, ikisi de gerçek daha-yüksek-kaliteli kazanana karşı ölçülmüş:
+
+```text
+  naive judge (X always first):  disagreement with truth = 5/12 = 0.42
+  corrected (both orders avg):   disagreement with truth = 1/12 = 0.08
+  corrected position-bias rate:  0/12 = 0.00  (order can no longer flip a verdict)
+```
+
+Naif yargıç 12 çiftin 5'inde gerçekle uyuşmaz, `0.42`'lik bir uyuşmazlık oranı: karşılaştırmaların neredeyse yarısını yanlış yapar, ve onları bir *yönde* yanlış yapar, her zaman kimi önce gösterdiyse onu kayırarak. İki sıralamayı ortalamak bunu 12'de 1'e düşürür, `0.08`'lik bir oran. Ve düzeltilmiş konum önyargısı oranı `0/12 = 0.00`: iki sıralamayı bir kez ortaladığınızda, hangi sistemi "önce" diye adlandırdığınızı değiştirmek girdi etiketlerini değiştirir ama ortalanmış skorları değiştirmez, dolayısıyla artık hiçbir karar sıra üzerine dönemez. Önyargı azaltılmadı, *yok oldu*, kuruluş gereği. İşte bu yüzden sıra-rastgeleleştirme (ya da daha iyisi, buradaki gibi sıra-ortalama), herhangi bir eşli LLM-yargıç kurulumundaki tek en önemli hijyen adımıdır, ve işte bu yüzden her zaman mevcut sistemi önce gösteren bir hat sessizce hileye getirilmiştir.
+
+Ama neyin onarıl*ma*dığına yakından bakın. Düzeltilmiş yargıç hâlâ bir çiftte gerçekle uyuşmaz. O tek hayatta kalan, daha önce işaretlediğimiz çift olan p11'dir: X'in kalitesi daha düşük (5'e karşı 6) ama Y'nin 15 kelimesine karşı 70 kelime, dolayısıyla `0.02 * 70 = 1.40`'lık uzunluk ödülü, slot bonusu birbirini götürdükten sonra bile bir puanlık kalite açığını fazlasıyla kapatır. Sıra-ortalama konum hatasını kaldırdı ama ayrıntı hatasını tam olarak sondanın öngördüğü gibi büsbütün bıraktı. İşte dürüst, rahatsız edici son: **bir önyargıyı düzeltmek bir başkasını düzeltmez**. Ortalama, bir yanıtın *nerede* oturduğunu onarır; *ne kadar uzun* olduğu hakkında hiçbir şey yapmaz. Ayrıntı önyargısını öldürmek için farklı bir müdahaleye ihtiyacınız var (uzunluğa göre normalleştirin, rubrikte kelime sayısını sınırlayın, ya da şişirmeyi cezalandırın), ve o düzeltmeyi bunu ölçtüğümüz gibi ölçersiniz, düzeltilmiş kararları bilinen bir gerçeğe karşı karşılaştırarak.
+
+Aşağıdaki interaktif figür bütün deneyi kendiniz çalıştırmanızı sağlar. İki önyargıyı yukarı aşağı ayarlayabilir, kararlar döndükçe ya da yerleştikçe değiştirme tablosunun yeniden boyanmasını izleyebilir, dönmeyi tek başına görmek için tek bir çiftin slot sırasını çevirebilir, ve düzeltmeyi açarak uyuşmazlığın 5/12'den 1/12'ye çökmesini izlerken tek hayatta kalan ayrıntı sağkalanının kıpırdamayı reddetmesini görebilirsiniz. `POS_BIAS`'ı sıfıra ayarlayın ve her dönme kaybolur; `VERB_PER_WORD`'ü sıfıra ayarlayın ve son düzeltilmiş hata da yok olur, ki bu da bunların tek bir yargıç üzerine istiflenmiş iki bağımsız bulaşan olduğunu hissetmenin en temiz yoludur.
+
+<IframeFigure src="/essays/judging-the-judge/part5-interactive.html" title="İnteraktif yargıç-önyargı gezgini: slot-A konum bonusunu ve kelime başına ayrıntı ödülünü ayarlayın, sonra 12 eşli karşılaştırmadan oluşan bir tablonun, kimin önce gittiğini değiştirdiğinizde hangi kararların döndüğünü, konum önyargısı oranını, ve iki sıralamayı ortalamanın gerçek kazananla uyuşmazlığı 12'de 5'ten 12'de 1'e nasıl indirdiğini tek ayrıntı hatası kalırken göstermesini izleyin." height={860} />
+
+## Özet / Çıkarımlar
+
+- **Bir LLM yargıcı bir modeldir, dolayısıyla hataları yapısı vardır.** Rastgele gürültü örnekler üzerinde ortalanarak yok olur; sistematik önyargı olmaz, çünkü her karşılaştırmayı aynı yöne eğer. Bir sistem, daha iyi olduğu için değil, kayrılan slotta oturarak ya da uzunluğu şişirerek değerlendirmenizi kazanabilir.
+- **Konum önyargısı, sırayı değiştirip dönmeleri sayarak ölçülür.** Adil bir yargıç sıradan bağımsız aynı kazananı döndürür ve sıfır karar döner. Bizimki, `1.00` slot-A bonusuyla, 12 kararın 7'sini döndürür (`0.58` oranı), ve her dönme bir puanlık bonusun küçük bir kalite boşluğuna ağır bastığı yakın bir karardır. Ezici galibiyetler sabit kalır, ki bu da önyargının tam olarak umursadığınız karşılaştırmalarda saklanmasının sebebidir.
+- **Ayrıntı önyargısı, eşit-kaliteli sondalarla ölçülür.** Kalitede eşit ve yalnızca uzunlukta farklılaşan 5 çiftte, daha uzun yanıt kelime başına `0.02` ile beşinin de kazanır (`1.00` oranı). Yargıç şişirmeyi ödüllendirir, ki değerlendirme hatları sistemleri gevezeliğe bu şekilde sessizce eğitir.
+- **Sıra-ortalama konum önyargısını tamamen kaldırır, kuruluş gereği.** Her çifti iki sıralamada yargılayın ve ortalayın; her yanıt slot A'da tam olarak bir kez oturur, dolayısıyla bonus birbirini götürür. Gerçekle uyuşmazlık `5/12 = 0.42`'den `1/12 = 0.08`'e düşer, ve düzeltilmiş konum önyargısı oranı `0/12 = 0.00`'dır: sıra artık bir kararı döndüremez.
+- **Bir önyargıyı düzeltmek bir başkasını düzeltmez.** Sağ çıkan tek düzeltilmiş hata (p11) bir ayrıntı hatasıdır: daha kısa, daha iyi bir yanıtın daha uzun, daha kötü biri tarafından yenilmesi. Ortalama, bir yanıtın *nerede* oturduğunu onarır, asla *ne kadar uzun* olduğunu değil. Her önyargının kendi düzeltmesine ihtiyacı vardır, ve her düzeltme aynı şekilde, bilinen bir gerçeğe karşı doğrulanır.
+
+## Sözlük
+
+- **Eşli karşılaştırma (pairwise comparison)**: iki sistemin aynı istemi yanıtladığı ve yargıcın her yanıtı ayrı ayrı skorlamak yerine bir kazanan seçtiği bir değerlendirme. LLM yargılamasının baskın biçimi ve bu bölümdeki her önyargının ortamı.
+- **Konum önyargısı (position bias)**: bir yargıcın, bir yanıtı nerede göründüğüne göre sistematik olarak tercih etmesi (burada, slot A'da oturan neyse ona `1.00` bonus, önce gösterilen). Sırayı değiştirip kaç kararın döndüğünü sayarak ölçülür; burada 12'de 7, `0.58` oranı.
+- **Ayrıntı önyargısı (verbosity bias)**: bir yargıcın, kaliteden bağımsız olarak daha uzun yanıtları sistematik olarak tercih etmesi (burada, kelime başına eklenen `0.02`). Eşit-kaliteli sondalarla ölçülür; burada daha uzun yanıt beşinin de kazanır, `1.00` oranı.
+- **Öz-tercih (self-preference)**: bir yargıcın kendi model ailesinden gelen yanıtları kayırma eğilimi. Gösterimde çalıştırılmadı, ama farklı bir tetikleyiciyle aynı tarif, aynı şekilde ölçülüp düzeltilir.
+- **Gerçek kazanan (true winner)**: bir karşılaştırmanın dürüst yanıtı, burada daha yüksek kaliteli sistem olarak tanımlanır (`true_winner`). Kaliteleri biz yazdığımız için onu önceden biliriz, ki bu da önyargıyı en baştan ölçülebilir kılan şeydir.
+- **Dönme (flip)**: iki yanıt sıra değiştirdiğinde değişen bir karar. Adil bir yargıç sıfır kez döner; bir dönme, değerin değil sıranın sonucu belirlediğinin doğrudan kanıtıdır.
+- **Sıra-ortalama (order-averaging)**: konum önyargısının düzeltmesi, her çifti iki sıralamada yargılayıp her sistemin iki skorunu ortalamak (`corrected_winner`). Slot-A bonusu birbirini götürür çünkü her yanıt slot A'da tam olarak bir kez oturur, konum önyargısı oranını `0/12 = 0.00`'a sürükler.
+- **Uyuşmazlık oranı (disagreement rate)**: bir yargıcın kararının gerçek kazanandan farklılaştığı karşılaştırmaların kesri. Naif yargıç `5/12 = 0.42` alır; sıra-ortalanmış yargıç `1/12 = 0.08` alır.
+- **Sistematik önyargı (systematic bias)**: rastgele gürültünün aksine, tutarlı bir yönü olan bir hata (her zaman slot A, her zaman daha uzun). Daha çok örnekle küçülmez, dolayısıyla örneklem boyutuyla ortalanarak değil, tasarımla kaldırılmalıdır.
+
+---
+
+Artık düzeltilmiş bir yargıcımız ve 12'de 1'lik bir uyuşmazlık oranımız var, ama o "12'de 1", tek bir küçük kümeden gelen tek bir sayı, ve hemen sonraki soru ona ne kadar güveneceğinizdir. **6. Bölüm, Belirsizlik (Uncertainty)**, bir bootstrap güven aralığı kurmak için bir kümeyi elle yeniden örnekler, yalnız bir skoru gerçekten savunabileceğiniz bir aralığa çevirir.

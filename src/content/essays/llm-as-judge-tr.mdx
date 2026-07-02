@@ -1,0 +1,138 @@
+---
+title: "Elle LLM-Yargic"
+description: "Her çıktı için bir insan notçu tutmaya gücünüz yetmediğinde, rubriği bunun yerine bir modele verirsiniz. Bölüm 4, on iki etiketli destek yanıtını deterministik bir taklit yargıçtan geçirir, her serbest metin kararını PASS, FAIL ya da ABSTAIN'e ayrıştırır ve yargıcı, notlayabildiği on yanıt üzerinde insan altını karşısında skorlar."
+date: 2026-07-17
+tags: ["Değerlendirme", "LLM", "AI", "LLM-Yargıç", "Kesinlik", "Duyarlılık"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-04-llm-as-judge"
+lang: "tr"
+translationSlug: "llm-as-judge"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 3, iki insanın aynı yanıtları notlarken ne kadar anlaşmazlığa düştüğünü ölçtü ve dürüst sonuç şuydu: dikkatli insanlar bile gürültülü bir ölçüm aletidir. İşte rahatsız edici devamı: insanlar aynı zamanda yavaş ve pahalıdır ve bir üretim sisteminin ürettiği her çıktının arkasına bir kişi koyamazsınız. Modern refleks, notlama işini bir modele devretmektir. Bir rubrik yazarsınız, ona soruyu ve aday yanıtı verirsiniz ve bir **LLM yargıcın** bir karar döndürmesine izin verirsiniz. Bu artık uygulamalı değerlendirmenin beygiridir ve aynı zamanda pek çok değerlendirme hattının sessizce yoldan çıktığı yerdir, çünkü insanlar yargıcın kararını, kendisi de ölçülmesi gereken bir başka gürültülü notçu olarak görmek yerine, kesin gerçek gibi ele alır.
+
+Bu parça o yargıcı elle kurar ve sonra neredeyse hiç kimsenin yapmadığı şeyi yapar: yargıcı insan altını karşısında skorlar. On iki etiketli destek-QA öğesi alıyoruz, her birinde bir soru, gerekli bir anahtar olgu, bir aday yanıt ve bir insan PASS ya da FAIL var. On ikisinin hepsini serbest metin üreten deterministik bir taklit yargıçtan geçiriyoruz, her kararı `PASS`, `FAIL` ya da `ABSTAIN`'e ayrıştırıyoruz ve on ikisinden yalnızca onunun gerçekten skorlanabilir olduğunu keşfediyoruz, çünkü üç gerçek başarısızlık kipi (bir beraberlik, bir aday reddi ve karar etiketi olmayan format kayması) ayrıştırıcının elini zorluyor. Notlayabildiği on öğede, yargıç-insan hata matrisini (pozitif sınıf `PASS`) seriyoruz ve doğruluğu, kesinliği, duyarlılığı ve F1'i okuyoruz. Aşağıdaki her sayı, eşlik eden dosyanın basılmış çıktısıdır, yuvarlanmamış.
+
+## Ön koşullar
+
+Bölüm 1'in hata matrisine ihtiyacınız var, çünkü onu olduğu gibi yeniden kullanıyoruz: TP, FP, FN, TN ve dört formül `(TP+TN)/n`, `TP/(TP+FP)`, `TP/(TP+FN)` ve `2PR/(P+R)`. Bunlar bulanıksa, önce Bölüm 1'i yeniden okuyun; bu parça yeni bir aritmetik eklemiyor, yalnızca yeni bir tahmin kaynağı. Temel Python yeterli: bir kayıt listesi, bir döngü ve basit dize eşleştirme. API anahtarı ve ağ gerekmiyor. Eşlik eden dosya, [llm_judge.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-04-llm-as-judge), gerçek modeli deterministik kural tabanlı bir taklit yargıçla değiştirir; böylece bütün çalışma bayt bayt yeniden üretilebilir. O taklit bir öğretim aracı, bir kaytarma değil: bu parçanın konusu yargıcın çevresindeki tesisat (rubrik, ayrıştırıcı, skorlama) ve o tesisat, karar bir kuraldan da gelse bir bayrağın arkasındaki sınır modelden de gelse aynıdır.
+
+## Yargıç yalnızca bir başka notçudur
+
+Zihinsel modelle başlayın, çünkü çoğu ekibin yanlış yaptığı tek şey bu. Bir LLM yargıcı bir kâhin değildir. O bir notçudur, tam olarak Bölüm 3'ün insan işaretleyicileri gibi ve onlar gibi hata yapar, altınla anlaşmazlığa düşer ve bazen hiç yanıt vermeyi reddeder. Tek fark, her çıktı üzerinde çalıştırılacak kadar ucuz olmasıdır. O ucuzluk baştan çıkarıcıdır ve insanları, bütün işi güvenilir kılan adımı atlamaya iter: yargıcın kararlarına güvenmeden önce onları insan etiketli bir kümeyle karşılaştırmak. O karşılaştırmayı hiç yapmazsanız, "%90 geçme oranınızın" sisteminizi mi yoksa içinde doğru anahtar kelime bulunan her şeyi damgalayan bir yargıcı mı yansıttığını bilemezsiniz.
+
+Yani yargıcı, Bölüm 1'de modeli ele aldığımız gibi ele alıyoruz: tahminler üretir, altını insanlar tutar ve birini diğeri karşısında skorlarız. Görev, destek-yanıtı notlamadır. Her öğe için bir soru, yanıtın doğru olması için içermesi gereken bir anahtar olgu ve bir aday yanıt var. Bir insan her adayı okudu ve PASS ya da FAIL kaydetti. O insan sütunu bizim altınımız. Yargıcın işi onu yeniden üretmek.
+
+## Yargıca verdiğimiz rubrik
+
+Bir yargıç ancak talimatları kadar iyidir. İşte eşlik eden dosyanın taklit yargıca verdiği rubrik, tam olarak bastığı gibi yeniden verilmiş:
+
+```text
+You are grading one answer. Reply on ONE line as: VERDICT: PASS
+or VERDICT: FAIL.
+  - FAIL if the answer refuses or declines to respond.
+  - PASS only if the answer contains the required key fact.
+  - Otherwise FAIL.
+```
+
+O rubriği bir prompt hevesken gibi değil, bir mühendis gibi okuyun. Üç şey yapar. **Çıktı formatını** sabitler ("Reply on ONE line as: VERDICT: PASS or VERDICT: FAIL"), ki ham metni en baştan ayrıştırılabilir kılan da budur. Reddetmeler için bir **katı kural** koyar (reddeden bir aday, içerikten bağımsız olarak otomatik FAIL'dir). Ve **esasa ilişkin kuralı** koyar: yalnızca gerekli anahtar olgu mevcutsa PASS, aksi halde FAIL. Taklit yargıcımız tam olarak bu mantığı deterministik biçimde uygular, dolayısıyla kararları, iyi davranan gerçek bir modelin rubriğe uyduğunda söyleyeceği şeyin bir yerine geçenidir. `is_refusal` yardımcısı reddeden bir adayı saptar, `mock_judge` ham karar dizesini üretmek için üç kuralı uygular ve (göreceğimiz gibi) gerçek modeller formata her zaman uymaz, ki ayrıştırıcının var olma sebebinin tamamı budur.
+
+## Önce ham kararlar, sonra ayrıştırılmış etiketler
+
+İşte hattın kalbi. `mock_judge` öğe başına bir satır serbest metin döndürür; `parse_verdict` o metni üç etiketten birine çevirir. Kritik olan, ayrıştırıcının PASS ve FAIL'in ötesinde **üçüncü** bir değer döndürebilmesidir: `ABSTAIN`, yani "bu karar notlanabilir bir PASS/FAIL değil ve tahmin yürütmeyi reddediyorum." `grade` fonksiyonu her ayrıştırılmış etiketi insan altınıyla eşler ve `shorten`, tablonun tek satıra sığması için uzun bir ham dizeyi kesen bir gösterim yardımcısıdır. On iki öğenin hepsini çalıştırmak şunu basar:
+
+```text
+  Q01  gold=PASS  judge->PASS      raw: VERDICT: PASS
+  Q02  gold=PASS  judge->ABSTAIN   raw: VERDICT: TIE  (too little content to grade...
+  Q03  gold=FAIL  judge->FAIL      raw: VERDICT: FAIL  (the answer refuses to resp...
+  Q04  gold=PASS  judge->PASS      raw: VERDICT: PASS
+  Q05  gold=FAIL  judge->PASS      raw: VERDICT: PASS
+  Q06  gold=PASS  judge->FAIL      raw: VERDICT: FAIL
+  Q07  gold=PASS  judge->ABSTAIN   raw: After weighing both sides, this answer loo...
+  Q08  gold=PASS  judge->PASS      raw: VERDICT: PASS
+  Q09  gold=PASS  judge->FAIL      raw: VERDICT: FAIL
+  Q10  gold=PASS  judge->PASS      raw: VERDICT: PASS
+  Q11  gold=FAIL  judge->FAIL      raw: VERDICT: FAIL
+  Q12  gold=FAIL  judge->FAIL      raw: VERDICT: FAIL
+```
+
+Yavaşça yürüyün, çünkü bu parçadaki her ilginç şey o on iki satırda görünür. Çoğu satır temiz: `VERDICT: PASS` PASS'e, `VERDICT: FAIL` FAIL'e ayrışır. Ama üç satır temiz değil ve saf bir hattın ("VERDICT:" sonrasındaki sözcüğü kap, ona güven) skorunuzu sessizce bozmasının sebebi de bunlar.
+
+Q02'nin yargıcı `VERDICT: TIE` yazdı. Bu ne bir PASS ne de bir FAIL; yargıç bağlanmayı reddediyor. Tembel bir ayrıştırıcı bunu FAIL'e zorlayıp devam edebilir, ama bu yargıcın hiç vermediği bir kararı uydurmak olurdu. Dürüst hamle, onu `ABSTAIN` işaretleyip düşürmektir. Q07 daha kötü: ham metin `After weighing both sides, this answer loo...` ve hiçbir yerde `VERDICT:` etiketi yok. Bu **format kaymasıdır**, LLM yargıçlarının gerçek dünyadaki en yaygın başarısızlığı, modelin çıktı sözleşmenizi görmezden gelip sadece anlatı döşemesidir. Ayrıştıracak bir şey yok, dolayısıyla o da `ABSTAIN` olur. Q03 farklı bir yaratık: aday yanıt yanıt vermeyi reddetti, `is_refusal` onu yakaladı ve yargıç rubriğin ilk kuralı uyarınca doğru biçimde FAIL döndürdü. O satır temiz, notlanabilir bir FAIL ve matriste kalır. Reddetme, notlanan şeydeydi, yargıçta değil.
+
+## Başarısızlık kipleri değerlendirilebilir kümeyi küçültür
+
+Şimdi o başarısızlık kiplerini açıkça sayıyoruz, çünkü gerçekten skorlayabildiğiniz kümenin büyüklüğü, kendisi bildirilmeye değer bir sayıdır. Eşlik eden dosya onları toplar:
+
+```text
+FAILURE MODES the parser had to survive:
+  refusals (candidate declined) : 1   -> judge said FAIL, kept in the matrix
+  ties     (judge won't commit) : 1   -> ABSTAIN, dropped from the matrix
+  format drift (no VERDICT tag) : 1   -> ABSTAIN, dropped from the matrix
+  scorable by the judge         : 10 of 12   (2 abstained)
+```
+
+Aritmetiği dikkatle okuyun, çünkü üç "1"in hepsi çıkarma yapmaz. On iki toplam öğeden tam olarak ikisi çekimser kaldı (Q02'deki beraberlik ve Q07'deki format kayması), geriye on skorlanabilir öğe bırakarak. Bir reddetme (Q03) üçüncü bir başarısızlık kipidir, ama kümeyi küçültmez: yanıt vermeyi reddeden bir adaydır, yargıç rubriğe uydu ve onu geçersiz saydı ve o karar, sakladığımız meşru bir FAIL'dir. Yani sayılar toplam öğe 12, çekimser 2, skorlanabilir 10 olur, reddetme sayısı 1 ise skorlanabilir onun dışında değil, içinde yaşar. Bu ayrım üretimde önemlidir: bir çekimserlik, yargıcın bu öğeyi notlayamadığını itiraf etmesidir ve çekimserliklerle ne yapacağınıza karar vermelisiniz (bir insana yönlendirmek, yumuşak bir başarısızlık saymak ya da hariç tutmak). Yapmamanız gereken, onların PASS ya da FAIL olduğunu iddia etmektir. Sessizce zorladığınız her çekimserlik, değerlendirmenizde uydurulmuş bir veri noktasıdır.
+
+Aşağıdaki figür, on iki öğenin hepsini tek bir hat olarak serer: solda ham karar, ortada ayrıştırma adımı ve sağda iniş kovası, iki çekimserlik hata matrisinden önce soyulur ve bir reddetme bir TN hücresine akar.
+
+<Diagram number={1} caption="On iki öğelik yargılama hattı, ham karardan skorlanmış hücreye. On iki destek öğesinin (Q01 ile Q12) her biri bir insan altın etiketi (PASS ya da FAIL) ve ham serbest metin bir yargıç kararı taşır. parse_verdict adımı temiz 'VERDICT: PASS' ya da 'VERDICT: FAIL' satırlarını PASS ya da FAIL'e eşler ve üç başarısızlık kipini ABSTAIN'e ya da saklanan bir FAIL'e eşler: Q02'nin 'VERDICT: TIE'ı çekimser kalır (yargıç bağlanmıyor), Q07'nin etiketsiz anlatısı çekimser kalır (format kayması) ve Q03'ün reddetmesi rubriğe göre geçersiz sayılıp saklanır. İki çekimserlik (Q02, Q07) düşer, geriye pozitif sınıf PASS ile yargıç-insan hata matrisine dizilen on skorlanabilir öğe kalır: TP=4, FP=1, FN=2, TN=3. Tek yanlış pozitif Q05, anahtar-kelime oyunu olarak kehribar vurgulanmıştır; iki yanlış negatif Q06 ve Q09, bir eşanlamlı ya da bir rakam üzerinden geçersiz sayılan doğru yanıtlar olarak gül rengi vurgulanmıştır.">
+  <img src="/essays/llm-as-judge/part4-figure.svg" alt="Q01 ile Q12 etiketli on iki destek-QA öğesi için soldan sağa bir hat diyagramı. Birinci sütun her öğenin insan altın etiketini listeler, PASS ya da FAIL. İkinci sütun ham yargıç kararı metnini gösterir, örneğin 'VERDICT: PASS', 'VERDICT: TIE', 'VERDICT: FAIL' ve etiketsiz bir anlatı satırı 'After weighing both sides...'. Ortadaki bir parse_verdict düğümü her kararı ayrıştırılmış bir etikete eşler: temiz PASS ya da FAIL satırları dosdoğru geçer, Q02'nin TIE'ı ve Q07'nin etiketsiz satırı ABSTAIN olur ve aşağı doğru soyularak çizilir ve Q03'ün reddetmesi saklanan bir FAIL olur. Kalan on skorlanabilir öğe, sağda insan altını PASS ve FAIL için satırlarla ve yargıç PASS ve FAIL için sütunlarla bir 2x2 hata matrisini besler. Dört hücre TP=4, FP=1, FN=2, TN=3 okunur. FP hücresi (Q05) kehribar gölgeli ve anahtar-kelime oyunu etiketli; FN hücresi (Q06, Q09) gül rengi gölgeli ve eşanlamlı ya da rakam etiketli; TP ve TN hücreleri zümrüt yeşili. Bir alt yazı şeridi 12 öğe girdi, 2 çekimser, 10 skorlandı notunu düşer." class="w-full rounded-lg" />
+</Diagram>
+
+## Yargıcı insan altını karşısında skorlamak
+
+Şimdi çoğu ekibin atladığı kısım. On skorlanabilir öğemiz var, her birinde bir insan altın etiketi ve bir yargıç etiketi. `PASS`'i pozitif sınıf olarak ele alın ve onları Bölüm 1'deki aynı 2x2'ye bırakın: TP, bir insan PASS üzerinde yargıç PASS; FP, bir insan FAIL üzerinde yargıç PASS; FN, bir insan PASS üzerinde yargıç FAIL; TN, bir insan FAIL üzerinde yargıç FAIL. `confusion` fonksiyonu dört hücreyi sayar; metrik fonksiyonları Bölüm 1'den değişmemiştir. Çıktı:
+
+```text
+JUDGE vs HUMAN on the scorable set (positive = PASS):
+  n = 10  (human PASS: 6, human FAIL: 4)
+  confusion:  TP=4  FP=1  FN=2  TN=3
+  accuracy  = (TP+TN)/n  = (4+3)/10 = 0.70
+  precision = TP/(TP+FP) = 4/(4+1) = 0.80
+  recall    = TP/(TP+FN) = 4/(4+2) = 0.67
+  F1        = 2PR/(P+R)  = 0.73
+```
+
+On öğe, altısı insan PASS ve dördü insan FAIL. Yargıç on üzerinde yediyi doğru yaptı, dolayısıyla **doğruluk 0.70**. PASS dediği beş öğeden dördü gerçekten öyleydi, dolayısıyla **kesinlik 0.80**. Gerçekten PASS olan altı öğeden dördünü yakaladı, dolayısıyla **duyarlılık 0.67**. Ve **F1 0.73**, ikisinin arasında oturan harmonik ortalama. Bunlar bir kâhinin sayıları değil. İnsanla zamanın %70'inde anlaşan ve gerçekten iyi yanıtların üçte birini kaçıran bir yargıç, gerçek hatası olan gerçek bir alettir ve artık o hatayı varsaymak yerine sayısallaştırmış oldunuz.
+
+Bireysel hataları adlandırmak yardımcı olur, çünkü size yargıcın ne kadar sık değil, *nasıl* başarısız olduğunu söylerler. Tek yanlış pozitif Q05: yargıcın geçirdiği bir insan FAIL. Veriye geri bakın ve o bir **anahtar-kelime oyunu**, gerekli anahtar sözcüğü tesadüfen içeren yanlış bir yanıt, dolayısıyla yargıcın alt dize kuralı ateşlendi ve kötü bir yanıtı geçirdi. İki yanlış negatif Q06 ve Q09: insanın geçirdiği ama yargıcın geçersiz saydığı doğru yanıtlar, çünkü yanıt anahtar olguyu bir eşanlamlıyla ifade etti ya da bir sayıyı, yargıcın eşleştirdiği sözcük yerine rakamla yazdı. Her iki başarısızlık yönü de aynı kırılganlıktan gelir, anlam yerine yüzey dizeleri eşleştiren bir yargıç, ve ikisi de yargıcı insanlar karşısında etiketli bir kümede skorlayarak keşfedebileceğiniz türden şeylerdir.
+
+İnteraktif figür bunu doğrudan hissetmenizi sağlar. On iki öğenin her birini temiz ve başarısızlık-kipi kararları arasında çevirebilir, çekimserliklerin öğeyi skorlanabilir kümeden soyduğunu izleyebilir ve hata matrisi dolarken dört metriğin hepsinin canlı yeniden hesaplanmasını görebilirsiniz. Q05'i dürüst bir FAIL'e geri çevirin ve kesinlik sıçrar; Q06 ile Q09'u düzeltin ve duyarlılık insana doğru tırmanır, ki bu da yargıç iyileştirmenin bütün hikayesi tek bir panelde demektir.
+
+<IframeFigure src="/essays/llm-as-judge/part4-interactive.html" title="İnteraktif LLM-yargıç skorlayıcı: temiz ve başarısızlık-kipi kararları arasında çevirebileceğiniz on iki destek öğesi, çekimserliklerin skorlanabilir kümeyi on ikiden ona nasıl küçülttüğünü ve anahtar-kelime oyunu yanlış pozitifini ve iki eşanlamlı yanlış negatifini düzelttikçe yargıç-insan hata matrisinin ve doğruluk, kesinlik, duyarlılık ile F1 değerlerinin nasıl canlı yeniden hesaplandığını gösterir." height={860} />
+
+## Neden bu disiplindir, hile değil
+
+Skorlama adımının neden bütün mesele olduğunu görmek için geri çekilmeye değer. Herkes bir modeli PASS ya da FAIL demesi için yönlendirebilir; bu beş dakikalık bir iş. Güvenilir bir değerlendirmeyi bir izlenimden ayıran şey, eşlik eden dosyanın en altındaki cümledir: bir yargıç yalnızca bir başka gürültülü notçudur, dolayısıyla skoruna güvenmeden önce onu insanlar karşısında ölçün. Az önce kurduğunuz hata matrisi tek seferlik bir teşhis değil. Rubriği değiştirdiğinizde, modeli takas ettiğinizde ya da yeni bir alana geçtiğinizde yeniden çalıştırdığınız şeydir, çünkü destek yanıtlarında 0.70-doğru olan bir yargıç, kod incelemesinde 0.50-doğru olabilir ve yargıcı karşısında notlayacak bir insan etiketli dilim tutmadıkça bunu asla bilemezsiniz. Bölüm 3 size insanların gürültülü olduğunu öğretti; bu parça, bir model koymanın gürültüyü kaldırmadığını, onu yeniden konumlandırdığını gösteriyor ve tek dürüst yanıt onu aynı birimlerde ölçmektir.
+
+## Özet / Çıkarımlar
+
+- **Bir LLM yargıcı bir notçudur, kâhin değil.** Gerçek hatayla tahminler üretir, dolayısıyla onu, Bölüm 1'de bir modeli skorladığınız gibi tam olarak bir insan etiketli küme karşısında skorlarsınız. O karşılaştırmayı atlamak, geçme oranınızın sisteminizi değil yargıcı ölçtüğü anlamına gelir.
+- **Ayrıştırıcı, prompt kadar önemlidir.** Ham kararlar kirli gelir: yargıcın bağlanmadığı bir beraberlik (Q02), hiç `VERDICT:` etiketi üretmeyen bir yanıt (Q07, format kayması). `parse_verdict`, bir PASS ya da FAIL uydurmak yerine bunları `ABSTAIN`'e eşler. 12 öğeden 2'si çekimser kaldı, geriye 10 skorlanabilir bıraktı.
+- **Her başarısızlık kipi kümeyi küçültmez.** Tek aday reddetmesi (Q03) rubrik tarafından geçersiz sayılır ve temiz bir TN olarak matriste tutulur; yalnızca beraberlik ve format kayması düşer. Üç kipi (1 reddetme, 1 beraberlik, 1 format kayması) saymak, küçülmeyi dürüst tutar.
+- **Skorlanabilir on üzerinde yargıç TP=4, FP=1, FN=2, TN=3 skorlar**, pozitif sınıf PASS ile doğruluk 0.70, kesinlik 0.80, duyarlılık 0.67, F1 0.73 verir (insan PASS: 6, insan FAIL: 4). Yargıç insanla zamanın %70'inde anlaşır ve iyi yanıtların üçte birini kaçırır.
+- **Adlandırılmış hatalar mekanizmayı açığa vurur.** Yanlış pozitif (Q05) bir anahtar-kelime oyunudur, anahtar sözcüğü taşıyan yanlış bir yanıt; yanlış negatifler (Q06, Q09) bir eşanlamlı ya da bir rakam üzerinden geçersiz sayılan doğru yanıtlardır. İkisi de yüzey-dizesi eşleştirmesinden gelir ve ikisi de yargıcı altın karşısında skorlayana dek görünmezdir.
+
+## Sözlük
+
+- **LLM-yargıç (LLM-as-judge)**: bir rubrik promptuyla yönlendirilen bir dil modelini, aday çıktıları bir insan yerine notlamak için kullanmak. Her çıktı üzerinde çalıştırılacak kadar ucuz ama gürültülü, dolayısıyla kendisi insan altını karşısında ölçülmelidir.
+- **Rubrik (rubric)**: yargıca verilen talimat kümesi, çıktı formatını, katı kuralları (burada, reddetmeler otomatik FAIL) ve esasa ilişkin geçme koşulunu (burada, yanıt gerekli anahtar olguyu içermelidir) sabitler.
+- **Karar (verdict)**: yargıcın bir öğe için ürettiği ham serbest metin, ideal olarak `VERDICT: PASS` ya da `VERDICT: FAIL`, ama pratikte bazen bir beraberlik, etiketsiz bir anlatı ya da başka bir kayma.
+- **parse_verdict**: bir ham kararı `PASS`, `FAIL` ya da `ABSTAIN`'den birine çeviren fonksiyon. İşi, karar temiz bir PASS ya da FAIL olmadığında tahmin yürütmeyi reddetmektir.
+- **ABSTAIN (çekimserlik)**: ayrıştırıcının üçüncü etiketi, kararın notlanabilir olmadığı anlamına gelir. Çekimser kalan öğeler bir PASS ya da FAIL'e zorlanmak yerine hata matrisinden düşürülür. Burada 12 öğeden 2'si çekimser kalır.
+- **Reddetme (refusal)**: yanıt vermeyi reddeden bir aday yanıt, `is_refusal` tarafından saptanır. Rubriğe göre yargıç tarafından geçersiz sayılır, dolayısıyla bir çekimserliğin aksine matriste kalır (saklanan bir FAIL).
+- **Format kayması (format drift)**: gerekli `VERDICT:` sözleşmesini görmezden gelip yerine anlatı döşeyen ve ayrıştıracak hiçbir şey bırakmayan bir yargıç çıktısı. Gerçek dünyadaki en yaygın yargıç başarısızlığı; bir ABSTAIN'e zorlar (burada Q07).
+- **Skorlanabilir küme (scorable set)**: hem insandan hem yargıçtan temiz bir PASS ya da FAIL taşıyan, üzerinde hata matrisi ve metriklerin hesaplandığı öğeler. Burada 12 öğeden 10'u.
+- **Anahtar-kelime oyunu (keyword-gaming)**: gerekli anahtar sözcüğü tesadüfen içeren ve yüzey eşleştiren bir yargıcı bir PASS'e kandıran yanlış bir yanıt. Tek yanlış pozitifin (Q05) sebebi.
+- **Yargıç-insan hata matrisi (judge-vs-human confusion matrix)**: yargıcın etiketlerini insan altını karşısında skorlayan 2x2 (pozitif sınıf PASS), TP=4, FP=1, FN=2, TN=3 ve doğruluk 0.70, kesinlik 0.80, duyarlılık 0.67, F1 0.73 metriklerini verir.
+
+---
+
+Artık bir yargıcımız ve insanlarla ne kadar iyi eşleştiğine dair bir sayımız var, ama o sayı daha ince bir tehlikeyi gizler: bir yargıç, doğruluğun asla yakalamadığı biçimlerde sistematik olarak adaletsiz olabilir. **Bölüm 5, Yargıcı Yargılamak**, bir düzine eşli karşılaştırma üzerinde konum yanlılığını, uzunluk yanlılığını ve kendini-tercihi ölçer, sonra onları düzeltir ve düzeltilmiş sayıyı gösterir.

@@ -1,0 +1,191 @@
+---
+title: "Regression Gates"
+description: "A score is worth nothing if it cannot say no. Part 11 turns the whole series into one CI gate that runs three checks on two candidate runs of a 20-item eval, a bootstrap-CI threshold, an n-gram contamination scan, and a PSI drift comparison, and blocks the deploy of the run whose mean looked fine but whose interval and distribution did not."
+date: 2026-07-24
+tags: ["Evals", "LLM", "AI", "CI/CD", "Contamination", "Drift"]
+seriesOrder: 11
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-11-regression-gates"
+lang: "en"
+translationSlug: "regression-gates-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 10 asked whether a model's stated confidence keeps its promise; this part asks whether *your whole eval* is allowed to say no. Every number the series has built so far, a score, a golden set, a de-biased judge, a confidence interval, exists to answer one question at one moment: should this new model version reach production, or not? A **regression gate** is where that question stops being a conversation in a meeting and becomes a rule a machine can enforce. It is a small program that runs before a deploy, looks at the eval results, and returns one of two words: ship, or block.
+
+The trap this part is built to catch is the one that fools almost everyone: a run whose headline mean clears the bar. We will grade two candidate versions of the same tiny 20-item eval set, run A with mean `0.900` and run B with mean `0.725`, against a quality bar of `0.70`. Run B's average sits comfortably above the line. By the naive rule, "mean beats threshold, so ship," run B deploys. We will build three checks that each look past the mean, and by the end all three will agree that run B is not safe: its confidence interval reaches below the bar, and its score distribution has drifted significantly away from the run we trust. The gate blocks the deploy, and it does so with a number, not a hunch.
+
+## Prerequisites
+
+You need basic Python (a list, a loop, a division) and one idea from earlier in the series: the **bootstrap confidence interval** from Part 6, which turns a single mean into a range by resampling the data with replacement. If that phrase is fuzzy, the short version is here too. NumPy appears (for the resampling and one logarithm), but nothing exotic. The companion file, [regression_gates.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-11-regression-gates), runs offline with no API key and no network, with a fixed random seed so the bootstrap is reproducible, and it ends with a verified expected-output block. Every number printed in this essay is that file's real output, and you can reproduce all of it yourself.
+
+## The scenario: two runs, one bar
+
+Here is the situation a gate exists for. You have an eval set of 20 items, each graded to a per-item quality score of `0.0` (wrong), `0.5` (partial), or `1.0` (correct). Two versions of your model each produce 20 scores on the *same* 20 items, so they are directly comparable. Version A is the model currently in production, or a candidate you already trust. Version B is the new one somebody wants to ship. Written as counts of how many items landed in each quality bucket, the two runs are:
+
+```python
+RUN_A = [1.0] * 17 + [0.5] * 2 + [0.0] * 1   # mean 0.900
+RUN_B = [1.0] * 12 + [0.5] * 5 + [0.0] * 3   # mean 0.725
+```
+
+Run A has 17 correct, 2 partial, 1 wrong: a mean of `0.900`. Run B has 12 correct, 5 partial, 3 wrong: a mean of `0.725`. Your quality bar is `THRESHOLD = 0.70`. Both means clear it. A one-line gate that checks only the mean would wave both through. The rest of this part is three reasons that gate is wrong about run B.
+
+## Check 1: the CI threshold gate
+
+The first check refuses to trust a mean on its own. A mean computed from 20 examples is a **point estimate**: run the same eval on a different sample of 20 items and you would get a slightly different number. Part 6 taught the tool that measures that wobble, the bootstrap. You resample the 20 scores with replacement, draw a new set of 20, and re-average; do that `N_BOOT = 10000` times and you have 10000 plausible values of the mean. Sort them and read off the 2.5th and 97.5th percentiles, and you have a **95% confidence interval** (that is `ALPHA = 0.05`, split into the two tails):
+
+```python
+def bootstrap_ci(scores, n_boot, alpha, rng):
+    arr = np.asarray(scores, dtype=float)
+    n = len(arr)
+    idx = rng.integers(0, n, size=(n_boot, n))   # n_boot resamples of size n
+    boot_means = arr[idx].mean(axis=1)
+    lo = float(np.percentile(boot_means, 100 * alpha / 2))
+    hi = float(np.percentile(boot_means, 100 * (1 - alpha / 2)))
+    return float(arr.mean()), lo, hi
+```
+
+The gate's rule is one line, and it is the whole point of the check: **pass only if the CI's lower bound clears the bar, not just the mean.**
+
+```python
+def threshold_gate(scores, threshold, rng):
+    mean, lo, hi = bootstrap_ci(scores, N_BOOT, ALPHA, rng)
+    passed = lo >= threshold
+    return mean, lo, hi, passed
+```
+
+Run it on both candidates and the difference between them stops hiding:
+
+```text
+  run A: mean=0.900  95% CI=[0.775, 1.000]  low >= 0.70  -> PASS
+  run B: mean=0.725  95% CI=[0.550, 0.875]  low <  0.70  -> FAIL
+```
+
+Run A's mean is `0.900` and its entire interval, `[0.775, 1.000]`, sits above the bar. Even in the pessimistic corner of what the data could plausibly be, run A clears `0.70` with room to spare, so it passes. Run B's mean is `0.725`, above the bar, but its interval is `[0.550, 0.875]`, and the lower end, `0.550`, is well below `0.70`. That is the gate's veto: run B's *average* beats the bar, but the data is consistent with the true quality being as low as `0.550`, comfortably under it. On a 20-item set the interval is wide, and B's mean is only barely over the line, so a chunk of the interval falls on the wrong side. The gate refuses to stake a deploy on a number that might be below the bar it is supposed to defend.
+
+This is the difference between "the average passed" and "we are confident it passed." A gate that checks the mean ships on a coin flip. A gate that checks the lower bound ships only when the noise cannot plausibly drag you under the line.
+
+## Check 2: contamination
+
+The second check protects against a subtler failure, one that makes a score look *good* for a bad reason. If an eval question has leaked into the training data, the model may have memorized the answer rather than reasoned to it. The score it earns on that item is not evidence of skill; it is evidence of overlap. A contaminated eval set inflates every number computed from it, so before we trust a score we scan for leakage.
+
+The check is a **word n-gram overlap**. Break each eval question and each training document into overlapping windows of `n = 3` consecutive words (word trigrams), then ask, for each eval item, what fraction of its trigrams also appear somewhere in the training corpus. An overlap of `1.00` means every trigram of the question is present in training, which is what full memorization of the wording looks like.
+
+```python
+def word_ngrams(text, n):
+    tokens = text.lower().split()
+    return {tuple(tokens[i:i + n]) for i in range(len(tokens) - n + 1)}
+
+def contamination_overlap(eval_text, train_ngrams, n):
+    ev = word_ngrams(eval_text, n)
+    if not ev:
+        return 0.0
+    hit = sum(1 for g in ev if g in train_ngrams)
+    return hit / len(ev)
+```
+
+We scan four eval questions against a four-document training corpus, and one of those training documents is an eval question that was pasted straight in. We flag anything with an overlap at or above the leak bar of `0.80`:
+
+```text
+  E1: overlap=1.00  -> LEAKED   "what is the capital of france"
+  E2: overlap=0.00  -> clean   "how many legs does a spider have"
+  E3: overlap=0.00  -> clean   "who wrote the play romeo and juliet"
+  E4: overlap=0.20  -> clean   "what is the boiling point of water"
+```
+
+E1, "what is the capital of france," has an overlap of `1.00`. Its four trigrams (`what is the`, `is the capital`, `the capital of`, `capital of france`) all appear in the corpus, because the exact question sits in the training set. That item is flagged: any score it earned is contaminated and must be thrown out or the item removed. E2 and E3 share no trigram with training at all, overlap `0.00`, genuinely unseen. E4, "what is the boiling point of water," is the instructive case. Its overlap is `0.20`, not zero. It has five trigrams, and exactly one of them, `what is the`, also shows up in E1's leaked line, so one out of five hits. But `what is the` is a generic question opener, not a leaked answer, and `0.20` is far below the `0.80` bar, so E4 is correctly left clean. The check distinguishes a memorized question from a coincidental common phrase, which is the entire art of contamination detection: high overlap flags leakage, incidental overlap does not.
+
+Two design choices are worth naming. Using trigrams rather than single words is what keeps `what is the` from dragging every question over the bar; longer windows demand that whole phrases match, not stray words. And setting the bar at `0.80` rather than `1.00` leaves room for a leaked item that was lightly reworded to still be caught. This is a deliberately simple, offline stand-in for the contamination research the field runs on real corpora, but the principle is identical: a benchmark is only honest if the model has not already seen its answers.
+
+## Check 3: drift
+
+The third check catches a run that has changed *shape* even when its summary number looks calm. Two runs can have similar-looking means while their distributions of scores have moved apart, and that movement is often the first sign of a regression. To see it you have to compare the whole distribution, not the average.
+
+First bucket each run's scores by quality level, `0.0`, `0.5`, and `1.0`, and count how many items fall in each:
+
+```python
+def bucketize(scores, edges):
+    counts = [0] * len(edges)
+    for s in scores:
+        counts[edges.index(s)] += 1
+    return counts
+```
+
+For our two runs the bucket counts are:
+
+```text
+  buckets           [0.0, 0.5, 1.0]
+  run A counts      [1, 2, 17]   (n=20)
+  run B counts      [3, 5, 12]   (n=20)
+```
+
+Run A puts 17 of its 20 items in the top `1.0` bucket, with just 2 partials and 1 miss. Run B has slumped: only 12 items are fully correct, while partials rose to 5 and outright misses tripled to 3. Mass has slid down out of the "correct" bucket into "partial" and "wrong." The **Population Stability Index**, or PSI, puts a single number on exactly that slide. For each bucket, take the two runs' proportions `pA` and `pB`, and sum `(pA - pB) * ln(pA / pB)` across buckets:
+
+```python
+def psi(counts_a, counts_b):
+    na, nb = sum(counts_a), sum(counts_b)
+    total = 0.0
+    for a, b in zip(counts_a, counts_b):
+        pa, pb = a / na, b / nb
+        total += (pa - pb) * np.log(pa / pb)
+    return float(total)
+```
+
+PSI is zero when the two distributions are identical and grows as they diverge; it is symmetric, so it does not matter which run you call the baseline. The conventional reading is: below `0.10` the distributions are stable, `0.10` to `0.25` is moderate drift worth a look, and above `0.25` is significant drift. Our two runs give:
+
+```text
+  PSI = sum (pA-pB)*ln(pA/pB) = 0.334  -> SIGNIFICANT drift
+```
+
+A PSI of `0.334` is well past the `0.25` line, so the distributions have drifted significantly. Notice what this caught that Check 1's mean could not emphasize: run B did not just score a bit lower on average, it changed the entire *profile* of outcomes, with real answers turning into partial and wrong ones. Even if B's mean had somehow landed right on run A's, PSI would still be shouting, because the shape moved. Means blur; PSI resolves.
+
+The figure below puts all three checks side by side on candidate B, which is exactly how the gate sees them: three panels, one verdict.
+
+<Diagram number={1} caption="The three regression-gate checks on candidate run B, laid out as the gate evaluates them. Left, the CI threshold gate: the 0.70 bar with run A's mean 0.900 and 95% bootstrap CI [0.775, 1.000] fully above it (PASS) and run B's mean 0.725 with CI [0.550, 0.875] whose lower bound 0.550 drops below the bar (FAIL). Center, contamination: four eval questions scanned for word 3-gram overlap against training, with E1 at 1.00 flagged LEAKED and E2 (0.00), E3 (0.00), and E4 (0.20) clean under the 0.80 bar. Right, distribution drift: run A's score buckets [1, 2, 17] against run B's [3, 5, 12] over 20 items each, giving a PSI of 0.334, above the 0.25 significant-drift line. A bottom banner combines a failed threshold gate and significant drift into the decision: BLOCK THE DEPLOY.">
+  <img src="/essays/regression-gates/part11-figure.svg" alt="A three-panel figure titled 'Three checks decide the gate: ship, or block,' with the subtitle that run B's mean of 0.725 clears the bar but its CI and its drift do not. The left panel, the CI threshold gate, draws a 0.70 bar; run A is plotted at mean 0.900 with a 95% bootstrap CI whisker from 0.775 to 1.000 entirely above the bar and labelled PASS, while run B is plotted at mean 0.725 with a CI whisker from 0.550 to 0.875 whose lower end crosses below the bar and is labelled FAIL. The center panel, contamination with word 3-grams flagged at overlap 0.80 or above, lists E1 'what is the capital of france' at overlap 1.00 marked LEAKED in rose, and E2 'how many legs does a spider have' at 0.00, E3 'who wrote the play romeo and juliet' at 0.00, and E4 'what is the boiling point of water' at 0.20, all three marked clean in emerald. The right panel, distribution drift by PSI, shows run A's score buckets as counts 1, 2, 17 and run B's as 3, 5, 12 across the buckets 0.0, 0.5, 1.0 over 20 items per run, with the population stability index of 0.334 labelled SIGNIFICANT drift. A banner across the bottom reads: CI threshold FAIL, Drift SIGNIFICANT, DECISION BLOCK THE DEPLOY, a number, not a vibe, stops the regression." class="w-full rounded-lg" />
+</Diagram>
+
+## The gate's verdict
+
+Now the gate does its actual job, which is to decide. It combines the checks on candidate B, the run somebody wanted to ship, and returns a single word:
+
+```text
+GATE VERDICT on candidate B (the run we were about to deploy):
+  CI threshold gate : FAIL
+  distribution drift : SIGNIFICANT drift
+  DECISION: BLOCK THE DEPLOY
+```
+
+Run B's mean of `0.725` cleared the `0.70` bar, and a lazy gate would have shipped it. But the CI threshold gate failed it, because the interval `[0.550, 0.875]` reaches below the bar, and the drift check flagged significant drift at PSI `0.334`, because its distribution collapsed away from the trusted run. Either signal alone is enough to stop a deploy; together they are decisive. The decision is `BLOCK THE DEPLOY`. The regression never reaches prod, and, crucially, the reason is auditable: not "it felt worse," but "the lower bound of the 95% CI is `0.550`, under the `0.70` bar, and PSI is `0.334`, over the `0.25` drift line." A number, not a vibe, stopped it.
+
+The interactive figure below lets you push on that decision. Slide the bucket counts of candidate B, moving items between the wrong, partial, and correct columns, and watch the three checks recompute live: B's mean, its confidence interval against the bar, and the PSI against run A, with the final ship-or-block verdict updating as you go. Try to build a run that passes all three, and you will feel how much harder that is than merely clearing the mean.
+
+<IframeFigure src="/essays/regression-gates/part11-interactive.html" title="Interactive regression-gate explorer: sliders set candidate run B's counts of wrong, partial, and correct items over 20 examples, and the panel recomputes B's mean, its 95% bootstrap CI against the 0.70 bar, the PSI drift against run A's fixed distribution, and the final ship-or-block gate verdict." height={860} />
+
+## Key takeaways
+
+- **A gate checks the lower bound, not the mean.** A point estimate above the bar is not enough, because 20 items produce a wide interval. Run B's mean `0.725` beats the `0.70` bar, but its 95% bootstrap CI `[0.550, 0.875]` reaches below it, so the CI threshold gate fails it. Run A passes because its whole interval `[0.775, 1.000]` clears the bar.
+- **Contamination inflates scores, so scan for it.** A word-trigram overlap check flags any eval item whose n-grams already live in the training data. E1 scored overlap `1.00` (fully leaked, flagged at the `0.80` bar); E4 scored `0.20` from the generic phrase `what is the` and stayed clean. High overlap is memorization; incidental overlap is not.
+- **Compare distributions, not just means.** Two runs can have close-looking means while their shape moves. Run A's bucket counts `[1, 2, 17]` and run B's `[3, 5, 12]` give a PSI of `0.334`, above the `0.25` line, so the drift is significant even though both means are over the bar.
+- **The gate's decision is auditable.** The verdict on candidate B is `BLOCK THE DEPLOY`, backed by two concrete numbers (CI lower bound `0.550` under the bar, PSI `0.334` over the drift line), not by intuition. That is what makes a gate something you can defend and automate.
+- **This is where the series pays off.** The score (Part 1), the golden set (Part 2), and the confidence interval (Part 6) were built precisely so this moment, the automated ship-or-block call, can be made with evidence.
+
+## Glossary
+
+- **Regression gate**: an automated check that runs before a deploy and returns ship or block based on eval results. Here it combines a CI threshold gate and a drift check, and blocks candidate B.
+- **Point estimate**: a single computed value, like run B's mean `0.725`, with no measure of how much it would move on a different sample. A gate that trusts a point estimate alone ships on noise.
+- **Bootstrap confidence interval**: the range of plausible values for a metric, built by resampling the data with replacement `N_BOOT = 10000` times and reading the 2.5th and 97.5th percentiles of the recomputed means. Introduced in Part 6.
+- **CI threshold gate**: the rule that a run passes only if the *lower bound* of its confidence interval clears the bar. It failed run B (`0.550 < 0.70`) and passed run A (`0.775 >= 0.70`).
+- **Contamination (leakage)**: an eval item that has appeared in the training data, so the model may have memorized its answer. It inflates the score for a reason that has nothing to do with skill.
+- **Word n-gram overlap**: the fraction of an eval item's `n`-word windows (here trigrams, `n = 3`) that also appear in the training corpus. An overlap of `1.00` means the item's wording is fully present in training; the leak bar here is `0.80`.
+- **Population Stability Index (PSI)**: a single number measuring how far two distributions have drifted, `sum (pA - pB) * ln(pA / pB)` over buckets. Zero means identical; below `0.10` is stable, `0.10` to `0.25` moderate, above `0.25` significant. Run A vs run B gives `0.334`.
+- **Drift**: a change in the *shape* of a score distribution between runs, not just its mean. Run B's mass slid from the correct bucket into partial and wrong, which the mean understates and PSI resolves.
+
+---
+
+The gate can now block a bad run, but its verdict is only as good as the eval set behind it, and that set does not grow itself. **Part 12, The Eval Flywheel**, turns your production logs into the engine that keeps feeding it: mining real traces into new labeled examples so the golden set, and every gate built on it, gets sharper with every deploy.

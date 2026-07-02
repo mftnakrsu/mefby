@@ -1,0 +1,181 @@
+---
+title: "Degerlendirme Carki"
+description: "En iyi değerlendirme kümeniz yazdığınız bir şey değil, modelinizin zaten yaptıklarından madenlediğiniz bir şeydir. Bölüm 12, bir destek asistanından 12 üretim izini alır, bunları ucuz bir şüphe skoruyla sıralar ve rastgele örneklemenin yalnızca 2'sini yakaladığı yerde 4 gerçek hatanın hepsini yakalayan bir altın küme büyütmek için 6 anotasyonluk bir bütçe harcar."
+date: 2026-07-25
+tags: ["Değerlendirme", "LLM", "AI", "Altın Küme", "Örnekleme", "Üretim"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-12-eval-flywheel"
+lang: "tr"
+translationSlug: "eval-flywheel"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 11 size bir regresyon kapısı verdi: bir skoru ve onun güven aralığını okuyup yeni bir modelin gönderilmeye güvenli olup olmadığına karar veren bir kural. Ama bir kapı, ancak arkasındaki değerlendirme kümesi kadar güvenilirdir ve Bölüm 2'de o kümeyi sıfırdan, her seferinde dikkatle seçilmiş tek bir örnekle elle kurduk. Başlangıç için bu işe yarar, ama ölçeklenmez ve daha kötüsü, bir tahmindir. Test senaryoları icat etmek için oturduğunuzda, hayal edebildiğiniz hataları yazarsınız. Üretimde gerçekten canınızı yakan hatalar ise, neredeyse tanım gereği, hayal edemediklerinizdir. Peki iyi bir değerlendirme kümesi gerçekte nereden gelir?
+
+Bu bölüm, hızlı iyileşen ekipleri tıkanan ekiplerden ayıran hamleyle yanıt veriyor: en iyi değerlendirme kümeniz, üretim loglarınızdır. Modelinizin daha önce sunduğu her istek, ortaya çıkmayı bekleyen etiketli bir örnektir. İşin cilvesi, etiketin, yani yanıtın gerçekten iyi mi yoksa gerçekten bir hata mı olduğunun, gizli olmasıdır. Onu açığa çıkarmak bir insan anotasyonuna mal olur ve anotasyon, kıt ve pahalı kaynaktır. Böylece bütün oyun şuna dönüşür: hangi izleri önce etiketlemek için para ödersiniz? Bedava olan sinyallerden (modelin kendi güveni ve bir güvenlik-bekçisi bayrağı) bir **öncelik skoru** kuracağız, sabit bir anotasyon bütçesini iki farklı biçimde harcayacağız ve bir yolun her gerçek hatayı yakalarken diğerinin yarısını yakaladığını izleyeceğiz. Sonra **çarkı** çalıştıracağız: azıcık anotasyon yap, modelin nerede zayıf olduğunu öğren, bir sonraki anotasyonları oraya nişanla ve tam olarak modelin kör noktalarına yoğunlaşan bir altın küme büyüt. Son olarak, bunun yarattığı tek tuzağa dair dürüst olacağız, çünkü hata-yoğun olacak şekilde kurulmuş bir altın küme, izin verirseniz size üretim hata oranınız hakkında yalan söyler.
+
+## Ön koşullar
+
+Temel Python yeterli: bir kayıt listesi, anahtar fonksiyonlu bir sıralama, bir döngü ve bir bölme. Hepsi bu kadar. "Rastgele örnekleme" temel çizgisi tam olarak yeniden üretilebilir olsun diye sabit bir rastgele tohum (seed) kullanıyoruz ve saymanın ve ortalamanın ötesinde hiçbir istatistik yok. Bölüm 1'i (hata matrisi ve bir skorun ne olduğu) ve Bölüm 11'i (regresyon kapıları) okuduysanız bütün bağlama sahipsiniz, ama bu bölüm kendi içinde bütünlüklüdür. Eşlik eden dosya, [flywheel.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-12-eval-flywheel), API anahtarı, ağ ve bağımlılık olmadan offline çalışır. Bu yazıda basılan her sayı, o dosyanın gerçek çıktısıdır, yuvarlanmamış ve düzenlenmemiş; böylece hepsini kendiniz yeniden üretebilirsiniz.
+
+## Üretim logu
+
+İşte içinde yaşadığımız dünya. Bir destek asistanı bugün 12 isteği sundu, `T01`'den `T12`'ye kadar izler. Her biri için bize hiçbir şeye mal olmayan iki ucuz sinyali otomatik olarak kaydettik:
+
+- `conf`, modelin kendi bildirdiği güven, her yanıtın yanında yaydığı bir sayı.
+- `flag`, ikili bir güvenlik-bekçisi sinyali: bir güvenlik kuralı tetiklendiyse ya da kullanıcı başparmak-aşağı bastıysa `1`, aksi halde `0`.
+
+Bunların ikisi de her tek istekte bedava loglanır. Elimizde **olmayan** şey, aslında umursadığımız şeydir: yanıt iyi miydi yoksa bir hata mıydı? Kodda `correct` olan o gerçek etiket gizlidir. Bir insanın izi okuyup karar vermesi gerekir ve o insanın zamanı, dikkatle harcamamız gereken bütçedir.
+
+Loga bakın. `priority` sütunu, birazdan kuracağımız bir skordur; gerçek etiket kasıtlı olarak `(hidden)` (gizli) olarak gösterilmiştir, çünkü bu aşamada onu gerçekten bilmiyoruz:
+
+```text
+  id    conf  flag  priority  true label
+  T01   0.96    0     0.04   (hidden)
+  T02   0.93    0     0.07   (hidden)
+  T03   0.91    0     0.09   (hidden)
+  T04   0.88    0     0.12   (hidden)
+  T05   0.84    0     0.16   (hidden)
+  T06   0.80    0     0.20   (hidden)
+  T07   0.74    0     0.26   (hidden)
+  T08   0.68    0     0.32   (hidden)
+  T09   0.62    1     0.88   (hidden)
+  T10   0.55    1     0.95   (hidden)
+  T11   0.48    1     1.02   (hidden)
+  T12   0.40    1     1.10   (hidden)
+```
+
+Bu tabloda gömülü, ancak anotasyonlar için para ödeyerek hak edeceğimiz bir gerçek var, bu yüzden aritmetiği sonradan kontrol edebilesiniz diye şimdi bir kez söyleyeyim: bu 12 izden tam olarak 4'ü gerçek hatadır. Bu, gerçek üretim hata oranını `4/12 = 0.33` yapar, üçte bir. Ama unutmayın, logun başında bunu henüz göremiyoruz. Görebildiğimiz tek şey `conf` ve `flag`. Bu bölümün bütün sanatı, etiketlere bir kuruş harcamadan önce o iki bedava sinyalden ellerinden geleni sıkıp çıkarmaktır.
+
+## Ucuz bir şüphe skoru
+
+Her şeyi etiketleyemeyiz, dolayısıyla yalnızca bedava olanı kullanarak hangi izlerin büyük olasılıkla hata olduğunu tahmin etmemiz gerekir. Sezgi bize iki temiz kural verir. İlki, düşük güven şüphelidir: modelin kendisi emin olmadığında, yanılma ihtimali daha yüksektir. İkincisi, kalkmış bir bayrak şüphelidir: bir güvenlik-bekçisi tetiklenmesi ya da bir başparmak-aşağı, bir şeyin yan yattığına dair doğrudan bir sinyaldir. Bunları tek bir **öncelik skorunda** birleştiriyoruz:
+
+```text
+priority = (1 - confidence) + 0.5 * flag
+```
+
+Onu parça parça okuyun. `(1 - confidence)` terimi, yüksek güveni düşük önceliğe, düşük güveni yüksek önceliğe çevirir; böylece modelin emin olduğu bir iz (`conf = 0.96`) yalnızca `0.04` katkı yaparken, sallantılı olan biri (`conf = 0.40`) `0.60` katkı yapar. `0.5 * flag` terimi, güvenlik-bekçisi tetiklendiğinde sabit bir `0.5` çıkıntısı ekler. O `0.5` ağırlığı kasıtlı bir tercihtir: kalkmış bir bayrağın, güvende yarım puanlık bir düşüş kadar şüpheye değdiğini söyler, yani bayraklı bir izi sakin, yüksek-güvenli olanların üzerine kaldırmaya yetecek kadar, ama güven sinyalini tümüyle boğmadan. Hesaplanması hiç anotasyon gerektirmez; loglanmış iki sayı üzerinde saf aritmetiktir, dolayısıyla 12 izin hepsini anında ve bedava skorlayabiliriz.
+
+Skoru logun boyunca çalıştırın ve en şüpheliden en aza doğru sıralayın:
+
+```text
+  T12  T11  T10  T09  T08  T07  T06  T05  T04  T03  T02  T01
+```
+
+`T12`, öncelik `1.10` ile listenin başındadır (en düşük güven `0.40` artı bir bayrak) ve `T01`, `0.04` ile en dipte oturur (sağlam `0.96` güven, bayrak yok). `0.5 * flag` teriminin ne yaptığına dikkat edin: dört bayraklı izin hepsini (`T09`'dan `T12`'ye) sıralamanın en üstüne, her bayraksız izin üzerine temizce kaldırdı, çünkü en az güvenli bayraksız iz bile (öncelik `0.32` ile `T08`), en güvenli bayraklı olanın (öncelik `0.88` ile `T09`) altında skorluyor. Tek bir gerçek etiket bilmeden bütün logu olası-hataya göre sıraladık.
+
+<Diagram number={1} caption="12 destek-asistanı izi üzerinde değerlendirme çarkı. Sol: üretim logu, ucuz öncelik skoru (1 - confidence) + 0.5 * flag ile yukarıdan aşağıya sıralanmış, T12'den (öncelik 1.10, bayraklı) T01'e (öncelik 0.04) doğru. Orta: 6 anotasyonluk bir bütçenin iki biçimde harcanması. Zor-vaka partisi, önceliğe göre en üstteki 6'yı alır (T12, T11, T10, T09, T08, T07) ve 6'da 4 hata açığa çıkarır, 0.67'lik bir hata yoğunluğu ve 4 gerçek hatanın hepsinin kapsanması (4/4 = 1.00). Rastgele parti (tohum 0: T01, T04, T05, T07, T08, T12) 6'da yalnızca 2 hata açığa çıkarır, yoğunluk 0.33, 4 gerçek hatanın yalnızca 2'sini kapsar (0.50). Sağ: çark döngüsü, log'dan önceliğe, anotasyona, altın küme büyütmeye, zayıf noktaları korumaya ve geri, zenginleştirilmiş altın küme oranı 0.67'nin gerçek üretim oranı 0.33 OLMADIĞI dürüstlük notuyla birlikte.">
+  <img src="/essays/eval-flywheel/part12-figure.svg" alt="12 iz üzerinde değerlendirme çarkının üç panelli bir diyagramı. Sol panel, üretim logunun öncelik skoruna göre sıralanmış dikey bir çubuk listesidir; en üstte T12 (öncelik 1.10, düşük güven 0.40, bayrak kalkmış), en altta T01'e (öncelik 0.04, güven 0.96, bayrak yok) inerek; dört bayraklı iz T09'dan T12'ye zümrüt yeşiliyle en üstte oturur. Orta panel, 6 anotasyonluk bir bütçeyi harcayan iki partiyi gösterir. Zor-vaka partisi, önceliğe göre en üstteki 6'yı vurgular (T12, T11, T10, T09, T08, T07) ve zümrüt yeşiliyle 'bulunan hata 6'da 4, yoğunluk 0.67, kapsam 4'te 4 = 1.00' notunu düşer. Rastgele parti (tohum 0), T01, T04, T05, T07, T08, T12'yi vurgular ve donuk bir çinko tonuyla 'bulunan hata 6'da 2, yoğunluk 0.33, kapsam 4'te 2 = 0.50' notunu düşer. Sağ panel, dört aşamalı dairesel bir çark çizer, üretim logu, önceliğe göre sırala, en üstteki k'yı anotasyonla, altın küme büyür, oklar modelin zayıf noktalarını korumaya geri döner, ve gül renginde bir dipnot şöyle okunur: 'zenginleştirilmiş altın oran 0.67, üretim oranı 0.33 DEĞİLDİR: rastgele bir kenar örneklem tutun.'" class="w-full rounded-lg" />
+</Diagram>
+
+## Bir bütçe harcamak: zor vakalar rastgeleye karşı
+
+Şimdi önem taşıyan karar. 6 anotasyonluk bir bütçemiz var. Bir insan 6 izi okuyup gerçek etiketlerini açığa çıkaracak. Hangi 6'yı gönderiyoruz?
+
+Naif yanıt, ve çoğu ekibin varsayılan olarak yaptığı, şu: sadece bazı logları rastgele kap. Adil ve tarafsız hissettirir. Daha akıllı yanıt şu: en şüpheli 6 izi, önceliğe göre en üstteki 6'yı gönder. Her ikisini de yapalım ve her birinin bize ne kazandırdığını sayalım. Sonunda anotasyon harcadığımız ve gerçek etiketlerin belirdiğini gördüğümüz tek yer burası.
+
+**Zor-vaka örneklemesi.** Sıralamanın en üstteki 6'sını alın: `T12`, `T11`, `T10`, `T09`, `T08`, `T07`. Bir insan onları etiketler ve sonuçlar geri gelir:
+
+```text
+  Hard-case batch (top 6 by priority):
+    T12 T11 T10 T09 T08 T07
+    failures found = 4/6   (failure density = 0.67)
+    failure coverage = 4/4 of all real failures = 1.00
+```
+
+Altının dördü hata çıktı. Bu `4/6 = 0.67`'lik bir hata yoğunluğudur: etiketlediğimiz her şeyin üçte ikisi gerçek bir sorundu. Ve işte sizi doğrultup oturtacak sayı: o 4 hata, bütün logdaki gerçek hataların **hepsi**. Hata kapsamı `4/4 = 1.00`. 12 izin 6 anotasyonuyla, zor-vaka örneklemesi modelin yaptığı her tek hatayı süpürüp topladı. Güven ve bir bayraktan başka hiçbir şeyle kurulmuş ucuz öncelik skorumuz, her kör noktayı tam isabetle gösterdi.
+
+**Rastgele örnekleme.** Şimdi temel çizgi. Rastgele 6 iz çekiyoruz (sabit bir tohumla, dolayısıyla çekiliş tam olarak yeniden üretilebilir) ve `T01`, `T04`, `T05`, `T07`, `T08`, `T12`'yi seçmesi denk geliyor. Onları etiketleyin:
+
+```text
+  Random batch (seed 0):
+    T01 T04 T05 T07 T08 T12
+    failures found = 2/6   (failure density = 0.33)
+    expected failures for a random batch = 6*4/12 = 2.00
+    failure coverage = 2/4 of all real failures = 0.50
+```
+
+6'nın yalnızca 2'si hataydı, `2/6 = 0.33`'lük bir yoğunluk. Bu kötü şans değil; rastgele örneklemenin tam olarak yapması gereken şey bu. Rastgele bir çekiliş temel oranı görür, dolayısıyla beklenen hata sayısı `bütçe * hata / toplam = 6*4/12 = 2.00`'dir. Çekiliş tam beklentisine oturdu. Ve 4 gerçek hatanın yalnızca 2'sini bulduğu için, hata kapsamı `2/4 = 0.50`'dir. Rastgele örnekleme, aynı 6 anotasyonu harcayarak, zor-vaka örneklemesinin bulduğu hataların yarısını buldu ve diğer yarısını logda, etiketsiz ve görünmez bıraktı.
+
+İkisini yan yana koyun. Aynı bütçe, aynı log, aynı emek:
+
+```text
+  -> Same 6 annotations: hard-case sampling caught ALL 4 failures,
+     random caught 2. The golden set is 0.67 failures vs the 0.33
+     base rate: ~2x denser.
+```
+
+Zor-vaka altın kümesi, örnek başına `0.67` hata, popülasyonun `0.33` temel oranına karşı, incelemek istediğimiz şeyde kabaca iki kat daha yoğun. Madenlemeyi değerli kılan **zenginleştirme** budur: anotasyonları bedava bir sinyalle nişanlayarak, her etiketleme doları, rastgelede alacağının yaklaşık iki katı hata satın alır. Hatalar nadir, bulunması pahalı olay olduğunda, ki genellikle öyledir, isabet oranınızı ikiye katlamak, size bir şey öğreten bir değerlendirme kümesiyle çoğunlukla modelin kolay sorularda iyi olduğunu yeniden onaylayan bir küme arasındaki farktır.
+
+## Çark
+
+Bir bütçe bir enstantaneydi. Asıl güç, bunu bir döngüde çalıştırmaktan gelir ve o döngü çarktır. Reçete basittir ve sonsuza dek tekrarlanır: üretim izlerini logla, ucuz öncelik skoruyla sırala, en üstteki birkaçını anotasyonla, yeni etiketlenmiş vakaları altın kümene ekle ve o zenginleştirilmiş kümenin bir sonraki sürümde modelin zayıf noktalarını korumasına izin ver. Sonra yeni izler gelir, model değişir, yeni zayıf noktalar belirir ve çarkı yeniden çevirirsiniz. Her tur ucuzdur, çünkü sıralama bedavadır ve yalnızca bir avuç etiket için para ödersiniz.
+
+Çarkı logumuz üzerinde üç kez çevirelim, tur başına 2 zor vakayı anotasyonlayarak (tur başına 2 bütçe, 3 tur için). Altın kümenin büyümesini ve, en önemlisi, büyürken iki farklı oranın ayrışmasını izleyin:
+
+```text
+  round  new       new fail  golden  cum fail  coverage  gold rate
+   1     T12+T11        2       2        2     0.50      1.00
+   2     T10+T09        1       4        3     0.75      0.75
+   3     T08+T07        1       6        4     1.00      0.67
+```
+
+Sütunları takip edin. **1. turda** en şüpheli iki izi, `T12` ve `T11`'i anotasyonlarız. İkisi de hata, dolayısıyla `new fail` 2, altın küme artık 2 örnek tutuyor, kümülatif hata 2, kapsam `2/4 = 0.50` (ilk turumuzda gerçek hataların yarısını çoktan bulduk) ve altın oran (altın-küme büyüklüğü üzerinden hatalar) `2/2 = 1.00`. Şimdiye kadar her örnek bir hata.
+
+**2. turda** sonraki ikiyi, `T10` ve `T09`'u alırız. Bu kez yalnızca biri (`T09`) hata, dolayısıyla `new fail` 1. Altın küme 4'e büyür, kümülatif hata 3'e yükselir, kapsam `3/4 = 0.75`'e tırmanır ve altın oran `3/4 = 0.75`'e oturur. Bir hata-olmayanı etiketlediğimiz an altın oranın düşmeye başladığına dikkat edin.
+
+**3. turda** `T08` ve `T07`'yi alırız. Yine bir hata (`T08`), dolayısıyla kümülatif hata 4'e ulaşır, altın küme 6 örnektir, kapsam `4/4 = 1.00`'e vurur (artık logdaki her gerçek hataya sahibiz) ve altın oran `4/6 = 0.67`'ye iner. 3 turdan sonra, anotasyonları yalnızca bedava sinyalin bakmamızı söylediği yere harcayarak kurulmuş, modelin 4 hatasının hepsini yakalayan 6 büyüklüğünde bir altın kümemiz var.
+
+O iki eğrinin şekli dersin tamamıdır. Kapsam hızlı ve erken tırmanır (`0.50`, `0.75`, `1.00`), çünkü önce en şüpheli izleri anotasyonluyoruz ve hataların yaşadığı yer gerçekten oralar. Altın oran, `1.00`'den `0.67`'ye doğru düşer, çünkü bariz hataları tükettikten sonra her yeni tur bazı doğru yanıtları da içeri çekmeye başlar. Çark tam da amaçlandığı gibi çalışıyor: hataları öne yükler, dolayısıyla küçücük bir anotasyon bütçesi bile en önemli vakaları yakalar, ve ne zaman durmanız gerektiğini söyler, çünkü altın oran sert biçimde düşmeyi bıraktığı an kolay hataları madenleyip bitirmişsinizdir ve bir sonraki tur çoğunlukla bildiğinizi yeniden onaylayacaktır.
+
+Aşağıdaki interaktif figür bunu kendiniz sürmenize izin verir. Anotasyon bütçesini ve `flag` sinyalinin ağırlığını ayarlayın, zor-vaka ile rastgele örnekleme arasında geçiş yapın ve çarkı tur tur adımlayın. Kapsamın ve altın oranın gerçek zamanlı yanıt vermesini izleyin ve rastgele temel çizginin inatla `0.33` temel oranına yakın oturmasını, zor-vaka örneklemesinin ise tam kapsama koşmasını izleyin.
+
+<IframeFigure src="/essays/eval-flywheel/part12-interactive.html" title="İnteraktif değerlendirme-çarkı gezgini: 12 üretim izi, bayrak ağırlığıyla yeniden ayarlayabileceğiniz bir öncelik skoruna göre sıralanmış, zor-vaka ile rastgele örnekleme altında hangi izlerin anotasyonlanacağını seçen bir bütçe kaydırıcısı ve altın küme büyürken hata kapsamının 1.00'e tırmandığını ve altın oranın 1.00'den 0.67'ye düştüğünü gösteren tur-tur bir çark." height={860} />
+
+## Döngüyü dürüstçe kapatmak
+
+Bu tekniğin keskin bir kenarı var ve orada olmadığını varsaymak, iyi ekiplerin kendilerini nasıl kandırdığıdır. Kasıtlı olarak hata-yoğun bir altın küme kurduk. Bütün amaç buydu: modelin zayıf noktalarına yoğunlaşmış bir değerlendirme kümesi istedik, böylece onun üzerinde eğitilmiş bir regresyon kapısı (Bölüm 11) tam olarak üretimin yaptığı hatalara karşı şiddetle savunma yapsın. Altın kümemiz `4/6 = 0.67` hata. O yoğunluk bir özelliktir.
+
+Ama ondan yanlış sayıyı okursanız bir tuzaktır. `0.67`'lik altın oran, üretim hata oranınız **değildir**. Olamaz, çünkü bu örnekleri tam da hataya benzedikleri için elle seçtik. Gerçek üretim hata oranı `4/12 = 0.33`, üçte bir, ve zenginleştirilmiş oranın yarısı. Parlak madenlenmiş altın kümenizi alır, "model zamanın %67'sinde başarısız oluyor" hesabını yapar ve bunu yukarı raporlarsanız, bilerek yarattığınız bir örnekleme yapaylığıyla kendi hata oranınızı ikiye katlamış olursunuz.
+
+```text
+Closing the loop (honestly):
+  The golden set is deliberately failure-dense (4/6 = 0.67); that is
+  the point, it guards the model's weak spots. But that rate is NOT
+  production's: the true production failure rate is 4/12 = 0.33. To
+  estimate THAT unbiased, keep a small random holdout alongside the
+  mined set.
+```
+
+Çözüm, bir değil iki küme tutmak ve her birinin hangi soruyu yanıtladığını bilmektir. **Madenlenmiş küme** (zor-vaka, zenginleştirilmiş), "model hâlâ bilinen zayıf noktalarında başarısız oluyor mu?" sorusunu yanıtlar, bir regresyon kapısının umursadığı soru. Küçük bir **rastgele kenar örneklem** (yansız, temel-oranlı), "model vahşi doğada ne sıklıkla başarısız oluyor?" sorusunu yanıtlar, bir durum raporunun umursadığı soru. Madenlenmiş küme bilerek yanlıdır ve onun oranını asla bir üretim sayısı olarak aktarmamalısınız; rastgele kenar örneklem bilerek sıkıcıdır ve gerçekte nasıl gittiğinizin tek dürüst tahminidir. Birincisini büyütmek için çarkı çalıştırın ve ikincisi için anotasyon bütçenizden bir dilim ayırın. Böylece hem keskin zayıf-nokta kapsamını hem de dürüst bir manşeti elde edersiniz ve ikisini asla birbirine karıştırmazsınız.
+
+## Özet / Çıkarımlar
+
+- **En iyi değerlendirme kümeniz madenlenir, icat edilmez.** Elle yazılmış test senaryoları yalnızca hayal edebildiğiniz hataları kapsar; üretim izleri gerçekten olan hataları içerir. Çark, en şüpheli olanları anotasyonlamak için para ödeyerek logları etiketli örneklere çevirir.
+- **Ucuz bir öncelik skoru kıt anotasyonlarınızı nişanlar.** `priority = (1 - confidence) + 0.5 * flag`, yalnızca bedava sinyalleri (modelin güveni ve bir güvenlik-bekçisi bayrağı) kullanarak 12 izi en şüpheliden en aza sıralar, hiç etiket gerekmez. `0.5` ağırlığı, her bayraklı izi bayraksız olanların üzerine kaldırır.
+- **Zor-vaka örneklemesi hata yoğunluğunu kabaca ikiye katlar.** Aynı 6 anotasyonluk bütçeyi harcayarak, sıralama-tabanlı örnekleme 4/6 hata buldu (yoğunluk `0.67`) ve 4 gerçek hatanın hepsini kapsadı (`4/4 = 1.00`), rastgele örnekleme ise yalnızca 2/6 buldu (yoğunluk `0.33`, beklenen `6*4/12 = 2.00`) ve yalnızca yarısını kapsadı (`2/4 = 0.50`).
+- **Çark hataları öne yükler.** Tur başına 2 zor vakayı 3 tur boyunca anotasyonlayarak, kapsam `0.50`'den `0.75`'e `1.00`'e tırmandı, altın oran ise `1.00`'den `0.75`'e `0.67`'ye düştü, 4 hatanın hepsini yakalayan 6 büyüklüğünde bir altın kümeyle bitirdi. Kapsamın hızlı yükselmesi ve altın oranın düşmesi, ne zaman madenlemeyi bırakmanız gerektiğini söyler.
+- **Zenginleştirilmiş bir altın küme temel oran hakkında, tasarım gereği, yalan söyler.** Madenlenmiş küme `4/6 = 0.67` hata, ama gerçek üretim hata oranı `4/12 = 0.33`. Zenginleştirilmiş oranı asla bir üretim sayısı olarak aktarmayın; yansız tahmin için küçük bir rastgele kenar örneklem tutun ve hangi kümenin hangi soruyu yanıtladığını bilin.
+
+## Sözlük
+
+- **İz (trace)**: loglanmış tek bir üretim isteği ve yanıtı, her zaman görünür ucuz sinyaller (güven, güvenlik-bekçisi bayrağı) artı bir insan anotasyonlayana dek gizli kalan gerçek bir kalite etiketi taşır.
+- **Öncelik skoru (priority score)**: loglanmış sinyallerden hesaplanan, ucuz, etiketsiz bir şüphe skoru, burada `(1 - confidence) + 0.5 * flag`, anotasyonun önce olası hatalara harcanması için izleri sıralamakta kullanılır.
+- **Anotasyon bütçesi (annotation budget)**: bir insanın bir turda etiketlemeye gücünün yettiği sabit iz sayısı (tek-atışlık karşılaştırmada 6, çark boyunca tur başına 2). Bütün yöntemin optimize ettiği kıt kaynak.
+- **Zor-vaka örneklemesi (hard-case sampling)**: anotasyonlanacak izleri öncelik sıralamasının en üstünden alarak seçmek, ki bu etiketli kümeyi temel orana göre hatalarla zenginleştirir.
+- **Rastgele örnekleme (random sampling)**: anotasyonlanacak izleri tekdüze rastgele seçmek, ki bu popülasyonun temel oranını yeniden üretir ve yansız ama hata-seyrek bir küme verir.
+- **Hata yoğunluğu (altın oran)**: anotasyonlanmış örneklerin hata olan kesri. Zor-vaka örneklemesiyle zenginleştirilmiş (burada `0.67`), kasıtlı olarak üretim temel oranından yüksektir.
+- **Hata kapsamı (failure coverage)**: anotasyonlanmış kümenin yakaladığı bütün gerçek hataların kesri (6 bütçede zor-vaka için `4/4 = 1.00`, rastgele için `2/4 = 0.50`). Çark döndükçe izlenecek metrik.
+- **Altın küme (golden set)**: modeli notlamakta kullanılan, büyüyen, anotasyonlanmış, güvenilir örnekler koleksiyonu; burada üretimden madenlenmiş ve modelin zayıf noktalarına yoğunlaşmış.
+- **Temel oran (base rate)**: popülasyondaki gerçek hata sıklığı (`4/12 = 0.33`). Onu yalnızca rastgele, yansız bir örneklem doğru tahmin eder; madenlenmiş bir küme etmez.
+- **Rastgele kenar örneklem (random holdout)**: üretim hata oranını dürüstçe tahmin etmek için madenlenmiş kümenin yanında özellikle tutulan küçük, yansız bir örneklem, çünkü zenginleştirilmiş altın küme bunu yapamaz.
+
+---
+
+Artık üretimden bir altın küme büyütüyoruz, ama şimdiye kadar her sayı hâlâ offline, olay sonrası, loglanmış izler üzerinde ölçülüyor. Asıl sınav, yeni bir model canlı kullanıcılarla buluştuğunda ne olduğudur. **Bölüm 13, Çevrimiçi Değerlendirmeler (Online Evals)**, kavgayı üretime taşır: küçük bir örneklemde A/B test etki büyüklükleri, güvenlik-bekçisi metrikleri ve neden offline bir zaferin gerçek dünyayla temasa her zaman dayanamadığı.

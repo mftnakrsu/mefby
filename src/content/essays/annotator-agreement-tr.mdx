@@ -1,0 +1,161 @@
+---
+title: "İnsanlar Gerçekten Anlaşıyor mu?"
+description: "Karşısında notladığınız altın etiketlerin kendileri de birer görüştür, ve görüşlerde gürültü vardır. Bölüm 3, iki insanın notladığı ve 18'inde anlaştığı, korkutucu derecede yüksek bir %90 veren 20 destek talebini alır ve o anlaşmanın çoğunun neden şanstan ibaret olduğunu elle gösterir: Cohen kappa onu 0.61'e çökertir, Fleiss kappa üç notlayıcıyı ele alır ve Krippendorff alfa genel durum olarak sırada bekler."
+date: 2026-07-16
+tags: ["Değerlendirme", "LLM", "AI", "Notlayıcılar Arası Uyum", "Cohen Kappa", "Fleiss Kappa"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-03-annotator-agreement"
+lang: "tr"
+translationSlug: "annotator-agreement"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 2'de, Altın Küme Kurmak'ta, etiketli bir küme derledik ve onun güvenilir olduğuna söz verdik, ama "doğru"yu tanımlamak için sessizce tek bir insanın yargısına yaslandık. Bu bölüm rahatsız edici devam sorusunu soruyor: peki ya ikinci dikkatli bir insan, tam olarak aynı örnekleri ve tam olarak aynı talimatları verdiğinizde, bazılarını farklı etiketleseydi? Anlaşmazlarsa, o zaman "altın etiket" dünyadan okuduğunuz bir gerçek değildir; bir görüştür, ve görüşler gürültü taşır. Aşağı akışta hesapladığınız her skor o gürültüyü miras alır. Yani tek bir etikete güvenmeden önce, iki insanın gerçekte ne kadar anlaştığını ölçmeliyiz, ve bunu dürüstçe yapmalıyız.
+
+Dürüst kısmı, dersin tamamıdır. Uyumu ölçmenin bariz yolu, iki notlayıcının kaç kez aynı etiketi verdiğini sayıp toplama bölmektir, yani **ham uyum** (çoğu zaman `po` yazılır, "proportion observed", gözlenen oran). Kolaydır, sezgiseldir ve sessizce bozuktur. Tek bir etiket baskın olduğunda (taleplerin çoğu gerçekten acil değildir), iki notlayıcı ikisi de yalnızca yaygın etiketi tahmin ederek sürekli aynı yanıta iner, ve ham uyum onları bunun için ödüllendirir. İki notlayıcının, neredeyse tamamen şanstan ibaret bir manşet **%90** uyuma ulaşmasını izleyeceğiz. Sonra o şansı elle düzelteceğiz, **Cohen kappa** kullanarak, ve dürüst sayının **0.61**'e düşmesini göreceğiz. Bunu üç notlayıcıya **Fleiss kappa** ile genişleteceğiz (taze beş-talep kümesinde **0.44**), ve tümünü yutan genel durum olan **Krippendorff alfa** üzerine tek satırlık bir notla kapatacağız. Bu yazıdaki her sayı, eşlik eden dosya tarafından basılır, yuvarlanmamış ve düzenlenmemiş.
+
+## Ön koşullar
+
+Bölüm 1'in söz dağarcığına (iki etiketin birbirine karşı çaprazlandığı 2x2 ızgara) ve temel Python'dan (bir liste, bir döngü, bir bölme) fazlasına ihtiyacınız yok. Hiçbir istatistik geçmişi varsayılmıyor; kappayı saymadan inşa ediyoruz, tam olarak kesinlik ve duyarlılığı inşa ettiğimiz gibi. Eşlik eden dosya, [agreement.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-03-annotator-agreement), API anahtarı, ağ ve bağımlılık olmadan offline çalışır (bu kez NumPy bile yok, saf Python), böylece her satırı okuyup buradaki her figürü kendiniz yeniden üretebilirsiniz. Üç işlev sunar, `cohen_cells`, `cohen_kappa` ve `fleiss_kappa`, ve aşağıda adım adım yürüdüğümüz tam izi basar.
+
+## İki notlayıcı, yirmi talep
+
+İşte kurulum, doğrudan eşlik eden dosyadan. İki insan notlayıcı, A ve B, aynı 20 destek talebini alır ve Bölüm 1'de kullandığımız aynı soru sorulur: bu talep **acil (urgent)** mi (`1`), yoksa **acil değil (not urgent)** mi (`0`)? Bağımsız çalışırlar. Gerçek bir destek gelen kutusu çoğunlukla sakin olduğundan, iki notlayıcı da taleplerin ezici çoğunluğunda "acil değil" der, ki bu tam olarak ham uyumu kandıracak koşuldur:
+
+```python
+RATER_A = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+RATER_B = [1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+```
+
+İki listeyi birlikte yürüyün ve notlayıcılar anlaşırsa her talebi "yes", ayrışırlarsa "NO" olarak işaretleyin. 1 nolu talepte eşleşirler (ikisi de acil), 2 nolu talepte eşleşirler (ikisi de acil), 3 nolu talepte ayrışırlar (A acil der, B değil), 4 nolu talepte ayrışırlar (A değil der, B acil), ve sonra kalan on altı talebin hepsinde anlaşırlar (her seferinde ikisi de acil değil der). Yirmide iki anlaşmazlık. Yani **20'de 18** öğede anlaşırlar, ve ham uyum şudur:
+
+```text
+po = agreements / n = 18 / 20 = 0.90
+```
+
+Yüzde doksan. Notlama-kalitesi raporuna giren sayı budur, bir yöneticinin başını salladığı sayı. Ve hak edilmiş gibi hisseder: on üzerinden dokuz, notlayıcılar ikizdir. O hissi tutun, çünkü onu parçalarına ayırmak üzereyiz.
+
+## İki notlayıcının 2x2'si
+
+Onu parçalarına ayıracak alet, Bölüm 1'deki aynı 2x2, ama yeniden amaçlanmış. Bölüm 1'de ızgara altın etiketi modelin tahminine karşı çaprazlıyordu. Burada ne model ne de altın var; iki insan var, ve ızgara notlayıcı A'nın etiketini notlayıcı B'nin etiketine karşı çaprazlıyor. `cohen_cells` işlevi onu elle doldurur, iki listeyi bir kez yürüyerek ve her talebi dört kovadan birine bırakarak: ikisi de acil dedi, A acil derken B değil, A değil derken B acil, ya da ikisi de değil. Yirmi talebi saymak şunu verir:
+
+```text
+                 B=urgent   B=not
+    A=urgent        2         1
+    A=not           1        16
+```
+
+Yani dört hücre şudur: ikisi-de-acil = **2** (1 ve 2 nolu talepler), A-acil-B-değil = **1** (3 nolu talep), A-değil-B-acil = **1** (4 nolu talep) ve ikisi-de-değil = **16** (sakin on altı). Toplamları 20, sağlamamız. İki uyum hücresi köşegende oturur, ikisi-de-acil ve ikisi-de-değil, ve toplamları `2 + 16 = 18`, ki bu tam olarak saydığımız 18 anlaşma, dolayısıyla ham uyum gerçekten `(2 + 16) / 20 = 0.90`. Aritmetikte yanlış bir şey yok. Yanlış olan, aritmetiğin dışarıda bıraktığı şey.
+
+<Diagram number={1} caption="İki notlayıcı için 20 talep üzerindeki 2x2 uyum matrisi, ve onu söndüren şans-düzeltmesi. Solda, notlayıcı A'nın etiketi notlayıcı B'nin etiketine karşı çaprazlanır: ikisi-de-acil=2 ve ikisi-de-değil=16 zümrüt uyum köşegeninde oturur, iki anlaşmazlık (A-acil-B-değil=1 ve A-değil-B-acil=1) köşegen dışında gül renginde oturur. Ham uyum, köşegenin toplama oranıdır, (2+16)/20 = 0.90. Sağdaki panel bunun neden yanıltıcı olduğunu gösterir: her notlayıcı 20'de yalnızca 3 kez acil der (0.15) ve 20'de 17 kez değil (0.85), dolayısıyla o oranlarda tahmin eden iki notlayıcı 0.85*0.85 = 0.7225 zamanda ikisi de 'değil' ve 0.15*0.15 = 0.0225 zamanda ikisi de 'acil' der, bu da şans uyumu pe = 0.7450 eder, yani ham %90'ın %74'ü şanstır. Cohen kappa o tabanı kaldırır: (0.90 - 0.7450) / (1 - 0.7450) = 0.61.">
+  <img src="/essays/annotator-agreement/part3-figure.svg" alt="İki panelde bir uyum analizi. Sol panel, 'A vs B, elle sayılmış' başlıklı bir 2x2 matristir; satırlar A=acil ve A=değil, sütunlar B=acil ve B=değil etiketlidir. Sol üst hücre (ikisi de acil) zümrüt renginde 2 okur, sağ alt hücre (ikisi de değil) zümrüt renginde 16 okur ve bunlar uyum köşegenini oluşturur; sağ üst hücre (A acil, B değil) gül renginde 1 okur ve sol alt hücre (A değil, B acil) gül renginde 1 okur. Bir başlık ham uyum po = (2 + 16) / 20 = 0.90 okur. 'ne kadarı şans?' başlıklı sağ panel her notlayıcının marjinal oranlarını gösterir: A 3/20 = 0.15 acil ve 0.85 değil der; B 3/20 = 0.15 acil ve 0.85 değil der. Sonra şans uyumunu hesaplar pe = 0.15 çarpı 0.15 + 0.85 çarpı 0.85 = 0.0225 + 0.7225 = 0.7450, yüzde 74 şans olarak notlanmış. Son bir zümrüt kutu Cohen kappa = (0.90 - 0.7450) / (1 - 0.7450) = 0.61 okur." class="w-full rounded-lg" />
+</Diagram>
+
+## Bunun ne kadarı şans?
+
+İşte tuzak. Diyelim ki iki notlayıcı tek bir talep bile okumadı. Diyelim ki her biri sadece, alışkanlığı kadar sık "acil" ve geri kalan zamanda "acil değil" diyen yanlı bir para attı. İki böyle para, saf şanstan, ne kadar sık aynı yanıta iner? Eğer o şanslı taban zaten yüksekse, o zaman 0.90 ham uyum etkileyici değildir; tek başına gürültünün üreteceğinin güçbela üzerindedir.
+
+O tabanı hesaplamak için her notlayıcının **marjinal oranına** ihtiyacımız var: diğer notlayıcıyı tamamen görmezden gelerek her birinin ne kadar sık acil dediği. Onu ızgaradan okuyun. Notlayıcı A üst satırda acil dedi, 20'de `2 + 1 = 3` talep, dolayısıyla A'nın acil oranı `3/20 = 0.15` ve A'nın değil oranı `0.85`. Notlayıcı B sol sütunda aşağı acil dedi, 20'de `2 + 1 = 3` talep, dolayısıyla B'nin acil oranı da `3/20 = 0.15` ve B'nin değil oranı `0.85`. İki notlayıcı da kabaca yedi talepte birine acil der ve geri kalanı geçirir.
+
+Şimdi, iki notlayıcı o oranlarda bağımsız etiketleseydi, iki şekilde anlaşırlardı. `0.15 * 0.15 = 0.0225` olasılıkla ikisi de acil derdi, ve `0.85 * 0.85 = 0.7225` olasılıkla ikisi de acil değil derdi. Onları toplayın ve **şans uyumunu** elde edersiniz, `pe` ("proportion expected", beklenen oran):
+
+```text
+pe = 0.15*0.15 + 0.85*0.85 = 0.0225 + 0.7225 = 0.7450
+```
+
+O sayıyı yavaşça okuyun. **0.7450.** Hiç konuşmamış, hiç talep okumamış ve sadece alışkanlıklarına göre tahmin etmiş iki notlayıcı, yine de zamanın **%74**'ünde, tamamen şanstan anlaşırlardı, çünkü ikisi de neredeyse her zaman "acil değil"e uzanır ve "acil değil", "acil değil" ile anlaşır. Bu kadar etkilendiğimiz uyum, iki insan herhangi bir düşünme yapmadan önce merdivenin dörtte üçünde başlar. O `0.7225` terimi, ikisi de "değil" tahmin ediyor, işin neredeyse tamamını yapıyor, ve notlayıcıların görevi anladığına dair kanıt olarak tam olarak hiçbir değeri yok.
+
+## Cohen kappa: yalnızca beceriyi ödüllendirmek
+
+Cohen kappa bunu tek bir dürüst fikirle düzeltir: notlayıcılara yalnızca şans tabanının *üzerinde* elde ettikleri uyum için kredi verin, ve bunu o tabanın üzerinde elde edebilecekleri en fazla şeye karşı ölçün. Taban `pe = 0.7450`. Mükemmel uyum `1.0`. Yani tabanın üzerindeki alan `1 - pe`, ve notlayıcılar bunun `po - pe`'sini tırmandı. Oran kappadır:
+
+```text
+kappa = (po - pe) / (1 - pe)
+      = (0.90 - 0.7450) / (1 - 0.7450)
+      = 0.1550 / 0.2550
+      = 0.61
+```
+
+Ham 0.90, **0.61** olur. Notlayıcılar şansın öngöreceğinden daha çok anlaştı (kappa sıfırın epey üzerinde, dolayısıyla bu gerçek sinyal, gürültü değil), ama dürüst, şans-düzeltilmiş rakam manşetin epey altında. 0.90 ile 0.61 arasındaki o boşluk, bu bölümün bütün meselesidir: buharlaşan o 0.29 hiçbir zaman beceri değildi, ikisi de yaygın etikete varsayılan olan iki insanın aritmetiğiydi.
+
+Kappanın vurabileceği uç noktaları bilmek yardımcı olur. Notlayıcılar tam olarak şansın öngördüğü kadar sık anlaşsaydı, `po = pe`, pay sıfır olur ve kappa `0` olur: gösterilmiş beceri yok. Mükemmel anlaşsalardı, `po = 1`, kappa `1` olur. Ve kappa **negatif** olabilir, sıfırın altında, notlayıcılar şanstan *daha az* anlaştığında, ki bu genellikle görevi zıt yönlerde yanlış anladıkları ya da birinin bir etiket kuralını ters çevirdiği anlamına gelir. Kaba bir saha kuralı olarak (Landis ve Koch işaret taşları, yararlı ama kanun değil), 0.41 ile 0.60 arası kappa "orta" ve 0.61 ile 0.80 arası "önemli"dir, dolayısıyla bizim 0.61'imiz tam "önemli"nin alt kenarında oturur. Düzgün, savunulabilir, ve düzeltme olmadan raporlayacağınız "notlayıcılarımız zamanın %90'ında anlaşıyor"dan bir dünya ötede.
+
+Aşağıdaki widget, mekanizmayı iman ederek değil hissederek anlamanızı sağlar. Taleplerin ne kadar dengesiz olduğunu ("acil"in gerçekte ne kadar seyrek olduğunu) kaydırın ve zıt yönlerde hareket eden iki şeyi izleyin: veri daha çarpık hale geldikçe ham uyum 1.0'a doğru tırmanır, çünkü iki notlayıcı da çoğunluk etiketinin üzerinde kayar, oysa kappa etkilenmeyi reddeder ve şans tabanı ham sayıya doğru yükseldikçe hatta batabilir. Çarpık etiketler üzerinde yüksek bir `po`'nun size neredeyse hiçbir şey söylemediğini görmenin en net yolu budur.
+
+<IframeFigure src="/essays/annotator-agreement/part3-interactive.html" title="İnteraktif uyum gezgini: talep kümesinin sınıf dengesini ve iki notlayıcının hata oranlarını ayarlayın, ve 2x2 uyum matrisinin, ham uyum po'nun, şans tabanı pe'nin ve Cohen kappanın birlikte güncellenmesini izleyin, dengesiz bir etiket dağılımının ham uyumu nasıl şişirdiğini oysa kappanın nasıl dürüst kaldığını gösterir." height={820} />
+
+## Üç notlayıcı: Fleiss kappa
+
+Cohen kappa tam olarak iki notlayıcıyı ele alır. Gerçek notlama projeleri sıklıkla üç ya da daha fazlasını kullanır, hem beraberlikleri bozmak hem de bir panel boyunca uyumu ölçmek için, ve bunun için **Fleiss kappaya** ihtiyacımız var. Aynı iskeleti korur, şans uyumuyla düzeltilmiş gözlenen uyum, `(P_bar - P_e) / (1 - P_e)`, ama uyumu notlayıcı çifti başına değil *öğe* başına sayar, dolayısıyla herhangi bir sayıdaki notlayıcıya ölçeklenir.
+
+Beş taze talep alın, her biri şimdi üç notlayıcı, R1, R2 ve R3 tarafından notlanmış:
+
+```text
+  item  R1 R2 R3  | urgent  not
+     1   1  1  1  |     3     0
+     2   1  1  0  |     2     1
+     3   0  0  0  |     0     3
+     4   1  0  0  |     1     2
+     5   0  0  0  |     0     3
+```
+
+Fleiss "notlayıcı X, notlayıcı Y ile eşleşti mi" diye sormaz. Her öğe için, o öğedeki *notlayıcı çiftlerinin* hangi kısmının aynı etikete indiğini sorar. 3 notlayıcıyla öğe başına 3 olası çift vardır. `fleiss_kappa`'daki düzenli formül o kısmı, karesi alınmış oy sayılarının toplamı eksi notlayıcı sayısı, tümü `raters * (raters - 1)`'e bölünmüş olarak hesaplar:
+
+```text
+P_i = (karesi alınmış oy sayılarının toplamı - raters) / (raters * (raters - 1))
+```
+
+Onu her öğede çalıştırın. Öğe 1'in oyları (3 acil, 0 değil), dolayısıyla `(3*3 + 0*0 - 3) / (3*2) = (9 - 3)/6 = 1.0000`: oybirliği, üç çiftin hepsi anlaşır, mükemmel öğe uyumu. Öğe 2'nin oyları (2, 1), dolayısıyla `(4 + 1 - 3)/6 = 2/6 = 0.3333`: üç çiftten yalnızca biri anlaşır (ikisi de acil diyen iki notlayıcı), diğer iki çift anlaşmaz. Öğe 3 oybirliğiyle "değil", `1.0000`. Öğe 4 (1, 2), başka bir `0.3333`. Öğe 5 oybirliğiyle "değil", `1.0000`. Bu beş öğe-başı uyumun ortalamasını alın:
+
+```text
+P_bar = (1.0000 + 0.3333 + 1.0000 + 0.3333 + 1.0000) / 5 = 0.7333
+```
+
+Şimdi şans tabanı, tam olarak öncesi gibi ama tüm notlayıcılar boyunca havuzlanmış. Tablodaki her oyu sayın: `5 öğe * 3 notlayıcı = 15` oy var, bunların `3 + 2 + 0 + 1 + 0 = 6`'sı "acil" ve 9'u "değil". Yani kategori payları acil `6/15 = 0.40` ve değil `9/15 = 0.60`. Notlayıcılar o oranlarda şansla etiket atasaydı, ikisinin bir kategoride eşleşme olasılığı o kategorinin payının karesidir, kategoriler boyunca toplanmış:
+
+```text
+P_e = 0.40^2 + 0.60^2 = 0.16 + 0.36 = 0.52
+```
+
+Ve Fleiss kappa, aynı `(gözlenen - şans) / (1 - şans)` biçiminden bir araya gelir:
+
+```text
+Fleiss kappa = (P_bar - P_e) / (1 - P_e)
+             = (0.7333 - 0.52) / (1 - 0.52)
+             = 0.2133 / 0.48
+             = 0.44
+```
+
+**0.44**, aynı kaba ölçekte "orta", çoğunlukla panelin bölündüğü öğe 2 ve 4 tarafından aşağı çekilmiş. Makinenin Cohen'inkiyle özdeş olduğuna dikkat edin: notlayıcıların şans tabanının ne kadar üzerine tırmandığını ölçün, tırmanabilecekleri şeye bölün. Değişen tek şey, "uyum"un artık öğe başına notlayıcı çiftleri üzerinden sayılması, dolayısıyla formül artık iki notlayıcınız mı yoksa yirmi mi olduğunu umursamıyor. İki etiket ya da iki yüz, düzeltme, az önce elle yaptığımız aynı hamle.
+
+## Krippendorff alfa: genel durum
+
+Fleiss hâlâ her öğenin aynı sayıda notlayıcı tarafından notlandığını ve tüm anlaşmazlıkların eşit derecede kötü olduğunu varsayar ("acil" bir talebe "acil değil" demek, herhangi başka bir uyumsuzlukla aynıya mal olur). Gerçek projeler her iki varsayımı da kırar: notlayıcılar öğeleri atlar, paneller düzensizdir, ve sıralı bir ölçekte (diyelim, şiddet 1 ile 5 arası) bir birim şaşmak dört birim şaşmak kadar kötü değildir. **Krippendorff alfa**, tüm bunları emen genel durumdur. Herhangi bir sayıda notlayıcı için çalışır, eksik etiketleri hoş görür, ve iki etiketin ne kadar uzak olduğunu söyleyen bir uzaklık işlevi takarak herhangi bir ölçüm ölçeğini (nominal, sıralı, aralık) kabul eder. Mekanik olarak uyumdan değil *anlaşmazlıktan* inşa edilir, `alpha = 1 - (gözlenen anlaşmazlık / beklenen anlaşmazlık)`, ki bu yaptığımızın ayna görüntüsü gibi görünür, ama aynı fikrin içi dışına çevrilmiş halidir: ham sayıyı şanstan ne kadar göreceğinize göre düzeltin. Her öğenin aynı notlayıcıları olduğunda ve ölçek nominal olduğunda, alfa ve Fleiss kappa neredeyse çakışır. Onu burada satır satır türetmeyeceğiz (defter tutması kendi başına ele alınmayı hak eder), ama şimdi tam olarak ne yaptığını biliyorsunuz, çünkü çekirdek hamleyi zaten üç kez yaptınız.
+
+## Özet / Çıkarımlar
+
+- **Altın etiketler gürültülü görüşlerdir, dolayısıyla onların üzerine kurulu herhangi bir skora güvenmeden önce o gürültüyü ölçün.** İki dikkatli insan bazı örneklerde anlaşmazsa, "altın etiket" bir yargı çağrısıdır, ve aşağı akıştaki her metrik onun belirsizliğini miras alır.
+- **Ham yüzde-uyum, sınıf dengesizliği altında yalan söyler.** İkisi de yaygın etikete varsayılan olan iki notlayıcı sürekli şanstan anlaşır. İki notlayıcımız 20 talepte `po = 0.90`'a ulaştı, ama her notlayıcı 20'de yalnızca 3'üne acil derken şans tabanı `pe = 0.7450` idi: o uyumun %74'ü gürültüydü.
+- **Cohen kappa yalnızca şansın üzerindeki uyumu ödüllendirir.** `kappa = (po - pe) / (1 - pe) = (0.90 - 0.7450) / (1 - 0.7450) = 0.61`. Notlayıcılar şanstan daha iyisini yapmadığında 0, mükemmel anlaştıklarında 1, ve şanstan daha az anlaştıklarında negatiftir. Buradaki dürüst sayı 0.90 değil, 0.61.
+- **Fleiss kappa, üç veya daha fazla notlayıcı için aynı düzeltmedir.** Öğe başına notlayıcı çiftleri üzerinden uyumu sayın, `P_bar = 0.7333`'e ortalayın, kategori paylarını (acil 0.40, değil 0.60) `P_e = 0.52`'ye havuzlayın, ve `Fleiss kappa = 0.44` elde edin. `(gözlenen - şans) / (1 - şans)` iskeleti hiç değişmez.
+- **Krippendorff alfa tümünü genelleştirir** herhangi bir notlayıcı sayısına, eksik etiketlere ve bir uzaklık işlevi aracılığıyla herhangi bir ölçeğe, anlaşmazlıktan inşa edilmiş ama özdeş şans-düzeltmesine dayanan. Elle-yapılan hamleyi bir kez öğrenin ve her uyum katsayısı onun bir varyasyonudur.
+
+## Sözlük
+
+- **Notlayıcılar arası uyum (inter-annotator agreement)**: iki ya da daha fazla insan notlayıcının aynı öğelere ne kadar tutarlı biçimde aynı etiketleri atadığı. Yüksek uyum, etiketleme görevinizin iyi tanımlandığının ve altın kümenizin güvenilir olduğunun kanıtıdır; düşük uyum, talimatların, örneklerin ya da etiketlerin kendilerinin belirsiz olduğu anlamına gelir.
+- **Ham uyum (po)**: notlayıcıların aynı etiketi verdiği öğelerin oranı, uyum matrisinin köşegeninin toplama bölümü. Sezgiseldir ama tek bir etiket baskın olduğunda şişer, çünkü notlayıcılar yaygın etikette şanstan anlaşır.
+- **Şans uyumu (pe)**: her biri kendi taban oranında bağımsız etiketleseydi, notlayıcıların saf şanstan ne kadar sık anlaşacağı, kategori-başı oranların çarpımlarını toplayarak hesaplanır. Burada `0.15*0.15 + 0.85*0.85 = 0.7450`.
+- **Marjinal oran (marginal rate)**: tek bir notlayıcının, diğer notlayıcıyı görmezden gelerek, genelde belirli bir etiketi ne kadar sık atadığı. 2x2'nin satır toplamlarından (notlayıcı A) ya da sütun toplamlarından (notlayıcı B) okunur. İki notlayıcı da zamanın `3/20 = 0.15`'inde acil dedi.
+- **Cohen kappa**: tam olarak iki notlayıcı için şans-düzeltilmiş uyum, `(po - pe) / (1 - pe)`. Sıfır şans düzeyi, bir mükemmel, negatif şanstan kötü anlamına gelir. Notlayıcılarımız 0.90 ham uyuma rağmen 0.61 aldı.
+- **Fleiss kappa**: aynı düzeltmenin herhangi bir sabit sayıdaki notlayıcıya genişlemesi, öğe başına notlayıcı çiftleri üzerinden uyum (`P_bar = 0.7333`) ve havuzlanmış kategori payları (`P_e = 0.52`) kullanarak üç-notlayıcı kümesinde `0.44` verir.
+- **Krippendorff alfa**: herhangi bir sayıda notlayıcı, eksik veri ve herhangi bir ölçek (nominal, sıralı, aralık) için genel-durum uyum katsayısı. Gözlenen ile beklenen anlaşmazlıktan inşa edilir, `1 - (D_observed / D_expected)`, ve basit nominal durumda Fleiss kappaya indirgenir.
+- **Kappa yorum işaret taşları**: kaba Landis ve Koch bantları (0.41 ile 0.60 orta, 0.61 ile 0.80 önemli, 0.81 üzeri neredeyse mükemmel). Yararlı bir kısayol, katı bir kural değil, ve her zaman sayının yeterince büyük bir örneklemde kararlı olup olmadığına ikincil.
+
+---
+
+Artık altın etiketlerimizi yazan insanlara ne kadar güveneceğimizi ve buna dürüst bir sayı koymayı biliyoruz. Sıradaki soru, o pahalı insanları bizim için çıktıları notlayan bir modelle değiştirip değiştiremeyeceğimiz. **Bölüm 4, Elle LLM-as-Judge**, sıfırdan rubrik-güdümlü bir yargıç kurar, kararlarını ayrıştırır ve yargıcı insan altın kümesine karşı bir hata matrisinde dizer; böylece nerede, ve ne kadar kötü, anlaşmadığını tam olarak görür.

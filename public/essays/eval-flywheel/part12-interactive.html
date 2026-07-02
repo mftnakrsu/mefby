@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Eval Flywheel: mine a golden set by hand, Part 12</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.panel:last-child { margin-bottom: 0; }
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+/* ── controls ── */
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.budget-label {
+  font-size: 12.5px; font-weight: 600; color: var(--body);
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px;
+}
+input[type="range"] { flex: 1; min-width: 140px; accent-color: var(--emerald); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+.budget-read { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.budget-read b { color: var(--ink); }
+
+.strategy-toggle {
+  display: inline-flex;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.strategy-btn {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: none;
+  padding: 8px 14px;
+  cursor: pointer;
+  outline: none;
+}
+.strategy-btn + .strategy-btn { border-left: 1.5px solid var(--border); }
+.strategy-btn:focus-visible { box-shadow: inset 0 0 0 2px var(--emerald); }
+.strategy-btn[aria-pressed="true"] { background: var(--ink); color: #fff; }
+
+/* ── batch chips ── */
+.batch-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  min-height: 40px;
+}
+.chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  color: var(--body);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip .tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 5px;
+  letter-spacing: 0.03em;
+}
+.chip.fail { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.chip.fail .tag { background: var(--rose); color: #fff; }
+.chip.ok { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.chip.ok .tag { background: var(--emerald); color: #fff; }
+.chip.empty { color: var(--faint); border-style: dashed; font-weight: 500; }
+
+/* ── stats row ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+@media (max-width: 560px) { .stats-row { grid-template-columns: 1fr; } }
+.stat-card {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff;
+}
+.stat-card .k {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
+  color: var(--faint); text-transform: uppercase; margin-bottom: 4px;
+}
+.stat-card .v { font-family: var(--font-mono); font-size: 24px; font-weight: 700; color: var(--emerald-ink); }
+.stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.expected-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.expected-note code {
+  font-family: var(--font-mono);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+/* ── panel B: flywheel ── */
+.round-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.run-btn, .reset-btn {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  outline: none;
+}
+.run-btn { color: #fff; background: var(--emerald); border: 1px solid var(--emerald); }
+.run-btn:hover:not(:disabled) { background: var(--emerald-ink); }
+.run-btn:disabled { background: var(--chip-bg); color: var(--faint); border-color: var(--border); cursor: not-allowed; }
+.run-btn:focus-visible, .reset-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+.reset-btn { color: var(--body); background: #fff; border: 1px solid var(--border); }
+.reset-btn:hover { background: var(--chip-bg); }
+.round-status { font-size: 12px; color: var(--muted); }
+
+.round-table { width: 100%; border-collapse: separate; border-spacing: 0 6px; margin-bottom: 12px; }
+.round-table th {
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+  color: var(--faint); text-transform: uppercase;
+  text-align: left; padding: 0 10px 4px;
+}
+.round-table td {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: #fff;
+  border-top: 1.5px solid var(--border);
+  border-bottom: 1.5px solid var(--border);
+  padding: 10px;
+  color: var(--body);
+  white-space: nowrap;
+}
+.round-table tr td:first-child { border-left: 1.5px solid var(--border); border-radius: 8px 0 0 8px; }
+.round-table tr td:last-child { border-right: 1.5px solid var(--border); border-radius: 0 8px 8px 0; }
+.round-table .placeholder-row td { color: var(--faint); font-style: normal; border-style: dashed; }
+.round-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--emerald-bg); border: 1.5px solid var(--emerald-bd);
+  color: var(--emerald-ink); font-weight: 700; font-size: 12px;
+}
+.gold-rate { color: var(--emerald-ink); font-weight: 700; }
+.cum-fail { color: var(--rose-ink); font-weight: 700; }
+
+.closing-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.closing-note b { color: var(--ink); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL A ══════════════ -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <p class="eyebrow">Spend the budget</p>
+  <h2 id="panel-a-heading">Same 12 traces, two ways to spend an annotation budget</h2>
+  <p class="panel-subtitle">Drag the budget and switch strategy. Hard-case picks the traces ranked highest by <code style="font-family:var(--font-mono)">(1&#8722;conf) + 0.5&#215;flag</code>; random draws a fixed-seed sample instead. The true fail/ok label is revealed only once a trace is picked.</p>
+
+  <div class="hint">
+    <strong>Try it:</strong> set the budget to 6 and flip between strategies. Hard-case catches all 4 real failures; random catches about half as many, for the same spend.
+  </div>
+
+  <div class="controls-row">
+    <label class="budget-label" for="budget-slider">
+      Annotation budget
+      <input type="range" id="budget-slider" min="1" max="12" step="1" value="6" aria-describedby="budget-read" />
+    </label>
+    <span class="budget-read" id="budget-read"></span>
+  </div>
+
+  <div class="controls-row">
+    <div class="strategy-toggle" role="group" aria-label="Sampling strategy">
+      <button type="button" class="strategy-btn" id="btn-hard" aria-pressed="true">Hard-case (priority)</button>
+      <button type="button" class="strategy-btn" id="btn-random" aria-pressed="false">Random (seed 0)</button>
+    </div>
+  </div>
+
+  <div class="batch-grid" id="batch-grid" role="list" aria-label="Annotated batch"></div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="k">Failures found</div>
+      <div class="v" id="stat-found">0/6</div>
+      <div class="sub" id="stat-density">density 0.00</div>
+    </div>
+    <div class="stat-card">
+      <div class="k">Coverage</div>
+      <div class="v" id="stat-coverage">0.00</div>
+      <div class="sub">of all 4 real failures</div>
+    </div>
+    <div class="stat-card">
+      <div class="k">Base rate</div>
+      <div class="v">0.33</div>
+      <div class="sub">4 true failures / 12 traces</div>
+    </div>
+  </div>
+
+  <div class="expected-note" id="expected-note"></div>
+  <div class="sr-only" aria-live="polite" id="announcer-a"></div>
+</section>
+
+<!-- ══════════════ PANEL B ══════════════ -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <p class="eyebrow">The flywheel</p>
+  <h2 id="panel-b-heading">Grow a golden set, two hard cases at a time</h2>
+  <p class="panel-subtitle">Each round annotates the next 2 traces by priority. Run all 3 rounds and watch the golden set concentrate on the model's weak spots.</p>
+
+  <div class="round-controls">
+    <button type="button" class="run-btn" id="run-btn">Run round 1</button>
+    <button type="button" class="reset-btn" id="reset-btn">Reset</button>
+    <span class="round-status" id="round-status">0 of 3 rounds run &#183; golden set is empty</span>
+  </div>
+
+  <table class="round-table" aria-label="Flywheel rounds">
+    <thead>
+      <tr>
+        <th>Round</th>
+        <th>New traces</th>
+        <th>Golden set</th>
+        <th>Cum. fail</th>
+        <th>Coverage</th>
+        <th>Gold rate</th>
+      </tr>
+    </thead>
+    <tbody id="round-body">
+      <tr class="placeholder-row"><td colspan="6">Click &#8220;Run round 1&#8221; to annotate the first 2 hard cases.</td></tr>
+    </tbody>
+  </table>
+
+  <p class="closing-note">
+    The golden set's failure rate ends up <b>enriched</b> on purpose: it hunts for where the model breaks. That rate is <b>not</b> the production rate (the true production failure rate here is 4/12 = 0.33). To estimate production health without bias, keep a small random holdout alongside the mined set.
+  </p>
+  <div class="sr-only" aria-live="polite" id="announcer-b"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── shared data, mirrors the production log in the essay ── */
+  var PRIORITY_ORDER = ["T12", "T11", "T10", "T09", "T08", "T07", "T06", "T05", "T04", "T03", "T02", "T01"];
+  var RANDOM_ORDER    = ["T01", "T12", "T08", "T04", "T07", "T05", "T02", "T09", "T11", "T03", "T06", "T10"];
+  var FAIL = ["T08", "T09", "T11", "T12"];
+  var TOTAL_FAIL = FAIL.length;
+  var TOTAL_TRACES = 12;
+
+  function isFail(id) { return FAIL.indexOf(id) !== -1; }
+  function fmt(x) { return x.toFixed(2); }
+
+  /* ══════════════ PANEL A ══════════════ */
+  var slider = document.getElementById("budget-slider");
+  var btnHard = document.getElementById("btn-hard");
+  var btnRandom = document.getElementById("btn-random");
+  var strategy = "hard";
+
+  function makeChip(id) {
+    var fail = isFail(id);
+    var span = document.createElement("span");
+    span.className = "chip " + (fail ? "fail" : "ok");
+    span.setAttribute("role", "listitem");
+    span.innerHTML = id + ' <span class="tag">' + (fail ? "FAIL" : "OK") + "</span>";
+    return span;
+  }
+
+  function renderA() {
+    var budget = parseInt(slider.value, 10);
+    var order = strategy === "hard" ? PRIORITY_ORDER : RANDOM_ORDER;
+    var batch = order.slice(0, budget);
+    var found = batch.filter(isFail).length;
+    var density = budget ? found / budget : 0;
+    var coverage = found / TOTAL_FAIL;
+
+    document.getElementById("budget-read").innerHTML =
+      "<b>" + budget + "</b> of " + TOTAL_TRACES + " traces annotated";
+
+    var grid = document.getElementById("batch-grid");
+    grid.innerHTML = "";
+    batch.forEach(function (id) { grid.appendChild(makeChip(id)); });
+
+    document.getElementById("stat-found").textContent = found + "/" + budget;
+    document.getElementById("stat-density").textContent = "density " + fmt(density);
+    document.getElementById("stat-coverage").textContent = fmt(coverage);
+
+    var noteEl = document.getElementById("expected-note");
+    if (strategy === "random") {
+      var expected = budget * TOTAL_FAIL / TOTAL_TRACES;
+      noteEl.innerHTML =
+        "Expected failures for a random batch of " + budget + " &#8776; <code>" + budget + " &#215; 4/12 = " + fmt(expected) +
+        "</code>. This draw found <code>" + found + "</code>, density <code>" + fmt(density) + "</code> against the base rate <code>0.33</code>.";
+    } else {
+      var enrich = density > 0 ? (density / 0.3333333333).toFixed(1) : "0.0";
+      noteEl.innerHTML =
+        "Ranking by priority spends the budget on the traces most likely to be wrong first, so density stays &#8805; the base rate <code>0.33</code>" +
+        (density > 0 ? " (here roughly " + enrich + "&#215; denser)." : ".");
+    }
+
+    document.getElementById("announcer-a").textContent =
+      strategy + " batch of " + budget + ": " + found + " failures found, density " + fmt(density) +
+      ", coverage " + fmt(coverage) + ".";
+  }
+
+  slider.addEventListener("input", renderA);
+  btnHard.addEventListener("click", function () {
+    strategy = "hard";
+    btnHard.setAttribute("aria-pressed", "true");
+    btnRandom.setAttribute("aria-pressed", "false");
+    renderA();
+  });
+  btnRandom.addEventListener("click", function () {
+    strategy = "random";
+    btnHard.setAttribute("aria-pressed", "false");
+    btnRandom.setAttribute("aria-pressed", "true");
+    renderA();
+  });
+
+  renderA();
+
+  /* ══════════════ PANEL B ══════════════ */
+  var runBtn = document.getElementById("run-btn");
+  var resetBtn = document.getElementById("reset-btn");
+  var roundBody = document.getElementById("round-body");
+  var roundStatus = document.getElementById("round-status");
+  var MAX_ROUNDS = 3;
+  var PER_ROUND = 2;
+  var round = 0;
+  var golden = [];
+  var cumFail = 0;
+
+  function renderB() {
+    if (round === 0) {
+      runBtn.textContent = "Run round 1";
+      runBtn.disabled = false;
+      roundStatus.textContent = "0 of " + MAX_ROUNDS + " rounds run · golden set is empty";
+    } else if (round < MAX_ROUNDS) {
+      runBtn.textContent = "Run round " + (round + 1);
+      runBtn.disabled = false;
+      roundStatus.textContent = round + " of " + MAX_ROUNDS + " rounds run · golden set = " + golden.length;
+    } else {
+      runBtn.textContent = "All rounds complete";
+      runBtn.disabled = true;
+      roundStatus.textContent = MAX_ROUNDS + " of " + MAX_ROUNDS + " rounds run · golden set = " + golden.length;
+    }
+  }
+
+  function runRound() {
+    if (round >= MAX_ROUNDS) return;
+    if (round === 0) roundBody.innerHTML = "";
+
+    var start = round * PER_ROUND;
+    var newTraces = PRIORITY_ORDER.slice(start, start + PER_ROUND);
+    round++;
+    newTraces.forEach(function (id) { golden.push(id); });
+    var newFail = newTraces.filter(isFail).length;
+    cumFail += newFail;
+    var coverage = cumFail / TOTAL_FAIL;
+    var goldRate = golden.length ? cumFail / golden.length : 0;
+
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      "<td><span class=\"round-num\">" + round + "</span></td>" +
+      "<td>" + newTraces.join(" + ") + " (" + newFail + " new fail" + (newFail === 1 ? "" : "s") + ")</td>" +
+      "<td>" + golden.length + "</td>" +
+      "<td class=\"cum-fail\">" + cumFail + "</td>" +
+      "<td>" + fmt(coverage) + "</td>" +
+      "<td class=\"gold-rate\">" + fmt(goldRate) + "</td>";
+    roundBody.appendChild(tr);
+
+    document.getElementById("announcer-b").textContent =
+      "Round " + round + ": added " + newTraces.join(" and ") + ", " + newFail + " new failures. Golden set " +
+      golden.length + ", cumulative failures " + cumFail + ", coverage " + fmt(coverage) + ", gold rate " + fmt(goldRate) + ".";
+
+    renderB();
+  }
+
+  function resetRounds() {
+    round = 0;
+    golden = [];
+    cumFail = 0;
+    roundBody.innerHTML = '<tr class="placeholder-row"><td colspan="6">Click &#8220;Run round 1&#8221; to annotate the first 2 hard cases.</td></tr>';
+    renderB();
+  }
+
+  runBtn.addEventListener("click", runRound);
+  resetBtn.addEventListener("click", resetRounds);
+  renderB();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Uncertainty: bootstrap a confidence interval by hand, Part 6</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --zinc-bar: #e4e4e7;
+  --zinc-bar-bd: #d4d4d8;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+/* ── DATA CHIPS ── */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.chip {
+  position: relative;
+  width: 21px;
+  height: 21px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--faint);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.chip.correct { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.chip.incorrect { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.chip.picked { box-shadow: 0 0 0 2px var(--ink); transform: translateY(-2px); }
+.chip .badge {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0 4px;
+  line-height: 14px;
+  min-width: 14px;
+  text-align: center;
+}
+
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.btn {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 13px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+.btn:hover { background: var(--chip-bg); }
+.btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+.btn.primary { background: var(--emerald); border-color: var(--emerald); color: #fff; }
+.btn.primary:hover { background: var(--emerald-ink); }
+
+.draw-log {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-bottom: 16px;
+  min-height: 20px;
+}
+.draw-log b { color: var(--ink); }
+
+/* ── HISTOGRAM ── */
+.hist-wrap { margin-bottom: 14px; }
+.mini-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 130px;
+  border-bottom: 1.5px solid var(--zinc-bar-bd);
+  padding: 0 2px;
+  position: relative;
+}
+.hist-bar {
+  flex: 1;
+  min-width: 2px;
+  background: var(--zinc-bar);
+  border: 1px solid var(--zinc-bar-bd);
+  border-bottom: none;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.15s ease;
+}
+.hist-bar.in-ci { background: var(--emerald-br); border-color: var(--emerald); }
+.hist-bar.is-point { background: var(--emerald-ink); border-color: var(--emerald-ink); }
+.hist-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--faint);
+  margin-top: 4px;
+}
+
+/* ── STAT ROW ── */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+@media (max-width: 560px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
+.stat {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  background: #fff;
+}
+.stat .k { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.stat .v { font-family: var(--font-mono); font-size: 17px; font-weight: 700; color: var(--emerald-ink); margin-top: 2px; }
+
+/* ── PANEL B: n slider ── */
+.n-controls { margin-bottom: 16px; }
+.n-controls label {
+  font-size: 12.5px; font-weight: 600; color: var(--body);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+input[type="range"] { flex: 1; min-width: 180px; accent-color: var(--emerald); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+.n-read { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.n-read b { color: var(--ink); }
+
+.axis-wrap { position: relative; margin: 30px 4px 8px; height: 34px; }
+.axis-line { position: absolute; left: 0; right: 0; top: 16px; height: 2px; background: var(--zinc-bar-bd); }
+.axis-tick { position: absolute; top: 10px; width: 1px; height: 8px; background: var(--faint); }
+.axis-tick-label {
+  position: absolute; top: 20px; transform: translateX(-50%);
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--muted);
+}
+.ci-bar {
+  position: absolute; top: 8px; height: 18px; border-radius: 9px;
+  background: var(--emerald-br); border: 1.5px solid var(--emerald);
+  transition: left 0.2s ease, width 0.2s ease;
+}
+.ci-center-dot {
+  position: absolute; top: 12px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--emerald-ink); transform: translateX(-50%);
+  transition: left 0.2s ease;
+}
+
+.b-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+@media (max-width: 560px) { .b-stat-row { grid-template-columns: 1fr; } }
+.b-stat {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 11px;
+  text-align: center;
+  background: #fff;
+}
+.b-stat .k { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.b-stat .v { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--ink); margin-top: 2px; }
+.b-stat.hl .v { color: var(--emerald-ink); }
+
+.guard-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 12px;
+  line-height: 1.5;
+}
+.guard-note code {
+  font-family: var(--font-mono);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL A ══════════════ -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <p class="eyebrow">Resample by hand</p>
+  <h2 id="panel-a-heading">Draw bootstrap resamples from the 30-item set</h2>
+  <p class="panel-subtitle">21 of 30 graded outputs are correct (emerald), 9 are incorrect (rose): point estimate accuracy 0.70. Each resample draws 30 items WITH REPLACEMENT and recomputes accuracy.</p>
+
+  <div class="hint">
+    <strong>Draw 1</strong> picks 30 indices with replacement and highlights which items landed (a black ring; a badge shows how many times an item was picked). <strong>Draw 10,000</strong> runs a full bootstrap instantly and reads off the 95% interval.
+  </div>
+
+  <div class="chip-row" id="chip-row" role="group" aria-label="The 30 labeled items"></div>
+
+  <div class="btn-row">
+    <button class="btn primary" id="draw1-btn" type="button">Draw 1 resample</button>
+    <button class="btn" id="draw100-btn" type="button">Draw 100 more</button>
+    <button class="btn" id="draw10000-btn" type="button">Draw 10,000 more</button>
+    <button class="btn" id="resetA-btn" type="button">Reset</button>
+  </div>
+
+  <div class="draw-log" id="draw-log">No resamples drawn yet. Click <b>Draw 1 resample</b> to start.</div>
+
+  <div class="hist-wrap">
+    <p class="mini-label">Distribution of replicate accuracies so far</p>
+    <div class="hist" id="hist" aria-hidden="true"></div>
+    <div class="hist-axis"><span>0/30</span><span>15/30</span><span>30/30</span></div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat"><div class="k">Draws so far</div><div class="v" id="s-count">0</div></div>
+    <div class="stat"><div class="k">Mean</div><div class="v" id="s-mean">&#8212;</div></div>
+    <div class="stat"><div class="k">95% CI</div><div class="v" id="s-ci">&#8212;</div></div>
+    <div class="stat"><div class="k">Width</div><div class="v" id="s-width">&#8212;</div></div>
+  </div>
+  <div class="sr-only" aria-live="polite" id="announcer-a"></div>
+</section>
+
+<!-- ══════════════ PANEL B ══════════════ -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <p class="eyebrow">Width vs sample size</p>
+  <h2 id="panel-b-heading">Same 0.70 accuracy, wider or narrower interval</h2>
+  <p class="panel-subtitle">Tile the same 21/30 set to a bigger n and bootstrap it again (3,000 resamples). The interval should stay centered near 0.70 and shrink as n grows.</p>
+
+  <div class="n-controls">
+    <label for="n-slider">
+      Set size multiplier
+      <input type="range" id="n-slider" min="1" max="16" step="1" value="1" aria-describedby="n-read" />
+      <span class="n-read" id="n-read"></span>
+    </label>
+  </div>
+
+  <div class="axis-wrap" id="axis-wrap" aria-hidden="true">
+    <div class="axis-line"></div>
+    <div class="ci-bar" id="b-ci-bar"></div>
+    <div class="ci-center-dot" id="b-ci-dot"></div>
+  </div>
+
+  <div class="b-stat-row">
+    <div class="b-stat"><div class="k">n</div><div class="v" id="b-n">30</div></div>
+    <div class="b-stat hl"><div class="k">95% CI</div><div class="v" id="b-ci">&#8212;</div></div>
+    <div class="b-stat"><div class="k">Width</div><div class="v" id="b-width">&#8212;</div></div>
+  </div>
+
+  <p class="guard-note">
+    At n=30 the companion script's full 10,000-replicate bootstrap reads 95% CI = <code>[0.5333, 0.8667]</code>, width <code>0.3333</code>. Tiling to n=120 halves the width to about <code>0.1667</code>; tiling to n=480 halves it again to about <code>0.0833</code>. This panel uses 3,000 live resamples per setting, so its numbers will land close to, but not always bit-identical to, that fixed-seed run.
+  </p>
+  <div class="sr-only" aria-live="polite" id="announcer-b"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── the labeled set, mirrors bootstrap_ci.py DATA exactly ── */
+  var DATA = [
+    1, 1, 0, 1, 1, 1, 0, 1, 1, 0,
+    1, 1, 1, 0, 1, 1, 0, 1, 1, 1,
+    0, 1, 1, 0, 0, 1, 1, 0, 1, 1
+  ];
+  var N0 = DATA.length; // 30
+
+  function fmt4(x) { return x.toFixed(4); }
+  function fmt2(x) { return x.toFixed(2); }
+
+  /* one bootstrap draw: n indices with replacement, returns {idx, k} */
+  function drawOnce(data) {
+    var n = data.length;
+    var idx = new Array(n);
+    var sum = 0;
+    for (var i = 0; i < n; i++) {
+      var pick = Math.floor(Math.random() * n);
+      idx[i] = pick;
+      sum += data[pick];
+    }
+    return { idx: idx, k: sum, acc: sum / n };
+  }
+
+  /* linear-interpolation percentile, matches numpy's default */
+  function percentile(sortedArr, p) {
+    var m = sortedArr.length;
+    if (m === 0) return NaN;
+    var pos = (p / 100) * (m - 1);
+    var lo = Math.floor(pos), hi = Math.ceil(pos);
+    if (lo === hi) return sortedArr[lo];
+    var frac = pos - lo;
+    return sortedArr[lo] * (1 - frac) + sortedArr[hi] * frac;
+  }
+
+  /* ══════════════ PANEL A ══════════════ */
+  var chipRow = document.getElementById("chip-row");
+  var chips = [];
+  for (var i = 0; i < N0; i++) {
+    var chip = document.createElement("div");
+    chip.className = "chip " + (DATA[i] ? "correct" : "incorrect");
+    chip.textContent = DATA[i] ? "1" : "0";
+    chip.title = "item " + i + ": " + (DATA[i] ? "correct" : "incorrect");
+    chipRow.appendChild(chip);
+    chips.push(chip);
+  }
+
+  var reps = [];        // every replicate accuracy drawn so far
+  var kCounts = new Array(N0 + 1).fill(0); // bucket counts by k (0..30 correct)
+
+  var histEl = document.getElementById("hist");
+  var histBars = [];
+  for (var k = 0; k <= N0; k++) {
+    var bar = document.createElement("div");
+    bar.className = "hist-bar";
+    histEl.appendChild(bar);
+    histBars.push(bar);
+  }
+
+  function clearPicked() {
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].classList.remove("picked");
+      var b = chips[i].querySelector(".badge");
+      if (b) b.remove();
+    }
+  }
+
+  function showPicked(idx) {
+    clearPicked();
+    var pickCount = new Array(N0).fill(0);
+    for (var j = 0; j < idx.length; j++) pickCount[idx[j]]++;
+    for (var i = 0; i < N0; i++) {
+      if (pickCount[i] > 0) {
+        chips[i].classList.add("picked");
+        if (pickCount[i] > 1) {
+          var badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = "×" + pickCount[i];
+          chips[i].appendChild(badge);
+        }
+      }
+    }
+  }
+
+  function addReplicates(count, opts) {
+    var lastIdx = null, lastK = null;
+    for (var d = 0; d < count; d++) {
+      var draw = drawOnce(DATA);
+      reps.push(draw.acc);
+      kCounts[draw.k]++;
+      lastIdx = draw.idx;
+      lastK = draw.k;
+    }
+    if (opts && opts.showChips && lastIdx) showPicked(lastIdx);
+    renderA(lastK, count);
+  }
+
+  function renderA(lastK, lastCount) {
+    var maxCount = Math.max.apply(null, kCounts);
+    var lo = null, hi = null, mean = null;
+    if (reps.length > 0) {
+      var sorted = reps.slice().sort(function (a, b) { return a - b; });
+      lo = percentile(sorted, 2.5);
+      hi = percentile(sorted, 97.5);
+      var sum = 0;
+      for (var i = 0; i < reps.length; i++) sum += reps[i];
+      mean = sum / reps.length;
+    }
+    var loK = lo === null ? null : Math.round(lo * N0);
+    var hiK = hi === null ? null : Math.round(hi * N0);
+
+    for (var k = 0; k <= N0; k++) {
+      var h = maxCount > 0 ? Math.max(1, Math.round((kCounts[k] / maxCount) * 126)) : 0;
+      histBars[k].style.height = h + "px";
+      histBars[k].classList.remove("in-ci", "is-point");
+      if (loK !== null && k >= loK && k <= hiK) histBars[k].classList.add("in-ci");
+      if (k === 21) histBars[k].classList.add("is-point");
+      histBars[k].title = (k / N0).toFixed(3) + " accuracy: " + kCounts[k] + " draw(s)";
+    }
+
+    document.getElementById("s-count").textContent = reps.length;
+    document.getElementById("s-mean").textContent = mean === null ? "-" : fmt4(mean);
+    document.getElementById("s-ci").textContent = lo === null ? "-" : "[" + fmt4(lo) + ", " + fmt4(hi) + "]";
+    document.getElementById("s-width").textContent = lo === null ? "-" : fmt4(hi - lo);
+
+    if (lastK !== null) {
+      var logHtml;
+      if (lastCount === 1) {
+        logHtml = "Latest draw: <b>" + lastK + " / " + N0 + "</b> correct → accuracy <b>" + fmt4(lastK / N0) + "</b>. Total resamples: <b>" + reps.length + "</b>.";
+      } else {
+        logHtml = "Ran <b>" + lastCount + "</b> more resamples (total <b>" + reps.length + "</b>). Last one: " + lastK + " / " + N0 + " correct → " + fmt4(lastK / N0) + ".";
+      }
+      document.getElementById("draw-log").innerHTML = logHtml;
+    }
+
+    document.getElementById("announcer-a").textContent =
+      reps.length + " resamples drawn. Mean " + (mean === null ? "n/a" : fmt4(mean)) +
+      ". 95 percent interval " + (lo === null ? "n/a" : fmt4(lo) + " to " + fmt4(hi)) + ".";
+  }
+
+  document.getElementById("draw1-btn").addEventListener("click", function () {
+    addReplicates(1, { showChips: true });
+  });
+  document.getElementById("draw100-btn").addEventListener("click", function () {
+    addReplicates(100, {});
+  });
+  document.getElementById("draw10000-btn").addEventListener("click", function () {
+    addReplicates(10000, {});
+  });
+  document.getElementById("resetA-btn").addEventListener("click", function () {
+    reps = [];
+    kCounts = new Array(N0 + 1).fill(0);
+    clearPicked();
+    document.getElementById("draw-log").textContent = "No resamples drawn yet. Click Draw 1 resample to start.";
+    renderA(null, null);
+  });
+
+  renderA(null, null);
+
+  /* ══════════════ PANEL B ══════════════ */
+  var slider = document.getElementById("n-slider");
+  var axisWrap = document.getElementById("axis-wrap");
+  var ciBar = document.getElementById("b-ci-bar");
+  var ciDot = document.getElementById("b-ci-dot");
+  var AXIS_LO = 0.45, AXIS_HI = 0.95; // accuracy range shown on the axis
+  var baseWidth = null; // width at multiplier = 1, for the "Nx tighter" comparison
+
+  function buildAxisTicks() {
+    var ticks = [0.5, 0.6, 0.7, 0.8, 0.9];
+    for (var t = 0; t < ticks.length; t++) {
+      var pct = ((ticks[t] - AXIS_LO) / (AXIS_HI - AXIS_LO)) * 100;
+      var tick = document.createElement("div");
+      tick.className = "axis-tick";
+      tick.style.left = pct + "%";
+      axisWrap.appendChild(tick);
+      var lab = document.createElement("div");
+      lab.className = "axis-tick-label";
+      lab.style.left = pct + "%";
+      lab.textContent = ticks[t].toFixed(2);
+      axisWrap.appendChild(lab);
+    }
+  }
+  buildAxisTicks();
+
+  function toPct(acc) {
+    return ((acc - AXIS_LO) / (AXIS_HI - AXIS_LO)) * 100;
+  }
+
+  function bootstrapCI(data, B) {
+    var n = data.length;
+    var r = new Array(B);
+    for (var b = 0; b < B; b++) {
+      var sum = 0;
+      for (var i = 0; i < n; i++) sum += data[Math.floor(Math.random() * n)];
+      r[b] = sum / n;
+    }
+    r.sort(function (a, c) { return a - c; });
+    return { lo: percentile(r, 2.5), hi: percentile(r, 97.5) };
+  }
+
+  function tile(data, k) {
+    var out = [];
+    for (var t = 0; t < k; t++) out = out.concat(data);
+    return out;
+  }
+
+  function renderB() {
+    var mult = parseInt(slider.value, 10);
+    var n = N0 * mult;
+    var data = tile(DATA, mult);
+    var B = 3000;
+    var ci = bootstrapCI(data, B);
+    var width = ci.hi - ci.lo;
+    if (baseWidth === null) baseWidth = width;
+
+    document.getElementById("n-read").innerHTML = "<b>" + mult + "x</b> &nbsp; (n = " + n + ")";
+    document.getElementById("b-n").textContent = n;
+    document.getElementById("b-ci").textContent = "[" + fmt4(ci.lo) + ", " + fmt4(ci.hi) + "]";
+    var widthLabel = fmt4(width);
+    if (mult > 1) {
+      var ratio = baseWidth / width;
+      widthLabel += " (" + ratio.toFixed(2) + "x)";
+    }
+    document.getElementById("b-width").textContent = widthLabel;
+
+    var loPct = toPct(ci.lo), hiPct = toPct(ci.hi);
+    ciBar.style.left = loPct + "%";
+    ciBar.style.width = Math.max(0.5, hiPct - loPct) + "%";
+    ciDot.style.left = toPct((ci.lo + ci.hi) / 2) + "%";
+
+    document.getElementById("announcer-b").textContent =
+      "n = " + n + ". 95 percent interval " + fmt4(ci.lo) + " to " + fmt4(ci.hi) + ", width " + fmt4(width) + ".";
+  }
+
+  slider.addEventListener("input", renderB);
+  renderB();
+})();
+</script>
+</body>
+</html>

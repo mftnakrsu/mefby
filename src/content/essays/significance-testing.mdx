@@ -1,0 +1,157 @@
+---
+title: "Is the Difference Real?"
+description: "Two models are graded on the same 50-item set: A gets 41/50 (82%), B gets 42/50 (84%), a headline gap of +2 points. Part 7 builds the paired 2x2 of agreements by hand, runs McNemar's test on the 9 items where the models disagree (both an exact binomial p and the chi-square approximation), finds it insignificant, and then works out that catching a true 2-point gain would need thousands of examples."
+date: 2026-07-20
+tags: ["Evals", "LLM", "AI", "Significance", "McNemar", "Statistical Power"]
+seriesOrder: 7
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-07-significance-testing"
+lang: "en"
+translationSlug: "significance-testing-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 6 taught us to wrap every score in a confidence interval, because one number from one run is a point estimate that wobbles. This part answers the question that wobble forces on you the moment you have two of those numbers. You run the same eval on two models. Model A scores 41 out of 50 and Model B scores 42 out of 50, so A is at 82.0% and B is at 84.0%, and someone writes "+2 points" in the release notes. Is that plus two points a real improvement, or is it the same sampling noise we spent Part 6 learning to respect, dressed up as a result? This is the single most common statistical mistake in evals, and it has a precise answer.
+
+The answer has two halves, and we build both by hand on the 50 graded items. First, a **significance test**: given the data we actually have, how surprised should we be by a 2-point gap if the two models were truly equal? We will not run it on the raw accuracies. We will build the **paired 2x2 table** of agreements, notice that most of the 50 items say nothing at all about which model is better, and run **McNemar's test** on only the handful where the two models disagreed, computing both an exact binomial p-value enumerated by hand and the chi-square approximation. It comes back insignificant. Second, a **power** calculation that turns the disappointment into a plan: if a 2-point gain really did exist, how many items would you need to catch it reliably? The answer, thousands, is the whole reason a 2-point headline on 50 items should never have been written down as a result.
+
+## Prerequisites
+
+You need Part 6's idea that a score is a sample statistic with spread, and the same basic Python as always: a loop, a list, a division. One new piece of arithmetic shows up, the binomial coefficient `C(n, k)` (the number of ways to choose k things from n), and we compute it by hand so you never have to take it on faith. No statistics course is assumed; every formula is derived from counting coin flips. The companion file, [significance.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-07-significance-testing), runs offline with no API key, no network, and nothing but NumPy, and every number in this essay is copied straight from its printed output. Where we quote the chi-square approximation, SciPy is used in the file only to confirm the hand-derived value, never to produce it.
+
+## Two models, one set, one tempting number
+
+Start with the setup, because the setup is where the whole trick lives. We do not have two separate eval runs on two separate samples. We have **one** 50-item set, and both models were graded on **the same** 50 items. That word "same" is doing enormous work, and we will come back to it, but first the raw scores. Model A got 41 of the 50 right, which is 41/50 = 82.0%. Model B got 42 of the 50 right, which is 42/50 = 84.0%. Subtract and you get the headline: B minus A is +2.0 points. Real, or noise?
+
+The naive move is to treat the two accuracies as two independent measurements and ask whether 0.82 and 0.84 are far enough apart. That throws away the most valuable thing we have. Because both models saw the same items, we know, item by item, not just how many each got right but exactly *which* ones, and whether they agreed. That paired information is far more powerful than two lonely percentages, and using it is the difference between a test that can detect a small true gap and one that cannot. So we do not compare 41 against 42. We compare the two models one item at a time.
+
+When you line the two graded runs up side by side, most items are boring. On 41 of the 50 items the two models agreed with each other, right or wrong together, and an item where both models did the same thing tells you nothing about which is better. All the signal, every last bit of it, lives in the items where the two models split. On this set there are exactly nine of them:
+
+```text
+The 9 items where the models split (the rest, both agree):
+  item   A   B   who won
+    15   0   1   B only
+    20   1   0   A only
+    22   0   1   B only
+    24   1   0   A only
+    34   0   1   B only
+    36   1   0   A only
+    37   0   1   B only
+    41   1   0   A only
+    46   0   1   B only
+```
+
+Read the "who won" column and the entire question collapses to something you can hold in your head: across the nine items where the models disagreed, B won five and A won four. That is it. That five-versus-four split, over nine disagreements, is all the evidence there is for "B is better." Everything else in the 50 items is silent.
+
+## The paired 2x2
+
+Let us make that structure exact by sorting all 50 items into a table, the same move we made in Part 1 with the confusion matrix, except now the two axes are the two models rather than gold and prediction. Every item is either right or wrong under A, and independently right or wrong under B, so it lands in exactly one of four cells:
+
+- Both correct: the count we call **a**. There are 37 of these.
+- A correct, B wrong: the count **b**. There are 4.
+- A wrong, B correct: the count **c**. There are 5.
+- Both wrong: the count **d**. There are 4.
+
+They sum to 37 + 4 + 5 + 4 = 50, the sanity check that every item landed somewhere. Here is the table, with the four cells named:
+
+```text
+                     B correct   B wrong
+  A correct              37          4      (a, b)
+  A wrong                  5           4      (c, d)
+  cells: a=37  b=4  c=5  d=4   (n=50)
+```
+
+Now the key insight, and it is the whole reason the paired test is stronger than comparing percentages. The two cells on the diagonal, a = 37 (both right) and d = 4 (both wrong), are **concordant**: the models agreed, so they cannot possibly tell you which one is better. They are dead weight for this question. Only the two **discordant** cells carry signal: b = 4 (A right where B was wrong) and c = 5 (B right where A was wrong). Notice that the raw scores are just these cells added up. Model A's 41 correct is a + b = 37 + 4. Model B's 42 correct is a + c = 37 + 5. So the entire 2-point gap comes from one fact and one fact only: c is bigger than b by one, 5 versus 4. The test is going to ask whether a difference of one, out of nine disagreements, is anything at all.
+
+<Diagram number={1} caption="The paired 2x2 table for two models graded on the same 50-item set, counted by hand, with McNemar's test and a power panel. Model A scored 41/50 (82.0%) and Model B 42/50 (84.0%), a headline gap of +2.0 points. The four cells are both-correct a=37, A-only b=4, B-only c=5, and both-wrong d=4, summing to 50. The concordant diagonal cells (a and d) are marked silent and uninformative; only the 9 discordant items (b plus c) carry signal. McNemar's test on b=4, c=5 gives an uncorrected chi-square of 0.111, a Yates-corrected chi-square of 0.000, a chi-square approximate p of 0.739, and an exact two-sided binomial p of 1.000, so the gap is not significant. The power panel shows detecting a true 2-point gain at 80% power needs about 5528 items per model unpaired, or about 3515 items total when paired.">
+  <img src="/essays/significance-testing/part7-figure.svg" alt="A paired 2x2 table titled 'The paired 2x2 table, counted by hand' for two models graded on the same 50-item set, with Model A at 41/50 = 82.0% and Model B at 42/50 = 84.0%, headline gap +2.0 pts. Rows are Model A correct and wrong; columns are Model B correct and wrong. Top-left is both right, silent, a=37; top-right is A only, discordant, b=4; bottom-left is B only, discordant, c=5; bottom-right is both wrong, silent, d=4. A note reads n = a+b+c+d = 37+4+5+4 = 50, with concordant cells (a, d) uninformative and discordant cells (b, c) carrying the signal. A McNemar panel on b=4, c=5 lists chi-square uncorrected 0.111 from (4-5)^2/9, chi-square Yates corrected 0.000 from 0^2/9, approximate p (chi-square, 1 df) 0.739, and exact two-sided binomial p 1.000 from 2 times [C(9,0)+...+C(9,4)] over 2^9 = 2 times 256/512. It concludes p = 1.000 is much greater than 0.05 and the gap is not significant on 50 items. A power panel asks how big a set catches a true +2 point gain at 80% power and answers 5528 per model unpaired from 7.84 times 0.2820 / 0.0004, or 633 discordant pairs giving 3515 total when paired." class="w-full rounded-lg" />
+</Diagram>
+
+## McNemar's test: the disagreements are coin flips
+
+Here is the reasoning that makes the test almost obvious once you see it. Suppose the two models were truly equally good, the **null hypothesis**. Then on each of the nine items where they happened to disagree, there is no reason for the disagreement to fall one way rather than the other. Whether A got that particular item right and B wrong, or the reverse, is a coin flip. So under the null, the number of disagreements going B's way is just the count of heads in nine fair coin tosses: a **Binomial(9, 0.5)**. Our observed count going B's way is c = 5. The question "is +2 points real" has become "is 5 heads out of 9 surprising for a fair coin?" Said out loud, you already know the answer is no. Let us make it a number two ways.
+
+**The chi-square approximation.** McNemar's statistic compares the two discordant cells directly. The uncorrected version is the squared difference over the sum:
+
+```text
+chi-square (uncorrected) = (b - c)^2 / (b + c) = (4 - 5)^2 / 9 = 0.111
+```
+
+Because b and c are small counts, statisticians apply a continuity correction (Yates') that subtracts one from the absolute difference before squaring, which here wipes the statistic out entirely:
+
+```text
+chi-square (Yates corr.) = (|b - c| - 1)^2 / (b + c) = 0^2 / 9 = 0.000
+```
+
+Either way the statistic is tiny. Comparing the uncorrected 0.111 against a chi-square distribution with 1 degree of freedom gives a p-value of 0.739. In words: if the two models were equal, you would see a gap at least this large about 74% of the time. That is not surprise, that is the weather.
+
+**The exact test.** The chi-square is only an approximation, and with nine disagreements we do not need an approximation, we can count the coin-flip outcomes directly. We observed 5 of the 9 going B's way. The two-sided p-value is the probability of a split at least this lopsided in either direction. Because 5-versus-4 is the *most balanced* split nine can make (the other side is 4-versus-5), "at least this lopsided" is every possible outcome, so the tail we sum runs from 0 through 4:
+
+```text
+exact p: 2 * [C(9,0)+...+C(9,4)] / 2^9
+       = 2 * 256 / 512 = 1.000
+```
+
+Let us verify the pieces by hand so nothing is magic. The binomial coefficients are C(9,0) = 1, C(9,1) = 9, C(9,2) = 36, C(9,3) = 84, C(9,4) = 126, and 1 + 9 + 36 + 84 + 126 = 256. The total number of outcomes for nine flips is 2 to the 9th, which is 512. So the one-sided tail is 256/512 = 0.5, and doubling for two-sided gives 2 times 256 over 512 = 1.000. An exact p-value of 1.000 is the strongest possible statement of "nothing to see here": a 5-versus-4 split over nine disagreements is *precisely* what a fair coin produces on average. There is no configuration less surprising.
+
+So both roads arrive at the same place. The p-value, whether the 0.739 approximation or the exact 1.000, sits far above the usual 0.05 threshold. On this set we cannot rule out noise. The +2.0 points is not a result. It is not evidence that B is worse either; it is simply the sound of 50 items being too few to hear anything. That distinction matters: a big p-value never proves the models are equal, it only says this experiment lacked the resolution to tell them apart.
+
+## Power: how many items would it take?
+
+The natural, and correct, next question is not "is B better" but "how could we ever find out?" This is **statistical power**: the probability that your test would detect a true effect of a given size if one existed. Our 50-item eval had almost none. Let us compute how big a set we would actually need to catch a *genuine* 2-point gain 80% of the time, which is the conventional power target.
+
+The standard rule for comparing two proportions balances two things: how confident you insist on being before you call a result real (the significance level alpha, here 0.05, which corresponds to `z_alpha = 1.96`), and how often you want to catch a true effect (80% power, which corresponds to `z_beta = 0.84`). Add those two z-values, square the sum, and you get `(1.96 + 0.84)^2 = 7.84`, the price of your confidence and your power together. The unpaired two-proportion sample size is:
+
+```text
+n = (z_a + z_b)^2 * [pA(1-pA) + pB(1-pB)] / (pB - pA)^2
+```
+
+Fill in the numbers. The variance term is pA times (1 minus pA) plus pB times (1 minus pB), which is 0.82 times 0.18 plus 0.84 times 0.16, equal to 0.1476 + 0.1344 = 0.2820. The effect we want to detect is pB minus pA = 0.02, and squaring the denominator gives delta squared = 0.0004. So:
+
+```text
+n = 7.84 * 0.2820 / 0.0004 = 5528 items PER MODEL
+```
+
+Over five thousand graded items for *each* model, to reliably catch a 2-point gap. Our 50-item set was smaller by a factor of a hundred. It never stood a chance.
+
+Pairing helps, though, and this is the payoff for having graded both models on the same items. McNemar's test only spends its power on the discordant pairs, and on this set 9 of 50 items were discordant, a fraction of 18%. The paired calculation asks how many *discordant* pairs you need to see a consistent lean of the size implied by a 2-point gap, which works out to 633 discordant pairs. To collect 633 discordant pairs when only 18% of items are discordant, you divide 633 by that 18% rate, giving about 3515 items total:
+
+```text
+Paired (McNemar) rule, 18% of items discordant:
+  need 633 discordant pairs -> 3515 items total
+```
+
+Two lessons fall out of comparing 3515 to 5528. First, pairing is genuinely more efficient: 3515 total items beats 5528 per model, because the concordant items you throw away were never going to help anyway, and grading the same set twice reuses your labeling effort. Second, and more important, *both* numbers are in the thousands. There is no clever test that rescues a 2-point claim from a 50-item eval. The effect is real or not, but 50 items simply cannot see it. A 2-point headline on a small eval is a vibe, not a result, and the honest thing to report is not the +2 but the interval from Part 6, which on 50 items comfortably contains zero.
+
+The interactive figure below lets you feel exactly where the significance boundary sits. Drag the two discordant counts, b and c, and watch the exact binomial p-value update live: you will see that you need the split to become quite lopsided, far more than 5-versus-4, before p drops under 0.05, and you can watch how many more discordant items that would take. A second panel lets you dial the true gap and the set size and shows the power climbing from "almost none" toward 80% as n crosses into the thousands.
+
+<IframeFigure src="/essays/significance-testing/part7-interactive.html" title="Interactive significance and power explorer: a top panel where dragging the two discordant counts b and c recomputes McNemar's exact two-sided binomial p-value and shows whether the gap clears the 0.05 threshold, and a bottom panel where sliding the true accuracy gap and the eval-set size shows statistical power rising toward 80% only as the number of items reaches the thousands." height={860} />
+
+## Key takeaways
+
+- **A gap between two accuracies is not a result until a test says so.** Model A at 82.0% and Model B at 84.0% on the same 50 items is a +2.0 point headline, but the whole gap comes from one extra discordant item (c=5 versus b=4), and one item out of nine disagreements is exactly what a coin flip looks like.
+- **Pair the comparison and throw away the agreements.** Grading both models on the same set lets you build the paired 2x2 (a=37, b=4, c=5, d=4, summing to 50). The 37 both-right and 4 both-wrong items are concordant and carry no signal; only the 9 discordant items decide the question.
+- **McNemar's test treats the disagreements as coin flips.** Under the null that the models are equal, the count going one way is Binomial(9, 0.5). The uncorrected chi-square is 0.111 and the Yates-corrected chi-square is 0.000, giving an approximate p of 0.739; the exact two-sided p is 2 times [C(9,0)+...+C(9,4)] over 2^9 = 2 times 256/512 = 1.000. Nowhere near significant.
+- **A big p-value means "cannot tell," not "no difference."** The test did not prove the models are equal; it showed 50 items lack the resolution to separate them. The right report is the confidence interval, which on this set contains zero.
+- **Power tells you the set size you actually need.** Detecting a true 2-point gain at 80% power needs about 5528 items per model unpaired, computed as 7.84 times 0.2820 over 0.0004, or about 3515 items total when paired (633 discordant pairs at an 18% discordant rate). Pairing is more efficient, but both are in the thousands, so a 2-point claim on a small eval is a vibe, not a result.
+
+## Glossary
+
+- **Null hypothesis**: the default assumption a test tries to disprove. Here it is "the two models are equally good," under which each disagreement between them is a fair coin flip.
+- **Significance (p-value)**: the probability of seeing a gap at least as large as the observed one if the null hypothesis were true. A small p (conventionally below 0.05) means the data would be surprising under the null, so you reject it. Here p is 0.739 (approximate) or 1.000 (exact), far too large to reject anything.
+- **Paired comparison**: comparing two systems on the exact same items, so you know item by item whether they agreed. Far more powerful than comparing two independent accuracies, because agreements can be set aside and only the disagreements are analyzed.
+- **Concordant vs discordant**: an item is concordant when both models get the same result (both right, both wrong) and discordant when they differ. Only discordant items (here 9 of 50) carry information about which model is better.
+- **McNemar's test**: the significance test for a paired 2x2 table. It ignores the concordant cells and asks whether the split between the two discordant cells (b and c) is more lopsided than a fair coin would produce.
+- **Binomial coefficient C(n, k)**: the number of ways to choose k items from n, used to count coin-flip outcomes. Here C(9,0) through C(9,4) sum to 256, and all outcomes number 2^9 = 512.
+- **Yates' continuity correction**: an adjustment (subtracting 1 from the absolute difference before squaring) that makes the chi-square approximation more honest for small counts. It takes our statistic from 0.111 down to 0.000.
+- **Statistical power**: the probability that a test detects a true effect of a given size. Low power means a real difference can hide as noise; our 50-item set had almost no power to detect a 2-point gain.
+- **Sample size / z-values**: the number of items needed for a target power. It grows with the confidence and power you demand (through z_alpha = 1.96 and z_beta = 0.84, whose sum squared is 7.84) and with the outcome variance (0.2820 here), and shrinks with the square of the effect you want to catch (delta^2 = 0.0004), giving 5528 per model unpaired or 3515 total paired.
+
+---
+
+pass@k is the metric everyone quotes for code generation and almost nobody computes correctly: sample k times, count a success if any one passes, and the naive average is biased. **Part 8, pass@k**, derives the unbiased estimator from one combinatorial identity and checks it against a brute-force count at n=5.

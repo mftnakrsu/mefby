@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Judging the Judge: bias, measured and corrected, Part 5</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+/* ── MODE TOGGLE ── */
+.mode-toggle {
+  display: inline-flex;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 3px;
+  margin-bottom: 16px;
+  gap: 3px;
+}
+.mode-btn {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  padding: 7px 13px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s, color 0.12s;
+}
+.mode-btn:hover { color: var(--ink); }
+.mode-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+.mode-btn.active { background: var(--ink); color: #fff; }
+
+/* ── PAIR GRID ── */
+.pair-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 9px;
+  margin-bottom: 18px;
+}
+.pair-card {
+  border: 1.5px solid var(--border);
+  background: #fff;
+  border-radius: 11px;
+  padding: 9px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+.pair-card.mismatch { background: var(--rose-bg); border-color: var(--rose-bd); }
+.pair-card.match { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+
+.pair-top { display: flex; align-items: center; justify-content: space-between; }
+.pair-id { font-family: var(--font-mono); font-size: 10.5px; color: var(--faint); font-weight: 700; }
+.flip-flag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--amber-ink);
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-bd);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.pair-rows { display: flex; flex-direction: column; gap: 2px; }
+.pair-row { display: flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10.5px; color: var(--body); }
+.pair-row .sys { font-weight: 700; width: 10px; }
+.pair-row.win { font-weight: 700; color: var(--ink); }
+
+.pair-verdict {
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.pair-verdict .status { font-family: var(--font-mono); font-size: 9.5px; }
+.status.match-tag { color: var(--emerald-ink); }
+.status.mismatch-tag { color: var(--rose-ink); }
+
+/* ── SUMMARY STATS ── */
+.stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 4px;
+}
+.stat-card {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  background: #fff;
+  transition: background 0.2s, border-color 0.2s;
+}
+.stat-card.warn { background: var(--rose-bg); border-color: var(--rose-bd); }
+.stat-card.calm { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.stat-card .k { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.stat-card.warn .k { color: var(--rose); }
+.stat-card.calm .k { color: var(--emerald); }
+.stat-card .v { font-family: var(--font-mono); font-size: 32px; font-weight: 700; line-height: 1.15; margin-top: 4px; color: var(--ink); }
+.stat-card.warn .v { color: var(--rose-ink); }
+.stat-card.calm .v { color: var(--emerald-ink); }
+.stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.mini-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin: 16px 0 8px;
+}
+
+/* ── PANEL B: reference table ── */
+.ref-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ref-table th, .ref-table td { padding: 7px 10px; text-align: center; }
+.ref-table thead th {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+  background: var(--chip-bg);
+  border-bottom: 1px solid var(--border);
+}
+.ref-table tbody tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+.ref-table td.win { font-weight: 700; color: var(--emerald-ink); }
+.ref-table td.pairid { color: var(--faint); font-weight: 700; text-align: left; }
+
+.ref-foot {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+.ref-foot b { color: var(--ink); }
+
+/* ── SLIDER SECTION ── */
+.slider-controls { margin-bottom: 16px; }
+.slider-controls label {
+  font-size: 12.5px; font-weight: 600; color: var(--body);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+input[type="range"] { flex: 1; min-width: 180px; accent-color: var(--emerald); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+.slider-read { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.slider-read b { color: var(--ink); }
+
+.score-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 14px 0;
+}
+.score-card {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 13px;
+  background: #fff;
+}
+.score-card .name { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.score-card .meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 1px; }
+.score-card .score { font-family: var(--font-mono); font-size: 24px; font-weight: 700; margin-top: 6px; color: var(--body); }
+.score-card.winner { background: var(--chip-bg); border-color: var(--ink); }
+.score-card.winner .score { color: var(--ink); }
+
+.verdict {
+  font-size: 13px;
+  border-radius: 8px;
+  padding: 11px 13px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+.verdict.warn { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.verdict.warn strong { color: var(--rose); }
+.verdict.calm { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.verdict.calm strong { color: var(--emerald); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL A ══════════════ -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <p class="eyebrow">Position bias, live</p>
+  <h2 id="panel-a-heading">12 pairs: does correction beat the truth?</h2>
+  <p class="panel-subtitle">The same mock judge scores system X vs Y on 12 prompts. Switch between the naive judge (X always shown first) and the corrected judge (both orders averaged) and watch which pairs disagree with the true, higher-quality winner.</p>
+
+  <div class="hint">
+    <strong>Toggle the mode</strong> below. In naive mode, pairs tagged <strong>&#8646;</strong> would flip their verdict if the order were swapped, that's the position bias. In corrected mode the amber flip tag disappears, but one card still turns rose: a verbosity error averaging cannot touch.
+  </div>
+
+  <div class="mode-toggle" role="group" aria-label="Judging mode">
+    <button class="mode-btn active" id="btn-naive" type="button" aria-pressed="true">Naive (X always first)</button>
+    <button class="mode-btn" id="btn-corrected" type="button" aria-pressed="false">Corrected (average both orders)</button>
+  </div>
+
+  <div class="pair-grid" id="pair-grid" role="group" aria-label="12 paired comparisons"></div>
+
+  <div class="stat-row">
+    <div class="stat-card" id="stat-posbias">
+      <div class="k">Position-bias rate</div>
+      <div class="v" id="posbias-val">0.58</div>
+      <div class="sub" id="posbias-sub">7/12 flip when order swaps</div>
+    </div>
+    <div class="stat-card" id="stat-disagree">
+      <div class="k">Disagreement with truth</div>
+      <div class="v" id="disagree-val">0.42</div>
+      <div class="sub" id="disagree-sub">5/12 pairs</div>
+    </div>
+  </div>
+  <div class="sr-only" aria-live="polite" id="announcer-a"></div>
+</section>
+
+<!-- ══════════════ PANEL B ══════════════ -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <p class="eyebrow">Verbosity bias survives correction</p>
+  <h2 id="panel-b-heading">How many words does it take to beat quality?</h2>
+  <p class="panel-subtitle">Five pairs below are tied in quality and differ only in length. Order-averaging cannot help here, there is no position to correct, only length.</p>
+
+  <table class="ref-table" aria-label="Five equal-quality pairs, order-averaged verdicts">
+    <thead>
+      <tr><th>pair</th><th>X words</th><th>Y words</th><th>longer</th><th>winner</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="pairid">q01</td><td>50</td><td>20</td><td>X</td><td class="win">X</td></tr>
+      <tr><td class="pairid">q02</td><td>20</td><td>45</td><td>Y</td><td class="win">Y</td></tr>
+      <tr><td class="pairid">q03</td><td>55</td><td>25</td><td>X</td><td class="win">X</td></tr>
+      <tr><td class="pairid">q04</td><td>30</td><td>60</td><td>Y</td><td class="win">Y</td></tr>
+      <tr><td class="pairid">q05</td><td>40</td><td>15</td><td>X</td><td class="win">X</td></tr>
+    </tbody>
+  </table>
+  <p class="ref-foot">verbosity-bias rate = longer-wins / pairs = <b>5/5 = 1.00</b>. Quality is tied, yet the longer answer wins every time.</p>
+
+  <p class="mini-label">Zoom in: pair p11, the lone survivor of correction</p>
+  <p class="panel-subtitle">System X has quality 5, system Y has quality 6 and 15 words fixed. Y is the true winner. Drag X's word count and watch the <em>corrected</em> score (quality + 0.02/word, position bonus already averaged away) decide the verdict.</p>
+
+  <div class="slider-controls">
+    <label for="words-slider">
+      X's word count
+      <input type="range" id="words-slider" min="0" max="100" step="1" value="70" aria-describedby="slider-read" />
+      <span class="slider-read" id="slider-read"></span>
+    </label>
+  </div>
+
+  <div class="score-compare">
+    <div class="score-card" id="card-x">
+      <div class="name">System X</div>
+      <div class="meta" id="meta-x">quality 5, 70 words</div>
+      <div class="score" id="score-x">6.40</div>
+    </div>
+    <div class="score-card" id="card-y">
+      <div class="name">System Y &nbsp;<span style="font-weight:400;color:var(--muted);">(truth)</span></div>
+      <div class="meta">quality 6, 15 words</div>
+      <div class="score" id="score-y">6.30</div>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict-b"></div>
+  <div class="sr-only" aria-live="polite" id="announcer-b"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  var POS_BIAS = 1.00;
+  var VERB_PER_WORD = 0.02;
+  function fmt2(x) { return x.toFixed(2); }
+
+  /* ══════════════ PANEL A ══════════════ */
+  var PAIRS = [
+    { id: "p01", qX: 5, wX: 40, qY: 6, wY: 20 },
+    { id: "p02", qX: 6, wX: 50, qY: 7, wY: 25 },
+    { id: "p03", qX: 3, wX: 45, qY: 4, wY: 30 },
+    { id: "p04", qX: 7, wX: 35, qY: 8, wY: 25 },
+    { id: "p05", qX: 9, wX: 30, qY: 4, wY: 40 },
+    { id: "p06", qX: 8, wX: 20, qY: 5, wY: 30 },
+    { id: "p07", qX: 3, wX: 30, qY: 8, wY: 20 },
+    { id: "p08", qX: 4, wX: 25, qY: 7, wY: 35 },
+    { id: "p09", qX: 7, wX: 25, qY: 6, wY: 40 },
+    { id: "p10", qX: 8, wX: 20, qY: 7, wY: 45 },
+    { id: "p11", qX: 5, wX: 70, qY: 6, wY: 15 },
+    { id: "p12", qX: 6, wX: 35, qY: 5, wY: 25 }
+  ];
+
+  function answerScore(q, w, first) {
+    return q + (first ? POS_BIAS : 0) + VERB_PER_WORD * w;
+  }
+  function verdictXFirst(p) {
+    var sx = answerScore(p.qX, p.wX, true);
+    var sy = answerScore(p.qY, p.wY, false);
+    return sx > sy ? "X" : "Y";
+  }
+  function verdictYFirst(p) {
+    var sy = answerScore(p.qY, p.wY, true);
+    var sx = answerScore(p.qX, p.wX, false);
+    return sy > sx ? "Y" : "X";
+  }
+  function verdictCorrected(p) {
+    var sx = p.qX + VERB_PER_WORD * p.wX;
+    var sy = p.qY + VERB_PER_WORD * p.wY;
+    return sx > sy ? "X" : "Y";
+  }
+  function trueWinner(p) { return p.qX > p.qY ? "X" : "Y"; }
+
+  var mode = "naive"; // "naive" | "corrected"
+  var grid = document.getElementById("pair-grid");
+
+  function buildPairs() {
+    grid.innerHTML = "";
+    PAIRS.forEach(function (p) {
+      var card = document.createElement("div");
+      card.className = "pair-card";
+      card.setAttribute("data-id", p.id);
+      card.innerHTML =
+        '<div class="pair-top">' +
+          '<span class="pair-id">' + p.id + '</span>' +
+          '<span class="flip-flag" data-role="flip" style="visibility:hidden;">&#8646; flip</span>' +
+        '</div>' +
+        '<div class="pair-rows">' +
+          '<div class="pair-row" data-role="row-x"><span class="sys">X</span><span>q=' + p.qX + ' w=' + p.wX + '</span></div>' +
+          '<div class="pair-row" data-role="row-y"><span class="sys">Y</span><span>q=' + p.qY + ' w=' + p.wY + '</span></div>' +
+        '</div>' +
+        '<div class="pair-verdict"><span data-role="verdict-label">judge: X</span><span class="status" data-role="status">match</span></div>';
+      grid.appendChild(card);
+    });
+  }
+
+  function renderA() {
+    var flips = 0, disagreements = 0;
+    PAIRS.forEach(function (p) {
+      var vXFirst = verdictXFirst(p);
+      var vYFirst = verdictYFirst(p);
+      var flip = vXFirst !== vYFirst;
+      if (flip) flips++;
+
+      var verdict = mode === "naive" ? vXFirst : verdictCorrected(p);
+      var truth = trueWinner(p);
+      var isMatch = verdict === truth;
+      if (!isMatch) disagreements++;
+
+      var card = grid.querySelector('[data-id="' + p.id + '"]');
+      card.classList.remove("match", "mismatch");
+      card.classList.add(isMatch ? "match" : "mismatch");
+
+      var flipEl = card.querySelector('[data-role="flip"]');
+      flipEl.style.visibility = (mode === "naive" && flip) ? "visible" : "hidden";
+
+      card.querySelector('[data-role="row-x"]').classList.toggle("win", verdict === "X");
+      card.querySelector('[data-role="row-y"]').classList.toggle("win", verdict === "Y");
+
+      card.querySelector('[data-role="verdict-label"]').textContent =
+        (mode === "naive" ? "naive: " : "corrected: ") + verdict;
+      var statusEl = card.querySelector('[data-role="status"]');
+      statusEl.textContent = isMatch ? "match" : "mismatch";
+      statusEl.className = "status " + (isMatch ? "match-tag" : "mismatch-tag");
+
+      card.setAttribute("aria-label",
+        p.id + ": X quality " + p.qX + " words " + p.wX + ", Y quality " + p.qY + " words " + p.wY +
+        ". " + (mode === "naive" ? "Naive" : "Corrected") + " judge picks " + verdict +
+        ", true winner is " + truth + ". " + (isMatch ? "Match." : "Mismatch."));
+    });
+
+    var posRate = mode === "naive" ? flips / 12 : 0;
+    var posCount = mode === "naive" ? flips : 0;
+    document.getElementById("posbias-val").textContent = fmt2(posRate);
+    document.getElementById("posbias-sub").textContent = posCount + "/12 flip when order swaps";
+    var posCard = document.getElementById("stat-posbias");
+    posCard.className = "stat-card " + (mode === "naive" ? "warn" : "calm");
+
+    var disRate = disagreements / 12;
+    document.getElementById("disagree-val").textContent = fmt2(disRate);
+    document.getElementById("disagree-sub").textContent = disagreements + "/12 pairs";
+    var disCard = document.getElementById("stat-disagree");
+    disCard.className = "stat-card " + (disagreements > 1 ? "warn" : (disagreements === 0 ? "calm" : "warn"));
+
+    document.getElementById("announcer-a").textContent =
+      (mode === "naive" ? "Naive judge" : "Corrected judge") +
+      ". Position-bias rate " + fmt2(posRate) + ", disagreement with truth " + fmt2(disRate) + ".";
+  }
+
+  document.getElementById("btn-naive").addEventListener("click", function () {
+    mode = "naive";
+    document.getElementById("btn-naive").classList.add("active");
+    document.getElementById("btn-naive").setAttribute("aria-pressed", "true");
+    document.getElementById("btn-corrected").classList.remove("active");
+    document.getElementById("btn-corrected").setAttribute("aria-pressed", "false");
+    renderA();
+  });
+  document.getElementById("btn-corrected").addEventListener("click", function () {
+    mode = "corrected";
+    document.getElementById("btn-corrected").classList.add("active");
+    document.getElementById("btn-corrected").setAttribute("aria-pressed", "true");
+    document.getElementById("btn-naive").classList.remove("active");
+    document.getElementById("btn-naive").setAttribute("aria-pressed", "false");
+    renderA();
+  });
+
+  buildPairs();
+  renderA();
+
+  /* ══════════════ PANEL B ══════════════ */
+  var Q_X = 5, Q_Y = 6, W_Y = 15;
+  var slider = document.getElementById("words-slider");
+
+  function renderB() {
+    var wX = parseInt(slider.value, 10);
+    var scoreX = Q_X + VERB_PER_WORD * wX;
+    var scoreY = Q_Y + VERB_PER_WORD * W_Y;
+    var winner = scoreX > scoreY ? "X" : "Y";
+    var truth = "Y";
+
+    document.getElementById("slider-read").innerHTML = "<b>" + wX + "</b> words";
+    document.getElementById("meta-x").textContent = "quality " + Q_X + ", " + wX + " words";
+    document.getElementById("score-x").textContent = fmt2(scoreX);
+    document.getElementById("score-y").textContent = fmt2(scoreY);
+
+    var cardX = document.getElementById("card-x");
+    var cardY = document.getElementById("card-y");
+    cardX.classList.toggle("winner", winner === "X");
+    cardY.classList.toggle("winner", winner === "Y");
+
+    var v = document.getElementById("verdict-b");
+    if (winner === truth) {
+      v.className = "verdict calm";
+      v.innerHTML = "Corrected score " + fmt2(scoreX) + " vs " + fmt2(scoreY) + ": the judge picks <strong>Y</strong>, matching the true winner. Quality still decides.";
+    } else {
+      v.className = "verdict warn";
+      v.innerHTML = "Corrected score " + fmt2(scoreX) + " vs " + fmt2(scoreY) + ": the judge picks <strong>X</strong>, but Y is the true winner. Order-averaging already removed the +1.00 slot-A bonus, this error is pure verbosity, and it survives correction.";
+    }
+
+    document.getElementById("announcer-b").textContent =
+      "X at " + wX + " words scores " + fmt2(scoreX) + ", Y scores " + fmt2(scoreY) + ". Corrected judge picks " + winner + ".";
+  }
+
+  slider.addEventListener("input", renderB);
+  renderB();
+})();
+</script>
+</body>
+</html>

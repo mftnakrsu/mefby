@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Do Humans Even Agree? Chance-corrected agreement by hand, Part 3</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+/* ── PANEL A: two-rater 2x2 sliders ── */
+.cell-controls {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (max-width: 560px) {
+  .cell-controls { grid-template-columns: 1fr; }
+}
+.cell-ctrl {
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  padding: 11px 13px;
+}
+.cell-ctrl.agree { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.cell-ctrl.disagree { background: var(--amber-bg); border-color: var(--amber-bd); }
+.cell-ctrl-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.cell-ctrl-label { font-size: 12px; font-weight: 600; color: var(--body); }
+.cell-ctrl.agree .cell-ctrl-label { color: var(--emerald-ink); }
+.cell-ctrl.disagree .cell-ctrl-label { color: var(--amber-ink); }
+.cell-ctrl-val { font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--ink); }
+.cell-ctrl input[type="range"] { width: 100%; accent-color: var(--body); height: 20px; cursor: pointer; }
+.cell-ctrl.agree input[type="range"] { accent-color: var(--emerald); }
+.cell-ctrl.disagree input[type="range"] { accent-color: var(--amber); }
+
+.reset-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s;
+  margin-bottom: 18px;
+}
+.reset-btn:hover { background: var(--chip-bg); }
+.reset-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+
+.results {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  gap: 22px;
+  align-items: start;
+}
+@media (max-width: 560px) {
+  .results { grid-template-columns: 1fr; }
+}
+
+.mini-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* mini confusion matrix */
+.cm { border-collapse: separate; border-spacing: 5px; }
+.cm .axis {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+.cm .hdr { font-size: 11px; font-weight: 600; color: var(--body); padding: 0 2px; }
+.cm-cell {
+  width: 66px; height: 54px;
+  border-radius: 9px;
+  text-align: center;
+  vertical-align: middle;
+  border: 1.5px solid var(--border);
+}
+.cm-cell .cnt { font-family: var(--font-mono); font-size: 22px; font-weight: 700; line-height: 1; display: block; }
+.cm-cell .tag { font-family: var(--font-mono); font-size: 9px; font-weight: 700; display: block; margin-top: 2px; }
+.cm-cell.agree { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.cm-cell.agree .cnt, .cm-cell.agree .tag { color: var(--emerald-ink); }
+.cm-cell.disagree { background: var(--amber-bg); border-color: var(--amber-bd); }
+.cm-cell.disagree .cnt, .cm-cell.disagree .tag { color: var(--amber-ink); }
+
+/* metric rows */
+.metric { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.metric:last-child { border-bottom: none; }
+.metric-head { display: flex; align-items: baseline; justify-content: space-between; }
+.metric-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+.metric-val { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--emerald); }
+.metric-formula { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.metric-formula .guard { color: var(--amber); }
+.meter { height: 6px; background: var(--chip-bg); border-radius: 3px; margin-top: 7px; overflow: hidden; }
+.meter > span {
+  display: block; height: 100%;
+  background: var(--emerald-br);
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+@media (prefers-reduced-motion: reduce) { .meter > span { transition: none; } }
+
+.verdict {
+  font-size: 13px;
+  border-radius: 8px;
+  padding: 11px 13px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+  margin-top: 16px;
+}
+.verdict.warn { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.verdict.warn strong { color: var(--rose); }
+.verdict.calm { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.verdict.calm strong { color: var(--emerald); }
+
+/* ── PANEL B: Fleiss ── */
+.fleiss-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+  margin-bottom: 14px;
+}
+.fleiss-table th {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  text-transform: uppercase;
+  text-align: center;
+  padding-bottom: 4px;
+}
+.fleiss-table th.left, .fleiss-table td.left { text-align: left; }
+.fleiss-row td {
+  background: #ffffff;
+  border: 1.5px solid var(--border);
+  padding: 8px 6px;
+  text-align: center;
+  vertical-align: middle;
+}
+.fleiss-row td:first-child { border-radius: 9px 0 0 9px; border-right: none; }
+.fleiss-row td:last-child { border-radius: 0 9px 9px 0; border-left: none; }
+.fleiss-row td.item-id { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--ink); }
+.vote-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  width: 46px;
+  padding: 5px 0;
+  border-radius: 7px;
+  border: 1.5px solid var(--border);
+  background: var(--chip-bg);
+  color: var(--muted);
+  cursor: pointer;
+  outline: none;
+}
+.vote-btn.urgent { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.vote-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+.fleiss-row td.pi-cell { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--ink); }
+
+.fleiss-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+@media (max-width: 560px) {
+  .fleiss-summary { grid-template-columns: 1fr; }
+}
+.fl-stat {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: center;
+  background: #fff;
+}
+.fl-stat .k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.fl-stat .v { font-family: var(--font-mono); font-size: 26px; font-weight: 700; color: var(--ink); margin-top: 3px; }
+.fl-stat.kappa { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.fl-stat.kappa .k { color: var(--emerald); }
+.fl-stat.kappa .v { color: var(--emerald-ink); }
+
+.guard-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.guard-note code {
+  font-family: var(--font-mono);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL A ══════════════ -->
+<section class="panel" aria-labelledby="panel-a-heading">
+  <p class="eyebrow">Chance-corrected agreement</p>
+  <h2 id="panel-a-heading">Two raters, one 2x2: build any table by hand</h2>
+  <p class="panel-subtitle">Drag the four cells of A-vs-B. The sliders start on the worked example: 2 both-urgent, 1 and 1 disagreements, 16 both-not.</p>
+
+  <div class="hint">
+    <strong>Drag a cell</strong> to change how many of the 20 tickets fall there. Raw agreement, chance agreement, and Cohen's kappa recompute live below.
+  </div>
+
+  <div class="cell-controls">
+    <div class="cell-ctrl agree">
+      <div class="cell-ctrl-top"><span class="cell-ctrl-label">both say urgent</span><span class="cell-ctrl-val" id="v-a">2</span></div>
+      <input type="range" id="s-a" min="0" max="20" step="1" value="2" aria-label="both raters say urgent count" />
+    </div>
+    <div class="cell-ctrl disagree">
+      <div class="cell-ctrl-top"><span class="cell-ctrl-label">A urgent, B not</span><span class="cell-ctrl-val" id="v-b">1</span></div>
+      <input type="range" id="s-b" min="0" max="20" step="1" value="1" aria-label="A urgent, B not urgent count" />
+    </div>
+    <div class="cell-ctrl disagree">
+      <div class="cell-ctrl-top"><span class="cell-ctrl-label">A not, B urgent</span><span class="cell-ctrl-val" id="v-c">1</span></div>
+      <input type="range" id="s-c" min="0" max="20" step="1" value="1" aria-label="A not urgent, B urgent count" />
+    </div>
+    <div class="cell-ctrl agree">
+      <div class="cell-ctrl-top"><span class="cell-ctrl-label">both say not urgent</span><span class="cell-ctrl-val" id="v-d">16</span></div>
+      <input type="range" id="s-d" min="0" max="20" step="1" value="16" aria-label="both raters say not urgent count" />
+    </div>
+  </div>
+
+  <button class="reset-btn" id="reset-a-btn" type="button">Reset to the worked example (2, 1, 1, 16)</button>
+
+  <div class="results">
+    <div>
+      <p class="mini-label">A vs B, n = <span id="n-total">20</span></p>
+      <table class="cm" aria-hidden="true">
+        <tr>
+          <td></td><td></td>
+          <td colspan="2" class="axis" style="text-align:center;padding-bottom:2px;">Rater B</td>
+        </tr>
+        <tr>
+          <td></td><td></td>
+          <td class="hdr">urgent</td><td class="hdr">not</td>
+        </tr>
+        <tr>
+          <td rowspan="2" class="axis"><span style="writing-mode:vertical-rl;transform:rotate(180deg);display:inline-block;">Rater A</span></td>
+          <td class="hdr">urgent</td>
+          <td class="cm-cell agree" id="cell-a"><span class="cnt">2</span><span class="tag">both</span></td>
+          <td class="cm-cell disagree" id="cell-b"><span class="cnt">1</span><span class="tag">disagree</span></td>
+        </tr>
+        <tr>
+          <td class="hdr">not</td>
+          <td class="cm-cell disagree" id="cell-c"><span class="cnt">1</span><span class="tag">disagree</span></td>
+          <td class="cm-cell agree" id="cell-d"><span class="cnt">16</span><span class="tag">both</span></td>
+        </tr>
+      </table>
+    </div>
+
+    <div>
+      <p class="mini-label">Scores</p>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">Raw agreement po</span><span class="metric-val" id="po-val">0.00</span></div>
+        <div class="metric-formula" id="po-f"></div>
+        <div class="meter"><span id="po-bar" style="width:0%;background:var(--faint);"></span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">Chance agreement pe</span><span class="metric-val" id="pe-val" style="color:var(--amber);">0.00</span></div>
+        <div class="metric-formula" id="pe-f"></div>
+        <div class="meter"><span id="pe-bar" style="width:0%;background:var(--amber-bd);"></span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">Cohen's kappa</span><span class="metric-val" id="k-val">0.00</span></div>
+        <div class="metric-formula" id="k-f"></div>
+        <div class="meter"><span id="k-bar" style="width:0%"></span></div>
+      </div>
+    </div>
+  </div>
+  <div id="verdict-a" class="verdict calm"></div>
+  <div class="sr-only" aria-live="polite" id="announcer-a"></div>
+</section>
+
+<!-- ══════════════ PANEL B ══════════════ -->
+<section class="panel" aria-labelledby="panel-b-heading">
+  <p class="eyebrow">Beyond two raters</p>
+  <h2 id="panel-b-heading">Three raters, five tickets: Fleiss' kappa</h2>
+  <p class="panel-subtitle">Click any vote to flip it between urgent and not urgent. Per-item agreement, the category shares, and Fleiss' kappa update live.</p>
+
+  <table class="fleiss-table">
+    <thead>
+      <tr>
+        <th class="left">item</th>
+        <th>R1</th><th>R2</th><th>R3</th>
+        <th>urgent</th><th>not</th>
+        <th>P_i</th>
+      </tr>
+    </thead>
+    <tbody id="fleiss-body"></tbody>
+  </table>
+
+  <button class="reset-btn" id="reset-b-btn" type="button">Reset to the worked example</button>
+
+  <div class="fleiss-summary">
+    <div class="fl-stat">
+      <div class="k">Mean P&#772; (P_bar)</div>
+      <div class="v" id="pbar-val">0.00</div>
+    </div>
+    <div class="fl-stat">
+      <div class="k">Chance P_e</div>
+      <div class="v" id="pe2-val">0.00</div>
+    </div>
+    <div class="fl-stat kappa">
+      <div class="k">Fleiss' kappa</div>
+      <div class="v" id="fk-val">0.00</div>
+    </div>
+  </div>
+
+  <div id="verdict-b" class="verdict calm"></div>
+
+  <p class="guard-note">
+    Category shares this round: urgent <span id="share-urgent">0%</span>, not urgent <span id="share-not">0%</span>.
+    Chance agreement <code id="pe2-formula">P_e = share_urgent&#178; + share_not&#178;</code>.
+    If everyone always agrees on everything, <code>P_e</code> can reach 1.0 and kappa is guarded to <b>0.00</b> instead of dividing by zero.
+  </p>
+  <div class="sr-only" aria-live="polite" id="announcer-b"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  function fmt(x) { return x.toFixed(2); }
+  function fmt4(x) { return x.toFixed(4); }
+  function pct0(x) { return Math.round(x * 100) + "%"; }
+
+  /* ══════════════ PANEL A: Cohen's kappa on a live 2x2 ══════════════ */
+  var DEFAULT_A = { a: 2, b: 1, c: 1, d: 16 };
+  var sliders = {
+    a: document.getElementById("s-a"),
+    b: document.getElementById("s-b"),
+    c: document.getElementById("s-c"),
+    d: document.getElementById("s-d")
+  };
+
+  function cohen(a, b, c, d) {
+    var n = a + b + c + d;
+    if (n === 0) return { n: 0, po: 0, pe: 0, kappa: 0, aMarg: 0, bMarg: 0 };
+    var po = (a + d) / n;
+    var aMarg = (a + b) / n;   // A says urgent
+    var bMarg = (a + c) / n;   // B says urgent
+    var pe = aMarg * bMarg + (1 - aMarg) * (1 - bMarg);
+    var kappa = (1 - pe) !== 0 ? (po - pe) / (1 - pe) : 0;
+    return { n: n, po: po, pe: pe, kappa: kappa, aMarg: aMarg, bMarg: bMarg };
+  }
+
+  function renderA() {
+    var a = parseInt(sliders.a.value, 10);
+    var b = parseInt(sliders.b.value, 10);
+    var c = parseInt(sliders.c.value, 10);
+    var d = parseInt(sliders.d.value, 10);
+
+    document.getElementById("v-a").textContent = a;
+    document.getElementById("v-b").textContent = b;
+    document.getElementById("v-c").textContent = c;
+    document.getElementById("v-d").textContent = d;
+    document.getElementById("cell-a").querySelector(".cnt").textContent = a;
+    document.getElementById("cell-b").querySelector(".cnt").textContent = b;
+    document.getElementById("cell-c").querySelector(".cnt").textContent = c;
+    document.getElementById("cell-d").querySelector(".cnt").textContent = d;
+
+    var r = cohen(a, b, c, d);
+    document.getElementById("n-total").textContent = r.n;
+
+    document.getElementById("po-val").textContent = fmt(r.po);
+    document.getElementById("po-f").textContent =
+      "(" + a + "+" + d + ")/" + r.n + " = " + fmt(r.po);
+    document.getElementById("po-bar").style.width = (r.po * 100) + "%";
+
+    document.getElementById("pe-val").textContent = fmt4(r.pe);
+    document.getElementById("pe-f").textContent =
+      fmt(r.aMarg) + "*" + fmt(r.bMarg) + " + " + fmt(1 - r.aMarg) + "*" + fmt(1 - r.bMarg) + " = " + fmt4(r.pe);
+    document.getElementById("pe-bar").style.width = (r.pe * 100) + "%";
+
+    var kEl = document.getElementById("k-val");
+    var kfEl = document.getElementById("k-f");
+    if (r.n === 0 || (1 - r.pe) === 0) {
+      kEl.textContent = "0.00";
+      kfEl.innerHTML = "(po - pe)/(1 - pe) = <span class=\"guard\">guarded to 0.00</span>";
+      document.getElementById("k-bar").style.width = "0%";
+    } else {
+      kEl.textContent = fmt(r.kappa);
+      kfEl.textContent = "(" + fmt(r.po) + " - " + fmt(r.pe) + ")/(1 - " + fmt(r.pe) + ") = " + fmt(r.kappa);
+      document.getElementById("k-bar").style.width = (Math.max(0, r.kappa) * 100) + "%";
+    }
+
+    var v = document.getElementById("verdict-a");
+    if (r.n === 0) {
+      v.className = "verdict calm";
+      v.innerHTML = "No tickets yet. Move a slider to build a 2x2.";
+    } else if (r.po - r.pe > 0.35) {
+      v.className = "verdict calm";
+      v.innerHTML = pct0(r.po) + " raw agreement, chance agreement " + pct0(r.pe) + ", kappa <strong>" + fmt(r.kappa) + "</strong>. Most of the raw agreement here is real, not chance.";
+    } else {
+      v.className = "verdict warn";
+      v.innerHTML = pct0(r.po) + " raw agreement looks great, but chance agreement is already " + pct0(r.pe) + ", so kappa collapses to <strong>" + fmt(r.kappa) + "</strong>. The raters agree mostly because they both pick the same class almost every time.";
+    }
+
+    document.getElementById("announcer-a").textContent =
+      "n=" + r.n + ". Raw agreement " + fmt(r.po) + ", chance agreement " + fmt(r.pe) + ", Cohen's kappa " + fmt(r.kappa) + ".";
+  }
+
+  Object.keys(sliders).forEach(function (k) {
+    sliders[k].addEventListener("input", renderA);
+  });
+  document.getElementById("reset-a-btn").addEventListener("click", function () {
+    sliders.a.value = DEFAULT_A.a;
+    sliders.b.value = DEFAULT_A.b;
+    sliders.c.value = DEFAULT_A.c;
+    sliders.d.value = DEFAULT_A.d;
+    renderA();
+  });
+  renderA();
+
+  /* ══════════════ PANEL B: Fleiss' kappa, 3 raters x 5 items ══════════════ */
+  var DEFAULT_VOTES = [
+    [1, 1, 1],
+    [1, 1, 0],
+    [0, 0, 0],
+    [1, 0, 0],
+    [0, 0, 0]
+  ];
+  var votes = DEFAULT_VOTES.map(function (row) { return row.slice(); });
+  var N_RATERS = 3;
+  var N_ITEMS = 5;
+
+  var body = document.getElementById("fleiss-body");
+
+  function buildFleissTable() {
+    body.innerHTML = "";
+    for (var i = 0; i < N_ITEMS; i++) {
+      var tr = document.createElement("tr");
+      tr.className = "fleiss-row";
+      var idCell = document.createElement("td");
+      idCell.className = "item-id left";
+      idCell.textContent = "#" + (i + 1);
+      tr.appendChild(idCell);
+
+      for (var r = 0; r < N_RATERS; r++) {
+        (function (item, rater) {
+          var td = document.createElement("td");
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "vote-btn";
+          btn.setAttribute("data-item", item);
+          btn.setAttribute("data-rater", rater);
+          btn.addEventListener("click", function () {
+            votes[item][rater] = votes[item][rater] === 1 ? 0 : 1;
+            renderB();
+          });
+          td.appendChild(btn);
+          tr.appendChild(td);
+        })(i, r);
+      }
+
+      var urgentCell = document.createElement("td");
+      urgentCell.className = "item-id";
+      urgentCell.setAttribute("data-role", "urgent-" + i);
+      tr.appendChild(urgentCell);
+
+      var notCell = document.createElement("td");
+      notCell.className = "item-id";
+      notCell.setAttribute("data-role", "not-" + i);
+      tr.appendChild(notCell);
+
+      var piCell = document.createElement("td");
+      piCell.className = "pi-cell";
+      piCell.setAttribute("data-role", "pi-" + i);
+      tr.appendChild(piCell);
+
+      body.appendChild(tr);
+    }
+  }
+
+  function renderB() {
+    var totalUrgent = 0;
+    var piSum = 0;
+
+    for (var i = 0; i < N_ITEMS; i++) {
+      var nUrgent = votes[i][0] + votes[i][1] + votes[i][2];
+      var nNot = N_RATERS - nUrgent;
+      totalUrgent += nUrgent;
+
+      var pi = (nUrgent * nUrgent + nNot * nNot - N_RATERS) / (N_RATERS * (N_RATERS - 1));
+      piSum += pi;
+
+      for (var r = 0; r < N_RATERS; r++) {
+        var btn = body.querySelector('[data-item="' + i + '"][data-rater="' + r + '"]');
+        var v = votes[i][r];
+        btn.className = "vote-btn" + (v === 1 ? " urgent" : "");
+        btn.textContent = v === 1 ? "urgent" : "not";
+        btn.setAttribute("aria-label",
+          "Item " + (i + 1) + ", rater R" + (r + 1) + ": " + (v === 1 ? "urgent" : "not urgent") + ". Activate to flip.");
+      }
+
+      body.querySelector('[data-role="urgent-' + i + '"]').textContent = nUrgent;
+      body.querySelector('[data-role="not-' + i + '"]').textContent = nNot;
+      body.querySelector('[data-role="pi-' + i + '"]').textContent = fmt4(pi);
+    }
+
+    var pBar = piSum / N_ITEMS;
+    var totalVotes = N_ITEMS * N_RATERS;
+    var shareUrgent = totalUrgent / totalVotes;
+    var shareNot = 1 - shareUrgent;
+    var pE = shareUrgent * shareUrgent + shareNot * shareNot;
+    var kappa = (1 - pE) !== 0 ? (pBar - pE) / (1 - pE) : 0;
+
+    document.getElementById("pbar-val").textContent = fmt4(pBar);
+    document.getElementById("pe2-val").textContent = fmt(pE);
+    document.getElementById("fk-val").textContent = (1 - pE) !== 0 ? fmt(kappa) : "0.00";
+    document.getElementById("share-urgent").textContent = pct0(shareUrgent);
+    document.getElementById("share-not").textContent = pct0(shareNot);
+
+    var v = document.getElementById("verdict-b");
+    var kDisp = (1 - pE) !== 0 ? fmt(kappa) : "0.00";
+    if (pBar - pE > 0.35) {
+      v.className = "verdict calm";
+      v.innerHTML = "Mean observed agreement " + fmt4(pBar) + ", chance agreement " + fmt(pE) + ", Fleiss' kappa <strong>" + kDisp + "</strong>. The three raters agree well beyond chance here.";
+    } else {
+      v.className = "verdict warn";
+      v.innerHTML = "Mean observed agreement " + fmt4(pBar) + " looks decent, but chance agreement is " + fmt(pE) + ", so Fleiss' kappa is only <strong>" + kDisp + "</strong>.";
+    }
+
+    document.getElementById("announcer-b").textContent =
+      "P_bar " + fmt4(pBar) + ", P_e " + fmt(pE) + ", Fleiss kappa " + kDisp + ".";
+  }
+
+  document.getElementById("reset-b-btn").addEventListener("click", function () {
+    votes = DEFAULT_VOTES.map(function (row) { return row.slice(); });
+    renderB();
+  });
+
+  buildFleissTable();
+  renderB();
+})();
+</script>
+</body>
+</html>

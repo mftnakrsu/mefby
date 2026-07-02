@@ -1,0 +1,167 @@
+---
+title: "Arenalar: Elo ve Bradley-Terry"
+description: "Liderlik tabloları, bir yığın ikili çarpışmayı tek bir sıralamaya nasıl çevirir? Bölüm 9, dört sohbet botunu 18 çarpışmalık bir tek-devreli (round-robin) arenadan geçirir, onları iki farklı yolla sıralar (önce her çarpışmada güncellenen Elo, sonra toplam kazanç matrisine oturtulan Bradley-Terry MLE) ve Elo'nun neden çarpışma sırasına bağlı olduğunu, Bradley-Terry'nin ise neden olmadığını sayılarla gösterir."
+date: 2026-07-22
+tags: ["Değerlendirme", "LLM", "AI", "Elo", "Bradley-Terry", "Sıralama"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-09-arenas-elo-bradley-terry"
+lang: "tr"
+translationSlug: "arenas-elo-bradley-terry"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+"pass@k" başlıklı Bölüm 8, çok kez örneklediğimiz tek bir model için savunulabilir tek bir sayı verdi. Bu bölüm tam tersi problem: elimizde birçok model ve yalnızca göreli yargılar var, ve hepsini tek bir sırada dizmek istiyoruz. Bir **arena**nın yaptığı şey budur. Muhtemelen bir tane görmüşsünüzdür, çünkü herkese açık LLM liderlik tabloları tam olarak böyle çalışır: bir kalabalığa aynı istem için iki anonim yanıt gösterilir, daha iyi olana oy verilir, ve böyle her oy, iki model arasında bir **çarpışma (battle)**dır. Hiçbir yerde altın etiket yoktur. Kimse asla "doğru yanıt budur" diye yazmaz. Elinize geçen tek şey bir yığın "A bu sefer B'yi yendi" hükmüdür, ve o yığından, kimin en iyi olduğunu söyleyen tek bir sıralama imal etmek zorundasınız.
+
+Bu, seride şimdiye dek gördüğümüz her şeyden gerçekten farklı türde bir ölçümdür. Bölüm 1'den 8'e kadar hepsi, çıktıları sabit bir referansa karşı notladı. Burada referans yok, yalnızca tercih var. Yani bütün soru şuna dönüşüyor: bir yığın ikili galibiyet ve mağlubiyeti tek bir sıralı listeye nasıl çevirirsiniz, ve elde ettiğiniz sıraya güvenebilir misiniz? Bunu, dört sohbet botunu (onlara A, B, C ve D diyelim) küçük bir tek-devreli arenadan geçirip iki farklı yolla sıralayarak yanıtlayacağız. Önce satranç derecelendirme sistemi **Elo**, ki her tek çarpışmadan sonra günceller. Sonra yalnızca nihai toplamı okuyan bir maksimum-olabilirlik modeli olan **Bradley-Terry**. Yol boyunca gerçekten rahatsız edici bir gerçekle karşılaşacağız: tam olarak aynı çarpışmaları farklı bir sırayla tekrar oynatın, Elo size farklı sayılar döndürür, oysa Bradley-Terry kılını kıpırdatmaz. Sonunda bir liderlik tablosunun gerçekte hangisini kullanması gerektiğini ve nedenini bileceksiniz.
+
+## Ön koşullar
+
+Temel Python ve bir kesir ile bir üsle rahatça çalışabilmek gerekiyor. Bir formül, Elo'nun beklenen skoru, on üssü kullanır (`10^x`); bunu basamak basamak yürüyoruz, dolayısıyla daha önce görmüş olmanıza gerek yok. Elo, satranç dereceleri ya da maksimum olabilirlik konusunda önceden bir birikim varsayılmıyor. Bölüm 1'i okuduysanız zihniyet zaten elinizde: her sayıyı, yazdırılacak kadar küçük bir küme üzerinde izleyin. Eşlik eden dosya [arenas.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-09-arenas-elo-bradley-terry), API anahtarı, ağ ve Python standart kütüphanesinin ötesinde hiçbir şey olmadan offline çalışır, ve bu yazıda geçen her rakam o dosyanın basılmış çıktısıdır, yuvarlanmamış ve düzenlenmemiş.
+
+## Arena ve kazanç matrisi
+
+Çarpışmaları somutlaştıralım. Dört sohbet botu bir tek-devreye girer, yani her çift karşılaşır, ve her çift tam olarak 3 kez çarpışır. Altı çift çarpı üç çarpışma, **toplam 18 çarpışma** eder. Her çarpışma, sadece daha iyi yanıtı seçen bir hakem (bir insan kalabalığı, ya da koddaki taklit hakem) tarafından karara bağlanır, dolayısıyla her çarpışma bir galip ve bir mağlup üretir, beraberlik yok.
+
+İçine yerleştirdiğimiz gerçek beceri sırası `A > B > C > D` idi, ama arena gürültülüdür, tıpkı gerçek bir kalabalığın gürültülü olması gibi. Çarpışmaların çoğu daha güçlü bota gider, ama birkaç sürpriz sızar: B bir kez A'yı yendi, C bir kez B'yi yendi, ve D bir kez C'yi yendi. 18 çarpışmanın hepsini saydığınızda, bütün arenayı bir **kazanç matrisi (win matrix)** olarak yazabilirsiniz, ki burada `i`. satır, `j`. sütundaki değer, `i`nin `j`yi kaç kez yendiğidir:
+
+```text
+  win matrix (row beat col):   A  B  C  D
+                          A  [ 0  2  3  3 ]
+                          B  [ 1  0  2  3 ]
+                          C  [ 0  1  0  2 ]
+                          D  [ 0  0  1  0 ]
+```
+
+Satır satır okuyun. A satırı, A'nın B'yi iki kez, C'yi üç kez, D'yi üç kez yendiğini söyler. B satırı, B'nin A'yı bir kez yendiğini (işte sürpriz orada), C'yi iki kez, D'yi üç kez yendiğini söyler. C satırı, C'nin B'yi bir kez, D'yi iki kez yendiğini söyler. D satırı, D'nin C'yi bir kez yendiğini ve geri kalan her şeyi kaybettiğini söyler. Köşegen dışı her çift, iki üçgen boyunca 3'e toplanır (A, B'yi iki kez artı B, A'yı bir kez, üç adet A'ya-karşı-B çarpışması eder), ki bu da 18 çarpışmanın hepsinin hesaba katıldığının sağlamasıdır. Bu matris girdinin tamamıdır. Az sonra kuracağımız iki sıralama yöntemi de bu çarpışmalardan başka hiçbir şey okumaz. Tek fark, onları sırayla teker teker mi, yoksa toplamlar olarak hepsini birden mi okuduklarıdır.
+
+## Elo: elle bir güncelleme
+
+Elo, her oyuncuya bir derece atar, herkesi eşit başlatır, ve her çarpışmadan sonra iki dereceyi dürter: galip, mağluptan puan alır. Dürtmenin büyüklüğü, sonucun ne kadar şaşırtıcı olduğuna bağlıdır. Yenmesi beklenen birini yenin, az kazanırsınız; çok üstünüzdeki birini yenin, çok kazanırsınız. Mekanizma iki kısa formüldür, ve gerisini bilgisayara bırakmadan önce bir çarpışmayı baştan sona elle yapacağız.
+
+Hem A'yı hem B'yi standart **başlangıç derecesi (start rating)** olan `1000`'de başlatın. Çarpışmadan önce Elo, A için, derece farkından, kazanma olasılığının tahmini olan bir **beklenen skor (expected score)** hesaplar:
+
+```text
+E_A = 1 / (1 + 10^((Rb - Ra) / 400)) = 1 / (1 + 10^0) = 0.50
+```
+
+İki derece eşit olduğundan, `Rb - Ra` farkı sıfırdır, `10^0` 1'dir, ve ifade `1 / (1 + 1) = 0.50`'dir. Elo bariz olanı söylüyor: eşit dereceli iki oyuncu bir yazı-tura atışıdır. Şimdi çarpışma olur ve A kazanır. Güncelleme kuralı, her dereceyi gerçek sonuç `S`ye doğru (galibiyet için 1, mağlubiyet için 0) taşır, ki bu da **K-faktörü (K-factor)** ile ölçeklenir, tek bir çarpışmanın yol açabileceği en büyük sıçramadır bu. `K = 32` kullanıyoruz, klasik satranç değeri:
+
+```text
+A won, so S_A = 1.  R_A' = 1000 + 32 * (1 - 0.50) = 1016.0
+         S_B = 0.  R_B' = 1000 + 32 * (0 - 0.50) = 984.0
+```
+
+A'nın skorlaması 0.50 bekleniyordu ve aslında 1 skorladı, dolayısıyla beklentiyi yarım puan aştı; `32 * 0.5 = 16`, ve A `1016.0`'a tırmanır. B, aynı yarım puan kadar beklentinin altında kaldı ve `984.0`'a düşer. A'nın kazandığının tam olarak B'nin kaybettiği kadar olduğuna dikkat edin: Elo kapalı bir ekonomidir, puanlar yalnızca oyuncular arasında hareket eder, asla yaratılmaz. Ve büyüklüğe dikkat edin. Tahmin bir yazı-tura iken, galibiyet 16 puan taşır, K'nın yarısı. A ağır favori olsaydı, `E_A` 1'e yakın, `(1 - E_A)` sıfıra yakın olurdu, ve aynı galibiyet ona neredeyse hiçbir şey kazandırmazdı. Bütün fikir bu: Elo, sizi sonuçlar için, kendisini ne kadar şaşırttıkları oranında ödüllendirir.
+
+<Diagram number={1} caption="Dört-botlu arena iki farklı yolla çözülmüş. Solda: 18 çarpışmalık tek-devre, satır sütunu yendi biçiminde bir kazanç matrisi olarak, en tepede A (8 galibiyet) en altta D (1 galibiyet) ve üç sürpriz çarpışma (B'nin A'ya, C'nin B'ye, D'nin C'ye karşı) işaretli. Ortada: elle işlenmiş bir Elo güncellemesi, iki bot da 1000'de başlıyor, beklenen skor E_A = 0.50, A 1016.0'a kazanırken B 984.0'a düşüyor, K = 32. Sağda: iki nihai sıralama. Bütün 18 çarpışma üzerinde tekrar oynatılan Elo, listelenen sırada A 1083.7, B 1034.8, C 962.2, D 919.2 verir ama sabit-tohumlu bir karıştırmadan sonra A 1087.2, B 1038.8, C 961.4, D 912.6 verir, aynı sıra ama farklı sayılar; toplam matrise oturtulan Bradley-Terry, sıradan bağımsız güçler verir: pA 0.7015, pB 0.2314, pC 0.0506, pD 0.0164. İkisi de sıralamanın A > B > C > D olduğunda hemfikir.">
+  <img src="/essays/arenas-elo-bradley-terry/part9-figure.svg" alt="Üç panelli bir figür. Sol panel, satırları ve sütunları A, B, C, D olan, 'satır sütunu yendi' etiketli 4x4'lük bir kazanç matrisi gösterir; girdiler A satırı 0 2 3 3, B satırı 1 0 2 3, C satırı 0 1 0 2, D satırı 0 0 1 0, ve üç sürpriz hücre (B bir kez A'yı yendi, C bir kez B'yi yendi, D bir kez C'yi yendi) kehribar renginde vurgulanmış. Orta panel tek bir Elo güncellemesi gösterir: A ve B ikisi de 1000'de başlar, E_A 0.50'ye eşittir, A kazanır ve zümrüt yeşiliyle 1016.0'a çıkar, B ise gül rengiyle 984.0'a düşer, K 32'ye eşit notu düşülmüştür. Sağ panel iki sıralama sütunu gösterir. Elo sütunu, listelenen sıra A 1083.7, B 1034.8, C 962.2, D 919.2 ve karıştırılmış sıra A 1087.2, B 1038.8, C 961.4, D 912.6 listeler, aralarında bot başına farklar artı 3.5, artı 4.0, eksi 0.8, eksi 6.6 gösterilir. Bradley-Terry sütunu yakınsanmış güçleri listeler: pA 0.7015, pB 0.2314, pC 0.0506, pD 0.0164. Bir dipnot şöyle der: aynı çarpışmalar, Elo'nun sayıları sıraya bağlı, Bradley-Terry'ninkiler değil; ikisi de A'yı B'nin, B'yi C'nin, C'yi D'nin üstüne sıralar." class="w-full rounded-lg" />
+</Diagram>
+
+## Elo, bütün 18 çarpışma üzerinde, iki kez
+
+Bir çarpışma kolay. Şimdi bütün arenayı tekrar oynatın. Dört botun hepsini `1000`'de başlatın, **çarpışma kaydını (battle log)** sırayla yürüyün, ve o aynı iki satırlık güncellemeyi her çarpışmadaki iki bota uygulayın. 18 çarpışmanın sonuncusundan sonra dereceler oturur. Çarpışmaların listelendiği sırada şuraya inerler:
+
+```text
+  as-listed order:  A=1083.7  B=1034.8  C=962.2  D=919.2
+```
+
+Bu doğru görünüyor. En tepede A, sonra B, sonra C, sonra D, tam olarak içine inşa ettiğimiz beceri sırası, ve iki güçlü bot 1000 çizgisinin üstüne çekilirken iki zayıf bot altına battı. Toplam korunur: A ve B'nin kazandığı puanlar, C ve D'nin kaybettiği puanlardır. Yaptığımız her şey bu olsaydı, memnuniyetle `A > B > C > D` yayımlar ve yolumuza devam ederdik.
+
+İşte kritik nokta. **Tam olarak aynı 18 çarpışmayı** alın, aynı galipler ve mağluplar, ve yalnızca onları Elo'ya besleme sırasını karıştırın (sabit-tohumlu bir karıştırma, dolayısıyla tekrarlanabilir). Tekrar oynatın:
+
+```text
+  shuffled order:   A=1087.2  B=1038.8  C=961.4  D=912.6
+  difference:       A=+3.5  B=+4.0  C=-0.8  D=-6.6
+```
+
+Sayılar değişti. Çarpışmalar değil, yalnızca sıraları, ve yine de A `+3.5`, B `+4.0`, C `-0.8` ve D `-6.6` kadar kaydı. Özellikle D, sadece mağlubiyetlerinin dizide nereye denk geldiği yüzünden, başka hiçbir sebep olmadan altı dereceden fazla puan aşağıda. Bu koddaki bir hata değil ve yuvarlama da değil. Elo'nun gerçek bir özelliği: her güncelleme dereceleri *o an oldukları haliyle* kullandığından, ve o dereceler kendinden önce gelen her çarpışmaya bağlı olduğundan, yol önemlidir. Bir botu erken, hâlâ 1000 derecelendeyken yenin, bir miktar kazanırsınız; onu sonra, birkaç mağlubiyet almış ve 950'ye düşmüşken yenin, aynı galibiyet daha az değerlidir. Bu yüzden nihai dereceler yalnızca sonuçlara değil, izlenen yörüngeye bağlıdır.
+
+Şimdi, Elo'yu bir kalemde silmeden önce, *değişmeyen* şeye dikkat edin:
+
+```text
+  ranking (as-listed): A > B > C > D
+  ranking (shuffled):  A > B > C > D
+```
+
+Sıra korundu. İki tekrar oynatma da `A > B > C > D` sıralar. Sıra-bağımlılığı *sayıları* birkaç puan bozdu ama bu görece temiz arenada, kimsenin sırasını takas edecek kadar değil. Elo'nun dürüst özeti bu: çarpışmalar teker teker geldiğinde ve her birinden sonra canlı bir sayı istediğinizde (ki bu tam olarak satrançtaki ve gün boyu oy toplayan bir liderlik tablosundaki durumdur) harika olan, çevrimiçi, akışa dayalı bir derecelendirmedir. Ama herhangi bir anda okuduğunuz derece, bir yolun anlık görüntüsüdür, dolayısıyla aynı çarpışmaları farklı sıralarla işleyen iki kişi meşru biçimde farklı Elo skorları bildirebilir. Bir liderlik tablosunun, herkesin üzerinde anlaştığı tek, kanonik, tekrarlanabilir bir sayıya ihtiyacı olduğunda, o yol-bağımlılığı bir yüktür.
+
+## Bradley-Terry: sırayı değil, toplamları sırala
+
+Bradley-Terry diziyi tamamen atar. Bütün arenanın bir kerede olasılıksal bir modelidir. Şunu söyler: her bota pozitif bir **güç (strength)** `p` verin, ve `i`nin herhangi bir tek çarpışmada `j`yi yenme olasılığını, iki gücün payı olarak modelleyin:
+
+```text
+P(i beats j) = p_i / (p_i + p_j)
+```
+
+Modelin tamamı bu. Daha güçlü bir bot (daha büyük `p`) daha sık kazanır, ve ne kadar daha sık kazandığı yalnızca iki gücün *oranına* bağlıdır, asla bir derece farkına ya da geçmişe değil. Görevimiz, gerçekten gözlemlediğimiz arenayı olabildiğince olası kılan güç kümesini bulmaktır: **maksimum-olabilirlik tahmini (maximum-likelihood estimate)**. Kapalı biçimde bir yanıt yok, ama ona doğru tırmanmayı garanti eden güzelce basit bir yineleme var, Zermelo / MM güncellemesi. Her turda, her botun gücünü şununla değiştirin
+
+```text
+p_i (new) = W_i / sum over opponents j of  n_ij / (p_i + p_j)
+```
+
+sonra dördünü de toplamlarına bölerek 1'e normalize kalmalarını sağlayın. Burada `W_i`, `i` botunun toplam galibiyetidir (kazanç matrisindeki satır toplamı) ve `n_ij`, `i` ile `j` arasındaki çarpışma sayısıdır (burada her zaman 3). Pay "ne kadar kazandığın", payda "herkesin şu anki gücü göz önüne alındığında ne kadar kazanman beklendiği"dir, ve oran her gücü toplamlarla tutarlılığa doğru iter.
+
+İlk adımı elle izleyin, çünkü temiz çıkıyor. Herkes eşit, **`p = 0.2500`**'de başlar. Toplam galibiyetler `W_A = 8`, `W_B = 6`, `W_C = 3`, `W_D = 1` (satır toplamları; her çarpışma için bir tane, 18'e toplanırlar). Başlangıçta her `p_i + p_j`, `0.25 + 0.25 = 0.5`'tir, dolayısıyla her `n_ij / (p_i + p_j)` terimi `3 / 0.5 = 6`'dır, ve üç rakiple bütün payda her bot için `18`'dir. Yani ilk-yineleme güçleri, her botun galibiyetinin 18'e bölümüdür:
+
+```text
+      it 1      A=0.4444  B=0.3333  C=0.1667  D=0.0556
+```
+
+`8/18 = 0.4444`, `6/18 = 0.3333`, `3/18 = 0.1667`, `1/18 = 0.0556`, ve zaten 1'e toplanırlar. Bir geçişten sonra güçler, sadece galibiyet paylarıdır. Ama bu sabit nokta değil, çünkü her botun *kimi* yendiğini göz ardı ediyor. Güçlü rakipleri yenmek, zayıfları yenmekten daha çok saymalı, ve yineleme, sayılar bunu yansıtana dek yeniden ağırlıklandırmayı sürdürür. Bırakın çalışsın:
+
+```text
+     start      0.2500  0.2500  0.2500  0.2500
+      it 1      0.4444  0.3333  0.1667  0.0556
+      it 2      0.5195  0.3274  0.1179  0.0352
+      it 3      0.5655  0.3122  0.0933  0.0290
+     it 20      0.7015  0.2314  0.0506  0.0164
+```
+
+20. yinelemeye gelindiğinde yakınsamıştır: `A = 0.7015`, `B = 0.2314`, `C = 0.0506`, `D = 0.0164`. A'nın ham `8/18` galibiyet payının epey ötesine çekildiğine dikkat edin (0.4444'ten ta 0.7015'e), çünkü başkalarını da yenen botlar dahil herkesi yendi, dolayısıyla model onun galibiyetlerini yüksek-kaliteli galibiyetler olarak alacaklandırır. D, ham payının çok altına battı, çünkü tek galibiyeti, en dibe yakın olan C'ye karşıydı. **Yakınsanmış sıralama (converged ranking)** `A > B > C > D`, Elo'nun verdiği aynı sıra, ama şimdi bu yalnızca toplamların bir özelliğidir.
+
+O güçler, model aracılığıyla doğrudan yorumlanabilir. İkisini `p_i / (p_i + p_j)`ye koyun, tahmini bir baş-başa galibiyet olasılığı elde edersiniz:
+
+```text
+  P(A beats D) = pA / (pA + pD) = 0.977
+  P(B beats C) = pB / (pB + pC) = 0.821
+```
+
+Bradley-Terry, A'nın D'yi yaklaşık `0.977` oranında ve B'nin C'yi yaklaşık `0.821` oranında yendiğini söyler, liderlik tablosundan okuyup gerçekten üzerine bahis oynayabileceğiniz sayılar. Ve işte ödül: **çarpışmaları istediğiniz herhangi bir sıraya karıştırın, bunların hiçbiri kımıldamaz.** Yineleme diziye hiç bakmadı; yalnızca `W_i` (satır toplamları) ve `n_ij` (çift sayıları) tüketti, ve çarpışma kaydını karıştırmak ikisini de değiştirmez. Dolayısıyla Bradley-Terry tek bir kanonik sıralama döndürür, aynı çarpışmaları gören herkes için, hangi sırayla geldiklerinden bağımsız olarak aynıdır. Elo'nun eksik olduğu özellik tam da budur.
+
+İnteraktif figür iki davranışı da aynı anda hissetmenizi sağlar. Elo panelinde 18 çarpışmayı yeni bir sıraya sürükleyebilir (ya da karıştırmaya basabilir) ve sıralama genellikle korunurken dört nihai derecenin birkaç puan seğirmesini izleyebilirsiniz. Bradley-Terry panelinde MM yinelemesini düz `0.2500` başlangıcından teker teker adımlayabilir ve güçlerin `A = 0.7015, B = 0.2314, C = 0.0506, D = 0.0164`'e sürünmesini izleyebilirsiniz, ve çarpışmaları nasıl yeniden sıralarsanız sıralayın, yakınsanmış çubuklar tam olarak aynı yere iner.
+
+<IframeFigure src="/essays/arenas-elo-bradley-terry/part9-interactive.html" title="İnteraktif arena gezgini: 18 çarpışmayı yeniden sıralayıp ya da karıştırıp sıralama korunurken dört Elo derecesinin birkaç puan kaydığını izlediğiniz bir üst panel, ve Bradley-Terry MM yinelemesini düz 0.2500 başlangıcından yakınsanmış güçlere adımlayıp bunların herhangi bir çarpışma sırasında özdeş olduğunu gördüğünüz bir alt panel." height={860} />
+
+## Bir liderlik tablosu hangisini kullanmalı?
+
+İki yöntem de `A > B > C > D` üzerinde hemfikirdi, dolayısıyla bu arenada hangisiyle olursa olsun aynı listeyi yayımlardınız. Fark, o liste hakkında ne söz verebileceğinizdir. Elo size, bir oy düşer düşmez güncellenen canlı, akışa dayalı bir sayı verir, ki gerçek arenalar gün boyu hareketli bir liderlik tablosu göstermek için bunu bu yüzden kullanır, ama ekran görüntüsünü aldığınız tam derece, oyların denk geldiği sıranın bir fonksiyonudur, dolayısıyla iki kişinin ondalığına kadar bağımsız olarak yeniden üretebileceği bir şey değildir. Bradley-Terry size bütün çarpışma geçmişinin tek bir kanonik oturtmasını verir, aynı kazanç matrisine sahip herkes tarafından yeniden üretilebilir ve gerçek galibiyet olasılıkları olarak yorumlanabilir, karşılığında ise sürekli bir toplamdan çok, yeniden çalıştırdığınız bir toplu (batch) hesaplama olur. Pratikte olgun liderlik tabloları ikisini birden yapar: toplama sırasında hızlı hareket etmek için Elo (ya da onun çevrimiçi kuzenleri), ve kayıt sayısı olarak yayımlamak için bütün geçmiş üzerinde bir Bradley-Terry oturtması. Ve buradaki her sıralama hâlâ, her çarpışmaya karar veren hakeme yaslanır, ki bu da Bölüm 4 ve 5'in size güvenmemeyi ve yanlılığından arındırmayı öğrettiği tam o şeydir: çöp çarpışmalar girer, kendinden emin biçimde yanlış bir sıralama çıkar.
+
+## Özet / Çıkarımlar
+
+- **Bir arenada altın etiket yoktur, yalnızca tercih vardır.** Doğru yanıtı asla öğrenmezsiniz, yalnızca bir hakemin iki yanıttan hangisini tercih ettiğini. Sıralama, bir yığın ikili çarpışmayı (burada 4 bot arasında 18 çarpışma, üç sürprizli bir `A > B > C > D` gerçeği) tek bir sıralı listeye çevirme eylemidir.
+- **Elo her seferinde bir çarpışmayı günceller.** Eşit derecelerden beklenen skor `E_A`, `0.50`'dir, dolayısıyla bir galibiyet klasik `K = 32`'yi yarıya, `16` puana taşır: A `1000 -> 1016.0`'a tırmanır, B `984.0`'a düşer. Puanlar yalnızca oyuncular arasında taşınır, asla yaratılmaz.
+- **Elo sıraya bağlıdır.** Aynı 18 çarpışma, listelenen sırada `A=1083.7, B=1034.8, C=962.2, D=919.2` ama karıştırıldığında `A=1087.2, B=1038.8, C=961.4, D=912.6` verir, farklar `+3.5, +4.0, -0.8, -6.6`. Her güncelleme şu anki dereceleri okur, dolayısıyla yalnızca sonuçlar değil, yol da önemlidir.
+- **Bradley-Terry sırayı değil, toplamları sıralar.** MM yinelemesi, güçleri toplam kazanç matrisine oturtur, düz `0.2500`'den `it 1` galibiyet paylarına (`0.4444, 0.3333, 0.1667, 0.0556`) ve 20. yinelemede yakınsanmış `0.7015, 0.2314, 0.0506, 0.0164`'e ilerler. Yalnızca galibiyet toplamlarını ve çift sayılarını tükettiğinden, çarpışmaları karıştırmak hiçbir şeyi değiştirmez: sıralama sıradan bağımsız ve tekrarlanabilirdir.
+- **Güçler, okunabilir olasılıklardır.** `P(i beats j) = p_i / (p_i + p_j)`, oturmayı bahislere çevirir: `P(A beats D) = 0.977`, `P(B beats C) = 0.821`. Canlı akan bir sayı için Elo'yu, yayımladığınız kanonik sayı için Bradley-Terry'yi kullanın.
+
+## Sözlük
+
+- **Arena**: altın etiketi olmayan, modellerin yalnızca baş-başa karşılaştırıldığı ve her seferinde bir hakemin galibi seçtiği bir değerlendirme. Amaç skorlama değil, sıralamadır.
+- **Çarpışma (battle)**: iki modelin tek bir istem üzerinde tek bir baş-başa karşılaştırması, bir galip ve bir mağlup üretir. Arenamızda bunlardan 18 tane var (4 bot, her çift 3 kez).
+- **Kazanç matrisi (win matrix)**: `i`. satır, `j`. sütundaki değeri, `i`nin `j`yi kaç kez yendiği olan tablo. Bir arenanın sırasız tam özeti; satır toplamı, bir modelin toplam galibiyetidir.
+- **Elo**: herkesi eşit başlatan ve her çarpışmadan sonra, sonucun ne kadar şaşırtıcı olduğu oranında puanları mağluptan galibe taşıyan çevrimiçi bir derecelendirme sistemi. Canlı ve akışa dayalı, ama sıraya bağlı.
+- **Beklenen skor (`E_A`)**: Elo'nun, derece farkından A için tahmini galibiyet olasılığı, `1 / (1 + 10^((Rb - Ra) / 400))`. Eşit dereceler `0.50` verir, bir yazı-tura.
+- **K-faktörü (K-factor)**: Elo'da tek bir çarpışmanın yol açabileceği en büyük derece salınımı. `K = 32` kullanıyoruz; yazı-tura tahmininde bir galibiyet bunun yarısını, `16` puanı taşır.
+- **Sıra bağımlılığı (order dependence)**: aynı olaylar farklı bir dizide işlendiğinde bir yöntemin çıktısının değişmesi özelliği. Elo'da vardır (nihai dereceler birkaç puan kayar); Bradley-Terry'de yoktur.
+- **Bradley-Terry modeli**: her öğeye bir güç `p` veren ve `P(i beats j) = p_i / (p_i + p_j)` diyen bir model. Galibiyet toplamlarına maksimum olabilirlikle oturtulur, dolayısıyla sıradan bağımsızdır.
+- **Maksimum-olabilirlik tahmini (MLE)**: gözlemlenen veriyi model altında en olası kılan parametre değerleri (burada güçler). Ona doğru tırmanmayı garanti eden MM / Zermelo yinelemesiyle bulunur.
+- **MM yinelemesi**: `p_i = W_i / sum_j n_ij / (p_i + p_j)` güncellemesi, ardından yeniden normalize etme, yakınsayana dek tekrarlanır. `W_i` toplam galibiyet, `n_ij` `i` ile `j` arasındaki çarpışma sayısıdır.
+
+---
+
+İki model bir sıralamayı paylaşabilir ama Elo ile Bradley-Terry'nin hiç sormadığı bir şeyde ayrışabilir: bir modelin beyan ettiği güvenin bir anlam ifade edip etmediği. **Bölüm 10, Kalibrasyon**, tahminleri modelin iddia ettiği güvene göre gruplar, güvenilirlik eğrisini çizer, ve aşırı-güvenin bir sayı olarak tam olarak nasıl göründüğünü göstermek için ECE ile Brier skorunu hesaplar.

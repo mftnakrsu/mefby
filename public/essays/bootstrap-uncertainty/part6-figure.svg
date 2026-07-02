@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 640" width="100%" style="height:auto" role="img" aria-labelledby="bs-title bs-desc">
+  <title id="bs-title">The bootstrap turns one score into an interval</title>
+  <desc id="bs-desc">A 30-item labeled set scores 21 correct, a point-estimate accuracy of 0.70. The left panel shows the histogram of 10,000 bootstrap replicate accuracies, each computed by resampling the 30 items with replacement: the distribution peaks at 0.70 (1601 of 10000 replicates), and the emerald region between the 2.5th percentile (0.5333) and the 97.5th percentile (0.8667) marks the 95 percent confidence interval, width 0.3333. The right panel shows that same interval narrowing as the labeled set grows while accuracy stays at 0.70: at n=30 the interval is [0.5333, 0.8667] with width 0.3333; at n=120 it is [0.6167, 0.7833] with width 0.1667, twice as tight; at n=480 it is [0.6583, 0.7417] with width 0.0833, twice as tight again. Width roughly halves each time n quadruples.</desc>
+
+  <!-- Page background -->
+  <rect width="1180" height="640" fill="#ffffff"/>
+  <rect width="1180" height="640" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 6, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 6 &#183; UNCERTAINTY</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">The bootstrap turns one score into an interval</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">n=30, 21 correct, point estimate 0.70. 10,000 resamples with replacement.</text>
+
+  <!-- ============================================================
+       LEFT: bootstrap distribution histogram
+  ============================================================ -->
+  <text x="70" y="120"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.08em">10,000 BOOTSTRAP REPLICATES</text>
+
+  <!-- baseline axis -->
+  <line x1="60" y1="500" x2="570" y2="500" stroke="#d4d4d8" stroke-width="1.5"/>
+
+  <!-- CI shaded band across full plot height -->
+  <rect x="200" y="190" width="282" height="310" fill="#059669" opacity="0.05"/>
+
+  <!-- histogram bars: k=11..29, accuracy = k/30 -->
+  <rect x="70.0" y="499.6" width="22" height="0.4" rx="2.5" fill="#e4e4e7" stroke="#d4d4d8" stroke-width="1"/>
+  <rect x="96.0" y="499.0" width="22" height="1.0" rx="2.5" fill="#e4e4e7" stroke="#d4d4d8" stroke-width="1"/>
+  <rect x="122.0" y="497.5" width="22" height="2.5" rx="2.5" fill="#e4e4e7" stroke="#d4d4d8" stroke-width="1"/>
+  <rect x="148.0" y="491.5" width="22" height="8.5" rx="2.5" fill="#e4e4e7" stroke="#d4d4d8" stroke-width="1"/>
+  <rect x="174.0" y="482.0" width="22" height="18.0" rx="2.5" fill="#e4e4e7" stroke="#d4d4d8" stroke-width="1"/>
+  <rect x="200.0" y="453.1" width="22" height="46.9" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="226.0" y="416.5" width="22" height="83.5" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="252.0" y="358.1" width="22" height="141.9" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="278.0" y="279.7" width="22" height="220.3" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="304.0" y="223.1" width="22" height="276.9" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="330.0" y="190.0" width="22" height="310.0" rx="2.5" fill="#059669" stroke="#047857" stroke-width="1"/>
+  <rect x="356.0" y="212.1" width="22" height="287.9" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="382.0" y="268.6" width="22" height="231.4" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="408.0" y="345.3" width="22" height="154.7" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="434.0" y="402.0" width="22" height="98.0" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="460.0" y="461.9" width="22" height="38.1" rx="2.5" fill="#6ee7b7" stroke="#34d399" stroke-width="1"/>
+  <rect x="486.0" y="487.2" width="22" height="12.8" rx="2.5" fill="#e4e4e7" stroke="#d4d4d8" stroke-width="1"/>
+  <rect x="512.0" y="497.3" width="22" height="2.7" rx="2.5" fill="#e4e4e7" stroke="#d4d4d8" stroke-width="1"/>
+  <rect x="538.0" y="499.2" width="22" height="0.8" rx="2.5" fill="#e4e4e7" stroke="#d4d4d8" stroke-width="1"/>
+
+  <!-- dashed percentile lines: k=16 (2.5th) and k=26 (97.5th), point k=21 (0.70) -->
+  <line x1="211" y1="185" x2="211" y2="500" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="471" y1="185" x2="471" y2="500" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="341" y1="176" x2="341" y2="500" stroke="#18181b" stroke-width="1.5" stroke-dasharray="2 2"/>
+
+  <!-- labels for the two percentile lines -->
+  <text x="211" y="172" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#059669">2.5th</text>
+  <text x="211" y="516" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10.5" fill="#52525b">0.5333</text>
+  <text x="471" y="172" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="11" font-weight="700" fill="#059669">97.5th</text>
+  <text x="471" y="516" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="10.5" fill="#52525b">0.8667</text>
+  <text x="341" y="164" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10.5" font-weight="700" fill="#18181b">point 0.70</text>
+
+  <!-- axis annotation -->
+  <text x="315" y="536" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#71717a">replicate accuracy (k / 30 correct), bar height = replicate count</text>
+
+  <!-- 95% CI bracket label -->
+  <rect x="200" y="540" width="282" height="26" rx="7" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="341" y="557" text-anchor="middle"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" font-weight="700" fill="#047857">95% CI = [0.5333, 0.8667]  (width 0.3333)</text>
+
+  <!-- Divider between the two panels -->
+  <line x1="610" y1="100" x2="610" y2="576" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       RIGHT: interval narrows as n grows
+  ============================================================ -->
+  <text x="650" y="120"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.08em">SAME 0.70 ACCURACY, INTERVAL WIDTH VS n</text>
+
+  <!-- shared x-axis ticks (accuracy 0.5 to 0.9) -->
+  <line x1="650" y1="480" x2="1130" y2="480" stroke="#d4d4d8" stroke-width="1.5"/>
+  <line x1="698" y1="475" x2="698" y2="485" stroke="#a1a1aa" stroke-width="1"/>
+  <text x="698" y="500" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#71717a">0.50</text>
+  <line x1="794" y1="475" x2="794" y2="485" stroke="#a1a1aa" stroke-width="1"/>
+  <text x="794" y="500" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#71717a">0.60</text>
+  <line x1="890" y1="475" x2="890" y2="485" stroke="#18181b" stroke-width="1.5"/>
+  <text x="890" y="500" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" fill="#18181b">0.70</text>
+  <line x1="986" y1="475" x2="986" y2="485" stroke="#a1a1aa" stroke-width="1"/>
+  <text x="986" y="500" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#71717a">0.80</text>
+  <line x1="1082" y1="475" x2="1082" y2="485" stroke="#a1a1aa" stroke-width="1"/>
+  <text x="1082" y="500" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#71717a">0.90</text>
+
+  <!-- dashed reference line at accuracy 0.70, all three rows share the same center -->
+  <line x1="890" y1="160" x2="890" y2="480" stroke="#18181b" stroke-width="1" stroke-dasharray="2 2" opacity="0.35"/>
+
+  <!-- n = 30 -->
+  <text x="650" y="190" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#18181b">n = 30</text>
+  <rect x="729.97" y="204" width="320.06" height="20" rx="10" fill="#a7f3d0" stroke="#059669" stroke-width="1.5"/>
+  <circle cx="890" cy="214" r="4.5" fill="#047857"/>
+  <text x="1010" y="199" text-anchor="start" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#047857">width 0.3333</text>
+  <text x="650" y="240" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#71717a">[0.5333, 0.8667]</text>
+
+  <!-- n = 120 -->
+  <text x="650" y="290" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#18181b">n = 120</text>
+  <rect x="810.03" y="304" width="159.94" height="20" rx="10" fill="#6ee7b7" stroke="#059669" stroke-width="1.5"/>
+  <circle cx="890" cy="314" r="4.5" fill="#047857"/>
+  <text x="1010" y="299" text-anchor="start" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#047857">width 0.1667</text>
+  <text x="650" y="340" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#71717a">[0.6167, 0.7833]  2.00x tighter</text>
+
+  <!-- n = 480 -->
+  <text x="650" y="390" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#18181b">n = 480</text>
+  <rect x="849.97" y="404" width="80.06" height="20" rx="10" fill="#34d399" stroke="#059669" stroke-width="1.5"/>
+  <circle cx="890" cy="414" r="4.5" fill="#047857"/>
+  <text x="1010" y="399" text-anchor="start" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#047857">width 0.0833</text>
+  <text x="650" y="440" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#71717a">[0.6583, 0.7417]  2.00x tighter</text>
+
+  <!-- Bottom caption strip -->
+  <rect x="40" y="588" width="1100" height="34" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="590" y="609" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">Width roughly halves each time n quadruples, the ~1/sqrt(n) rule. A point estimate alone hides this wobble.</text>
+</svg>

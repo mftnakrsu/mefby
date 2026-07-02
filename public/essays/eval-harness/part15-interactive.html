@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>A Tiny Eval Harness: move the bar, watch the gate flip, Part 15</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+/* ── tabs (dataset + scorer picker) ── */
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.tab {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.tab:hover { background: var(--chip-bg); }
+.tab:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+.tab[aria-selected="true"] {
+  background: var(--emerald-bg);
+  border-color: var(--emerald-bd);
+  color: var(--emerald-ink);
+}
+.tab .n { color: var(--faint); font-weight: 500; }
+.tab[aria-selected="true"] .n { color: var(--emerald); }
+
+/* ── item list ── */
+.item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.item-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 11px;
+}
+.item-row.hit { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.item-row.miss { background: var(--rose-bg); border-color: var(--rose-bd); }
+.item-main { min-width: 0; }
+.item-q { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.item-gc {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-gc .cand { color: var(--body); }
+.item-score {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+.item-row.hit .item-score { color: var(--emerald-ink); background: rgba(5,150,105,0.10); }
+.item-row.miss .item-score { color: var(--rose-ink); background: rgba(225,29,72,0.10); }
+
+/* ── results row ── */
+.results {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.stat {
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  background: #fff;
+  padding: 11px 12px;
+  text-align: center;
+}
+.stat .k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.stat .v { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--ink); margin-top: 3px; }
+
+/* ── CI bar visualization ── */
+.ci-wrap {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 16px 16px;
+}
+.ci-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.ci-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--faint); text-transform: uppercase; }
+.ci-numbers { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+.ci-track {
+  position: relative;
+  height: 34px;
+  background: var(--chip-bg);
+  border-radius: 8px;
+  margin: 6px 0 4px;
+}
+.ci-band {
+  position: absolute;
+  top: 10px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--emerald-br);
+  opacity: 0.35;
+  transition: left 0.2s ease, width 0.2s ease, background 0.2s ease;
+}
+.ci-band.blocked { background: var(--rose); }
+.ci-mean-dot {
+  position: absolute;
+  top: 7px;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1.5px var(--border);
+  transition: left 0.2s ease;
+}
+.ci-bar-marker {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--amber);
+  transition: left 0.2s ease;
+}
+.ci-bar-marker::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -8px;
+  width: 10px;
+  height: 10px;
+  background: var(--amber);
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+.ci-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+/* ── bar slider control ── */
+.bar-controls { margin-top: 14px; }
+.bar-controls label {
+  font-size: 12.5px; font-weight: 600; color: var(--body);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+input[type="range"] { flex: 1; min-width: 180px; accent-color: var(--amber); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+.bar-read { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.bar-read b { color: var(--ink); }
+
+/* ── verdict ── */
+.verdict {
+  font-size: 14px;
+  border-radius: 10px;
+  padding: 13px 15px;
+  line-height: 1.5;
+  border: 1.5px solid transparent;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.verdict .badge {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+.verdict.ship { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.verdict.ship .badge { background: var(--emerald); color: #fff; }
+.verdict.hold { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.verdict.hold .badge { background: var(--rose); color: #fff; }
+
+/* ── summary table ── */
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  margin-top: 4px;
+}
+.summary-table th {
+  text-align: right;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 6px 8px;
+  border-bottom: 1.5px solid var(--border);
+}
+.summary-table th:first-child, .summary-table td:first-child { text-align: left; }
+.summary-table td {
+  text-align: right;
+  font-family: var(--font-mono);
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--body);
+}
+.summary-table tr:last-child td { border-bottom: none; }
+.summary-table tr.active td { background: var(--emerald-bg); }
+.summary-table td.name { font-family: var(--font-sans); font-weight: 600; color: var(--ink); }
+.summary-table td.verdict-ship { color: var(--emerald-ink); font-weight: 700; }
+.summary-table td.verdict-hold { color: var(--rose-ink); font-weight: 700; }
+
+.guard-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 12px;
+  line-height: 1.5;
+}
+.guard-note code {
+  font-family: var(--font-mono);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <p class="eyebrow">One harness, three evals</p>
+  <h2 id="panel-heading">Move the bar, watch the gate flip</h2>
+  <p class="panel-subtitle">Same five-piece harness, three runs. Pick a run, then drag the release bar and watch the SHIP / HOLD verdict react to the bootstrap CI, not the mean.</p>
+
+  <div class="hint">
+    <strong>Click a tab</strong> to switch dataset + scorer. <strong>Drag the bar slider</strong> to see the gate compare the CI's lower bound against your chosen release bar, exactly like <code>gate()</code> in the harness.
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Choose a run" id="tabs"></div>
+
+  <div class="item-list" id="item-list" role="list" aria-label="Per-item scores for the selected run"></div>
+
+  <div class="results">
+    <div class="stat-row">
+      <div class="stat"><div class="k">n</div><div class="v" id="stat-n">10</div></div>
+      <div class="stat"><div class="k">mean score</div><div class="v" id="stat-mean">0.00</div></div>
+      <div class="stat"><div class="k">CI width</div><div class="v" id="stat-width">0.00</div></div>
+    </div>
+
+    <div class="ci-wrap">
+      <div class="ci-label-row">
+        <span class="ci-label">95% bootstrap CI (B=2000, seed=0)</span>
+        <span class="ci-numbers" id="ci-numbers">[0.00, 0.00]</span>
+      </div>
+      <div class="ci-track">
+        <div class="ci-band" id="ci-band"></div>
+        <div class="ci-mean-dot" id="ci-mean-dot"></div>
+        <div class="ci-bar-marker" id="ci-bar-marker"></div>
+      </div>
+      <div class="ci-ticks">
+        <span>0.0</span><span>0.25</span><span>0.5</span><span>0.75</span><span>1.0</span>
+      </div>
+
+      <div class="bar-controls">
+        <label for="bar-slider">
+          Release bar
+          <input type="range" id="bar-slider" min="0" max="100" step="1" value="35" aria-describedby="bar-read" />
+          <span class="bar-read" id="bar-read">bar = <b>0.35</b></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="verdict" id="verdict" role="status">
+      <span class="badge" id="verdict-badge">HOLD</span>
+      <span id="verdict-text"></span>
+    </div>
+  </div>
+
+  <p class="guard-note" style="margin-top:16px;">
+    <strong>Summary, all three runs at their own release bar</strong> (the row matching your current tab is highlighted):
+  </p>
+  <table class="summary-table" aria-label="Summary of all three harness runs">
+    <thead>
+      <tr><th>eval</th><th>mean</th><th>95% CI</th><th>bar</th><th>verdict</th></tr>
+    </thead>
+    <tbody id="summary-body"></tbody>
+  </table>
+
+  <p class="guard-note">
+    The gate never looks at the mean alone: <code>ship = ci_lo &gt;= bar</code>. Runs 1 and 2 share the exact same 10-item QA dataset and the exact same 0.35 bar; only the <em>scorer</em> changes (strict string match vs. a lenient judge), and that alone moves the CI floor from 0.30 to 0.40 and flips HOLD into SHIP.
+  </p>
+  <div class="sr-only" aria-live="polite" id="announcer"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── the three runs, exact numbers from eval_harness.py's real stdout ── */
+  var RUNS = [
+    {
+      id: "qa-exact",
+      tabLabel: "QA · exact match",
+      n: 10,
+      mean: 0.60,
+      lo: 0.30,
+      hi: 0.90,
+      defaultBar: 0.35,
+      summaryName: "QA / exact-match",
+      items: [
+        { q: "capital of France",    gold: "Paris",       cand: "Paris",              score: 1 },
+        { q: "capital of Japan",     gold: "Tokyo",        cand: "Tokyo",              score: 1 },
+        { q: "capital of Australia", gold: "Canberra",     cand: "Sydney",             score: 0 },
+        { q: "capital of Canada",    gold: "Ottawa",       cand: "Ottawa",             score: 1 },
+        { q: "capital of Brazil",    gold: "Brasilia",     cand: "Rio de Janeiro",     score: 0 },
+        { q: "capital of USA",       gold: "Washington",   cand: "Washington, D.C.",   score: 0 },
+        { q: "capital of Turkey",    gold: "Ankara",       cand: "Ankara",             score: 1 },
+        { q: "capital of Spain",     gold: "Madrid",       cand: "Madrid",             score: 1 },
+        { q: "capital of India",     gold: "New Delhi",    cand: "new delhi",          score: 1 },
+        { q: "capital of Italy",     gold: "Rome",         cand: "Milan",              score: 0 }
+      ]
+    },
+    {
+      id: "qa-judge",
+      tabLabel: "QA · mock judge",
+      n: 10,
+      mean: 0.70,
+      lo: 0.40,
+      hi: 1.00,
+      defaultBar: 0.35,
+      summaryName: "QA / judge",
+      items: [
+        { q: "capital of France",    gold: "Paris",       cand: "Paris",              score: 1 },
+        { q: "capital of Japan",     gold: "Tokyo",        cand: "Tokyo",              score: 1 },
+        { q: "capital of Australia", gold: "Canberra",     cand: "Sydney",             score: 0 },
+        { q: "capital of Canada",    gold: "Ottawa",       cand: "Ottawa",             score: 1 },
+        { q: "capital of Brazil",    gold: "Brasilia",     cand: "Rio de Janeiro",     score: 0 },
+        { q: "capital of USA",       gold: "Washington",   cand: "Washington, D.C.",   score: 1 },
+        { q: "capital of Turkey",    gold: "Ankara",       cand: "Ankara",             score: 1 },
+        { q: "capital of Spain",     gold: "Madrid",       cand: "Madrid",             score: 1 },
+        { q: "capital of India",     gold: "New Delhi",    cand: "new delhi",          score: 1 },
+        { q: "capital of Italy",     gold: "Rome",         cand: "Milan",              score: 0 }
+      ]
+    },
+    {
+      id: "agent-traj",
+      tabLabel: "Agent · trajectory",
+      n: 5,
+      mean: 0.70,
+      lo: 0.47,
+      hi: 0.93,
+      defaultBar: 0.40,
+      summaryName: "agent / trajectory",
+      items: [
+        { q: "answer from a doc",  gold: "[search,read,answer]",           cand: "[search,read,answer]",     score: 1.00 },
+        { q: "compute a total",    gold: "[search,calculator,answer]",     cand: "[search,weather,answer]",  score: 0.67 },
+        { q: "summarize findings", gold: "[search,read,summarize,answer]", cand: "[search,read,answer]",     score: 0.50 },
+        { q: "quick lookup",       gold: "[search,answer]",                cand: "[search,search,answer]",   score: 0.33 },
+        { q: "schedule a meeting", gold: "[calendar,email]",               cand: "[calendar,email]",         score: 1.00 }
+      ]
+    }
+  ];
+
+  function fmt2(x) { return x.toFixed(2); }
+  function pctLeft(v) { return (v * 100).toFixed(3) + "%"; }
+
+  var current = 0;                 // active run index
+  var barByRun = RUNS.map(function (r) { return r.defaultBar; });
+
+  var tabsEl = document.getElementById("tabs");
+  var listEl = document.getElementById("item-list");
+  var announcer = document.getElementById("announcer");
+
+  function buildTabs() {
+    RUNS.forEach(function (r, i) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tab";
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", i === current ? "true" : "false");
+      btn.innerHTML = r.tabLabel + ' <span class="n">n=' + r.n + '</span>';
+      btn.addEventListener("click", function () {
+        current = i;
+        syncTabs();
+        renderAll();
+      });
+      tabsEl.appendChild(btn);
+    });
+  }
+
+  function syncTabs() {
+    var tabs = tabsEl.querySelectorAll(".tab");
+    tabs.forEach(function (t, i) {
+      t.setAttribute("aria-selected", i === current ? "true" : "false");
+    });
+  }
+
+  function buildItems(run) {
+    listEl.innerHTML = "";
+    run.items.forEach(function (it) {
+      var row = document.createElement("div");
+      row.className = "item-row " + (it.score >= 1 ? "hit" : (it.score === 0 ? "miss" : "hit"));
+      row.setAttribute("role", "listitem");
+      row.innerHTML =
+        '<div class="item-main">' +
+          '<div class="item-q">' + it.q + '</div>' +
+          '<div class="item-gc">gold=' + it.gold + ' &nbsp;cand=<span class="cand">' + it.cand + '</span></div>' +
+        '</div>' +
+        '<div class="item-score">' + (Number.isInteger(it.score) ? it.score.toFixed(0) : it.score.toFixed(2)) + '</div>';
+      listEl.appendChild(row);
+    });
+  }
+
+  var barSlider = document.getElementById("bar-slider");
+
+  function renderAll() {
+    var run = RUNS[current];
+    buildItems(run);
+
+    document.getElementById("stat-n").textContent = run.n;
+    document.getElementById("stat-mean").textContent = fmt2(run.mean);
+    document.getElementById("stat-width").textContent = fmt2(run.hi - run.lo);
+    document.getElementById("ci-numbers").textContent = "[" + fmt2(run.lo) + ", " + fmt2(run.hi) + "]";
+
+    var band = document.getElementById("ci-band");
+    band.style.left = pctLeft(run.lo);
+    band.style.width = pctLeft(run.hi - run.lo);
+
+    var dot = document.getElementById("ci-mean-dot");
+    dot.style.left = pctLeft(run.mean);
+
+    barSlider.value = Math.round(barByRun[current] * 100);
+    renderGate();
+
+    announcer.textContent = run.summaryName + ": mean " + fmt2(run.mean) +
+      ", 95% CI [" + fmt2(run.lo) + ", " + fmt2(run.hi) + "], bar " + fmt2(barByRun[current]) + ".";
+
+    renderSummary();
+  }
+
+  function renderGate() {
+    var run = RUNS[current];
+    var bar = barByRun[current];
+    var marker = document.getElementById("ci-bar-marker");
+    marker.style.left = pctLeft(bar);
+
+    document.getElementById("bar-read").innerHTML = "bar = <b>" + fmt2(bar) + "</b>";
+
+    var ship = run.lo >= bar;
+    var band = document.getElementById("ci-band");
+    band.classList.toggle("blocked", !ship);
+
+    var v = document.getElementById("verdict");
+    var badge = document.getElementById("verdict-badge");
+    var text = document.getElementById("verdict-text");
+    v.className = "verdict " + (ship ? "ship" : "hold");
+    badge.textContent = ship ? "SHIP" : "HOLD";
+    text.textContent = "CI_lo = " + fmt2(run.lo) + " " + (ship ? "≥" : "<") + " bar " + fmt2(bar) +
+      " → " + (ship ? "the floor of the interval clears the bar, ship it." : "the floor of the interval sits below the bar, hold it.");
+  }
+
+  function renderSummary() {
+    var tbody = document.getElementById("summary-body");
+    tbody.innerHTML = "";
+    RUNS.forEach(function (r, i) {
+      var bar = barByRun[i];
+      var ship = r.lo >= bar;
+      var tr = document.createElement("tr");
+      tr.className = i === current ? "active" : "";
+      tr.innerHTML =
+        '<td class="name">' + r.summaryName + '</td>' +
+        '<td>' + fmt2(r.mean) + '</td>' +
+        '<td>[' + fmt2(r.lo) + ', ' + fmt2(r.hi) + ']</td>' +
+        '<td>' + fmt2(bar) + '</td>' +
+        '<td class="' + (ship ? "verdict-ship" : "verdict-hold") + '">' + (ship ? "SHIP" : "HOLD") + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  barSlider.addEventListener("input", function () {
+    barByRun[current] = parseInt(barSlider.value, 10) / 100;
+    renderGate();
+    renderSummary();
+    var run = RUNS[current];
+    announcer.textContent = "Bar set to " + fmt2(barByRun[current]) + ". CI_lo " + fmt2(run.lo) +
+      ", verdict " + (run.lo >= barByRun[current] ? "SHIP" : "HOLD") + ".";
+  });
+
+  buildTabs();
+  renderAll();
+})();
+</script>
+</body>
+</html>

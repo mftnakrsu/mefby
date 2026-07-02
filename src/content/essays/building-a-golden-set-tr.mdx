@@ -1,0 +1,154 @@
+---
+title: "Altın Kümeyi Kurmak"
+description: "Bir metrik, ancak altındaki etiketli küme kadar iyidir. Bölüm 2, 40 destek talebi üzerinde elle güvenilir bir altın küme kurar: katmanlı örnekleme seyrek bir sınıfı her çekimde tam olarak 2 acil'e sabitlerken basit rastgele örnekleme 0 ile 4 arasında savrulur, bir sızıntı tuzağı doğruluğu dürüst 0.667'den 0.800'e şişirir ve üç ölçütlü bir rubrik 'iyi yanıt mı?' sorusunu sayılabilir bir 5'te-geçer barajına çevirir."
+date: 2026-07-15
+tags: ["Değerlendirme", "LLM", "AI", "Örnekleme", "Veri Kalitesi", "Rubrik"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-02-building-a-golden-set"
+lang: "tr"
+translationSlug: "building-a-golden-set"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 1'de bir modeli bir dizi insan etiketine karşı skorladık, sonra en zor kısmı tek bir cümleyle geçiştirdik: "insanın dikkatli olduğunu varsayın." O varsayım muazzam bir iş görüyordu. O yazıdaki her sayı, 0.70'lik doğruluk, 0.60'lık duyarlılık, hepsi, basitçe güvendiğimiz bir dizi altın etikete karşı hesaplandı. Eğer o küme yanlış on talepse, ya da modelin zaten ezberlediği taleplerse, ya da iki kişinin farklı notlayacağı bir kümeyse, o zaman bu serideki her aşağı-akış istatistiği tam bir kesinlikle yanlış şeyi ölçüyordur. Çürük bir skorun üzerindeki güven aralığı, yalnızca kendi kafa karışıklığınızın kesin bir dökümüdür. Yani başka bir metrik kurmadan önce, her metriğin üzerine oturduğu şeyi kurmamız gerekiyor: üzerine gerçekten bir karar bina edebileceğiniz bir **altın küme**.
+
+Bu parça, o kümeyi hak etmekle ilgili. Her gerçek ekibin çarptığı somut, sancılı bir kısıtı işliyoruz: bir destek ekibi 40 talebinden yalnızca 10'unu elle etiketleyebiliyor ve "acil" seyrek (8 acil, 32 değil, gerçek oran 0.20). O kısıt altında kurulan altın kümeyi sessizce mahvedebilecek üç şey var ve her birinin sayısal olarak gerçekleşmesini izleyip sonra düzelteceğiz. Birincisi, o 10 talebi **nasıl örneklediğiniz**: naif bir çekim 0 ile 4 arasında herhangi bir sayıda acil talep kapabilirken, katmanlı örnekleme payı her seferinde tam olarak 2'ye sabitler. İkincisi, **sızıntı (leakage)**: modelin eğitim verisinin yakın-kopyaları olan birkaç değerlendirme talebi, ölçülen 0.800'lük bir doğruluğu, bedavaları çıkarıp attığınızda dürüst 0.667'ye indirir. Üçüncüsü, **rubrik**: belirsiz bir "iyi yanıt mıydı?" sorusunu 0, 1 ya da 2 olarak notlanan üç ölçüte çevirmek; böylece "geçti", yeniden tartışmanız gereken bir his olmaktan çıkıp herkesin yeniden sayabileceği bir sayıya dönüşür.
+
+## Ön koşullar
+
+Bölüm 1'in söz dağarcığına (görev, altın etiket, metrik ve hata matrisi) ve temel Python'a ihtiyacınız var: bir liste, bir döngü, bir bölme. Yeniden örnekleme için burada NumPy ekliyoruz, ama yalnızca bir çekimi on bin kez tekrarlamanın hızlı bir yolu olarak; içindeki hiçbir şey kâğıt üzerinde elle yapamayacağınız bir istatistik yapmıyor. Olasılıktan bir fikir belirir, **hipergeometrik dağılım**, ve onu bildiğinizi varsaymıyoruz: ihtiyacımız olan iki gerçeği (sıfır acil talep çekme olasılığı ve acil sayısının yayılımı) düz saymadan türetiyoruz, sonra NumPy'nin simülasyonunu yalnızca elle türetilmiş sayıların uyuştuğunu doğrulamak için kullanıyoruz. Eşlik eden dosya, [golden_set.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-02-building-a-golden-set), API anahtarı ve ağ olmadan offline çalışır, sabit bir çekirdek (`numpy.random.default_rng(0)`) kullanır (böylece her sayı yeniden üretilebilir) ve doğrulanmış bir beklenen-çıktı bloğuyla biter. Bu yazıda alıntılanan her rakam, o dosyanın gerçek basılmış çıktısıdır.
+
+## Örnekleme problemi: kolayca kaçırabileceğiniz bir seyrek sınıf
+
+Nüfusla başlayın. 40 talep var. Sekizi gerçekten acil ve 32'si değil, dolayısıyla gerçek acil oranı `8/40 = 0.20`. O seyrek sınıf, değerlendirmenin bütün meselesi: acil talepler tam olarak yanlış yapmayı göze alamayacağımız olanlar ve tam olarak sayıca en az olanlar. Altın küme için yalnızca 10 talebi elle etiketleyebiliriz (etiketleme yavaş ve pahalıdır, gerçekçi kısıt budur), dolayısıyla bir örneklem seçmemiz gerekiyor. Aşağıdaki her şeye karar veren soru şu: *hangi* 10?
+
+Bariz yanıt, "10 tanesini rastgele seç." Bu, **basit rastgele örneklemedir (simple random sampling)**: 40'ın hepsinden 10 talebi tek biçimde (uniformly), yerine koymadan çekin ve onları etiketleyin. Adil hissettirir çünkü yanlıdır değildir (unbiased) ve ortalamada yanlıdır değildir. Sorun, "ortalamada" ifadesinin çok fazla varyansı gizlemesidir. Eşlik eden dosyadan gerçek bir çekimi izleyin (çekirdek sabit, yani onu yeniden üretebilirsiniz):
+
+```text
+One SIMPLE-RANDOM sample of 10:
+  urgent picked = 4  ->  measured urgent rate = 0.40
+```
+
+Bu belirli çekim, 10'unun içinden 4 acil talep çekti. Var olan bütün acil taleplerin yarısı, nüfusun dörtte biri büyüklüğünde bir örneklemin içine düştü, dolayısıyla ölçülen acil oranı 0.40 okunuyor, gerçek 0.20'nin iki katı. Hiçbir şey ters gitmedi; kod doğru ve çekim adil. Sadece havuzda yalnızca 8 acil öğe varken, rastgele bir avuç onları kolayca fazla ya da eksik temsil edebilir. Altın kümeniz artık acil taleplerin gerçekte olduğundan iki kat daha yaygın olduğunu iddia ederdi ve üzerinde hesapladığınız her oran o yalanı miras alırdı.
+
+Şimdi alternatif. **Katmanlı örnekleme (stratified sampling)** bütün havuzdan tek seferde çekmez. Nüfusu katmanlara (burada acil talepler ve acil olmayan talepler) böler ve her birinden gerçek büyüklüğüyle orantılı olarak çeker. 10 talep istiyoruz ve acil, nüfusun %20'si, dolayısıyla `round(10 * 8/40) = 2` acil talep ve `10 - 2 = 8` acil olmayan talep alıyoruz, her biri kendi katmanı içinde yerine koymadan çekiliyor. İşte o çekim:
+
+```text
+One STRATIFIED sample of 10 (share fixed at 0.20):
+  urgent picked = 2  ->  measured urgent rate = 0.20
+```
+
+Tam olarak 2 acil, tam olarak gerçek oran 0.20. Ve bu şans değil: yapısı gereği, bu nüfustan 10'luk katmanlı bir çekim *her zaman* 2 acil talep içerir, çünkü ona öyle söyledik. Kontrol etmeyi en çok önemsediğimiz tek nicelikten rastgeleliği çıkardık.
+
+Yine de her birinden tek bir çekim, yayılım hakkında hiçbir şey kanıtlamaz. Gerçek farkı görmek için deneyi çok kez tekrarlamamız ve tek bir noktayı değil sonuçların dağılımına bakmamız gerekiyor. Bu yüzden eşlik eden dosya her iki yöntemi de sabit çekirdek altında 10000 kez yeniden örnekler ve her seferinde acil sayısını sayar:
+
+```text
+Over 10000 resamples (fixed seed):
+  simple-random : mean urgent = 1.997, std = 1.105
+  stratified    : mean urgent = 2.000, std = 0.000
+  simple-random samples with ZERO urgent: 743/10000 = 0.074
+```
+
+O üç satırı yavaşça okuyun, çünkü bütün argüman onlar. Her iki yöntem de esasen aynı *ortalamaya* sahip: basit rastgele örneklem başına ortalama 1.997 acil, katmanlı ise tam olarak 2.000 ortalama alır, ikisi de gerçek beklenen sayı olan 2'ye sarılır. Yalnızca ortalamaya baksaydınız, iki yöntemin birbirinin yerine geçebileceği sonucuna varırdınız. Değiller ve fark tamamen **standart sapmada (standard deviation)**, o ortalamanın etrafındaki yayılımda yaşar. Basit rastgele örnekleme, 1.105'lik bir standart sapmaya sahip, yani tipik bir çekim beklenen 2'den tam bir acil talepten fazla uzağa düşer, bazen 4, bazen 0. Katmanlı örnekleme, 0.000'lık bir standart sapmaya sahip: 10000 çekimin her biri tam olarak 2 acil talep içeriyordu. Sıfır yayılım. Katmanlamanın size satın aldığı şey budur: ortalamada beklediğinizi değiştirmez, katmanladığınız şeyin varyansını hiçe indirir.
+
+Son satır, sizi korkutması gereken olan. 10000 basit-rastgele çekimin 743'ünde, 0.074'lük bir oranda, örneklem **sıfır** acil talep içeriyordu. Kabaca on üçte bir kez, 10'luk iyi niyetli bir rastgele çekim, size hiç acil örneği olmayan bir altın küme verir. O altın küme üzerinde acil sınıfında duyarlılık hesaplayamazsınız, çünkü yakalanacak hiçbir şey yoktur; Bölüm 1'de en çok önem taşıyan metrik tam anlamıyla tanımsız hale gelir. Yanlış bir sayı bile almazsınız, en önemli ölçümünüzün olması gereken yerde bir sıfıra-bölme alırsınız.
+
+<Diagram number={1} caption="Yalnızca %20'si acil olan 40 taleplik bir nüfustan 10 taleplik bir altın küme çekmenin iki yolu, 10000 yeniden örnekleme üzerinde karşılaştırıldı. Soldaki histogram basit rastgele örnekleme: çekim başına acil sayısı 0, 1, 2, 3 ve 4'e yayılır, gerçek beklenen değer olan 2'ye yakın merkezlenir (ortalama 1.997) ama 1.105'lik bir standart sapmayla, ve en soldaki çubuk sıfır acil talep yakalayan 743 çekimi (%7.4) gösterir. Sağdaki histogram katmanlı örnekleme: tam olarak 2 acilde tek bir uzun çubuk, ortalama 2.000 ve standart sapma 0.000, çünkü her çekim 2 içerecek biçimde kurulmuştur. Aynı ortalama, kökten farklı yayılım.">
+  <img src="/essays/building-a-golden-set/part2-figure.svg" alt="40 taleplik, %20'si acil bir nüfustan 10 taleplik 10000 çekim üzerinde iki örnekleme dağılımının yan yana karşılaştırması. Solda, 'basit rastgele örnekleme' başlıklı, çekim başına acil sayısının 0, 1, 2, 3 ve 4 acilde çubukları olan bir histogramı; 2'deki çubuk en uzun, dağılım çan biçimli ve 2'ye yakın merkezli, ve 0'daki çubuk '743 çekim = %7.4 sıfır acil yakaladı' diye açıklanmış. Sol histogramın altında: ortalama acil = 1.997, std = 1.105. Sağda, 'katmanlı örnekleme' başlıklı, tam olarak 2 acilde oturan ve başka hiçbir çubuğun olmadığı tek bir uzun çubuk. Sağ histogramın altında: ortalama acil = 2.000, std = 0.000. Aralarındaki bir başlık 'aynı ortalama, sıfır yayılım' der: katmanlama seyrek-sınıf payını sabitler ve standart sapmasını sıfıra sürer, basit rastgele örnekleme ise 0 ile 4 arasında savrulur ve seyrek sınıfı tümüyle kaçırabilir." class="w-full rounded-lg" />
+</Diagram>
+
+### Simülasyonu tam matematiğe karşı çapraz-doğrulamak
+
+Bir simülasyon, ancak onu bağımsız olarak türettiğiniz bir şeye karşı kontrol edebiliyorsanız güvenilirdir, yoksa yalnızca bir rastgele sayı üretecine hayranlık duyuyorsunuzdur. Basit rastgele bir örneklemdeki acil sayısının yayılımı bir gizem değildir; **hipergeometrik dağılımı (hypergeometric distribution)** izler, iki tür öğe içeren sonlu bir havuzdan yerine koymadan çekmenin kesin yasasını. Önemsediğimiz iki gerçeği elle hesaplayabilir ve 10000-koşuluk simülasyonun aynı yere indiğini doğrulayabiliriz.
+
+Önce, sıfır acil talep çekme olasılığı. Sıfır acil almak için, 10 seçimimizin hepsi 32 acil-olmayan talepten gelmeli. O 32'den 10 seçmenin yollarının sayısı `C(32,10)`, ve 40'ın hepsinden herhangi 10 seçmenin yollarının sayısı `C(40,10)`, dolayısıyla olasılık onların oranıdır. İkincisi, acil sayısının standart sapması, ki hipergeometrik yasa bunu `n=10`, `p=0.20` ve `N=40` ile `sqrt(n*p*(1-p)*(N-n)/(N-1))` kapalı formunda verir. Eşlik eden dosya ikisini de tam sayı kombinatoriğiyle tam olarak hesaplar:
+
+```text
+Exact (hypergeometric) cross-check of the simple-random draw:
+  P(zero urgent)      = C(32,10)/C(40,10) = 0.076
+  std of urgent count = sqrt(n*p*(1-p)*(N-n)/(N-1)) = 1.109
+```
+
+Sıfır acilin tam olasılığı 0.076 ve simülasyon 0.074 ölçtü: 10000 rastgele denemeden bekleyeceğiniz sallantı içinde uyuşuyorlar. Tam standart sapma 1.109 ve simülasyon 1.105 ölçtü: yine, bir uyuşma. Simülasyon bize yalan söylemiyor, matematik de söylemiyor, çünkü bağımsız olarak türetildiler ve aynı noktaya indiler. Bütün bu serinin üzerinde koştuğu disiplin budur. Kapalı-formlu bir değer bir simülasyonu sabitleyebilecekken rastgele bir simülasyonun asla yalnız durmasına izin vermiyoruz, ve bir simülasyonun doğruladığını görmediğimiz bir formüle asla güvenmiyoruz. Çıkarım keskin: katmanlama seyrek-sınıf payını sabitler ve standart sapmasını 0'a sürerken, basit rastgele örnekleme gerçek, ölçülebilir bir yayılım taşır ve kabaca her on üç çekimde bir acil sınıfı tümüyle kaçırabilir.
+
+## Sızıntı tuzağı: skoru pohpohlayan bedavalar
+
+Diyelim ki örneklemeyi düzelttiniz. Artık makul sayıda acil talep içeren bir altın kümeniz var. Kümenin size yalan söyleyebileceği ikinci, daha sinsi bir yol var ve kendini hiçbir oran ya da orantıda ilan etmez. Bu, **sızıntı (leakage)**: değerlendirme taleplerinizin bazıları, modelin eğitim sırasında zaten gördüğü verinin yakın-kopyalarıdır. Model o talepleri çözmedi, ezberledi, ve onlar üzerinde onu notladığınızda, daha önce hiç görmediği bir talebi ele alma yeteneğini değil, hafızasını test ediyorsunuz. Bu öğeler bedava puandır. Skoru şişirirler ve daha kötüsü, onu ölçmeye çalıştığınız yetenekle hiçbir ilgisi olmayan bir sebeple şişirirler.
+
+İşte tuzak somutlaştırılmış. Model 6 eğitim talebi üzerinde "eğitildi." Değerlendirme kümemizin 10 talebi var ve bunların 4'ü, büyük-küçük harf, noktalama ya da boşluk değişiklikleriyle hafifçe kılık değiştirmiş, eğitimdeki taleplerle aynı. Eğitimden `"How do I reset my password?"`, değerlendirme kümesinde `"how do i reset my password"` olarak yeniden belirir. `"Cancel my subscription"`, `"cancel my subscription!"` olur. Bir insan için bunlar besbelli aynı talep; naif bir dizge karşılaştırması için farklı görünürler, ki sızıntının gündelik bir kontrolden tam olarak böyle sıvışması budur. Çözüm, talepleri **normalleştirdikten (normalizing)** sonra karşılaştırmaktır: her şeyi küçük harfe çevir, noktalamayı çıkar, boşluk dizilerini sıkıştır ve sonra temizlenmiş değerlendirme metninin, temizlenmiş eğitim kümesinde herhangi bir yerde geçip geçmediğini kontrol et. O normalleştirmeyi çalıştırmak dördünü de yakalar:
+
+```text
+eval size = 10   train size = 6
+leaked eval items (normalized text found in train): 4
+  eval[0] 'how do i reset my password'  ==  a train ticket
+  eval[1] 'The app crashes on login.'  ==  a train ticket
+  eval[5] 'cancel my subscription!'  ==  a train ticket
+  eval[8] 'My invoice is wrong.'  ==  a train ticket
+```
+
+On değerlendirme talebinin dördü ezberlenmiş kopyalar. Şimdi skora ne yaptıklarını izleyin. Model 10 değerlendirme talebinin 8'ini doğru yaptı, dolayısıyla gururla raporlayacağınız doğruluk `8/10 = 0.800`. Ama o 8 doğru yanıttan, 4 sızmış talebin *hepsi* doğru, çünkü model onları ezberledi: 4'te 4 katkı sağlıyorlar. Beceri kanıtı değiller, örtüşme kanıtılar. 4 sızmış talebi çıkarıp atın ve modeli yalnızca gerçekten görmediği 6 talep üzerinde notlayın, dürüst tablo belirir:
+
+```text
+measured accuracy WITH leakage  = 8/10 = 0.800
+  (the 4 memorized duplicates are all correct: 4/4)
+honest accuracy AFTER removing leaks = 4/6 = 0.667
+  -> leakage inflated the score by 0.133.
+```
+
+6 temiz talepte model 4'ünü doğru yaptı, dolayısıyla dürüst doğruluk `4/6 = 0.667`. Sızıntı, raporlanan skoru `0.800 - 0.667 = 0.133` şişirdi, on üç puandan fazla, ve o puanların her biri, görülmemiş talepler üzerindeki gerçek performanstan değil, bedava kopyalardan geldi. On üç puan devasadır. Ekiplerin sevkedip kutladığı çoğu "iyileştirmeden" daha büyüktür. Altın kümeniz eğitim verinizle azıcık bile örtüşürse, tamamen kirlenmenin bir eseri olan bir kazanç ilan edebilirsiniz, ve hiçbir aşağı-akış istatistiği sizi kurtarmaz, çünkü sonraki parçalardaki bootstrap ve anlamlılık testi, temelden yanlış olan bir sayının etrafında güven aralıklarını sadakatle hesaplayacaktır. Ders şu: bir altın küme eğitim verisinden ayrık olmalı, ve emin olmanın tek yolu, değerlendirme ile eğitim kümenizin ayrı olduğunu öyle niyetlendiğiniz için varsaymak yerine, normalleştirdikten sonra örtüşmeyi gerçekten kontrol etmektir. (Bölüm 11'de bu aynı fikri n-gram örtüşmesiyle düzgün bir kirlenme kapısına sertleştiriyoruz; burada onu motive eden uyarı bu.)
+
+## Rubrik: "iyi yanıt mı?" sorusunu bir sayıya çevirmek
+
+Üçüncü tehdit, hangi örnekleri seçtiğinizle ilgili değil, onları nasıl notladığınızla ilgili. Şimdiye kadar taleplerimizin temiz bir ikili yanıtı vardı: acil ya da değil, doğru ya da değil. Gerçek değerlendirmeler nadiren o kadar derli topludur. "Bu iyi bir yanıt mıydı?" diye sorun ve iki dikkatli kişi size iki farklı hüküm verir, ikisi de yanlış olduğu için değil, "iyi", kafalarında farklı ağırlıklandırdıkları farklı şeylerin bir demeti olduğu için. Bir okuyucu, doğruysa ince bir yanıtı bağışlar; bir diğeri, sorunun yarısını atlayan bir yanıta katlanamaz. Bir **rubrik (rubric)** bunu, "iyi"yi tek bir bütünsel yargı olarak notlamayı reddederek düzeltir. Kaliteyi adlandırılmış ölçütlere böler, her birini sabit bir ölçekte notlar ve "geçti"yi toplam üzerindeki bir eşik olarak tanımlar. Hüküm bir his olmaktan çıkıp herkesin yeniden toplayabileceği bir toplama dönüşür.
+
+Rubriğimizin üç ölçütü var: **Doğru (Correct)** (yanıt olgusal olarak doğru mu?), **Dayanaklı (Grounded)** (kaynak tarafından destekleniyor mu, uydurulmuş değil mi?) ve **Tam (Complete)** (soruların hepsini gerçekten yanıtlıyor mu?). Her biri üç seviyeli bir ölçekte notlanır: 0, o ölçütte başarısız demek, 1, kısmi demek, 2, tam demek. Mümkün olan azami skor `3 * 2 = 6` ve geçme barajını en az 5 toplama koyuyoruz. O baraj bir politika seçimidir, ve onu açık bir sayı yapmak, rubriğin tam da değeridir: herkes bir yanıtın geçmiş sayılması için tam olarak ne kadar iyi olması gerektiğini görebilir ve "iyi" sözcüğü hakkında tartışmak yerine 5 sayısı hakkında doğrudan tartışabilir. İşte notlanmış üç aday yanıt:
+
+```text
+criteria: Correct, Grounded, Complete   (max 6, pass at total >= 5)
+  Answer A: Correct=2  Grounded=2  Complete=2  ->  total 6/6  PASS
+  Answer B: Correct=2  Grounded=2  Complete=1  ->  total 5/6  PASS
+  Answer C: Correct=1  Grounded=0  Complete=2  ->  total 3/6  FAIL
+```
+
+A Yanıtı doğru, dayanaklı ve tam: kusursuz bir 6, kolay bir geçiş. B Yanıtı doğru ve dayanaklı ama yalnızca kısmen tam, `2 + 2 + 1 = 5` alıyor, ki bu tam olarak 5 barajını geçiyor. C Yanıtı ilginç olan. Tümüyle tam (Complete=2, soruların hepsini ele alıyor) ama yalnızca yarı doğru (Correct=1) ve tümüyle dayanaksız (Grounded=0, uydurma yaptı), toplamda `1 + 0 + 2 = 3` ve başarısız oluyor. C Yanıtı'nın bir "his kontrolünden" pekâlâ sağ çıkabileceğine dikkat edin: uzun, kullanıcının sorduğu her şeyi ele alıyor, kendinden emin okunuyor. "Bu iyi bir yanıt gibi mi görünüyor?" diye üstünkörü göz gezdiren aceleci bir gözden geçirici onu kolayca geçirebilir. Rubrik geçirmez, çünkü rubrik, uydurma olgular üzerine kurulu kendinden emin, tam bir yanıtın bir başarısızlık olduğunu fark etti ve o başarısızlığı bir sayı olarak yazdı: `3 < 5`.
+
+```text
+2/3 answers clear the bar. A vibe check might wave
+all three through; the rubric makes the bar a number anyone can re-count.
+```
+
+Üç yanıttan ikisi barajı geçiyor. O "2/3", artık aynı rubrik ve aynı yanıtlardan herkesin yeniden üretebileceği bir gerçek, gözden geçiricinin kahvesiyle kayan bir ruh hali değil. Bu, Bölüm 1'deki hata matrisiyle aynı hamledir: küresel bir izlenimi küçük bir sayılabilir hücreler kümesiyle değiştirin, sonra manşet sayınızı o hücrelerin bir fonksiyonu olarak tanımlayın. Bir rubrik, tek bir evet ya da hayıra sığmayan kalite yargıları için yalnızca bir hata matrisidir, ve Bölüm 4'teki LLM-as-judge'ı hiç mümkün kılan şey odur: bir modelden "iyi"yi güvenilir biçimde notlamasını isteyemezsiniz, ama ondan Doğru, Dayanaklı ve Tam'ı 0'dan 2'ye ölçekte doldurmasını isteyebilir, sonra sayıları kendiniz toplayabilirsiniz.
+
+Aşağıdaki figür, üç fikri de aynı anda oynamanıza izin veriyor. Taze altın kümeler çekin ve basit-rastgele acil sayısının zıplamasını izlerken katmanlı sayının 2'ye kaynamış kalmasını izleyin, sızmış talepleri değerlendirme kümesine girip çıkarın ve doğruluğun 0.800 ile 0.667 arasında kaymasını izleyin, ve hangi yanıtların geçme barajını aştığını görmek için rubrik skorlarını ayarlayın. Bütün parça elle tutulur hale getirilmiş: örnekle, kirlenmeyi temizle ve notla, sondaki sayının bir anlam taşıyıp taşımadığına birlikte karar veren üç kol.
+
+<IframeFigure src="/essays/building-a-golden-set/part2-interactive.html" title="İnteraktif altın-küme kurucu: katmanlı ve basit-rastgele örneklemler çekip acil sayısını izleyin, dört sızmış değerlendirme talebini girip çıkararak doğruluğu 0.800 ile 0.667 arasında kaydırın ve üç yanıtı 5'te-geçer barajlı bir Doğru/Dayanaklı/Tam rubriğine karşı skorlayın." height={880} />
+
+## Özet / Çıkarımlar
+
+- **Bir metrik, ancak altındaki altın küme kadar güvenilirdir.** Bölüm 1 dikkatli bir insan varsaydı; bu parça o varsayımı hak ediyor. Etiketli küme kötü örneklenmiş, kirlenmiş ya da hislerle notlanmışsa, serinin ilerisinde onun üzerinde hesaplanan her istatistik kesin bir saçmalıktır.
+- **Katmanlı örnekleme seyrek bir sınıfın varyansını kontrol eder; basit rastgele örnekleme etmez.** %20'si acil olan 40 taleplik bir nüfusta, ikisi de 10'luk örneklem başına ortalama yaklaşık 2 acil çeker (ortalamalar 1.997'ye karşı 2.000), ama basit rastgele örneklemenin standart sapması 1.105'tir (çekimler 0 ile 4 arasında değişir), katmanlı örneklemenin standart sapması ise 0.000'dır (her seferinde tam olarak 2). Basit-rastgele çekimlerin yaklaşık %7.4'ü sıfır acil talep yakalar, ki bunu 0.076'lık tam hipergeometrik olasılık doğrular.
+- **Simülasyonları tam matematiğe karşı kontrol edin.** Elle türetilen hipergeometrik değerler (sıfır acil P'si = 0.076, acil sayısının std'si = 1.109) 10000-koşuluk simülasyonla (0.074 ve 1.105) uyuşuyor, dolayısıyla ikisine de güveniyoruz. Kapalı-formlu bir değer sabitleyebilecekken rastgele bir simülasyonun asla yalnız durmasına izin vermeyin.
+- **Sızıntı skorları sessizce şişirir.** 10 öğelik bir değerlendirme kümesinde saklanan, yalnızca büyük-küçük harf ve noktalama normalleştirildikten sonra yakalanan dört yakın-kopya eğitim talebi, doğruluğu dürüst `4/6 = 0.667`'den pohpohlayıcı `8/10 = 0.800`'e itti, tamamen ezberlenmiş bedavalardan yapılmış 0.133'lük bir şişme. Bir altın küme, örtüşmeyi gerçekten kontrol ederek doğrulanmış biçimde eğitim verisinden ayrık olmalıdır.
+- **Bir rubrik "iyi yanıt mı?" sorusunu herkesin yeniden sayabileceği bir sayıya çevirir.** Her biri 0, 1 ya da 2 olarak notlanan üç ölçüt (Doğru, Dayanaklı, Tam), 5 toplamda bir geçme barajıyla, üç yanıtı 6, 5 ve 3 notladı, dolayısıyla 3'ten 2'si geçiyor. Rubrik, bir his kontrolünün geçirebileceği uzun, tam ama dayanaksız bir yanıtı bir başarısızlık olarak işaretledi.
+
+## Sözlük
+
+- **Altın küme (golden set)**: her modeli karşısında notladığınız etiketli örnekler kümesi. Kalitesi (nasıl örneklendiği, eğitim verisiyle örtüşüp örtüşmediği, ne kadar tutarlı etiketlendiği) üzerinde hesaplanan her metriğin güvenilirliğine bir üst sınır koyar.
+- **Basit rastgele örnekleme (simple random sampling)**: örnekleri bütün nüfustan yerine koymadan tek biçimde rastgele çekmek. Ortalamada yanlıdır değil, ama gerçek bir yayılımla, dolayısıyla tek bir çekim seyrek bir sınıfı fena halde fazla ya da eksik temsil edebilir.
+- **Katmanlı örnekleme (stratified sampling)**: nüfusu gruplara (katmanlara) bölüp her birinden gerçek büyüklüğüyle orantılı olarak çekmek. Ortalamayı basit rastgele örneklemeyle aynı tutar ama katmanlanan niceliğin varyansını sıfıra doğru sürer, seyrek sınıfın temsil edilmesini garantiler.
+- **Seyrek sınıf (rare class)**: diğerlerinden çok daha az sıklıkta beliren etiket (burada, %20'de acil). Genellikle en çok önemsediğiniz ve naif bir örneklemin tümüyle kaçırma olasılığının en yüksek olduğu sınıftır.
+- **Standart sapma (standard deviation)**: ortalama etrafındaki yayılımın bir ölçüsü. İki örnekleme yöntemi bir ortalamayı (yaklaşık 2 acil) paylaşabilir ama std'de tümüyle ayrılabilir (1.105'e karşı 0.000), ve tek bir çekime ne kadar güvenilebileceğini size std söyler.
+- **Hipergeometrik dağılım (hypergeometric distribution)**: sonlu bir havuzdan yerine koymadan çektiğinizde belirli türden kaç öğenin belireceğini saymanın kesin olasılık yasası. Burada, sıfır acil talep çekme olasılığını (0.076) ve acil sayısının yayılımını (1.109) elle hesaplamak için kullanıldı.
+- **Sızıntı / kirlenme (leakage / contamination)**: değerlendirme örneklerinin modelin eğitim verisiyle örtüşmesi, böylece modelin onları beceriyle değil hafızayla yanıtlaması. Ölçülen skoru gerçek yetenekle ilgisiz bir sebeple şişirir; burada doğruluğa 0.133 ekledi.
+- **Normalleştirme (normalization)**: metni kanonik bir biçime indirmek (küçük harf, noktalama çıkarılmış, boşluk sıkıştırılmış), böylece yakın-kopyalar eşit olarak karşılaştırılır. Sızıntı kontrolünün `"cancel my subscription!"`'ı `"Cancel my subscription"` ile aynı talep olarak yakalaması bu sayededir.
+- **Rubrik (rubric)**: bulanık bir kalite yargısını adlandırılmış ölçütlere ayıran, her birini sabit bir ölçekte notlayan ve geçmeyi toplam üzerindeki bir eşik olarak tanımlayan bir notlama şeması. "İyi miydi?" sorusunu yeniden üretilebilir bir toplamla değiştirir.
+- **Geçme eşiği (pass threshold)**: bir yanıtın geçmiş sayılması için ulaşması gereken açık toplam skor (burada, 6'da 5). Onu bir sayı yapmak, insanların "iyi" sözcüğü hakkında değil, doğrudan baraj hakkında tartışmasını sağlar.
+
+---
+
+Artık iyi örneklenmiş, sızıntıdan arınmış ve bir his yerine bir rubrikle notlanmış bir altın kümemiz var. Ama o rubrik hâlâ bir şeyi varsayıyor: aynı yanıtı verilen herhangi iki dikkatli insanın onu aynı şekilde notlayacağını. **Bölüm 3, İnsanlar Aslında Anlaşıyor mu?**, gerçekten öyle yapıp yapmadıklarını ölçüyor ve saf %90'lık bir anlaşmanın, salt şanstan bekleyeceğiniz anlaşmayı çıkardığınızda gerçek anlaşmayı 0.6'ya yakın nasıl gizleyebileceğini gösteriyor.

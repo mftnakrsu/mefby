@@ -1,0 +1,127 @@
+---
+title: "Uncertainty"
+description: "One eval run graded 30 outputs and gave accuracy 0.70, a single number that looks solid until you ask how much it would wobble on a different sample. Part 6 builds the bootstrap by hand: resample the 30 items with replacement 10000 times, read the 2.5th and 97.5th percentiles as a 95% CI of [0.53, 0.87], and watch that interval halve as the set grows."
+date: 2026-07-19
+tags: ["Evals", "LLM", "AI", "Bootstrap", "Confidence Intervals", "Statistics"]
+seriesOrder: 6
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-06-bootstrap-uncertainty"
+lang: "en"
+translationSlug: "bootstrap-uncertainty-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 5 taught us to distrust the judge and correct its biases, but even a perfectly de-biased judge only ever hands back one number from one run. This part is about distrusting that number itself. You run an eval, 30 outputs come back graded, 21 are correct, and you write down "accuracy = 0.70." That 0.70 feels like a fact. It is not. It is a point estimate: one draw from a process that, run again on a different 30 items, would have handed you 0.63 or 0.77 just as easily. The whole discipline of evaluation lives or dies on whether you can tell the difference between a real gain and that wobble, and you cannot even begin until you learn to attach a range to every score.
+
+The tool that does it, using nothing but the data you already have, is the **bootstrap**. The idea is almost suspiciously simple: to find out how much your score would move if you could re-run the eval on fresh samples, you fake fresh samples by resampling your own 30 items **with replacement**, recompute the score on each fake sample, and look at the spread of the results. In this part we do exactly that by hand. We take one 30-item correct/incorrect set, print three real resample draws so you can see the mechanic with your own eyes (duplicates and all), run the full bootstrap of 10000 resamples, and read the 2.5th and 97.5th percentiles as a **95% confidence interval**. Then we do the one experiment that makes the whole thing click: hold the accuracy fixed at 0.70 but grow the set from 30 to 120 to 480, and watch the interval collapse from a useless width of 0.3333 down to 0.0833, halving every time the set quadruples.
+
+## Prerequisites
+
+You need the same basic Python as Part 1 (a list, a loop, a division) plus a first look at NumPy, which we use only for its random-number generator and its `percentile` function; every line is explained. No probability theory is assumed. We build the entire notion of a confidence interval from counting, exactly the way we built the confusion matrix in Part 1. The companion file, [bootstrap_ci.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-06-bootstrap-uncertainty), runs offline with no API key and no network, and it is fully deterministic: the resampling uses a fixed seed (`numpy.random.default_rng(0)`), so the exact draws and every interval you read here reproduce byte for byte when you run it. As always, every number in this essay is that file's printed output, unrounded and unedited.
+
+## The score you have is one sample
+
+Start with the set. One eval run graded 30 model outputs against gold, and each output is either correct (`1`) or incorrect (`0`):
+
+```text
+The labeled set (30 items, 1 = correct, 0 = incorrect):
+  1 1 0 1 1 1 0 1 1 0 1 1 1 0 1 1 0 1 1 1 0 1 1 0 0 1 1 0 1 1
+  correct: 21 / 30
+  point estimate:  accuracy = 21/30 = 0.7000
+```
+
+Twenty-one of the thirty are correct, so the accuracy is `21/30 = 0.7000`. That is the number you would put in a report, and by itself it is honest. The trouble is what it hides. These 30 items are a **sample**. There is some true, unknown accuracy of your model on the whole population of inputs it will ever see, and 0.70 is your best single guess at it, but it is only a guess drawn from 30 rolls of the dice. Grade a different 30 items tomorrow and you would get a different fraction. The question the bootstrap answers is: how different? If a re-run could plausibly land anywhere from 0.55 to 0.85, then quoting "0.70" as if it were pinned down is a small lie, and comparing it against a rival system's "0.72" is a much bigger one.
+
+The clean way to measure that wobble would be to collect many more independent samples of 30, grade each, and look at how the accuracy scatters across them. But you cannot: labeling is expensive, and if you had more labeled data you would have used it in the first place. The bootstrap's trick is to manufacture that scatter out of the single sample you already own.
+
+## The mechanic: resample with replacement
+
+Here is the move, and it is the whole idea. Your 30 items are, as far as you know, a stand-in for the population. So treat them as one: to simulate "drawing a fresh sample of 30 from the population," draw a fresh sample of 30 **from your own 30 items, with replacement**. "With replacement" is the load-bearing phrase. Each of the 30 slots in the new sample is filled by picking one of the original items uniformly at random and then putting it back, so the same item can be picked twice, three times, or not at all. The result is a set of 30 labels that overlaps your original but reweights it: some outputs count double, some drop out. Recompute accuracy on that reshuffled set and you have one **replicate**, one plausible answer to "what might a re-run have said?"
+
+Do not take that on faith. The companion file prints the first three real draws, showing the actual list of 30 indices it picked (each index is a position `0` to `29` in the original set) so you can spot the duplicates yourself:
+
+```text
+THE MECHANIC: resample 30 items WITH REPLACEMENT, recompute accuracy.
+Three example resamples (fixed seed, numpy default_rng(0)):
+  draw 1: indices = [25, 19, 15, 8, 9, 1, 2, 0, 5, 24, 19, 27, 15, 18, 29, 21, 18, 16, 16, 28, 8, 24, 20, 0, 11, 25, 16, 1, 22, 21]
+          correct in resample: 21 / 30  ->  accuracy = 0.7000
+  draw 2: indices = [25, 5, 2, 25, 0, 16, 2, 8, 14, 12, 12, 0, 0, 3, 0, 20, 15, 19, 7, 18, 22, 11, 13, 29, 24, 29, 11, 20, 28, 19]
+          correct in resample: 23 / 30  ->  accuracy = 0.7667
+  draw 3: indices = [25, 20, 21, 11, 26, 4, 17, 21, 25, 15, 11, 9, 12, 14, 21, 26, 2, 28, 15, 10, 20, 17, 7, 9, 21, 17, 15, 10, 22, 11]
+          correct in resample: 25 / 30  ->  accuracy = 0.8333
+```
+
+Read draw 1's index list and you can see the reweighting happen. Index `16` appears three times, `19` twice, `15` twice, `0` twice, and so on, while plenty of the original positions never show up at all. That is exactly what "with replacement" buys you: the composition of every resample is a little different, so the accuracy it produces is a little different too. Draw 1 happened to land back on `21/30 = 0.7000`, the same as the original. Draw 2 pulled in more correct items and came out at `23/30 = 0.7667`. Draw 3 leaned further and hit `25/30 = 0.8333`. Three resamples of the *same 30 outputs*, three different accuracies. That spread, made real by nothing but reshuffling weight across items you already had, is the uncertainty in your score becoming visible.
+
+One draw tells you almost nothing; the value of the bootstrap is in doing it thousands of times and letting the shape of all those replicates emerge.
+
+## From replicates to an interval
+
+So we run it 10000 times. Each of the 10000 resamples draws its own 30 indices with replacement and produces its own accuracy, giving us 10000 replicate scores clustered around 0.70. Now we ask the interval question directly: sort those 10000 numbers and chop off the extreme 2.5% at each end. The value at the 2.5th percentile and the value at the 97.5th percentile bracket the middle 95% of everything the bootstrap produced, and that bracket is our **95% confidence interval**:
+
+```text
+FULL BOOTSTRAP: B = 10000 resamples, then read the percentiles.
+  bootstrap replicates    = 10000
+  mean of replicates      = 0.6998
+  2.5th percentile        = 0.5333
+  97.5th percentile       = 0.8667
+  95% CI                  = [0.5333, 0.8667]  (width 0.3333)
+  -> report: accuracy = 0.70, 95% CI [0.53, 0.87]
+```
+
+Two things to notice. First, the mean of all 10000 replicates is 0.6998, essentially the original 0.70. That is a reassuring sanity check: the bootstrap is not biased, it centers on the score you started with, it only spreads out around it. Second, and this is the point of the whole part, look at how wide that spread is. The interval runs from 0.5333 to 0.8667, a width of 0.3333. Rounded for a report, your honest statement is not "accuracy is 0.70," it is "accuracy is 0.70, 95% CI `[0.53, 0.87]`." A third of the entire zero-to-one scale is on the table. The point estimate alone hid how much this set could wobble, and the wobble is enormous, because 30 items is very little evidence.
+
+That is the difference between a number and a measurement. A number is 0.70. A measurement is 0.70 with a range attached, and the range here is honest enough to embarrass the number. If a competing system reported 0.75, the two intervals would overlap so heavily that claiming your rival is better would be indefensible on this evidence. The figure below shows the full shape: the 10000 replicates piled into a histogram around 0.70, with the 2.5th and 97.5th percentile cuts marked, so you can see the confidence interval is literally the middle 95% of that pile.
+
+<Diagram number={1} caption="The bootstrap distribution for the 30-item set. Left: the original sample of 30 graded outputs (21 correct, 9 incorrect) gives the point estimate accuracy 0.7000. Center: a histogram of 10000 bootstrap replicate accuracies, each computed by resampling the 30 items with replacement and taking the mean; the pile is centered on 0.6998, essentially the original 0.70. Two vertical emerald lines mark the 2.5th percentile at 0.5333 and the 97.5th percentile at 0.8667, and the shaded band between them is the 95% confidence interval of width 0.3333. Right: the reported result, accuracy 0.70 with 95% CI [0.53, 0.87], showing the interval spans roughly a third of the whole scale.">
+  <img src="/essays/bootstrap-uncertainty/part6-figure.svg" alt="A three-panel figure on the bootstrap. The left panel shows the original labeled set of 30 cells, 21 filled emerald for correct and 9 grey for incorrect, labelled 'point estimate accuracy = 21/30 = 0.7000'. The center panel is a histogram of 10000 bootstrap replicate accuracies forming a bell-shaped pile centered near 0.70; the horizontal axis runs from about 0.4 to 1.0. Two vertical lines cut the pile at 0.5333 (2.5th percentile) and 0.8667 (97.5th percentile), and the region between them is shaded to mark the 95% confidence interval, annotated 'width 0.3333'. The mean of replicates, 0.6998, is marked at the peak. The right panel states the reported result: accuracy = 0.70, 95% CI [0.53, 0.87], with a bar showing the interval covering roughly a third of the 0-to-1 range." class="w-full rounded-lg" />
+</Diagram>
+
+Why does resampling your own data work at all? The intuition is that your 30 items already carry information about how variable the population is. If the true accuracy were near 0.5, individual outputs would be a near-coin-flip and resamples would scatter widely; if it were near 0.99, almost every resample would be near-perfect and the scatter would be tiny. The mix of correct and incorrect labels in your actual sample encodes that variability, and shuffling weight across them replays it. The bootstrap is not conjuring information from nowhere; it is squeezing the variability that was already latent in your 30 labels out into a visible interval.
+
+## Wide at n=30, tighter as n grows
+
+The interval was scandalously wide, but that is a fact about the sample size, not a flaw in the method, and the fix is the most important practical lesson in this part. Keep the accuracy fixed at exactly 0.70 by tiling the same 21-of-30 pattern into bigger sets: `n=120` is the 30-item set repeated four times (still 84 correct out of 120, still 0.70), and `n=480` is it repeated sixteen times. The point estimate never moves. Bootstrap each set and read the width:
+
+```text
+WIDE AT n=30, NARROWER AS n GROWS (same 0.70 accuracy, bigger set):
+      n   95% CI                  width
+     30   [0.5333, 0.8667]   0.3333
+    120   [0.6167, 0.7833]   0.1667  (2.00x tighter)
+    480   [0.6583, 0.7417]   0.0833  (2.00x tighter)
+```
+
+The accuracy is identical in all three rows, and the interval shrinks anyway. At n=30 it is `[0.5333, 0.8667]`, width 0.3333. Quadruple the data to n=120 and it tightens to `[0.6167, 0.7833]`, width 0.1667, exactly 2.00 times narrower. Quadruple again to n=480 and it tightens to `[0.6583, 0.7417]`, width 0.0833, another 2.00 times narrower. The pattern is not a coincidence: the width of a confidence interval shrinks in proportion to `1/sqrt(n)`, so to halve the interval you must **quadruple** the sample. That square-root law is why evaluation is so data-hungry near the top. Going from a 0.33-wide interval to a 0.08-wide one cost a sixteenfold increase in labeled examples, and that was just to get the range down to eight points.
+
+Sit with what the n=30 row means for real decisions. A 0.3333-wide interval cannot tell a 2-point difference from noise; it cannot even tell a 20-point difference from noise with much confidence. If someone shows you two systems scoring 0.70 and 0.72 on 30 examples each and declares the second one better, they are reading tea leaves, because both numbers carry an interval a third of the scale wide and those intervals swallow the gap whole. This is the bridge to Part 7: once you can put an interval on each score, "is B really better than A?" stops being a matter of eyeballing two point estimates and becomes a precise, answerable question.
+
+The interactive figure lets you drive both halves of this by hand. The top panel starts from the 30-item set and draws resamples on demand: one at a time so you can inspect a single draw, then a hundred, then ten thousand, and you watch the histogram fill in and the 95% CI settle toward `[0.53, 0.87]` as the replicate count climbs. The bottom panel is the scaling law under your finger: a set-size multiplier slides the same 0.70-accuracy set from n=30 up to n=480, and the interval, always centered on 0.70, visibly clamps down as n grows, with a running readout showing the width halving at each quadrupling.
+
+<IframeFigure src="/essays/bootstrap-uncertainty/part6-interactive.html" title="Interactive bootstrap explorer: a top panel that draws bootstrap resamples from the 30-item set one, a hundred, or ten thousand at a time and builds the live histogram of replicate accuracies with its mean and 95% CI, and a bottom panel whose set-size multiplier grows the same 0.70-accuracy set from n=30 to n=480 and shows the confidence interval narrowing along the one-over-square-root-of-n curve, halving each time the set quadruples." height={820} />
+
+## Key takeaways
+
+- **A single score is a point estimate, not a fact.** The 30-item run gave accuracy `21/30 = 0.7000`, but that is one sample from a noisy process. Re-run the eval on different items and the number would move. Always report a range, not just the point.
+- **The bootstrap turns one sample into an interval.** Resample your own set *with replacement* many times, recompute the metric on each resample, and read the 2.5th and 97.5th percentiles. On the 30-item set, 10000 resamples gave a mean of 0.6998 (centered on the original 0.70, so the method is unbiased) and a 95% CI of `[0.5333, 0.8667]`.
+- **With replacement is the whole mechanic.** Each resample refills all 30 slots by drawing with replacement, so items appear twice or not at all (draw 1 used index 16 three times). That reweighting is what makes each replicate differ: the same 30 outputs produced accuracies of 0.7000, 0.7667, and 0.8333 across three draws.
+- **n=30 is too little to trust.** A 95% CI of width 0.3333 spans a third of the scale. It cannot distinguish a 2-point difference from noise, so any "A beats B by 2 points on 30 examples" claim is unsupported.
+- **Interval width shrinks like 1/sqrt(n).** Holding accuracy at 0.70, the width fell from 0.3333 (n=30) to 0.1667 (n=120) to 0.0833 (n=480), halving each time the set quadrupled. Precision is expensive: cutting the interval in half costs four times the labeled data.
+
+## Glossary
+
+- **Point estimate**: a single best-guess value for a quantity, computed from one sample. Here, accuracy `21/30 = 0.7000`. It carries no information about how much it would vary on a different sample, which is exactly what a confidence interval adds.
+- **Bootstrap**: a resampling method that estimates the uncertainty of a statistic by repeatedly resampling the observed data with replacement, recomputing the statistic on each resample, and studying the spread of the results. It needs no formula for the sampling distribution and no extra data beyond the sample you have.
+- **Resample with replacement**: drawing a new sample of the same size from your data by picking items uniformly at random and putting each one back after picking, so the same item can appear multiple times or not at all. The reweighting this creates is what gives each bootstrap replicate a different value.
+- **Replicate**: one resampled dataset and the statistic computed on it. The full bootstrap here used 10000 replicates; three example replicate accuracies were 0.7000, 0.7667, and 0.8333.
+- **Confidence interval (95%)**: a range that brackets the plausible values of the quantity. The bootstrap version is read straight off the replicates as the interval between the 2.5th and 97.5th percentiles, which contains the middle 95% of them. Here `[0.5333, 0.8667]`.
+- **Percentile**: the value below which a given fraction of the sorted data falls. The 2.5th percentile of the replicates (0.5333) is the value larger than 2.5% of them; the 97.5th (0.8667) is larger than 97.5% of them.
+- **Interval width and the 1/sqrt(n) rule**: the width of a confidence interval shrinks roughly in proportion to 1 over the square root of the sample size, so quadrupling n halves the width. Observed here as 0.3333 at n=30, 0.1667 at n=120, and 0.0833 at n=480, each step 2.00 times tighter.
+
+---
+
+Two systems, 0.70 and 0.72, with overlapping intervals: is the second one actually better, or did you just get a luckier sample? **Part 7, Is the Difference Real?**, turns that question into a test.

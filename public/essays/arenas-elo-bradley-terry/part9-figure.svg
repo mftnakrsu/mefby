@@ -1,0 +1,232 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" width="100%" style="height:auto" role="img" aria-labelledby="a9-title a9-desc">
+  <title id="a9-title">Elo depends on battle order; Bradley-Terry does not</title>
+  <desc id="a9-desc">Four chatbots A, B, C and D fight a round-robin arena, 18 battles total (every pair meets 3 times). The win matrix (row beat column) is A beats B 2, A beats C 3, A beats D 3, B beats A 1, B beats C 2, B beats D 3, C beats A 0, C beats B 1, C beats D 2, D beats A 0, D beats B 0, D beats C 1, giving raw win totals of 8 for A, 6 for B, 3 for C and 1 for D out of 9 games each. Replaying the same 18 battles through Elo (start rating 1000, K factor 32) in the as-listed order gives final ratings A 1083.7, B 1034.8, C 962.2, D 919.2; replaying the identical battles in a shuffled order gives A 1087.2, B 1038.8, C 961.4, D 912.6, a difference of plus 3.5 for A, plus 4.0 for B, minus 0.8 for C and minus 6.6 for D: the same battles produce different numbers depending on order. A single hand-worked Elo update (A beats B, both starting at 1000, K=32) gives expected score E_A = 0.50, so the winner rises to 1016.0 and the loser falls to 984.0. In contrast, fitting a Bradley-Terry model by iterated Zermelo updates on the same aggregate win matrix converges after 20 iterations to strengths A 0.7015, B 0.2314, C 0.0506 and D 0.0164 (from an equal 0.25 start), which implies P(A beats D) = 0.977 and P(B beats C) = 0.821. This ranking, A greater than B greater than C greater than D, is identical for every ordering of the battles, because Bradley-Terry reads only the aggregate totals.</desc>
+
+  <rect width="1180" height="760" fill="#ffffff"/>
+  <rect width="1180" height="760" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 9, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 9 &#183; ARENAS</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">Elo drifts with order. Bradley-Terry doesn&#8217;t.</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">4 chatbots, 18 battles. One hand update (A beats B, 1000 vs 1000, K=32): E_A = 0.50 &#8594; R_A&#8217; = 1016.0, R_B&#8217; = 984.0.</text>
+
+  <!-- ============================================================
+       LEFT: win matrix
+  ============================================================ -->
+  <text x="40" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">WIN MATRIX &#8212; ROW BEAT COLUMN (18 BATTLES)</text>
+
+  <!-- column headers -->
+  <text x="220" y="164" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">A</text>
+  <text x="306" y="164" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">B</text>
+  <text x="392" y="164" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">C</text>
+  <text x="478" y="164" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">D</text>
+  <text x="568" y="150" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#a1a1aa" letter-spacing="0.04em">WINS</text>
+  <text x="568" y="164" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#a1a1aa" letter-spacing="0.04em">/9</text>
+
+  <!-- row labels -->
+  <text x="140" y="208" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">A</text>
+  <text x="140" y="278" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">B</text>
+  <text x="140" y="348" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">C</text>
+  <text x="140" y="418" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">D</text>
+
+  <!-- cell helper: 4 rows x 4 cols, width 80 height 64, gap 6 -->
+  <!-- row A: diag, 2, 3, 3 -->
+  <rect x="180" y="170" width="80" height="64" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="220" y="209" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" fill="#d4d4d8">&#8212;</text>
+
+  <rect x="266" y="170" width="80" height="64" rx="10" fill="#d1fae5" stroke="#34d399" stroke-width="1.6"/>
+  <text x="306" y="209" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#047857">2</text>
+
+  <rect x="352" y="170" width="80" height="64" rx="10" fill="#059669" stroke="#047857" stroke-width="1.6"/>
+  <text x="392" y="209" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#ffffff">3</text>
+
+  <rect x="438" y="170" width="80" height="64" rx="10" fill="#059669" stroke="#047857" stroke-width="1.6"/>
+  <text x="478" y="209" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#ffffff">3</text>
+
+  <rect x="536" y="170" width="64" height="64" rx="10" fill="#18181b"/>
+  <text x="568" y="209" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#ffffff">8</text>
+
+  <!-- row B: 1, diag, 2, 3 -->
+  <rect x="180" y="240" width="80" height="64" rx="10" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.6"/>
+  <text x="220" y="279" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#b45309">1</text>
+
+  <rect x="266" y="240" width="80" height="64" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="306" y="279" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" fill="#d4d4d8">&#8212;</text>
+
+  <rect x="352" y="240" width="80" height="64" rx="10" fill="#d1fae5" stroke="#34d399" stroke-width="1.6"/>
+  <text x="392" y="279" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#047857">2</text>
+
+  <rect x="438" y="240" width="80" height="64" rx="10" fill="#059669" stroke="#047857" stroke-width="1.6"/>
+  <text x="478" y="279" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#ffffff">3</text>
+
+  <rect x="536" y="240" width="64" height="64" rx="10" fill="#18181b"/>
+  <text x="568" y="279" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#ffffff">6</text>
+
+  <!-- row C: 0, 1, diag, 2 -->
+  <rect x="180" y="310" width="80" height="64" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="220" y="349" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#a1a1aa">0</text>
+
+  <rect x="266" y="310" width="80" height="64" rx="10" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.6"/>
+  <text x="306" y="349" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#b45309">1</text>
+
+  <rect x="352" y="310" width="80" height="64" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="392" y="349" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" fill="#d4d4d8">&#8212;</text>
+
+  <rect x="438" y="310" width="80" height="64" rx="10" fill="#d1fae5" stroke="#34d399" stroke-width="1.6"/>
+  <text x="478" y="349" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#047857">2</text>
+
+  <rect x="536" y="310" width="64" height="64" rx="10" fill="#18181b"/>
+  <text x="568" y="349" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#ffffff">3</text>
+
+  <!-- row D: 0, 0, 1, diag -->
+  <rect x="180" y="380" width="80" height="64" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="220" y="419" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#a1a1aa">0</text>
+
+  <rect x="266" y="380" width="80" height="64" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="306" y="419" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#a1a1aa">0</text>
+
+  <rect x="352" y="380" width="80" height="64" rx="10" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.6"/>
+  <text x="392" y="419" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700" fill="#b45309">1</text>
+
+  <rect x="438" y="380" width="80" height="64" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.3"/>
+  <text x="478" y="419" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" fill="#d4d4d8">&#8212;</text>
+
+  <rect x="536" y="380" width="64" height="64" rx="10" fill="#18181b"/>
+  <text x="568" y="419" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#ffffff">1</text>
+
+  <text x="40" y="466"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#52525b">Raw win totals already hint A &gt; B &gt; C &gt; D &#8212; but a hint isn&#8217;t a fitted ranking.</text>
+
+  <!-- Divider -->
+  <line x1="616" y1="100" x2="616" y2="470" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       RIGHT: Bradley-Terry converged strengths
+  ============================================================ -->
+  <text x="650" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">BRADLEY-TERRY STRENGTHS, ITERATION 20</text>
+
+  <!-- baseline -->
+  <line x1="640" y1="420" x2="1140" y2="420" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- P(A beats D) arc -->
+  <path d="M 705 176 Q 900 140 1095 259" fill="none" stroke="#a1a1aa" stroke-width="1.3" stroke-dasharray="3,4"/>
+  <text x="900" y="150" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#52525b">P(A beats D) = 0.977</text>
+
+  <!-- P(B beats C) arc -->
+  <path d="M 835 361 Q 900 335 965 369" fill="none" stroke="#a1a1aa" stroke-width="1.3" stroke-dasharray="3,4"/>
+  <text x="900" y="330" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#52525b">P(B beats C) = 0.821</text>
+
+  <!-- Bar A: value 0.7015 -> height 196 -->
+  <rect x="660" y="224" width="90" height="196" rx="10" fill="#059669" stroke="#047857" stroke-width="1.6"/>
+  <text x="705" y="212" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#047857">0.7015</text>
+  <text x="705" y="444" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#3f3f46">A</text>
+
+  <!-- Bar B: value 0.2314 -> height ~65 -->
+  <rect x="790" y="355" width="90" height="65" rx="10" fill="#34d399" stroke="#10b981" stroke-width="1.6"/>
+  <text x="835" y="343" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#047857">0.2314</text>
+  <text x="835" y="444" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#3f3f46">B</text>
+
+  <!-- Bar C: value 0.0506 -> height ~14 -->
+  <rect x="920" y="406" width="90" height="14" rx="6" fill="#a7f3d0" stroke="#6ee7b7" stroke-width="1.6"/>
+  <text x="965" y="394" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#047857">0.0506</text>
+  <text x="965" y="444" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#3f3f46">C</text>
+
+  <!-- Bar D: value 0.0164 -> height ~5 -->
+  <rect x="1050" y="415" width="90" height="5" rx="2.5" fill="#d1fae5" stroke="#a7f3d0" stroke-width="1.6"/>
+  <text x="1095" y="403" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#047857">0.0164</text>
+  <text x="1095" y="444" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" fill="#3f3f46">D</text>
+
+  <text x="650" y="466"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11.5" fill="#52525b">Start 0.2500 each &#8594; it 1: 0.4444/0.3333/0.1667/0.0556 &#8594; it 20 (above). Ranking: A &gt; B &gt; C &gt; D.</text>
+
+  <!-- ============================================================
+       BOTTOM: Elo, two orders, one number line per bot
+  ============================================================ -->
+  <text x="40" y="508"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">ELO OVER THE SAME 18 BATTLES, TWO ORDERS (START 1000, K=32)</text>
+
+  <!-- axis ticks -->
+  <line x1="140" y1="680" x2="1100" y2="680" stroke="#d4d4d8" stroke-width="1.3"/>
+  <g font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#a1a1aa">
+    <text x="227.3" y="696" text-anchor="middle">900</text>
+    <text x="445.5" y="696" text-anchor="middle">950</text>
+    <text x="663.6" y="696" text-anchor="middle">1000</text>
+    <text x="881.8" y="696" text-anchor="middle">1050</text>
+    <text x="1100" y="696" text-anchor="middle">1100</text>
+  </g>
+  <line x1="663.6" y1="522" x2="663.6" y2="684" stroke="#d4d4d8" stroke-width="1.2" stroke-dasharray="3,4"/>
+  <text x="663.6" y="514" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10" fill="#a1a1aa">start = 1000</text>
+
+  <!-- Row A: y=540, as-listed x=1028.9, shuffled x=1044.1 -->
+  <text x="60" y="546" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">A</text>
+  <line x1="140" y1="540" x2="1100" y2="540" stroke="#f4f4f5" stroke-width="10"/>
+  <line x1="1028.9" y1="540" x2="1044.1" y2="540" stroke="#d97706" stroke-width="2"/>
+  <circle cx="1028.9" cy="540" r="7" fill="#059669" stroke="#047857" stroke-width="1.5"/>
+  <circle cx="1044.1" cy="540" r="7" fill="#ffffff" stroke="#d97706" stroke-width="2.2"/>
+  <text x="1028.9" y="524" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#047857">1083.7</text>
+  <text x="1044.1" y="562" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#b45309">1087.2</text>
+  <text x="1108" y="545" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#52525b">+3.5</text>
+
+  <!-- Row B: y=580, as-listed 815.5, shuffled 832.9 -->
+  <text x="60" y="586" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">B</text>
+  <line x1="140" y1="580" x2="1100" y2="580" stroke="#f4f4f5" stroke-width="10"/>
+  <line x1="815.5" y1="580" x2="832.9" y2="580" stroke="#d97706" stroke-width="2"/>
+  <circle cx="815.5" cy="580" r="7" fill="#059669" stroke="#047857" stroke-width="1.5"/>
+  <circle cx="832.9" cy="580" r="7" fill="#ffffff" stroke="#d97706" stroke-width="2.2"/>
+  <text x="815.5" y="564" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#047857">1034.8</text>
+  <text x="832.9" y="602" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#b45309">1038.8</text>
+  <text x="1108" y="585" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#52525b">+4.0</text>
+
+  <!-- Row C: y=620, as-listed 498.7, shuffled 495.2 -->
+  <text x="60" y="626" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">C</text>
+  <line x1="140" y1="620" x2="1100" y2="620" stroke="#f4f4f5" stroke-width="10"/>
+  <line x1="495.2" y1="620" x2="498.7" y2="620" stroke="#d97706" stroke-width="2"/>
+  <circle cx="498.7" cy="620" r="7" fill="#059669" stroke="#047857" stroke-width="1.5"/>
+  <circle cx="495.2" cy="620" r="7" fill="#ffffff" stroke="#d97706" stroke-width="2.2"/>
+  <text x="498.7" y="604" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#047857">962.2</text>
+  <text x="495.2" y="642" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#b45309">961.4</text>
+  <text x="1108" y="625" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" fill="#52525b">-0.8</text>
+
+  <!-- Row D: y=660, as-listed 311.1, shuffled 282.3 -->
+  <text x="60" y="666" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#3f3f46">D</text>
+  <line x1="140" y1="660" x2="1100" y2="660" stroke="#f4f4f5" stroke-width="10"/>
+  <line x1="282.3" y1="660" x2="311.1" y2="660" stroke="#e11d48" stroke-width="2"/>
+  <circle cx="311.1" cy="660" r="7" fill="#059669" stroke="#047857" stroke-width="1.5"/>
+  <circle cx="282.3" cy="660" r="7" fill="#ffffff" stroke="#e11d48" stroke-width="2.2"/>
+  <text x="311.1" y="644" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#047857">919.2</text>
+  <text x="282.3" y="682" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#be123c">912.6</text>
+  <text x="1108" y="665" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#be123c">-6.6</text>
+
+  <!-- legend -->
+  <circle cx="850" cy="504" r="6" fill="#059669" stroke="#047857" stroke-width="1.4"/>
+  <text x="864" y="508" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#52525b">as-listed order</text>
+  <circle cx="1000" cy="504" r="6" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+  <text x="1014" y="508" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="11.5" fill="#52525b">shuffled</text>
+
+  <!-- Bottom caption strip -->
+  <rect x="40" y="712" width="1100" height="36" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="590" y="734" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">Same 18 battles, same win matrix &#8212; Elo's final numbers shift with order, Bradley-Terry's ranking never does.</text>
+</svg>

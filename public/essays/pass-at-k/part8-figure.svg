@@ -1,0 +1,220 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" width="100%" style="height:auto" role="img" aria-labelledby="pk-title pk-desc">
+  <title id="pk-title">pass@k: the unbiased combinatorial estimator versus the biased plug-in, checked by brute force</title>
+  <desc id="pk-desc">One coding task with n=5 sampled completions: s0 and s1 pass the hidden unit tests (c=2), s2, s3 and s4 fail. With budget k=2, there are C(5,2)=10 equally likely size-2 subsets of the 5 samples. Enumerating them by hand, 7 contain at least one correct sample and 3 (the pairs drawn only from s2, s3, s4) contain none. So pass@2 = 1 minus C(3,2)/C(5,2) = 1 minus 3/10 = 0.700, and this unbiased estimator matches the brute-force count exactly. The tempting plug-in formula 1-(1-c/n)^k = 1-(1-0.40)^2 = 0.640 instead treats the 5 draws as sampling with replacement from an infinite pool, so it is too low. Sweeping the budget from k=1 to k=5 the two estimators are: k=1 both 0.400, k=2 plug-in 0.640 versus unbiased 0.700, k=3 plug-in 0.784 versus unbiased 0.900, k=4 plug-in 0.870 versus unbiased 1.000, k=5 plug-in 0.922 versus unbiased 1.000. Taking the exact expectation over c drawn from a Binomial(5, 0.4) distribution proves it: E[unbiased] = 0.640 exactly matches the true pass@2 of 0.640, while E[plug-in] = 0.592 is low by 0.048. The unbiased estimator should always be reported.</desc>
+
+  <!-- Page background -->
+  <rect width="1180" height="760" fill="#ffffff"/>
+  <rect width="1180" height="760" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 8, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 8 &#183; PASS@K</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">Two estimators of pass@k, checked by brute force</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">n=5 completions, c=2 correct (s0, s1), k=2 budget. Draws are WITHOUT replacement.</text>
+
+  <!-- ============================================================
+       LEFT: the 5 samples, then all 10 size-2 subsets enumerated
+  ============================================================ -->
+
+  <text x="40" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">THE 5 SAMPLED COMPLETIONS</text>
+
+  <!-- 5 sample cells -->
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+    <!-- s0 correct -->
+    <rect x="40" y="130" width="106" height="56" rx="10" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="93" y="155" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#047857">s0</text>
+    <text x="93" y="173" text-anchor="middle" font-size="10.5" font-weight="700" fill="#059669">ok &#8226; correct</text>
+    <!-- s1 correct -->
+    <rect x="154" y="130" width="106" height="56" rx="10" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="207" y="155" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#047857">s1</text>
+    <text x="207" y="173" text-anchor="middle" font-size="10.5" font-weight="700" fill="#059669">ok &#8226; correct</text>
+    <!-- s2 wrong -->
+    <rect x="268" y="130" width="106" height="56" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+    <text x="321" y="155" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#52525b">s2</text>
+    <text x="321" y="173" text-anchor="middle" font-size="10.5" font-weight="700" fill="#71717a">x &#8226; fails</text>
+    <!-- s3 wrong -->
+    <rect x="382" y="130" width="106" height="56" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+    <text x="435" y="155" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#52525b">s3</text>
+    <text x="435" y="173" text-anchor="middle" font-size="10.5" font-weight="700" fill="#71717a">x &#8226; fails</text>
+    <!-- s4 wrong -->
+    <rect x="496" y="130" width="106" height="56" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+    <text x="549" y="155" text-anchor="middle" font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" fill="#52525b">s4</text>
+    <text x="549" y="173" text-anchor="middle" font-size="10.5" font-weight="700" fill="#71717a">x &#8226; fails</text>
+  </g>
+  <text x="40" y="200"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12" fill="#71717a">p_hat = c/n = 2/5 = 0.40 (empirical per-sample pass rate)</text>
+
+  <text x="40" y="230"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">ALL C(5,2) = 10 SIZE-2 SUBSETS (k=2 draws, no replacement)</text>
+
+  <!-- 10 subset cells, 5 cols x 2 rows -->
+  <g font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace">
+    <!-- Row 1: (0,1) (0,2) (0,3) (0,4) (1,2), all PASS -->
+    <rect x="40"  y="242" width="106" height="60" rx="9" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="93" y="266" text-anchor="middle" font-size="12" font-weight="700" fill="#047857">s0,s1</text>
+    <text x="93" y="286" text-anchor="middle" font-size="10" font-weight="700" fill="#059669">PASS</text>
+
+    <rect x="154" y="242" width="106" height="60" rx="9" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="207" y="266" text-anchor="middle" font-size="12" font-weight="700" fill="#047857">s0,s2</text>
+    <text x="207" y="286" text-anchor="middle" font-size="10" font-weight="700" fill="#059669">PASS</text>
+
+    <rect x="268" y="242" width="106" height="60" rx="9" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="321" y="266" text-anchor="middle" font-size="12" font-weight="700" fill="#047857">s0,s3</text>
+    <text x="321" y="286" text-anchor="middle" font-size="10" font-weight="700" fill="#059669">PASS</text>
+
+    <rect x="382" y="242" width="106" height="60" rx="9" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="435" y="266" text-anchor="middle" font-size="12" font-weight="700" fill="#047857">s0,s4</text>
+    <text x="435" y="286" text-anchor="middle" font-size="10" font-weight="700" fill="#059669">PASS</text>
+
+    <rect x="496" y="242" width="106" height="60" rx="9" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="549" y="266" text-anchor="middle" font-size="12" font-weight="700" fill="#047857">s1,s2</text>
+    <text x="549" y="286" text-anchor="middle" font-size="10" font-weight="700" fill="#059669">PASS</text>
+
+    <!-- Row 2: (1,3) (1,4) PASS ; (2,3) (2,4) (3,4) fail -->
+    <rect x="40"  y="310" width="106" height="60" rx="9" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="93" y="334" text-anchor="middle" font-size="12" font-weight="700" fill="#047857">s1,s3</text>
+    <text x="93" y="354" text-anchor="middle" font-size="10" font-weight="700" fill="#059669">PASS</text>
+
+    <rect x="154" y="310" width="106" height="60" rx="9" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="207" y="334" text-anchor="middle" font-size="12" font-weight="700" fill="#047857">s1,s4</text>
+    <text x="207" y="354" text-anchor="middle" font-size="10" font-weight="700" fill="#059669">PASS</text>
+
+    <rect x="268" y="310" width="106" height="60" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+    <text x="321" y="334" text-anchor="middle" font-size="12" font-weight="700" fill="#52525b">s2,s3</text>
+    <text x="321" y="354" text-anchor="middle" font-size="10" font-weight="700" fill="#a1a1aa">fail</text>
+
+    <rect x="382" y="310" width="106" height="60" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+    <text x="435" y="334" text-anchor="middle" font-size="12" font-weight="700" fill="#52525b">s2,s4</text>
+    <text x="435" y="354" text-anchor="middle" font-size="10" font-weight="700" fill="#a1a1aa">fail</text>
+
+    <rect x="496" y="310" width="106" height="60" rx="9" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.5"/>
+    <text x="549" y="334" text-anchor="middle" font-size="12" font-weight="700" fill="#52525b">s3,s4</text>
+    <text x="549" y="354" text-anchor="middle" font-size="10" font-weight="700" fill="#a1a1aa">fail</text>
+  </g>
+
+  <!-- subset summary bar -->
+  <text x="40" y="396"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" font-weight="700" fill="#18181b">passing subsets / total = 7/10 = 0.700</text>
+  <rect x="40" y="406" width="562" height="10" rx="5" fill="#f4f4f5"/>
+  <rect x="40" y="406" width="393" height="10" rx="5" fill="#34d399"/>
+
+  <!-- formula callout: unbiased -->
+  <rect x="40" y="432" width="562" height="60" rx="10" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="56" y="454"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.04em">UNBIASED (matches brute force)</text>
+  <text x="56" y="476"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" font-weight="700" fill="#047857">pass@2 = 1 - C(3,2)/C(5,2) = 1 - 3/10 = 0.700</text>
+
+  <!-- formula callout: plug-in -->
+  <rect x="40" y="500" width="562" height="60" rx="10" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="56" y="522"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#d97706" letter-spacing="0.04em">PLUG-IN (biased, samples WITH replacement)</text>
+  <text x="56" y="544"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="13" font-weight="700" fill="#b45309">pass@2 = 1 - (1 - 0.40)^2 = 1 - 0.36 = 0.640</text>
+
+  <!-- Divider between left and right -->
+  <line x1="632" y1="100" x2="632" y2="680" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       RIGHT: pass@k across budgets k=1..5
+  ============================================================ -->
+  <text x="672" y="120"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">PASS@K RISES WITH BUDGET K (n=5, c=2)</text>
+
+  <!-- gridlines + y labels -->
+  <g font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#a1a1aa">
+    <line x1="700" y1="180" x2="1120" y2="180" stroke="#e4e4e7" stroke-width="1"/>
+    <text x="694" y="184" text-anchor="end">1.00</text>
+    <line x1="700" y1="270" x2="1120" y2="270" stroke="#e4e4e7" stroke-width="1"/>
+    <text x="694" y="274" text-anchor="end">0.75</text>
+    <line x1="700" y1="360" x2="1120" y2="360" stroke="#e4e4e7" stroke-width="1"/>
+    <text x="694" y="364" text-anchor="end">0.50</text>
+    <line x1="700" y1="450" x2="1120" y2="450" stroke="#e4e4e7" stroke-width="1"/>
+    <text x="694" y="454" text-anchor="end">0.25</text>
+    <line x1="700" y1="540" x2="1120" y2="540" stroke="#e4e4e7" stroke-width="1.5"/>
+    <text x="694" y="544" text-anchor="end">0.00</text>
+  </g>
+
+  <!-- bar groups: k=1..5. baseline y=540, 1.00 at y=180 (360px = 1.0) -->
+  <g font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace">
+    <!-- k=1: plug-in 0.400 (h=144,y=396), unbiased 0.400 (h=144,y=396) -->
+    <rect x="712" y="396" width="26" height="144" rx="4" fill="#fcd34d"/>
+    <rect x="742" y="396" width="26" height="144" rx="4" fill="#059669"/>
+    <text x="742" y="388" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3f3f46">0.400</text>
+    <text x="755" y="558" text-anchor="middle" font-size="11" font-weight="700" fill="#71717a">k=1</text>
+
+    <!-- k=2: plug-in 0.640 (h=230,y=310), unbiased 0.700 (h=252,y=288) -->
+    <rect x="796" y="310" width="26" height="230" rx="4" fill="#fcd34d"/>
+    <text x="809" y="302" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b45309">0.640</text>
+    <rect x="826" y="288" width="26" height="252" rx="4" fill="#059669"/>
+    <text x="839" y="280" text-anchor="middle" font-size="10.5" font-weight="700" fill="#047857">0.700</text>
+    <text x="839" y="558" text-anchor="middle" font-size="11" font-weight="700" fill="#71717a">k=2</text>
+
+    <!-- k=3: plug-in 0.784 (h=282,y=258), unbiased 0.900 (h=324,y=216) -->
+    <rect x="880" y="258" width="26" height="282" rx="4" fill="#fcd34d"/>
+    <text x="893" y="250" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b45309">0.784</text>
+    <rect x="910" y="216" width="26" height="324" rx="4" fill="#059669"/>
+    <text x="923" y="208" text-anchor="middle" font-size="10.5" font-weight="700" fill="#047857">0.900</text>
+    <text x="923" y="558" text-anchor="middle" font-size="11" font-weight="700" fill="#71717a">k=3</text>
+
+    <!-- k=4: plug-in 0.870 (h=313,y=227), unbiased 1.000 (h=360,y=180) -->
+    <rect x="964" y="227" width="26" height="313" rx="4" fill="#fcd34d"/>
+    <text x="977" y="219" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b45309">0.870</text>
+    <rect x="994" y="180" width="26" height="360" rx="4" fill="#059669"/>
+    <text x="1007" y="172" text-anchor="middle" font-size="10.5" font-weight="700" fill="#047857">1.000</text>
+    <text x="1007" y="558" text-anchor="middle" font-size="11" font-weight="700" fill="#71717a">k=4</text>
+
+    <!-- k=5: plug-in 0.922 (h=332,y=208), unbiased 1.000 (h=360,y=180) -->
+    <rect x="1048" y="208" width="26" height="332" rx="4" fill="#fcd34d"/>
+    <text x="1061" y="200" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b45309">0.922</text>
+    <rect x="1078" y="180" width="26" height="360" rx="4" fill="#059669"/>
+    <text x="1091" y="172" text-anchor="middle" font-size="10.5" font-weight="700" fill="#047857">1.000</text>
+    <text x="1091" y="558" text-anchor="middle" font-size="11" font-weight="700" fill="#71717a">k=5</text>
+  </g>
+
+  <!-- legend -->
+  <rect x="700" y="580" width="14" height="14" rx="4" fill="#fcd34d"/>
+  <text x="722" y="591"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">plug-in, with replacement (biased low)</text>
+  <rect x="700" y="606" width="14" height="14" rx="4" fill="#059669"/>
+  <text x="722" y="617"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">unbiased, without replacement (= brute force)</text>
+
+  <text x="700" y="648"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#71717a">pass@k = 1.000 once k &gt; n-c = 3: you can no longer draw all-wrong.</text>
+
+  <!-- Bottom caption strip: bias proof -->
+  <rect x="40" y="700" width="1100" height="44" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="590" y="719" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">Exact expectation over c &#126; Binomial(5, 0.40): E[unbiased] = 0.640 matches the true pass@2 of 0.640.</text>
+  <text x="590" y="735" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">E[plug-in] = 0.592, low by 0.048. The plug-in always under-reports; report the unbiased estimator.</text>
+</svg>

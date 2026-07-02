@@ -1,0 +1,174 @@
+---
+title: "pass@k"
+description: "Tek bir kodlama görevi, beş örneklenen tamamlama, ikisi gizli testleri geçiyor: bu bölüm yansız pass@k tahmin edicisini bir kombinatorik özdeşlik olarak türetir, kaba kuvvet sayımıyla doğrular ve o cazip yerine-koyma formülünün neden fazla düşük raporladığını tam kesirli aritmetikle kanıtlar."
+date: 2026-07-21
+tags: ["Değerlendirme", "LLM", "AI", "Kod Üretimi", "Örnekleme", "Tahmin Ediciler"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-08-pass-at-k"
+lang: "tr"
+translationSlug: "pass-at-k"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 7'de, "Fark Gerçek mi?", iki skor arasındaki bir açığın gürültü olup olamayacağını sormuştuk ve oradaki makine, her sistemin her örnek için tek bir belirlenimci yanıt ürettiğini sessizce varsayıyordu. Kod üretimi bu varsayımı bozar. Bir modelden bir programlama problemini çözmesini isteyin, size tek bir yanıt vermez; birkaç örnek çekersiniz, her birini gizli bir test paketine karşı çalıştırırsınız ve herhangi biri geçerse problemi çözmüş olursunuz. Bu senaryonun metriği **pass@k**'dir: `k` örneklenen tamamlamadan en az birinin geçme olasılığı. Her kod modelinin raporladığı sayı budur ve aynı zamanda alandaki en sık yanlış hesaplanan metriklerden biridir, çünkü onun için akla gelen ilk formül, gözden kaçması kolay ve her zaman aynı yönü gösteren bir şekilde yanlıştır.
+
+Bu bölüm bunu temelden düzeltir. Modelin `n = 5` tamamlama ürettiği, bunların `c = 2` tanesinin testleri geçtiği tek bir görevi ele alıyoruz ve pass@2'yi üç ayrı yolla hesaplıyoruz: herkesin önce yazdığı cazip **yerine-koyma (plug-in)** formülü, alanın gerçekte kullandığı **yansız (unbiased)** kombinatorik tahmin edici ve tartışmayı sayarak bitiren, ikili boyuttaki on alt kümenin tümü üzerinden bir **kaba kuvvet (brute-force)** numaralandırma. Üç yanıt uyuşmuyor ve yerine-koyma formülünün tam olarak neden düşük olduğunu anlamak, yansızlığı tam kesirli aritmetikle kanıtlayarak, dersin tamamıdır. Sonunda pass@k'nin neden bir kombinatorik özdeşlik olduğunu, yazı-tura formülü olmadığını bileceksiniz ve bir daha asla yanlış olanı raporlamayacaksınız.
+
+## Ön koşullar
+
+Temel Python ve kombinatorikten tek bir fikir gerekli: binom katsayısı `C(n, k)`, "n'den k seç", `n` öğeden `k` öğelik sırasız bir alt kümeyi seçme yollarının sayısı. Bu, `C(5, 2) = 10` ve `C(3, 2) = 3`, yaslandığımız yalnızca iki değer. "Bir olasılık 0 ile 1 arasında bir kesirdir" dışında hiçbir olasılık geçmişi varsayılmıyor; tahmin ediciyi alt kümeleri sayarak kuruyoruz ve her alt kümeyi tek tek sesli okuyarak doğruluyoruz. Eşlik eden dosya, [pass_at_k.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-08-pass-at-k), API anahtarı, ağ ve NumPy dışında bağımlılık olmadan offline çalışır ve bu yazıda basılan her sayı o dosyanın gerçek çıktısıdır, yuvarlanmamış. Son kanıt kayan noktayla değil, tam kesirlerle yapılır, böylece son basamağa güvenebilirsiniz.
+
+## Kurulum: tek görev, beş çekiliş
+
+İşte somut durum ve herhangi bir aritmetikten önce onu çivilemekte fayda var. Elimizde tek bir kodlama görevi var, diyelim "X yapan bir fonksiyon yaz", ve tek bir model. Model stokastik olduğu için, onu bir sıcaklıkta `n = 5` kez örnekledik ve beş aday tamamlama elde ettik, `s0`'dan `s4`'e. Her birini gizli birim-test paketine karşı çalıştırdık. İkisi geçti ve üçü başarısız oldu:
+
+```text
+  samples:  s0(ok) s1(ok) s2(x ) s3(x ) s4(x )
+```
+
+Yani `n = 5` örneğimizin `c = 2`'si doğru. Örnek başına ampirik geçme oranı tam da bu orandır:
+
+```text
+  p_hat = c/n = 2/5 = 0.40
+```
+
+İşe yarayan çekilişlerin oranı budur. Bu modelin, bu sıcaklıkta, bu görevi tek denemede ne sıklıkla çözdüğüne dair mükemmel derecede iyi bir tahmindir. Ama raporlamak istediğimiz şey bu *değil*. Pratikte kimse tek bir tamamlama göndermez; birkaç örnek çekersiniz ve herhangi biri derlenip geçerse kullanıcı memnundur. Yani önemli olan soru şu: `k` çekilişlik bir bütçe verilirse, en az birinin doğru olma şansı nedir? İşte pass@k budur ve görevimiz için `k = 2` sabitleyeceğiz. `p_hat`'in 0.40 olduğu göz önüne alındığında, pass@2 nedir?
+
+## Adım 1: cazip yerine-koyma ve neden yanlış olduğu
+
+İşte neredeyse herkesin önce yazdığı formül. Her çekiliş `p_hat = 0.40` olasılığıyla başarılı olur, yani her çekiliş `1 - 0.40 = 0.60` olasılığıyla başarısız olur. Çekilişler bağımsız olsaydı, *hepsinin* `k`'sının başarısız olma şansı `0.60`'ın `k`'ıncı kuvvetidir ve en az birinin başarılı olma şansı bir eksi bu değerdir:
+
+```text
+  pass@2 ~= 1 - (1 - c/n)^k = 1 - (1 - 0.40)^2 = 1 - 0.36 = 0.640
+```
+
+Temiz, akılda kalıcı ve yanlı. Gizli varsayım "çekilişler bağımsızdı, her biri 0.40 olasılıkla başarılı" ifadesidir. Bu, %40'ı geçen *sonsuz* bir tamamlama havuzuna uzanıp `k` tanesini yerine koyarak (with replacement) çekseydiniz tam olarak doğru olurdu. Ama olan bu değil. Beş tamamlama çektiniz ve `k`'nızı bu beşten yerine koymadan (without replacement) seçiyorsunuz. Yerine-koyma, 5 örneklik sonlu havuzunuzu 0.40 yanlılıklı sonsuz bir madeni para gibi ele alır. Beş çekilişinize baktıktan sonra kompozisyonun sabitlendiğini yok sayar: tam olarak 2 iyi ve 3 kötü var, ne fazla ne eksik.
+
+Bu tahmini neden aşağı yönlü yanlı yapar? Uç durumu düşünün. Diyelim `c = 2` ve yerine koymadan `k = 4` çekiyorsunuz. Doğru bir örnekten kaçınmanız kelimenin tam anlamıyla imkansız, çünkü yalnızca 3 tane kötü var, dolayısıyla pass@4 mutlaka 1.000 olmalı. Ama yerine-koyma `1 - 0.60^4 = 0.870` diyor, dört başarısızlık çekmiş olma şansının %13 olduğunda ısrar ediyor, ki bu yalnızca üç tane tutan bir havuzdan imkansız. Yerine koyarak örnekleme kötü çekilişleri tekrarlayabilir; yerine koymadan örnekleme onları tüketir. Yerine-koyma, ıskalama yollarını sistematik olarak fazla sayar, dolayısıyla pass@k'yi düşük raporlar. Bu sezgiyi tutun; sonunda onu kesinleştireceğiz.
+
+## Adım 2: yansız tahmin edici, alt kümeleri sayarak
+
+Çözüm, olasılığı dürüst yolla hesaplamaktır: gerçek sonlu havuz üzerinden. Sonsuz madeni paraları unutun. 5 örneğiniz var, bunların `k = 2`'sini çekeceksiniz ve ikili boyuttaki her alt küme eşit olasılıklı. Yani bu saf sayma. 5 örneğin 2'sini seçme yollarının toplam sayısı binom katsayısıdır:
+
+```text
+  total size-k subsets      C(n, k)   = C(5,2) = 10
+```
+
+Şimdi, o 10 olası çekilişten kaçı tam başarısızlıktır, yani her iki seçim de başarısız örneklerden geldi? Başarısız örnekler `n - c = 3` tanedir, `s2`, `s3`, `s4`, ve bu 3'ten 2 başarısızlık seçme yollarının sayısı:
+
+```text
+  all-wrong size-k subsets  C(n-c, k) = C(3,2) = 3
+```
+
+Yani eşit olasılıklı 10 çekilişten 3'ü hiç doğru örnek içermiyor. Rastgele bir ikili çekilişin tümüyle yanlış olma olasılığı bu iki sayının oranıdır:
+
+```text
+  P(draw is all wrong) = C(n-c,k)/C(n,k) = 3/10 = 0.300
+```
+
+Ve pass@k tam olarak bir eksi budur, çekilişin tümüyle yanlış *olmama*, iki seçimden en az birinin geçme olasılığı:
+
+```text
+  pass@2 = 1 - C(n-c,k)/C(n,k) = 1 - 3/10 = 0.700
+```
+
+İşte yansız tahmin edici bu ve kod-değerlendirme literatürünün kullandığı tam formül budur. Yerine-koymanın 0.640'ı değil, **0.700** verdiğine dikkat edin. Aynı görev, aynı iki doğru örnek, iki formül arasında 0.060'lık bir açık, ve bütün fark yerine koyarak ile yerine koymadan arasında. Kombinatorik sürüm, üçlük bir havuzdan dördüncü bir başarısızlık çekmeyi asla hayal etmez, çünkü yalnızca gerçekten var olan alt kümeleri dikkate alır.
+
+Adlandırmaya değer bir sınır durumu var, çünkü eşlik eden kod onu korur: eğer `n - c < k` ise, yani bütçenizden daha az başarısız örnek varsa, o zaman `C(n-c, k)` sıfırdır (`k` tanesinden az varken `k` başarısızlık seçemezsiniz), dolayısıyla tümüyle-yanlış olasılığı 0 ve pass@k tam olarak 1.000'dir. Bu "ıskalayamazsınız" rejimidir ve formül otomatik olarak ona iner.
+
+## Adım 3: kaba kuvvet tartışmayı bitirir
+
+Her iki formüle de güvenmek zorunda değiliz. `n = 5`'te bütün örneklem uzayı minicik, dolayısıyla her tek ikili çekilişi elle numaralandırıp kaç tanesinin doğru bir örnek içerdiğini sayabiliriz. Doğru örnekler `s0` ve `s1`; çekiliş, bunlardan en az birini içeriyorsa geçer. İşte on tanesinin hepsi:
+
+```text
+  size-2 subsets of s0..s4 that contain >=1 correct sample:
+    {s0,s1}     -> PASS
+    {s0,s2}     -> PASS
+    {s0,s3}     -> PASS
+    {s0,s4}     -> PASS
+    {s1,s2}     -> PASS
+    {s1,s3}     -> PASS
+    {s1,s4}     -> PASS
+    {s2,s3}     -> fail
+    {s2,s4}     -> fail
+    {s3,s4}     -> fail
+  passing subsets / total = 7/10 = 0.700
+```
+
+On çekilişin yedisi `s0` ya da `s1`'den en az birini içerir; başarısız olan yalnızca üçü, tümüyle başarısız üçlü `s2`, `s3`, `s4`'ten çekilen çiftlerdir, ki bunlar tam olarak tahmin edicinin saydığı `C(3, 2) = 3` alt kümedir. Kaba kuvvet **7/10 = 0.700** diyor ve kombinatorik tahmin edici 0.700 dedi. Tam olarak uyuşuyorlar, çünkü tahmin edici, bir liste yerine sayıların oranı olarak yazılmış *bu* numaralandırmadır. Yerine-koymanın 0.640'ı gerçek alt kümelerin hiçbir sayımına karşılık gelmez; bu on çekilişten seçim yapıp 0.640'a inmenin bir yolu yoktur. Yanlış şeyi ölçtüğünün ipucu budur.
+
+Statik figür bunların hepsini tek bir görünümde serer: beş örnek, geçme veya başarısız kararlarıyla on alt küme, ve açığı görebilesiniz diye yan yana iki formül.
+
+<Diagram number={1} caption="n=5 tamamlamalı tek görev için pass@2, ki bunların c=2'si geçiyor. Sol: beş örnek, s0 ve s1 doğru, s2 ile s4 başarısız. Orta: elle numaralandırılmış, eşit olasılıklı C(5,2)=10 ikili çekilişin tümü, 7'si en az bir doğru örnek içeriyor (PASS) ve 3'ü yalnızca başarısız üçlüden çekilmiş (fail), bu da 7/10 = 0.700 kaba kuvvet yanıtını veriyor. Sağ: iki kapalı biçim tahmin edici karşılaştırılıyor. Yansız kombinatorik tahmin edici 1 eksi C(3,2)/C(5,2) = 1 eksi 3/10 = 0.700 kaba kuvvet sayımıyla tam olarak uyuşurken, cazip yerine-koyma 1-(1-0.40)^2 = 0.640 daha düşük çünkü elimizdeki sonlu beş çekiliş yerine sonsuz bir havuzdan yerine koyarak örneklemeyi modelliyor.">
+  <img src="/essays/pass-at-k/part8-figure.svg" alt="Beş örneklenen tamamlamalı bir kodlama görevi için 'pass@k'nin iki tahmin edicisi, kaba kuvvetle doğrulanmış' başlıklı bir figür. Solda, beş örnek kartı: s0 ve s1 zümrüt yeşilinde geçti işaretli, s2, s3 ve s4 başarısız işaretli. Ortada, beş örneğin ikili boyuttaki on alt kümesinin tümünün bir listesi: s0 ya da s1 içeren yedi alt küme zümrüt yeşilinde PASS etiketli, ve yalnızca s2, s3 ve s4'ten çekilen üç alt küme fail etiketli, bu da geçen alt kümelerin toplama oranını 7 bölü 10 eşittir 0.700 veriyor. Sağda, iki kutu tahmin edicileri karşılaştırıyor: yansız kombinatorik tahmin edici, 1 eksi C(3,2) bölü C(5,2) eşittir 1 eksi 3 bölü 10 eşittir 0.700, zümrüt yeşilinde gösterilmiş ve kaba kuvvet sayımıyla uyuşuyor olarak işaretlenmiş; ve yerine-koyma tahmin edicisi, 1 eksi (1 eksi 0.40) kare eşittir 0.640, soluk bir renkte gösterilmiş ve düşük yanlı işaretlenmiş. Bir açıklama, yerine-koymanın sonlu beş çekilişi sonsuz bir madeni para gibi ele aldığını, dolayısıyla pass@k'yi düşük raporladığını not eder." class="w-full rounded-lg" />
+</Diagram>
+
+## Adım 4: bütçe k'yı taramak
+
+Tek görev ve tek `k` açığı gösterir; `k`'yı taramak onun şeklini gösterir. Aynı havuzu koruyarak (`n = 5`, `c = 2`), pass@k'yi 1'den 5'e kadar her bütçe için üç yöntemle de hesaplıyoruz. Yansız ve kaba kuvvet sütunları, kuruluş gereği özdeş; yerine-koyma onlardan uzaklaşır:
+
+```text
+    k   plug-in(biased)   unbiased    brute-force
+    1      0.400          0.400       2/5 = 0.400
+    2      0.640          0.700       7/10 = 0.700
+    3      0.784          0.900       9/10 = 0.900
+    4      0.870          1.000       5/5 = 1.000
+    5      0.922          1.000       1/1 = 1.000
+```
+
+Sütunları okuyun. `k = 1`'de üçü de **0.400** üzerinde anlaşır, çünkü tek çekilişle pass@1 sadece örnek başına oran `p_hat`'tir ve beşten birini yerine koyarak ya da koymadan çekmek aynı şeydir. `k = 2`'den itibaren yolları ayrılır. Yansız tahmin edici 0.700, **0.900** diye tırmanır, sonra `k = 4`'te **1.000**'e çarpar ve orada kalır. O tavan, "ıskalayamazsınız" gerçeğinin görünür kılınmış halidir: bütçeniz başarısız örneklerin sayısını (`n - c = 3`) aştığında, her olası çekiliş mutlaka bir doğru örnek içermelidir, dolayısıyla pass@k tam olarak 1'dir. Kaba kuvvet sütunu bunu küçülen paydalarla doğrular, `5/5` sonra `1/1`, çünkü o bütçelerde çekmenin yalnızca `C(5, 4) = 5` ve `C(5, 5) = 1` yolu vardır.
+
+Yerine-koyma ise bu arada asla 1'e ulaşmaz. `k = 3`'te 0.784, `k = 4`'te **0.870**, `k = 5`'te **0.922** raporlar, o kombinatorik olarak imkansız olduğunda bile "tüm çekilişler başarısız oldu" üzerinde sonsuza dek bir olasılık dilimi bırakır. `k = 5`'te beş örneğin hepsini çekiyorsunuz, ikisi geçiyor, dolayısıyla pass@5 kesinlikle 1.000'dir, ama yerine-koyma 0.922'de ısrar eder. O 0.078'lik açık, yerine koyma kurgusunun saf yapaylığıdır. Taramanın dersi: pass@k, `k` ile monoton yükselir ve `k > n - c` olduğunda 1'e doygunlaşır, ve doygunlaşamayan herhangi bir tahmin edici size beş örneğinizi değil, hayali bir sonsuz havuzu anlatıyordur.
+
+## Adım 5: neden "yansız", tam aritmetikte kanıtlanmış
+
+Kombinatorik tahmin ediciye "yansız" demeye devam ediyoruz. Bu sözcüğün, hak edilmeye değer kesin bir anlamı var: çekmiş *olabileceğiniz* tüm veri kümeleri üzerinden ortalandığında, tahmin edici gerçek niceliğe eşittir. Ortalamada yakın değil, tam olarak eşit. Bunu kanıtlayalım, çünkü kanıt kısa ve formüle güvenmenin sebebi bu.
+
+Diyelim modelin bu görevdeki gerçek örnek başına başarı olasılığı `p = 0.40`. Eğer gerçek bu olsaydı, dürüst hedef, *gerçek* pass@2, yerine koyma formülüdür, çünkü taze bağımsız bir çekiliş her seferinde gerçekten `p` olasılığıyla başarılı olur:
+
+```text
+  true per-sample rate p = 0.40,  true pass@2 = 1 - (1-p)^2 = 0.640
+```
+
+Yani tahmin etmeye çalıştığımız sayı 0.640. Şimdi insanları tökezleten incelik burada: yerine-koyma formülü *gerçek* `p`'de değerlendirildiğinde 0.640 verir, ki bu doğru. Sorun şu ki pratikte `p`'yi bilmezsiniz; aynı beş gürültülü çekilişten tahmin edilen `p_hat = c/n`'i yerine koyarsınız ve `c`'nin kendisi rastgeledir. Bir tahmin ediciyi yargılamanın doğru yolu, çıktısını verinin çıkabileceği tüm yollar üzerinden ortalamaktır. Beş çekilişteki doğru örnek sayısı `c`, Binomial(5, 0.4) dağılımını izler, dolayısıyla her tahmin edicinin tam beklenen değerini, `c`'yi 0'dan 5'e alarak, her `c`'nin binom olasılığıyla ağırlıklandırarak ve bütün toplamı kesirli aritmetikle yaparak alıyoruz:
+
+```text
+  E[unbiased estimator] = 0.640   (exact: 16/25)  -> matches truth
+  E[plug-in  estimator] = 0.592   (exact: 74/125)  -> low by 0.048
+```
+
+İşte orada. Her olası veri kümesi üzerinden ortalandığında, kombinatorik tahmin edici tam olarak **16/25 = 0.640** döndürür, gerçek pass@2'nin tam üzerine. Gerçek, kanıtlanabilir anlamda yansızdır. Yerine-koyma **74/125 = 0.592**'ye ortalanır, ki bu **0.048 düşüktür**, sabit `n`'de hiçbir veri miktarının kaldırmadığı sabit bir aşağı yönlü yanlılık. `16/25` ve `74/125`, eşlik eden dosyada kayan nokta yaklaşımı olarak değil, tam kesirler olarak hesaplanır, dolayısıyla bu bir kanıttır, sayısal bir tesadüf değil.
+
+Sezgi Adım 1'e bağlanır. Yerine-koyma, `1 - (1-p)^k` yanlış hedef olduğu için yanlış değildir; başarısızlık oranının *gürültülü, ortalamada düşük* bir tahminini dışbükey bir fonksiyona beslediği için yanlıştır. Az örnek çektiğinizde, `c/n` etrafta zıplar ve başarısızlık terimi `(1 - c/n)^k`'nin o zıplamaya tepkisi asimetriktir: tahmini, ödüllendirdiğinden daha çok cezalandırır, ortalamayı gerçeğin altına sürükler. Kombinatorik tahmin edici, `p`'yi hiç tahmin etmeyerek bütün problemi baştan atlatır. Farklı, tamamen sonlu bir soruyu yanıtlar, "bu tam beş örnekten yapabileceğim çekilişlerden kaçı bir doğru olan içerir", ve o sorunun yanıtı, gerçek pass@k'nin yansız bir tahmini olmakla kalır. Özdeşliğin sessiz büyüsü budur: yalnızca beş örneğinizi tarif ediyor gibi görünür, ama ortalamada popülasyonu tam isabet vurur.
+
+İnteraktif figür hikayenin her iki yarısını da hissetmenizi sağlar. Üst panelde beş örnekten hangilerinin geçeceğini ayarlar ve bütçe `k`'yı kaydırırsınız, alt küme numaralandırmasının ve her iki tahmin edicinin canlı güncellenmesini izleyerek açığın açılıp kapanmasını görürsünüz. Alt panelde gerçek `p`'yi kaydırır ve tam beklentileri izlersiniz, yerine-koymanın ortalamasının inatla gerçeğin altında oturmasını, yansız tahmin edicinin ise onu tam olarak izlemesini görürsünüz.
+
+<IframeFigure src="/essays/pass-at-k/part8-interactive.html" title="İnteraktif pass@k gezgini: beş örneklenen tamamlamadan herhangi birine tıklayarak onu geçti ya da başarısız işaretlediğiniz ve 1'den 5'e bir bütçe kaydırıcısı k'yı sürüklediğiniz, ikili boyuttaki alt kümelerin numaralandırmasının, kaba kuvvet sayımının, yansız tahmin edicinin ve yanlı yerine-koymanın birlikte güncellenmesini izlediğiniz bir üst panel; ve gerçek örnek başına oran p'yi sürüklemenin, her tahmin edicinin doğru sayıların bir Binomial(5, p)'si üzerinden tam beklentisini gösterdiği, yerine-koymanın ortalamasının gerçek pass@k'nin altında kaldığını, yansız tahmin edicinin ise onunla uyuştuğunu görünür kılan bir alt panel." height={860} />
+
+## Özet / Çıkarımlar
+
+- **pass@k, `k` örneklenen tamamlamadan en az birinin geçme olasılığıdır ve bir sayma problemidir, bir yazı-tura değil.** Görevimiz için (`n = 5` örnek, `c = 2` doğru), pass@2 0.700'dür, hiç doğru örnek içermeyen ikili çekilişlerin oranından bir eksi olarak hesaplanır.
+- **Cazip yerine-koyma `1 - (1 - c/n)^k` düşük yanlıdır.** pass@2 için doğru 0.700'e karşılık 0.640 verir, çünkü sonlu `n`'nizden `k` seçmek yerine sonsuz bir havuzdan yerine koyarak `k` örnek çekmeyi modeller. Asla doygunlaşmaz: gerçek yanıt kesin bir 1.000 iken pass@5 için 0.922 raporlar.
+- **Yansız tahmin edici bir kombinatorik özdeşliktir: `1 - C(n-c, k) / C(n, k)`.** pass@2 için bu `1 - C(3,2)/C(5,2) = 1 - 3/10 = 0.700`'dür ve 10 alt kümenin tümünün kaba kuvvet numaralandırması, tam 7/10 olacak şekilde 7'sinin geçtiğini doğrular. `n - c < k` olduğunda tahmin edici tam olarak 1'dir: ıskalayamazsınız.
+- **"Yansız" bir slogan değil, kanıtlanabilir.** `c`'yi Binomial(5, 0.4)'ten alan tam beklenti kesirli aritmetikle alındığında, kombinatorik tahmin edici 16/25 = 0.640'a, tam olarak gerçek pass@2'ye ortalanırken, yerine-koyma 74/125 = 0.592'ye ortalanır, her sabit `n`'de 0.048 düşük.
+- **Yansız tahmin ediciyi raporlayın.** Ne zaman `n` tamamlama örnekleyip daha küçük bir `k` için pass@k isteseniz, kombinatorik biçimi kullanın. Yerine-koyma, raporunuzdaki her kod modelini sessizce olduğundan daha kötü gösterir, ve her zaman aynı aşağı yönlü eğimle.
+
+## Sözlük
+
+- **pass@k**: bir görev için `k` örneklenen tamamlamadan en az birinin testlerini geçme olasılığı. Kod üretiminin ve birkaç yanıt örnekleyip herhangi biri işe yararsa görevi çözülmüş kabul ettiğiniz herhangi bir senaryonun standart başarı metriği.
+- **Örnek / tamamlama (sample / completion)**: modelin görev için ürettiği bir çıktı. `n = 5` tanesini çektik, `s0`'dan `s4`'e etiketli; `c = 2`'si gizli birim testleri geçti.
+- **p_hat (örnek başına ampirik oran)**: `c / n`, geçen örneklenen tamamlamaların oranı. Burada `2/5 = 0.40`. pass@1'dir, ama `k > 1` için pass@k değil.
+- **Yerine-koyma tahmin edicisi (plug-in estimator)**: `1 - (1 - c/n)^k` formülü. Sonlu `n` örneklik havuzu, yerine koyarak çekilen sonsuz bir madeni para gibi ele alır, ki bu pass@k'yi aşağı yönlü yanlı yapar. Bizim pass@2'miz için 0.640 verir.
+- **Yansız tahmin edici (unbiased estimator)**: kombinatorik formül `1 - C(n-c, k) / C(n, k)`, `n` örneğin ikili boyuttaki `k`-alt kümelerinin en az bir doğru örnek içerenlerin oranı. Bizim pass@2'miz için 0.700 verir ve ortalamada gerçek pass@k'ye eşittir.
+- **Binom katsayısı `C(n, k)`**: `n` öğeden sırasız bir `k`-alt küme seçme yollarının sayısı. `C(5,2) = 10` (tüm çekilişler) ve `C(3,2) = 3` (tümüyle başarısız çekilişler) kullandık.
+- **Yanlılık (bias)**: bir tahmin edicinin, görebileceği tüm veri kümeleri üzerinden ortalama değeri ile gerçek nicelik arasındaki fark. Yerine-koymanın buradaki yanlılığı 0.592 eksi 0.640, aşağı yönlü 0.048; kombinatorik tahmin edicinin yanlılığı sıfır.
+- **Yerine koymadan örnekleme (sampling without replacement)**: sabit bir `n` havuzundan `k` ayrık öğe seçmek, böylece her öğe bir çekilişte en fazla bir kez görünebilir. `n` tamamlamanızın `k`'sını seçtiğinizde gerçekten olan budur, yerine koyarak örnekleme değil, ve kombinatorik tahmin edicinin doğru olan olmasının sebebi budur.
+
+---
+
+Artık tek bir sistemi, hatta stokastik bir sistemi bile, sabit bir örnek kümesinden skorlayabiliriz. Ama bazı nitelikler, "bu iki yanıttan hangisi daha iyi", mutlak bir sayıya tamamen direnir ve yalnızca karşılaştırmada yargılanır. **Bölüm 9, Arenalar (Arenas)**, ikili galibiyet ve mağlubiyetleri tek bir sıralamaya çevirir, Elo ve Bradley-Terry modellerini aynı ilk ilkelerden türetir.

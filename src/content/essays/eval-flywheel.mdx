@@ -1,0 +1,182 @@
+---
+title: "The Eval Flywheel"
+description: "Your best eval set is not something you write, it is something you mine from what your model already did. Part 12 takes 12 production traces from a support assistant, ranks them by a cheap suspicion score, and spends a budget of 6 annotations to grow a golden set that catches all 4 real failures where random sampling catches only 2."
+date: 2026-07-25
+tags: ["Evals", "LLM", "AI", "Golden Set", "Sampling", "Production"]
+seriesOrder: 12
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-12-eval-flywheel"
+lang: "en"
+translationSlug: "eval-flywheel-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 11 gave you a regression gate: a rule that reads a score plus its confidence interval and decides whether a new model is safe to ship. But a gate is only as trustworthy as the eval set behind it, and in Part 2 we hand-built that set from scratch, one carefully chosen example at a time. That works to start, but it does not scale, and worse, it is guessing. When you sit down to invent test cases, you write the failures you can imagine. The failures that actually hurt in production are, almost by definition, the ones you did not imagine. So where does a good eval set really come from?
+
+This part answers with the move that separates teams who improve fast from teams who stall: your best eval set is your production logs. Every request your model has already served is a labeled example waiting to happen. The catch is that the label, whether the answer was actually good or actually a failure, is hidden. Revealing it costs a human annotation, and annotation is the scarce, expensive resource. So the whole game becomes: which traces do you pay to label first? We will build a **priority score** from signals that are free (the model's own confidence and a guardrail flag), spend a fixed budget of annotations two different ways, and watch one way capture every real failure while the other captures half. Then we will run the **flywheel**: annotate a little, learn where the model is weak, aim the next annotations there, and grow a golden set that concentrates exactly on the model's blind spots. Finally, we will be honest about the one trap this creates, because a golden set built to be failure-dense will lie to you about your production failure rate if you let it.
+
+## Prerequisites
+
+You need basic Python: a list of records, a sort with a key function, a loop, and a division. That is all. We use a fixed random seed so the "random sampling" baseline is exactly reproducible, and no statistics beyond counting and averaging. If you have read Part 1 (the confusion matrix and what a score is) and Part 11 (regression gates) you have all the context, but this part stands alone. The companion file, [flywheel.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-12-eval-flywheel), runs offline with no API key, no network, and no dependencies. Every number printed in this essay is that file's real output, unrounded and unedited, so you can reproduce all of it yourself.
+
+## The production log
+
+Here is the world we live in. A support assistant has served 12 requests today, traces `T01` through `T12`. For each one we automatically recorded two cheap signals that cost us nothing:
+
+- `conf`, the model's self-reported confidence, a number it emits alongside every answer.
+- `flag`, a binary guardrail signal: `1` if a safety rule fired or the user pressed thumbs-down, `0` otherwise.
+
+Both of those are logged for free on every single request. What we do **not** have is the thing we actually care about: was the answer good or was it a failure? That true label, `correct` in the code, is hidden. A human has to read the trace and decide, and that human's time is the budget we have to spend carefully.
+
+Look at the log. The `priority` column is a score we will build in a moment; the true label is deliberately shown as `(hidden)` because at this stage we genuinely do not know it:
+
+```text
+  id    conf  flag  priority  true label
+  T01   0.96    0     0.04   (hidden)
+  T02   0.93    0     0.07   (hidden)
+  T03   0.91    0     0.09   (hidden)
+  T04   0.88    0     0.12   (hidden)
+  T05   0.84    0     0.16   (hidden)
+  T06   0.80    0     0.20   (hidden)
+  T07   0.74    0     0.26   (hidden)
+  T08   0.68    0     0.32   (hidden)
+  T09   0.62    1     0.88   (hidden)
+  T10   0.55    1     0.95   (hidden)
+  T11   0.48    1     1.02   (hidden)
+  T12   0.40    1     1.10   (hidden)
+```
+
+There is a truth buried in this table that we will only earn by paying for annotations, so let me state it once now so you can check the arithmetic later: of these 12 traces, exactly 4 are real failures. That makes the true production failure rate `4/12 = 0.33`, one in three. But remember, sitting at the log we cannot see that yet. All we can see are `conf` and `flag`. The entire art of this part is squeezing those two free signals for everything they are worth before we spend a cent on labels.
+
+## A cheap suspicion score
+
+We cannot label everything, so we need to guess which traces are most likely to be failures using only what is free. Intuition gives us two clean rules. First, low confidence is suspicious: when the model itself is unsure, it is more likely to be wrong. Second, a raised flag is suspicious: a guardrail hit or a thumbs-down is a direct signal that something went sideways. We combine them into one **priority score**:
+
+```text
+priority = (1 - confidence) + 0.5 * flag
+```
+
+Read it piece by piece. The term `(1 - confidence)` turns high confidence into low priority and low confidence into high priority, so a trace the model was sure about (`conf = 0.96`) contributes only `0.04`, while a shaky one (`conf = 0.40`) contributes `0.60`. The term `0.5 * flag` adds a fixed bump of `0.5` whenever the guardrail fired. That weight of `0.5` is a deliberate choice: it says a raised flag is worth about as much suspicion as a half-point drop in confidence, enough to lift a flagged trace above the calm, high-confidence ones, without completely swamping the confidence signal. It needs no annotation to compute; it is pure arithmetic on two logged numbers, so we can score all 12 traces instantly and for free.
+
+Run the score down the log and rank from most suspicious to least:
+
+```text
+  T12  T11  T10  T09  T08  T07  T06  T05  T04  T03  T02  T01
+```
+
+`T12` tops the list at priority `1.10` (lowest confidence `0.40` plus a flag), and `T01` sits at the bottom at `0.04` (rock-solid `0.96` confidence, no flag). Notice what the `0.5 * flag` term did: it cleanly lifted all four flagged traces (`T09` through `T12`) to the top of the ranking, above every unflagged trace, because even the least confident unflagged trace (`T08` at priority `0.32`) scores below the most confident flagged one (`T09` at `0.88`). We have sorted the whole log by likely-failure without knowing a single true label.
+
+<Diagram number={1} caption="The eval flywheel on 12 support-assistant traces. Left: the production log ranked top-to-bottom by the cheap priority score (1 - confidence) + 0.5 * flag, from T12 (priority 1.10, flagged) down to T01 (priority 0.04). Middle: spending a budget of 6 annotations two ways. The hard-case batch takes the top 6 by priority (T12, T11, T10, T09, T08, T07) and reveals 4 failures out of 6, a failure density of 0.67 and coverage of all 4 real failures (4/4 = 1.00). The random batch (seed 0: T01, T04, T05, T07, T08, T12) reveals only 2 failures out of 6, density 0.33, covering just 2 of 4 real failures (0.50). Right: the flywheel loop, log to priority to annotate to grow golden set to guard weak spots and back, with the honesty note that the enriched golden set rate 0.67 is not the true production rate 0.33.">
+  <img src="/essays/eval-flywheel/part12-figure.svg" alt="A three-panel diagram of the eval flywheel over 12 traces. The left panel is a vertical bar list of the production log ranked by priority score, with T12 at the top (priority 1.10, low confidence 0.40, flag set) descending to T01 at the bottom (priority 0.04, confidence 0.96, no flag); the four flagged traces T09 to T12 sit at the top in emerald. The middle panel shows two batches spending a budget of 6 annotations. The hard-case batch highlights the top 6 by priority (T12, T11, T10, T09, T08, T07) and annotates 'failures found 4 of 6, density 0.67, coverage 4 of 4 = 1.00' in emerald. The random batch (seed 0) highlights T01, T04, T05, T07, T08, T12 and annotates 'failures found 2 of 6, density 0.33, coverage 2 of 4 = 0.50' in a muted zinc tone. The right panel draws a circular flywheel with four stages, production log, rank by priority, annotate top-k, golden set grows, arrows looping back to guard the model's weak spots, and a footnote in rose reading 'enriched golden rate 0.67 is NOT the production rate 0.33: keep a random holdout.'" class="w-full rounded-lg" />
+</Diagram>
+
+## Spending a budget: hard cases versus random
+
+Now the decision that matters. We have a budget of 6 annotations. A human will read 6 traces and reveal their true labels. Which 6 do we send?
+
+The naive answer, and the one most teams default to, is: just grab some logs at random. It feels fair and unbiased. The smarter answer is: send the 6 most suspicious traces, the top 6 by priority. Let us do both and count what each buys us. This is the one place we finally spend annotations and see true labels appear.
+
+**Hard-case sampling.** Take the top 6 of the ranking: `T12`, `T11`, `T10`, `T09`, `T08`, `T07`. A human labels them and the results come back:
+
+```text
+  Hard-case batch (top 6 by priority):
+    T12 T11 T10 T09 T08 T07
+    failures found = 4/6   (failure density = 0.67)
+    failure coverage = 4/4 of all real failures = 1.00
+```
+
+Four of the six turned out to be failures. That is a failure density of `4/6 = 0.67`: two-thirds of everything we labeled was a genuine problem. And here is the number that should make you sit up: those 4 failures are **all 4** of the real failures in the entire log. Failure coverage is `4/4 = 1.00`. With 6 annotations out of 12 traces, hard-case sampling swept up every single failure the model made. Our cheap priority score, built from nothing but confidence and a flag, pointed straight at every blind spot.
+
+**Random sampling.** Now the baseline. We draw 6 traces at random (with a fixed seed, so the draw is exactly reproducible), and it happens to select `T01`, `T04`, `T05`, `T07`, `T08`, `T12`. Label those:
+
+```text
+  Random batch (seed 0):
+    T01 T04 T05 T07 T08 T12
+    failures found = 2/6   (failure density = 0.33)
+    expected failures for a random batch = 6*4/12 = 2.00
+    failure coverage = 2/4 of all real failures = 0.50
+```
+
+Only 2 of the 6 were failures, a density of `2/6 = 0.33`. That is not bad luck; it is exactly what random sampling is supposed to do. A random draw sees the base rate, so its expected number of failures is `budget * failures / total = 6*4/12 = 2.00`. The draw landed right on its expectation. And because it only found 2 of the 4 real failures, its failure coverage is `2/4 = 0.50`. Random sampling, spending the identical 6 annotations, found half the failures hard-case sampling found and left the other half sitting in the log, unlabeled and invisible.
+
+Put the two side by side. Same budget, same log, same effort:
+
+```text
+  -> Same 6 annotations: hard-case sampling caught ALL 4 failures,
+     random caught 2. The golden set is 0.67 failures vs the 0.33
+     base rate: ~2x denser.
+```
+
+The hard-case golden set is `0.67` failures per example against the population base rate of `0.33`, roughly twice as dense in exactly the thing we want to study. This is the **enrichment** that makes mining worth it: by aiming annotations with a free signal, every dollar of labeling buys about double the failures it would buy at random. When failures are the rare, expensive-to-find event, and they usually are, doubling your hit rate is the difference between an eval set that teaches you something and one that mostly re-confirms the model is fine at easy questions.
+
+## The flywheel
+
+One budget was a snapshot. The real power comes from running this on a loop, and that loop is the flywheel. The recipe is simple and it repeats forever: log production traces, rank them by the cheap priority score, annotate the top few, add the newly labeled cases to your golden set, and let that enriched set guard the model's weak spots on the next release. Then new traces arrive, the model changes, new weak spots appear, and you turn the wheel again. Each turn is cheap because the ranking is free and you only pay for a handful of labels.
+
+Let us turn the wheel three times on our log, annotating 2 hard cases per round (per-round budget of 2, for 3 rounds). Watch the golden set grow and, crucially, watch two different rates diverge as it does:
+
+```text
+  round  new       new fail  golden  cum fail  coverage  gold rate
+   1     T12+T11        2       2        2     0.50      1.00
+   2     T10+T09        1       4        3     0.75      0.75
+   3     T08+T07        1       6        4     1.00      0.67
+```
+
+Trace the columns. In **round 1** we annotate the two most suspicious traces, `T12` and `T11`. Both are failures, so `new fail` is 2, the golden set now holds 2 examples, cumulative failures is 2, coverage is `2/4 = 0.50` (we have already found half the real failures on our first turn), and the gold rate (failures over golden-set size) is `2/2 = 1.00`. Every example so far is a failure.
+
+In **round 2** we take the next two, `T10` and `T09`. Only one of them (`T09`) is a failure this time, so `new fail` is 1. The golden set grows to 4, cumulative failures rises to 3, coverage climbs to `3/4 = 0.75`, and the gold rate settles to `3/4 = 0.75`. Notice the gold rate started falling the moment we labeled a non-failure.
+
+In **round 3** we take `T08` and `T07`. Again one failure (`T08`), so cumulative failures reaches 4, the golden set is 6 examples, coverage hits `4/4 = 1.00` (we now have every real failure in the log), and the gold rate lands at `4/6 = 0.67`. After 3 rounds we have a golden set of size 6 that captures all 4 of the model's failures, built by spending annotations only where the free signal told us to look.
+
+The shape of those two curves is the whole lesson. Coverage climbs fast and early (`0.50`, `0.75`, `1.00`) because we annotate the most suspicious traces first and they really are where the failures live. The gold rate falls from `1.00` toward `0.67` because, having exhausted the obvious failures, each new round starts pulling in some correct answers too. That is the flywheel working exactly as intended: it front-loads the failures, so even a tiny annotation budget captures the cases that matter most, and it tells you when to stop, because once the gold rate stops falling steeply you have mined out the easy failures and the next round will mostly re-confirm what you know.
+
+The interactive figure below lets you drive this yourself. Adjust the annotation budget and the weight on the `flag` signal, toggle between hard-case and random sampling, and step through the flywheel round by round. Watch coverage and gold rate respond in real time, and watch the random baseline sit stubbornly near the `0.33` base rate while hard-case sampling races to full coverage.
+
+<IframeFigure src="/essays/eval-flywheel/part12-interactive.html" title="Interactive eval-flywheel explorer: the 12 production traces ranked by a priority score you can retune with the flag weight, a budget slider that selects which traces get annotated under hard-case versus random sampling, and a round-by-round flywheel that shows failure coverage climbing to 1.00 and the gold rate falling from 1.00 toward 0.67 as the golden set grows." height={860} />
+
+## Closing the loop, honestly
+
+There is a sharp edge on this technique, and pretending it is not there is how good teams fool themselves. We deliberately built a golden set that is failure-dense. That was the entire point: we wanted an eval set concentrated on the model's weak spots, so a regression gate (Part 11) trained on it would fiercely defend against exactly the mistakes production makes. Our golden set is `4/6 = 0.67` failures. That density is a feature.
+
+But it is a trap if you read the wrong number off it. The gold rate of `0.67` is **not** your production failure rate. It cannot be, because we hand-picked these examples precisely because they looked like failures. The true production failure rate is `4/12 = 0.33`, one in three, and it is half the enriched rate. If you take your shiny mined golden set, compute "the model fails 67% of the time," and report that upward, you have just doubled your own failure rate through a sampling artifact you created on purpose.
+
+```text
+Closing the loop (honestly):
+  The golden set is deliberately failure-dense (4/6 = 0.67); that is
+  the point, it guards the model's weak spots. But that rate is NOT
+  production's: the true production failure rate is 4/12 = 0.33. To
+  estimate THAT unbiased, keep a small random holdout alongside the
+  mined set.
+```
+
+The fix is to keep two sets, not one, and to know which question each answers. The **mined set** (hard-case, enriched) answers "does the model still fail on its known weak spots?", the question a regression gate cares about. A small **random holdout** (unbiased, base-rate) answers "how often does the model fail in the wild?", the question a status report cares about. The mined set is biased on purpose and you must never quote its rate as a production number; the random holdout is boring on purpose and it is the only honest estimate of how you are actually doing. Run the flywheel to grow the first, and reserve a slice of your annotation budget for the second. That way you get both the sharp weak-spot coverage and a truthful headline, and you never confuse the two.
+
+## Key takeaways
+
+- **Your best eval set is mined, not invented.** Hand-written test cases only cover the failures you can imagine; production traces contain the failures that actually happen. The flywheel turns logs into labeled examples by paying to annotate the most suspicious ones.
+- **A cheap priority score aims your scarce annotations.** `priority = (1 - confidence) + 0.5 * flag` uses only free signals (the model's confidence and a guardrail flag) to rank 12 traces from most to least suspicious, no labels required. The `0.5` weight lifts every flagged trace above the unflagged ones.
+- **Hard-case sampling roughly doubles failure density.** Spending the same budget of 6 annotations, ranking-based sampling found 4/6 failures (density `0.67`) and covered all 4 real failures (`4/4 = 1.00`), while random sampling found only 2/6 (density `0.33`, its expected `6*4/12 = 2.00`) and covered just half (`2/4 = 0.50`).
+- **The flywheel front-loads failures.** Annotating 2 hard cases per round for 3 rounds, coverage climbed `0.50` to `0.75` to `1.00` while the gold rate fell `1.00` to `0.75` to `0.67`, ending with a golden set of 6 that captures all 4 failures. Coverage rising fast and gold rate falling tells you when to stop mining.
+- **An enriched golden set lies about the base rate, by design.** The mined set is `4/6 = 0.67` failures, but the true production failure rate is `4/12 = 0.33`. Never quote the enriched rate as a production number; keep a small random holdout for the unbiased estimate and know which set answers which question.
+
+## Glossary
+
+- **Trace**: one logged production request and its response, carrying cheap signals (confidence, guardrail flag) that are always visible plus a true quality label that is hidden until a human annotates it.
+- **Priority score**: a cheap, label-free suspicion score computed from logged signals, here `(1 - confidence) + 0.5 * flag`, used to rank traces so annotation is spent on the likely failures first.
+- **Annotation budget**: the fixed number of traces a human can afford to label in a round (6 in the single-shot comparison, 2 per round across the flywheel). The scarce resource the whole method optimizes.
+- **Hard-case sampling**: choosing traces to annotate by taking the top of the priority ranking, which enriches the labeled set with failures relative to the base rate.
+- **Random sampling**: choosing traces to annotate uniformly at random, which reproduces the population base rate and gives an unbiased but failure-sparse set.
+- **Failure density (gold rate)**: the fraction of annotated examples that are failures. Enriched by hard-case sampling (`0.67` here), it is deliberately higher than the production base rate.
+- **Failure coverage**: the fraction of all real failures that the annotated set has captured (`4/4 = 1.00` for hard-case, `2/4 = 0.50` for random at budget 6). The metric to watch as the flywheel turns.
+- **Golden set**: the growing collection of annotated, trusted examples used to grade the model; here mined from production and concentrated on the model's weak spots.
+- **Base rate**: the true frequency of failures in the population (`4/12 = 0.33`). Only a random, unbiased sample estimates it correctly; a mined set does not.
+- **Random holdout**: a small unbiased sample kept alongside the mined set specifically to estimate the production failure rate honestly, since the enriched golden set cannot.
+
+---
+
+We now grow a golden set from production, but every number so far is still measured offline, after the fact, on logged traces. The real test is what happens when a new model meets live users. **Part 13, Online Evals**, takes the fight into production: A/B test effect sizes on a small sample, guardrail metrics, and why an offline win does not always survive contact with the real world.

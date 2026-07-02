@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Online Evals: an A/B test with a guardrail, Part 13</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 780px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+/* ── CONTROLS ── */
+.control-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 20px;
+  margin-bottom: 8px;
+}
+@media (max-width: 560px) {
+  .control-grid { grid-template-columns: 1fr; }
+}
+.control-grid label {
+  font-size: 12.5px; font-weight: 600; color: var(--body);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.control-row { display: flex; align-items: center; gap: 10px; }
+input[type="range"] { flex: 1; min-width: 100px; accent-color: var(--emerald); height: 22px; cursor: pointer; }
+input[type="range"]:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+.control-read { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 84px; text-align: right; }
+.control-read b { color: var(--ink); }
+
+.reset-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s;
+  margin: 6px 0 18px;
+}
+.reset-btn:hover { background: var(--chip-bg); }
+.reset-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+
+/* ── RESULT CARDS ── */
+.result-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+@media (max-width: 560px) {
+  .result-row { grid-template-columns: 1fr; }
+}
+.stat-card {
+  border: 1.5px solid var(--border);
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+}
+.stat-card .mini-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.metric { padding: 7px 0; border-bottom: 1px solid var(--border); }
+.metric:last-child { border-bottom: none; }
+.metric-head { display: flex; align-items: baseline; justify-content: space-between; }
+.metric-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.metric-val { font-family: var(--font-mono); font-size: 17px; font-weight: 700; color: var(--emerald); }
+.metric-formula { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+
+.chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.chip {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+}
+.chip.ok { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.chip.bad { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+
+.verdict {
+  font-size: 13px;
+  border-radius: 10px;
+  padding: 13px 15px;
+  line-height: 1.5;
+  border: 1.5px solid transparent;
+}
+.verdict .v-title { font-size: 14.5px; font-weight: 700; margin-bottom: 4px; }
+.verdict.ship { background: var(--emerald-bg); border-color: var(--emerald-bd); color: var(--emerald-ink); }
+.verdict.ship .v-title { color: var(--emerald); }
+.verdict.noship { background: var(--rose-bg); border-color: var(--rose-bd); color: var(--rose-ink); }
+.verdict.noship .v-title { color: var(--rose); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<section class="panel" aria-labelledby="panel-heading">
+  <p class="eyebrow">Simulate the launch decision</p>
+  <h2 id="panel-heading">Two arms, one ship decision</h2>
+  <p class="panel-subtitle">400 sessions per arm, one week of live traffic. Drag the counts and watch the z-test and the guardrail decide whether the new prompt ships.</p>
+
+  <div class="hint">
+    <strong>Drag any slider</strong> to change how many of the 400 sessions in each arm resolved or were refused, or move the allowed guardrail margin. Every rate, the z-test, and the ship verdict recompute live.
+  </div>
+
+  <div class="control-grid" id="control-grid">
+    <label for="c-resolved">
+      Control resolved (of 400)
+      <div class="control-row">
+        <input type="range" id="c-resolved" min="0" max="400" step="1" value="168" />
+        <span class="control-read" id="c-resolved-read"></span>
+      </div>
+    </label>
+    <label for="t-resolved">
+      Treatment resolved (of 400)
+      <div class="control-row">
+        <input type="range" id="t-resolved" min="0" max="400" step="1" value="200" />
+        <span class="control-read" id="t-resolved-read"></span>
+      </div>
+    </label>
+    <label for="c-refused">
+      Control refused (of 400)
+      <div class="control-row">
+        <input type="range" id="c-refused" min="0" max="400" step="1" value="20" />
+        <span class="control-read" id="c-refused-read"></span>
+      </div>
+    </label>
+    <label for="t-refused">
+      Treatment refused (of 400)
+      <div class="control-row">
+        <input type="range" id="t-refused" min="0" max="400" step="1" value="40" />
+        <span class="control-read" id="t-refused-read"></span>
+      </div>
+    </label>
+    <label for="margin" style="grid-column: 1 / -1;">
+      Allowed guardrail margin
+      <div class="control-row">
+        <input type="range" id="margin" min="0" max="10" step="0.5" value="2" />
+        <span class="control-read" id="margin-read"></span>
+      </div>
+    </label>
+  </div>
+
+  <button class="reset-btn" id="reset-btn" type="button">Reset to the real experiment</button>
+
+  <div class="result-row">
+    <div class="stat-card">
+      <p class="mini-label">Primary metric &#183; resolution rate</p>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">control</span><span class="metric-val" id="pc-val" style="color:var(--body)">0.000</span></div>
+        <div class="metric-formula" id="pc-f"></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">treatment</span><span class="metric-val" id="pt-val">0.000</span></div>
+        <div class="metric-formula" id="pt-f"></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">absolute lift</span><span class="metric-val" id="lift-abs-val">+0.000</span></div>
+        <div class="metric-formula" id="lift-abs-f"></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">relative lift</span><span class="metric-val" id="lift-rel-val">+0.0%</span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">z statistic</span><span class="metric-val" id="z-val">0.000</span></div>
+        <div class="metric-formula" id="z-f"></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">p-value (two-sided)</span><span class="metric-val" id="p-val">0.0000</span></div>
+        <div class="metric-formula">pooled p, SE below</div>
+      </div>
+      <div class="metric-formula" id="se-f" style="margin-top:6px;"></div>
+      <div class="chip-row">
+        <span class="chip" id="sig-chip">not significant</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <p class="mini-label">Guardrail &#183; refusal rate</p>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">control</span><span class="metric-val" id="rc-val" style="color:var(--body)">0.000</span></div>
+        <div class="metric-formula" id="rc-f"></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">treatment</span><span class="metric-val" id="rt-val">0.000</span></div>
+        <div class="metric-formula" id="rt-f"></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">change</span><span class="metric-val" id="guard-delta-val">+0.000</span></div>
+        <div class="metric-formula" id="guard-delta-f"></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">allowed margin</span><span class="metric-val" id="margin-val" style="color:var(--body)">+2.0 pp</span></div>
+      </div>
+      <div class="chip-row">
+        <span class="chip" id="guard-chip">OK</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict">
+    <div class="v-title" id="verdict-title">VERDICT</div>
+    <span id="verdict-body"></span>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="announcer"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  var N = 400;
+
+  /* ── math core, mirrors online_evals.py exactly ── */
+  function rate(count, n) { return n ? count / n : 0.0; }
+
+  function erf(x) {
+    var sign = x >= 0 ? 1 : -1;
+    x = Math.abs(x);
+    var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
+        a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+    var t = 1 / (1 + p * x);
+    var y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    return sign * y;
+  }
+  function normalCdf(z) { return 0.5 * (1.0 + erf(z / Math.sqrt(2.0))); }
+
+  function twoProportionZtest(x1, n1, x2, n2) {
+    var p1 = rate(x1, n1);
+    var p2 = rate(x2, n2);
+    var pPool = (x1 + x2) / (n1 + n2);
+    var se = Math.sqrt(pPool * (1.0 - pPool) * (1.0 / n1 + 1.0 / n2));
+    var z = se === 0 ? 0 : (p2 - p1) / se;
+    var pValue = 2.0 * (1.0 - normalCdf(Math.abs(z)));
+    return { p1: p1, p2: p2, pPool: pPool, se: se, z: z, pValue: pValue };
+  }
+
+  function fmt3(x) { return x.toFixed(3); }
+  function fmt5(x) { return x.toFixed(5); }
+  function fmt4(x) { return x.toFixed(4); }
+  function signed3(x) { return (x >= 0 ? "+" : "") + x.toFixed(3); }
+  function pp(x) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(1) + " pp"; }
+  function pct1(x) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(1) + "%"; }
+
+  var cResolved = document.getElementById("c-resolved");
+  var tResolved = document.getElementById("t-resolved");
+  var cRefused = document.getElementById("c-refused");
+  var tRefused = document.getElementById("t-refused");
+  var marginSlider = document.getElementById("margin");
+
+  var DEFAULTS = { cResolved: 168, tResolved: 200, cRefused: 20, tRefused: 40, margin: 2 };
+
+  function render() {
+    var cr = parseInt(cResolved.value, 10);
+    var tr = parseInt(tResolved.value, 10);
+    var cf = parseInt(cRefused.value, 10);
+    var tf = parseInt(tRefused.value, 10);
+    var marginPp = parseFloat(marginSlider.value);
+    var margin = marginPp / 100;
+
+    document.getElementById("c-resolved-read").innerHTML = "<b>" + cr + "</b> / 400";
+    document.getElementById("t-resolved-read").innerHTML = "<b>" + tr + "</b> / 400";
+    document.getElementById("c-refused-read").innerHTML = "<b>" + cf + "</b> / 400";
+    document.getElementById("t-refused-read").innerHTML = "<b>" + tf + "</b> / 400";
+    document.getElementById("margin-read").innerHTML = "<b>+" + marginPp.toFixed(1) + " pp</b>";
+    document.getElementById("margin-val").textContent = "+" + marginPp.toFixed(1) + " pp";
+
+    /* primary metric */
+    var t = twoProportionZtest(cr, N, tr, N);
+    var absLift = t.p2 - t.p1;
+    var relLift = t.p1 === 0 ? 0 : absLift / t.p1;
+
+    document.getElementById("pc-val").textContent = fmt3(t.p1);
+    document.getElementById("pc-f").textContent = cr + "/400";
+    document.getElementById("pt-val").textContent = fmt3(t.p2);
+    document.getElementById("pt-f").textContent = tr + "/400";
+    document.getElementById("lift-abs-val").textContent = signed3(absLift);
+    document.getElementById("lift-abs-f").textContent = fmt3(t.p2) + " - " + fmt3(t.p1) + " (" + pp(absLift) + ")";
+    document.getElementById("lift-rel-val").textContent = pct1(relLift);
+    document.getElementById("z-val").textContent = t.z.toFixed(3);
+    document.getElementById("z-f").textContent = "(" + fmt3(t.p2) + " - " + fmt3(t.p1) + ") / " + fmt5(t.se);
+    document.getElementById("p-val").textContent = fmt4(t.pValue);
+    document.getElementById("se-f").textContent =
+      "pooled p = (" + cr + "+" + tr + ")/(400+400) = " + fmt3(t.pPool) +
+      "  ·  SE = " + fmt5(t.se);
+
+    var primarySig = t.pValue < 0.05;
+    var sigChip = document.getElementById("sig-chip");
+    sigChip.className = "chip " + (primarySig ? "ok" : "bad");
+    sigChip.textContent = primarySig
+      ? "p = " + fmt4(t.pValue) + " < α = 0.05 → SIGNIFICANT"
+      : "p = " + fmt4(t.pValue) + " ≥ α = 0.05 → not significant";
+
+    /* guardrail metric */
+    var rC = rate(cf, N);
+    var rT = rate(tf, N);
+    var guardDelta = rT - rC;
+    var guardOk = guardDelta <= margin;
+
+    document.getElementById("rc-val").textContent = fmt3(rC);
+    document.getElementById("rc-f").textContent = cf + "/400";
+    document.getElementById("rt-val").textContent = fmt3(rT);
+    document.getElementById("rt-f").textContent = tf + "/400";
+    document.getElementById("rt-val").style.color = guardOk ? "var(--emerald-ink)" : "var(--rose-ink)";
+    document.getElementById("guard-delta-val").textContent = signed3(guardDelta);
+    document.getElementById("guard-delta-val").style.color = guardOk ? "var(--emerald-ink)" : "var(--rose-ink)";
+    document.getElementById("guard-delta-f").textContent = fmt3(rT) + " - " + fmt3(rC) + " (" + pp(guardDelta) + ")";
+
+    var guardChip = document.getElementById("guard-chip");
+    guardChip.className = "chip " + (guardOk ? "ok" : "bad");
+    guardChip.textContent = guardOk ? "OK, within +" + marginPp.toFixed(1) + " pp" : "BREACHED";
+
+    /* verdict */
+    var ship = primarySig && guardOk;
+    var v = document.getElementById("verdict");
+    var vt = document.getElementById("verdict-title");
+    var vb = document.getElementById("verdict-body");
+    v.className = "verdict " + (ship ? "ship" : "noship");
+    if (ship) {
+      vt.textContent = "VERDICT: SHIP IT";
+      vb.textContent = "The primary lift is real (p = " + fmt4(t.pValue) + " < 0.05) and the guardrail holds (refusal change " + pp(guardDelta) + " within the +" + marginPp.toFixed(1) + " pp margin).";
+    } else if (!primarySig && !guardOk) {
+      vt.textContent = "VERDICT: DO NOT SHIP";
+      vb.textContent = "Neither condition is met: the lift is not significant (p = " + fmt4(t.pValue) + ") and the guardrail is breached (" + pp(guardDelta) + ").";
+    } else if (!primarySig) {
+      vt.textContent = "VERDICT: DO NOT SHIP";
+      vb.textContent = "The guardrail is fine, but the primary lift is not statistically significant (p = " + fmt4(t.pValue) + " ≥ 0.05). It could just be noise.";
+    } else {
+      vt.textContent = "VERDICT: DO NOT SHIP";
+      vb.textContent = "The primary lift is real and significant (p = " + fmt4(t.pValue) + " < 0.05), but the guardrail is breached (refusal rate change " + pp(guardDelta) + " exceeds the +" + marginPp.toFixed(1) + " pp margin). An offline win is necessary, not sufficient.";
+    }
+
+    document.getElementById("announcer").textContent =
+      "Control resolves " + fmt3(t.p1) + ", treatment resolves " + fmt3(t.p2) +
+      ", lift " + pp(absLift) + ", p-value " + fmt4(t.pValue) +
+      ", guardrail change " + pp(guardDelta) + ". " + vt.textContent + ".";
+  }
+
+  [cResolved, tResolved, cRefused, tRefused, marginSlider].forEach(function (el) {
+    el.addEventListener("input", render);
+  });
+
+  document.getElementById("reset-btn").addEventListener("click", function () {
+    cResolved.value = DEFAULTS.cResolved;
+    tResolved.value = DEFAULTS.tResolved;
+    cRefused.value = DEFAULTS.cRefused;
+    tRefused.value = DEFAULTS.tRefused;
+    marginSlider.value = DEFAULTS.margin;
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

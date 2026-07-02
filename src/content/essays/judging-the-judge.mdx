@@ -1,0 +1,138 @@
+---
+title: "Judging the Judge"
+description: "An LLM judge is a model, so it carries systematic, measurable biases. Part 5 baits a deterministic mock judge with a slot-A bonus and a per-word reward, measures its position bias (7 of 12 verdicts flip when you swap who goes first) and verbosity bias (the longer answer wins all 5 tied probes), then corrects the position bias by averaging both orderings and watches disagreement with the truth fall from 5/12 to 1/12."
+date: 2026-07-18
+tags: ["Evals", "LLM", "AI", "LLM-as-Judge", "Bias", "Position Bias"]
+seriesOrder: 5
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-05-judging-the-judge"
+lang: "en"
+translationSlug: "judging-the-judge-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 4 built an LLM judge and scored it against human gold, and the lesson was that a judge is just another noisy grader you have to measure. This part measures a subtler and more dangerous property of that grader: not how *often* it is wrong, but whether it is wrong in a *systematic* direction. A judge that misses at random is merely noisy, and noise averages out over enough examples. A judge that always favors the answer shown first, or always favors the longer answer, is **biased**, and bias does not average out. It quietly tilts every comparison the same way, so a system can win your eval not because it is better but because it happened to sit in the lucky slot or padded its answers with words. That is the failure this part is about, and it is one that headline accuracy never catches.
+
+We work on paired comparisons, the format that powers most modern judging: two systems answer the same prompt, and the judge picks a winner. We build a deterministic mock judge with two flaws baked in on purpose, so we know the ground truth exactly. It hands a fixed bonus of `POS_BIAS = 1.00` quality-points to whichever answer sits in slot A (shown first), and it adds `VERB_PER_WORD = 0.02` per word to any answer, so longer answers creep ahead. Then we do three things by hand. We measure the **position bias** by swapping who goes first across 12 pairs and counting how many verdicts flip (7 of 12, a rate of 0.58). We measure the **verbosity bias** with 5 probe pairs whose answers are tied in quality and differ only in length, and watch the longer answer win all 5 (a rate of 1.00). Then we **correct** the position bias by running both orderings and averaging, so the slot-A bonus cancels, and watch disagreement with the true winner fall from 5/12 to 1/12. Every number below is the companion file's printed output, unrounded.
+
+## Prerequisites
+
+You need Part 4, because this part picks up its judge and asks the next question: is that judge fair? You do not need the full confusion-matrix machinery of Part 1 here; the arithmetic in this part is comparison and counting, not precision and recall. Basic Python is enough: a list of records, a loop, an `if`, and a division. No statistics background is assumed. The companion file, [judge_bias.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-05-judging-the-judge), runs offline with no API key, no network, and no dependencies at all (not even NumPy), so you can read every line and reproduce every number yourself. The judge is a pure function with no randomness, which is exactly what lets us prove the bias: because the only thing that changes between two runs is the ordering, any verdict that flips is caused by the order and nothing else.
+
+## The judge is a model, so it has biases
+
+Here is the mental shift that makes this part click. In Part 4 we treated the judge as a grader that makes mistakes. Now we treat it as a grader whose mistakes have *structure*. A real LLM judge, asked to compare answer A and answer B, is running the same next-token machinery that any model runs, and that machinery has learned habits. It has seen countless examples where the first option in a list is the chosen one, so it leans toward slot A. It has learned that longer, more detailed text often correlates with better answers, so it leans toward length even when length adds nothing. These are not bugs in a prompt; they are tendencies in the weights, and you cannot prompt them fully away. What you *can* do is measure them and design your evaluation so they cancel.
+
+To measure a tendency you need a judge whose tendencies you already know, so we build one. Our mock judge scores a single answer with one line:
+
+```python
+score = quality + (POS_BIAS if in_slot_a else 0) + VERB_PER_WORD * words
+```
+
+A *fair* judge would use `quality` alone: the honest merit of the answer, the thing a careful human would grade. Ours adds two contaminants. The `POS_BIAS` term adds a full quality-point (`1.00`) to whatever sits in slot A, the first position it sees. The `VERB_PER_WORD` term adds `0.02` for every word, so a 50-word answer carries a full extra point of length credit over a 30-word one. The function `answer_score(quality, words, in_slot_a)` computes exactly this, and `judge(slot_a, slot_b)` scores the two answers and returns the winning slot, `A` or `B`, with ties going to A (which is itself position bias showing up one more time). Everything downstream is built from these two small functions.
+
+Each comparison is a `Pair`: system X against system Y on one prompt, where each answer is just its `(quality, words)`. Quality is the score a fair judge would give; words is its length. Crucially, the **true winner** is defined for us: `true_winner(pair)` returns whichever system has the higher quality, full stop. Because we wrote the qualities, we know the right answer to every comparison in advance, and that is what lets us catch the judge red-handed.
+
+## Position bias: swap who goes first, count the flips
+
+The cleanest test for position bias is almost embarrassingly simple: judge each pair twice, once with X shown first and once with Y shown first, and see whether the verdict changes. A *fair* judge is indifferent to order, so it would return the same winner both times, every time, and flip zero verdicts. Any flip is proof that the order alone decided the outcome. The function `verdict(pair, x_first)` handles the bookkeeping: when `x_first` is true it puts X in slot A and Y in slot B, and when it is false it swaps them, always returning the winning *system* rather than the winning slot, so the two runs are directly comparable.
+
+Run all 12 pairs both ways and count. Seven verdicts flip:
+
+```text
+pair   X(q,words)   Y(q,words)  X-1st  Y-1st  flip  true
+ p01       (5,40)       (6,20)      X      Y   YES     Y
+ p02       (6,50)       (7,25)      X      Y   YES     Y
+ p03       (3,45)       (4,30)      X      Y   YES     Y
+ p04       (7,35)       (8,25)      X      Y   YES     Y
+ p05       (9,30)       (4,40)      X      X     .     X
+ p06       (8,20)       (5,30)      X      X     .     X
+ p07       (3,30)       (8,20)      Y      Y     .     Y
+ p08       (4,25)       (7,35)      Y      Y     .     Y
+ p09       (7,25)       (6,40)      X      Y   YES     X
+ p10       (8,20)       (7,45)      X      Y   YES     X
+ p11       (5,70)       (6,15)      X      Y   YES     Y
+ p12       (6,35)       (5,25)      X      X     .     X
+
+  position-bias rate = flips / pairs = 7/12 = 0.58
+```
+
+Read a flipping row and a stable row side by side to see the mechanism. Take p01: X has quality 5, Y has quality 6, so Y is genuinely better and `true` is Y. When X goes first it sits in slot A and collects the `1.00` bonus, which is more than enough to erase Y's one-point quality edge, so the judge crowns X. Swap them, and now Y sits in slot A, keeps its quality lead *and* gains the bonus, so the judge crowns Y. The winner followed the first slot, not the merit. That is a flip, and it happens on every pair where the two answers are close enough that a one-point slot bonus can tip the result: p01 through p04 (Y slightly better), and p09 and p10 (X slightly better, Y wordier). Six of the seven flips are these near-ties.
+
+Now look at a stable row like p05: X has quality 9 against Y's 4, a five-point gulf. The slot-A bonus is only one point, far too small to bridge that gap, so X wins whether it goes first or second. The verdict is stable *because* the true difference dwarfs the bias. This is the signature of position bias and the reason it is so insidious: it never touches the easy calls, so a casual glance at your eval sees the blowouts decided correctly and concludes the judge is fine. The bias hides in the close comparisons, which are exactly the ones you built the eval to decide. On this set the position-bias rate is `7/12 = 0.58`: the judge flips on well over half the pairs, and a fair judge would flip on none.
+
+Notice p11, which flips for a slightly different reason worth flagging now: X is worse in quality (5 vs 6) but hugely wordier (70 words vs 15). When X goes first, the slot bonus *and* the length reward both push for X, and X wins; when Y goes first, Y's slot bonus plus quality edge just barely reclaims it. So p11's flip is real position bias, but it also carries a verbosity thumb on the scale, which is the exact contaminant we isolate next.
+
+<Diagram number={1} caption="Position bias measured by swapping order across 12 paired comparisons, and the correction that removes it. The left panel is the swap table: each of the 12 pairs (p01 to p12) lists system X and system Y as (quality, words) tuples, the verdict when X is shown first, the verdict when Y is shown first, whether the two disagree (a flip), and the true higher-quality winner. Seven rows flip (p01 to p04, p09, p10, p11), all of them close comparisons where the one-point slot-A bonus outweighs a small quality gap; the five blowout pairs stay stable. The right panel contrasts the naive judge (X always first), which disagrees with the truth on 5 of 12 pairs, against the corrected judge (both orderings averaged), which disagrees on only 1 of 12, with the corrected position-bias rate at 0 of 12 because order can no longer flip a verdict. Emerald marks correct and stable outcomes, amber marks the flips, and the lone surviving corrected error is called out as a verbosity mistake.">
+  <img src="/essays/judging-the-judge/part5-figure.svg" alt="A two-panel figure titled 'Judging the judge: position bias and its correction.' The left panel is a table of 12 paired comparisons labelled p01 through p12. Each row shows system X as a (quality, words) pair, system Y as a (quality, words) pair, the verdict with X shown first, the verdict with Y shown first, a flip flag, and the true winner. Rows p01, p02, p03, p04, p09, p10, and p11 are shaded amber and marked YES in the flip column, because their verdict changes from X to Y when the order is swapped; rows p05, p06, p07, p08, and p12 are shaded emerald and marked with a dot, staying stable. A footer reads 'position-bias rate = flips / pairs = 7/12 = 0.58.' The right panel shows two horizontal bars comparing disagreement with the truth: the naive judge with X always first disagrees on 5 of 12 pairs (0.42), shown in amber; the corrected judge averaging both orderings disagrees on only 1 of 12 (0.08), shown in emerald, with a note that the corrected position-bias rate is 0 of 12 and that the single remaining error is a verbosity mistake averaging cannot fix." class="w-full rounded-lg" />
+</Diagram>
+
+## Verbosity bias: equal quality, does the longer answer win?
+
+Position bias was easy to isolate because swapping order changes nothing but the slot. Verbosity is trickier, because in the raw comparisons length and quality are tangled together, and we do not want to accidentally credit a quality difference to length. So we build a clean probe: 5 new pairs whose two answers are **tied in quality** and differ *only* in word count. If quality is equal, a fair judge should be unable to pick a winner (or should pick at random), and length should decide nothing. We also strip out the position bias while we are at it, by scoring each probe with the corrected, order-averaged verdict (introduced in the next section), so the *only* remaining thing that can break a quality tie is word count. That leaves verbosity standing alone in the spotlight.
+
+The result is stark. The longer answer wins all five:
+
+```text
+   pair  X words  Y words  longer  winner
+    q01       50       20       X       X
+    q02       20       45       Y       Y
+    q03       55       25       X       X
+    q04       30       60       Y       Y
+    q05       40       15       X       X
+
+  verbosity-bias rate = longer-wins / pairs = 5/5 = 1.00
+```
+
+Every row tells the same story. In q01 both answers have identical quality, but X wrote 50 words to Y's 20, so X collects `0.02 * 50 = 1.00` of length credit against Y's `0.02 * 20 = 0.40`, and X wins on padding alone. In q02 the lengths flip (Y is the longer one) and so does the winner, tracking length exactly. Across all five probes the `longer` column and the `winner` column are identical, giving a verbosity-bias rate of `5/5 = 1.00`. Quality was a dead heat every time, and length broke the tie every time. This is the mechanism behind a well-known real-world pathology: judges (and the models trained on their preferences) drift toward longer, more verbose outputs, not because length is better but because the grader rewards it. If your eval uses a judge with this bias, you are silently training your system to ramble.
+
+The verbosity bias also survives the position correction, which is the whole point of running the probe through the corrected verdict. Averaging the two orderings cancels the slot-A bonus because each answer sits in slot A exactly once, but *both* answers keep their length reward in *both* orderings, so averaging leaves it completely untouched. Position bias is a property of *where* an answer sits; verbosity bias is a property of *what* the answer is. The correction we are about to build fixes the first and cannot touch the second, and the probe proves it.
+
+## The correction: average both orderings
+
+Here is the fix, and it is as simple as the disease. If the judge unfairly rewards slot A, then give every answer the slot-A treatment equally: judge each pair in *both* orderings and average each system's two scores. The function `corrected_winner(pair)` does exactly this. It computes system X's score once with X in slot A and once with X in slot B, averages the two, does the same for Y, and picks the higher average. Because each answer occupies slot A in exactly one of the two runs, the `1.00` bonus is added to X once and to Y once, so when you average, the same constant lands on both sides and cancels. What is left is `quality` plus the length term, with the position term gone.
+
+Compare the naive judge (X always shown first, the way a lazy pipeline runs it) against the corrected judge, both measured against the true higher-quality winner:
+
+```text
+  naive judge (X always first):  disagreement with truth = 5/12 = 0.42
+  corrected (both orders avg):   disagreement with truth = 1/12 = 0.08
+  corrected position-bias rate:  0/12 = 0.00  (order can no longer flip a verdict)
+```
+
+The naive judge disagrees with the truth on 5 of the 12 pairs, a disagreement rate of `0.42`: it gets nearly half the comparisons wrong, and it gets them wrong in a *direction*, always favoring whoever it happened to show first. Averaging the two orderings drops that to 1 of 12, a rate of `0.08`. And the corrected position-bias rate is `0/12 = 0.00`: once you average both orderings, swapping which system you call "first" changes the input labels but not the averaged scores, so no verdict can flip on order anymore. The bias is not reduced, it is *gone*, by construction. This is why order-randomization (or, better, order-averaging like this) is the single most important hygiene step in any pairwise LLM-judge setup, and why a pipeline that always shows the incumbent first is quietly rigged.
+
+But look closely at what did *not* get fixed. The corrected judge still disagrees with the truth on one pair. That lone survivor is p11, the pair we flagged earlier: X has lower quality (5 vs 6) but 70 words to Y's 15, so its length reward of `0.02 * 70 = 1.40` more than covers the one-point quality deficit even after the slot bonus cancels. Order-averaging removed the position error but left the verbosity error completely intact, exactly as the probe predicted. This is the honest, uncomfortable ending: **correcting one bias does not correct another**. Averaging fixes *where* an answer sits; it does nothing about *how long* it is. To kill the verbosity bias you need a different intervention (normalize for length, cap word count in the rubric, or penalize padding), and you would measure that fix the same way we measured this one, by comparing the corrected verdicts against a known truth.
+
+The interactive figure below lets you run the whole experiment yourself. You can dial the two biases up and down, watch the swap table repaint as verdicts flip or settle, flip a single pair's slot order to see the flip happen in isolation, and toggle the correction on to watch disagreement collapse from 5/12 toward 1/12 while the lone verbosity survivor refuses to budge. Set `POS_BIAS` to zero and every flip disappears; set `VERB_PER_WORD` to zero and the last corrected error vanishes too, which is the cleanest way to feel that these are two independent contaminants stacked on one judge.
+
+<IframeFigure src="/essays/judging-the-judge/part5-interactive.html" title="Interactive judge-bias explorer: adjust the slot-A position bonus and the per-word verbosity reward, then watch a table of 12 paired comparisons show which verdicts flip when you swap who goes first, the position-bias rate, and how averaging both orderings drives disagreement with the true winner from 5 of 12 down to 1 of 12 while the single verbosity error remains." height={860} />
+
+## Key takeaways
+
+- **An LLM judge is a model, so its errors have structure.** Random noise averages out over examples; systematic bias does not, because it tilts every comparison the same way. A system can win your eval by sitting in the favored slot or by padding length, not by being better.
+- **Position bias is measured by swapping order and counting flips.** A fair judge returns the same winner regardless of order and flips zero verdicts. Ours, with a `1.00` slot-A bonus, flips 7 of 12 verdicts (a rate of `0.58`), and every flip is a close call where the one-point bonus outweighs a small quality gap. Blowouts stay stable, which is why the bias hides in exactly the comparisons you care about.
+- **Verbosity bias is measured with equal-quality probes.** On 5 pairs tied in quality and differing only in length, the longer answer wins all 5 (a rate of `1.00`) at `0.02` per word. The judge rewards padding, which is how eval pipelines silently train systems to ramble.
+- **Order-averaging removes position bias completely, by construction.** Judge each pair in both orderings and average; each answer sits in slot A exactly once, so the bonus cancels. Disagreement with the truth drops from `5/12 = 0.42` to `1/12 = 0.08`, and the corrected position-bias rate is `0/12 = 0.00`: order can no longer flip a verdict.
+- **Fixing one bias does not fix another.** The single corrected error that survives (p11) is a verbosity mistake: a shorter, better answer beaten by a longer, worse one. Averaging fixes *where* an answer sits, never *how long* it is. Each bias needs its own correction, and each correction is validated the same way, against a known truth.
+
+## Glossary
+
+- **Pairwise comparison**: an evaluation where two systems answer the same prompt and the judge picks a winner, rather than scoring each answer in isolation. The dominant format for LLM judging and the setting for every bias in this part.
+- **Position bias**: a judge's systematic preference for an answer based on where it appears (here, a `1.00` bonus for whatever sits in slot A, shown first). Measured by swapping order and counting how many verdicts flip; here 7 of 12, a rate of `0.58`.
+- **Verbosity bias**: a judge's systematic preference for longer answers regardless of quality (here, `0.02` added per word). Measured with equal-quality probes; here the longer answer wins all 5, a rate of `1.00`.
+- **Self-preference**: a judge's tendency to favor answers from its own model family. Not run in the demo, but it is the same recipe with a different trigger, measured and corrected the same way.
+- **True winner**: the honest answer to a comparison, defined here as the higher-quality system (`true_winner`). Because we author the qualities, we know it in advance, which is what makes the bias measurable at all.
+- **Flip**: a verdict that changes when the two answers swap order. A fair judge flips zero times; a flip is direct proof that the order, not the merit, decided the outcome.
+- **Order-averaging**: the correction for position bias, judging each pair in both orderings and averaging each system's two scores (`corrected_winner`). The slot-A bonus cancels because each answer sits in slot A exactly once, driving the position-bias rate to `0/12 = 0.00`.
+- **Disagreement rate**: the fraction of comparisons where a judge's verdict differs from the true winner. The naive judge scores `5/12 = 0.42`; the order-averaged judge scores `1/12 = 0.08`.
+- **Systematic bias**: an error with a consistent direction (always slot A, always longer), as opposed to random noise. It does not shrink with more examples, so it must be removed by design, not out-averaged by sample size.
+
+---
+
+We now have a corrected judge and a disagreement rate of 1 in 12, but that "1 in 12" is a single number from a single small set, and the very next question is how much to trust it. **Part 6, Uncertainty**, resamples a set by hand to build a bootstrap confidence interval, turning a lone score into a range you can actually defend.

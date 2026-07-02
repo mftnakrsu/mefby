@@ -1,0 +1,169 @@
+---
+title: "Kucuk Bir Degerlendirme Motoru"
+description: "Kapanış parçası bütün seriyi tek bir küçük, saf Python motorunda birleştirir: bir veri kümesi, takas edilebilir bir skorlayıcı, bir bootstrap güven aralığı ve bir kapı. Onu iki minik senaryo üzerinde üç ayrı şekilde çalıştırıyor ve yalnızca skorlayıcıyı değiştirmenin aynı on maddelik QA verisini HOLD'dan SHIP'e çevirmesini izliyoruz."
+date: 2026-07-28
+tags: ["Değerlendirme", "LLM", "AI", "Motor", "Bootstrap", "Sürüm Kapısı"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-15-eval-harness"
+lang: "tr"
+translationSlug: "eval-harness"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 14 bir ajanı izlediği yola göre notladı; yalnızca nihai yanıtı değil, bir araç-çağrısı yörüngesinin her adımını skorladı, ve bu, serinin kuracağı son yeni metrikti. Şimdi parça eklemeyi bırakıp onları birleştirmeye başlıyoruz. Buraya kadar her parça size bir bileşen verdi: Bölüm 1 doğruyu ve yanlışı bir sayıya çeviren bir metrik verdi, Bölüm 4 katı bir metriğin yanlış yaptığı durumlar için bir LLM-as-judge verdi, Bölüm 6 yalnız bir skoru bir güven aralığıyla saran bootstrap'ı verdi, ve Bölüm 11 sürüm ver ya da bekle kararını veren kapıyı verdi. Tek başına her biri bir parçadan ibaret. Bu parça onları, **değerlendirme motoru (eval harness)** adını hak eden en küçük şeyde birbirine kenetler: bir sürümden önce gerçekten çalıştırabileceğiniz tek bir dosya.
+
+Motor beş yeniden kullanılabilir parçadır. Notlanmış örneklerden oluşan bir **veri kümesi (dataset)**. Ya sade bir metrik ya da bir sahte LLM jürisi olan, tek bir örneği sıfır ile bir arasında bir sayıya çeviren bir **skorlayıcı (scorer)**. O sayıların ortalaması etrafında bir **bootstrap güven aralığı (CI)**. Yalnızca aralığın alt sınırı bir sürüm barajını aştığında sürüm veren bir **kapı (gate)**. Ve dördünü birbirine bağlayıp bir SHIP ya da HOLD kararı basan ince bir **motor fonksiyonu**. Onları ayırmanın getirisi, herhangi birini diğerlerine dokunmadan takas edebilmenizdir. Bunu, aynı motoru üç şekilde çalıştırarak kanıtlıyoruz: aynı on maddelik QA kümesi önce katı, sonra hoşgörülü şekilde skorlanıyor, ve beş görevlik bir ajan-yörüngesi kümesi. Yalnızca skorlayıcıyı değiştirmek aynı veriyi HOLD'dan SHIP'e çevirecek, ki bu da tek bir önce-ve-sonra içine sıkıştırılmış bütün seridir.
+
+## Ön koşullar
+
+Temel Python (bir sözlük listesi, argüman olarak geçirilen bir fonksiyon, bir döngü) ve bootstrap'ın yeniden örneklemesi için tek bir NumPy import'u yeterli. Hepsi bu. Kavramlar önceden öğretilmiş halde geliyor: Bölüm 1, 4, 6 ve 11'i okuduysanız buradaki her fikre zaten sahipsiniz ve bu parça yalnızca onları birbirine bağlıyor, ama her biri kullanıldığı noktada tek bir cümleyle yeniden açıklanıyor, dolayısıyla ilk kez okuyan biri de bütün akışı takip edebilir. Eşlik eden dosya, [eval_harness.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-15-eval-harness), API anahtarı ve ağ olmadan offline çalışır ve tek rastgelelik sıfırla tohumlanan bootstrap'tır, dolayısıyla aşağıdaki her sayı tam olarak yeniden üretilir. Her zamanki gibi, bu nesirdeki her figür o dosyanın basılmış çıktısıdır, yuvarlanmamış.
+
+## Beş parça
+
+Onları birbirine bağlamadan önce parçaları somut veri üzerinde adlandırayım, çünkü bütün tasarımın özü her parçanın diğerleri hakkında hiçbir şey bilmemesidir.
+
+**Birinci parça veri kümesidir.** QA çalıştırmaları için bu, on başkent sorusudur; RAG Bölüm 8'in yanıt-kalitesi değerlendirmesine bir selam. Her satır bir soru, bir altın kısa yanıt ve sistemin aday yanıtını tutar:
+
+```python
+QA = [
+    {"q": "capital of France",    "gold": "Paris",     "cand": "Paris"},
+    {"q": "capital of USA",       "gold": "Washington","cand": "Washington, D.C."},
+    {"q": "capital of India",     "gold": "New Delhi", "cand": "new delhi"},
+    # ... toplam on satır
+]
+```
+
+Altıncı satır ilginç olanı. Aday `Washington, D.C.`, ABD'nin başkenti için doğru bir yanıttır, ama birebir `Washington` dizesi değildir. O satırı aklınızda tutun; iki skorlayıcının anlaşamayacağı yer orası.
+
+**İkinci parça skorlayıcıdır**, tek bir kayıttan sıfır ile bir arasında bir sayıya giden bir fonksiyon. Katı sürüm tam eşleşmedir (exact match): her iki dizeyi küçük harfe çevirip boşlukları kırparak normalize et, sonra yalnızca özdeşlerse `1.0` döndür.
+
+```python
+def _norm(s):
+    return s.strip().lower()
+
+def exact_match(rec):
+    return 1.0 if _norm(rec["cand"]) == _norm(rec["gold"]) else 0.0
+```
+
+O normalizasyon, `new delhi`nin `New Delhi`ye karşı tam puan almasının sebebidir: küçük harfe çevirince aynı dize olurlar. Ama `Washington, D.C.` yine de `Washington`a karşı başarısız olur, çünkü virgül ve `D.C.` onları farklı diziler yapar. Hoşgörülü sürüm, Bölüm 4'ün model notlayıcısının deterministik bir yerine geçeni olan bir sahte LLM jürisidir. Rubriği şeffaftır: altın adayın içinde geçiyorsa ya da aday altının içinde geçiyorsa yanıtı kabul et.
+
+```python
+def mock_judge(rec):
+    g, c = _norm(rec["gold"]), _norm(rec["cand"])
+    return 1.0 if (g in c or c in g) else 0.0
+```
+
+Şimdi `washington`, `washington, d.c.` içinde geçiyor, dolayısıyla jüri, tam eşleşmenin sıfır verdiği altıncı satıra tam puan verir. Gerçek bir jüri bir `generate()` çağrısının arkasında devreye girerdi, ama karar yine bir sıfır ya da bir olarak kalır, dolayısıyla aşağı akıştaki her şey dokunulmadan kalır. Ajan çalıştırmaları için yörünge skorlayıcısı, adım başına kısmi kredi verir, tam olarak Bölüm 14'ün adım-düzeyi skorlaması: altın ve tahmin edilen araç çağrısının uyuştuğu konumları say, sonra fazladan ya da eksik bir adım cezalandırılsın diye iki dizinin uzun olanına böl.
+
+```python
+def trajectory_match(rec):
+    gold, pred = rec["gold"], rec["pred"]
+    matches = sum(1 for i in range(min(len(gold), len(pred))) if gold[i] == pred[i])
+    return matches / max(len(gold), len(pred))
+```
+
+**Üçüncü parça, Bölüm 6'nın bootstrap CI'sıdır.** Madde başına skorların listesi verildiğinde, onu yerine koyarak `B=2000` kez yeniden örnekle, her yeniden örneklemeyi yeniden ortala, ve o iki bin ortalamanın 2.5. ve 97.5. yüzdeliklerini oku. O çift, %95 aralıktır. Yeniden örnekleme bütün dosyadaki tek rastgeleliktir, dolayısıyla sıfırla tohumlanmış bir NumPy üretecinden çalışır ve aralık her çalıştırmada özdeştir.
+
+**Dördüncü parça, Bölüm 11'in kapısıdır**, ve tek bir karşılaştırmadır. Ortalamaya bakmaz. Yalnızca aralığın alt sınırı en az sürüm barajı kadarsa sürüm verir, aksi halde bekler:
+
+```python
+def gate(ci_lo, bar):
+    return "SHIP" if ci_lo >= bar else "HOLD"
+```
+
+**Beşinci parça, bir ile dördüncü parçaları birbirine dizen motordur:** her kaydı skorla, bir ortalamaya indir, aralığı bootstrap et, kapıyı uygula, ve hiçbir şey gizlenmesin diye madde başına bir satır bas. İmzası argüman olarak veri kümesini ve skorlayıcıyı alır, ki bütün numara budur, çünkü farklı bir skorlayıcı geçirmek motorun tek bir satırını değiştirmeden kararı değiştirir. Aşağıdaki figür o akışı bir hat (pipeline) olarak serer, böylece skorlayıcının takıldığı dikişi görebilirsiniz.
+
+<Diagram number={1} caption="Küçük değerlendirme motoru beş aşamalı bir hat olarak. Notlanmış bir VERİ KÜMESİ, takas edilebilir bir SKORLAYICI'ya (tam eşleşme, sahte jüri ya da yörünge eşleşmesi) akar; bu, madde başına skorlar üretir, bunlar bir ortalamaya indirilir ve paralelde bootstrap edilir (B=2000, seed=0), bir %95 güven aralığı oluşur. Aralığın yalnızca alt sınırı KAPI'ya ulaşır; kapı onu bir sürüm barajıyla karşılaştırır ve SHIP ya da HOLD yayar. Üç çalıştırma yan yana gösterilir: aynı on maddelik QA verisi tam eşleşmeyle skorlanınca ortalama 0.60 ile CI [0.30, 0.90] verir, 0.35 barajına karşı, ve 0.30 barajın altında olduğu için HOLD ile kapılanır; aynı QA verisi jüriyle skorlanınca ortalama 0.70 ile CI [0.40, 1.00] verir, aynı 0.35 barajına karşı, ve 0.40 barajı aştığı için SHIP ile kapılanır; beş görevlik ajan-yörüngesi verisi ortalama 0.70 ile CI [0.47, 0.93] verir, 0.40 barajına karşı, ve SHIP ile kapılanır. Skorlayıcı kutusu, değiştirilen tek aşama olarak vurgulanır.">
+  <img src="/essays/eval-harness/part15-figure.svg" alt="Beş kutulu, soldan sağa bir hat diyagramı: VERİ KÜMESİ, SKORLAYICI, sonra ORTALAMA ile BOOTSTRAP CI'ya bir ayrım, sonra KAPI, sonra bir SHIP ya da HOLD kararı. SKORLAYICI kutusu zümrüt yeşiliyle vurgulanmış ve 'değiştirilen tek aşama' etiketli. Bootstrap CI'nın yalnızca alt sınırı KAPI'ya bir ok olarak çizilmiş; ortalama, kapının yok saydığı sönük bir yan çıktı olarak gösterilmiş. Hattın altında üç satır çalıştırmaları özetler. Birinci satır, QA tam eşleşme: ortalama 0.60, CI [0.30, 0.90], baraj 0.35, ve CI alt sınırı 0.30, 0.35'ten küçük olduğu için karar HOLD, kehribar renkte. İkinci satır, QA jüri: ortalama 0.70, CI [0.40, 1.00], baraj 0.35, ve 0.40 en az 0.35 olduğu için karar SHIP, zümrüt yeşilinde. Üçüncü satır, ajan yörüngesi: ortalama 0.70, CI [0.47, 0.93], baraj 0.40, ve 0.47 en az 0.40 olduğu için karar SHIP, zümrüt yeşilinde. Satırların altındaki bir başlık şöyle der: kapı aralığı okur, asla nokta tahmini değil." class="w-full rounded-lg" />
+</Diagram>
+
+## Birinci çalıştırma: katı tam eşleşme bekletir
+
+On QA satırını, tam eşleşme skorlayıcısı ve 0.35 sürüm barajıyla motordan geçirin. On adaydan yedisi normalizasyondan sonra altınıyla eşleşir; üçü eşleşmez. Sydney, Canberra değildir; Rio de Janeiro, Brasilia değildir; ve Milan, Rome değildir, dolayısıyla o üçü sıfır alır. Altıncı satır, `Washington, D.C.`, de sıfır alır, çünkü katı eşleşme onun doğru olduğunu göremez. Bu, altı bir ve dört sıfır verir:
+
+```text
+  n = 10   mean score = 0.60
+  bootstrap 95% CI (B=2000 resamples, seed=0): [0.30, 0.90]
+  gate: release bar = 0.35 ; CI_lo = 0.30 -> 0.30 < 0.35 -> HOLD
+```
+
+0.60'lık bir ortalama geçer bir not gibi görünür, bir standup'ta zikredip yola devam edebileceğiniz türden bir sayı. Motor bunu reddeder. Yalnızca on madde üzerinde bootstrap aralığı geniştir, 0.30'dan 0.90'a uzanır, ve kapı o aralığın ortasını değil zeminini okur. Zemin 0.30'dur, ki 0.35 barajının altında oturur, dolayısıyla karar HOLD'dur. Bu tam olarak Bölüm 6'nın dersinin gerçek iş görmesidir: nokta tahmini sürüm ver der, aralık bekle der, ve kapı aralığa inanır. İstatistiğin altında saklanan esaslı bir hata da vardır: dört başarısızlıktan biri, `Washington, D.C.`, onu tanıyamayacak kadar katı bir skorlayıcı tarafından cezalandırılan doğru bir yanıttır. Dolayısıyla motor size bekletmek için iki sebep verir: aralık fazla oynak, ve skorlayıcı fazla katı. İkincisinin çözümü daha iyi bir skorlayıcıya uzanmaktır, ki bu tam olarak ikinci çalıştırmadır.
+
+## İkinci çalıştırma: jüri aynı veriyi gönderir
+
+Tek bir argümanı değiştirin. Aynı on QA satırını koruyun, aynı 0.35 barajını koruyun, aynı tohumu koruyun, ve tam eşleşme yerine sahte jüriyi geçirin. Jüri, tam eşleşmenin kabul ettiği her şeyi kabul eder, ve ek olarak altıncı satırı da kabul eder, çünkü `washington`, `washington, d.c.` içinde geçer. Sydney, Rio ve Milan hâlâ gerçekten yanlış ve hâlâ sıfır alır. Dolayısıyla bir sıfır bire döner, yedi bir yedi bir olarak kalır, ve ortalama tırmanır:
+
+```text
+  n = 10   mean score = 0.70
+  bootstrap 95% CI (B=2000 resamples, seed=0): [0.40, 1.00]
+  gate: release bar = 0.35 ; CI_lo = 0.40 -> 0.40 >= 0.35 -> SHIP
+```
+
+Ortalama 0.60'tan 0.70'e yükselir, ve daha önemlisi, aralığın zemini 0.30'dan 0.40'a yükselir. O zemin artık 0.35 barajının üstündedir, dolayısıyla aynı kapı SHIP döndürür. Az önce olanla oturun. Aynı veri kümesi. Aynı baraj. Aynı bootstrap tohumu. Değişen tek şey skorlayıcıydı, ve karar HOLD'dan SHIP'e döndü. Bu, skorlayıcıyı testinizin içine gömülmüş sabit kodlanmış bir dize karşılaştırması olarak değil, birinci sınıf, takas edilebilir bir bileşen olarak ele almanın gerekçesidir. Doğru yanıtları haksızca başarısız sayan bir metrik size yalnızca bir puan doğrulukla mal olmaz; sürüm vermekle vermemek arasındaki fark olabilir, ve skorlayıcı çevirebileceğiniz bir düğme olmadıkça bunu asla göremezsiniz. Bu aynı zamanda Bölüm 4'ün somut getirisidir: jüri tam olarak katı bir metriğin yakalayamadığı `Washington, D.C.` durumlarını yakalamak için vardır.
+
+## Üçüncü çalıştırma: farklı bir alan, aynı motor
+
+Şimdi motorun neyi notladığını umursamadığını göstermek için yalnızca skorlayıcıyı değil veri kümesini de değiştirin. Ajan-yörüngesi kümesi beş görevdir, Bölüm 14 ile Agents Bölüm 17'ye bir selam. Her görevin bir altın araç-çağrısı dizisi ve ajanın gerçekte izlediği dizi vardır, ve yörünge skorlayıcısı kısmi adım-düzeyi kredi verir. Kredinin nereye düştüğü şöyle:
+
+```text
+  answer from a doc   gold=[search,read,answer]           pred=[search,read,answer]     -> 1.00
+  compute a total     gold=[search,calculator,answer]     pred=[search,weather,answer]  -> 0.67
+  summarize findings  gold=[search,read,summarize,answer] pred=[search,read,answer]     -> 0.50
+  quick lookup        gold=[search,answer]                pred=[search,search,answer]   -> 0.33
+  schedule a meeting  gold=[calendar,email]               pred=[calendar,email]         -> 1.00
+```
+
+İkisini yürüyelim. Kusursuz eşleşme, `answer from a doc`, üç konumda da uyuşur ve her iki dizi de üç uzunluğunda, dolayısıyla üç bölü üç, tam 1.00 alır. `compute a total`, birinci ve üçüncü konumlarda uyuşur (`search` ve `answer`) ama ajan `calculator` çağırması gerekirken `weather` çağırdı, dolayısıyla üç konumdan ikisi eşleşir ve 0.67 alır. `summarize findings`, ilk iki adımda eşleşir ama ajan erken durdu, dördü gereken yerde üç adımlık bir yol verdi, dolayısıyla dört maksimum uzunluğu üzerinden üç eşleşme 0.50'dir. `quick lookup`, yalnızca birinci konumda eşleşir ve fazladan bir `search` ile doldurur, dolayısıyla bir bölü üç 0.33'tür. Beş madde başına skoru (1.00, 0.67, 0.50, 0.33, 1.00) ortalayın ve şunu alın:
+
+```text
+  n = 5   mean score = 0.70
+  bootstrap 95% CI (B=2000 resamples, seed=0): [0.47, 0.93]
+  gate: release bar = 0.40 ; CI_lo = 0.47 -> 0.47 >= 0.40 -> SHIP
+```
+
+Ortalama 0.70, aralık zemini 0.47, 0.40 barajına karşı, dolayısıyla kapı gönderir. Neyin değişmediğine dikkat edin: bootstrap, kapı ve motor fonksiyonu, QA çalıştırmalarını notlayan kodun bayt-bayt aynısıdır. Kımıldayan her şey veri kümesi ve onu anlayan skorlayıcıydı. Bir başkentler QA değerlendirmesini ve bir ajan araç-kullanım değerlendirmesini aynı dört aşağı akış parçasıyla kapılayabilen bir motor, tam olarak serinin doğru kurmaya çalıştığı yeniden kullanılabilirliktir. Buradaki baraj 0.35 yerine 0.40'tır çünkü yalnızca farklı bir alan farklı bir sürüm standardını gerektirir; onu okuyan kapı mantığı özdeştir.
+
+## Özeti okumak
+
+Üç çalıştırmayı üst üste koyun ve bütün serinin disiplini tek bir tabloda belirir:
+
+```text
+  eval                  mean          95% CI    bar  verdict
+  QA / exact-match      0.60    [0.30, 0.90]   0.35     HOLD
+  QA / judge            0.70    [0.40, 1.00]   0.35     SHIP
+  agent / trajectory    0.70    [0.47, 0.93]   0.40     SHIP
+```
+
+Bu satırlardan ikisinin ortalaması sizi yalnız nokta tahmini üzerinden göndermeye kışkırtacak türden, ve bunlardan biri (0.60'taki tam eşleşme çalıştırması) bir tuzak: 0.60 hiçten yüksek, ama 0.30'luk aralık zemini barajın altında, dolayısıyla bekletir. Kapı `mean` sütununu bir kez bile okumaz. `95% CI` sütununun alt ucunu okur ve onu `bar` ile karşılaştırır. O tek alışkanlık, nokta tahmini ile bir baraj değil CI alt sınırı ile bir baraj, zikrettiğiniz bir sayıyı savunabileceğiniz bir karardan ayıran şeydir, ve bütün serinin tek bir karşılaştırmaya damıtılmış halidir. Yukarı akıştaki her şey, Bölüm 1'in metriği, Bölüm 2'nin altın kümesi, Bölüm 3'ün uzlaşması, Bölüm 4'ün jürisi ve Bölüm 5'teki yansızlaştırması, Bölüm 6'nın aralığı, Bölüm 7'nin anlamlılık testi ve gerisi, o son karşılaştırmayı güvenilir kılmak için vardır.
+
+İnteraktif figür motoru kendiniz çalıştırmanızı sağlar. QA verisinde skorlayıcıyı tam eşleşme ile jüri arasında çevirin ve aralık zemini barajı geçerken QA satırının HOLD ile SHIP arasında dönmesini izleyin. Sonra herhangi bir çalıştırma için sürüm barajını sürükleyin ve baraj CI alt sınırını geçtiği anda kararın değişmesini görün, asla ortalamada değil. Bu, kapının aralığın merkezini değil kenarını okuduğunu hissetmenin en açık yoludur.
+
+<IframeFigure src="/essays/eval-harness/part15-interactive.html" title="İnteraktif bir değerlendirme motoru: bir veri kümesi seçin (QA ya da ajan yörüngesi), skorlayıcıyı çevirin (QA için tam eşleşme ile sahte jüri), ve madde başına skorların, ortalamanın, bootstrap %95 CI'nın ve SHIP ya da HOLD kararının canlı güncellenmesini görün; sürüklenebilir bir sürüm barajı, kararın tam olarak baraj ortalamayı değil CI alt sınırını geçtiğinde döndüğünü gösterir." height={880} />
+
+## Özet / Çıkarımlar
+
+- **Bir değerlendirme motoru beş ayrılabilir parçadır:** bir veri kümesi, takas edilebilir bir skorlayıcı, bir bootstrap CI, bir kapı, ve onları birbirine bağlayan ince bir fonksiyon. Onları bağımsız tutmak, birini diğerlerini bozmadan değiştirmenizi sağlayan şeydir, ve bir kullan-at betiği ile bir sürümden önce çalıştıracağınız bir şey arasındaki farktır.
+- **Skorlayıcı birinci sınıf, takas edilebilir bir bileşendir.** Aynı on maddelik QA verisinde aynı 0.35 barajıyla, tam eşleşme ortalama 0.60, CI [0.30, 0.90] ve HOLD verirken, sahte jüri ortalama 0.70, CI [0.40, 1.00] ve SHIP verir. `Washington, D.C.`yi doğru olarak tanıyamayacak kadar katı bir metrik yalnızca bir puan kaybetmedi; sürümü kaybetti.
+- **Kapı aralığı okur, asla nokta tahminini değil.** Yalnızca CI alt sınırı barajı aşarsa gönderir. 0.30 zeminli 0.60'ın 0.35 barajına karşı bekletmesinin, ve 0.40 zeminli 0.70'in göndermesinin sebebi budur. Nokta tahminleri kışkırtır; aralıklar karar verir.
+- **Aynı motor alanlar arasında genelleşir.** Yalnızca veri kümesini ve onun skorlayıcısını değiştirerek, ajan-yörüngesi çalıştırması (beş görev, madde başına skorlar 1.00, 0.67, 0.50, 0.33, 1.00) ortalama 0.70, CI [0.47, 0.93] ve 0.40 barajına karşı SHIP verir, QA çalıştırmalarıyla bayt-bayt aynı bootstrap, kapı ve motoru kullanarak.
+- **Küçük n geniş aralıklar demektir, ve motor buna saygı gösterir.** Bütün QA sayıları on maddeden ve bütün ajan sayıları beşten gelir, dolayısıyla aralıklar geniştir ve gönderilebilir görünen üç ortalamadan biri bekletildi. Çözüm daha yüksek-sesli bir ortalama değil, daha çok notlanmış veridir.
+
+## Sözlük
+
+- **Değerlendirme motoru (eval harness)**: notlanmış bir veri kümesi alan, madde başına skorlar için bir skorlayıcı uygulayan, onları bir ortalama ve bir bootstrap güven aralığıyla özetleyen, ve aralığı ship ya da hold kararı döndüren bir kapıya geçiren birleştirilmiş hat. En küçük sürümü tek bir dosyaya sığar.
+- **Skorlayıcı (scorer)**: tek bir veri kümesi kaydından sıfır ile bir arasında bir sayıya giden bir fonksiyon. Sade bir metrik (tam eşleşme, yörünge eşleşmesi) ya da bir model notlayıcı (sahte jüri) olabilir. Motora argüman olarak geçirildiği için, aşağı akıştaki hiçbir şeye dokunmadan takas edilebilir.
+- **Tam eşleşme (exact match)**: yalnızca aday, küçük harfe çevirip boşlukları kırptıktan sonra altına eşit olduğunda 1.0 skorlayan katı dize metriği. Basit ve ucuz, ama farklı ifade edilmiş doğru yanıtları başarısız sayar, `Washington` için `Washington, D.C.` gibi.
+- **Sahte LLM jürisi (mock LLM judge)**: şeffaf rubriği, altın adayın içinde ya da aday altının içinde geçtiğinde bir yanıtı kabul eden, bir LLM-as-judge'ın (Bölüm 4) deterministik yerine geçeni. Tam eşleşmenin haksızca başarısız saydığı durumları kabul edecek kadar hoşgörülüdür, ve gerçek bir jüri kararın biçimini değiştirmeden onun arkasında devreye girer.
+- **Yörünge eşleşmesi (trajectory match)**: bir ajana, araç-çağrısı dizisinin altınla eşleştiği konumların oranına eşit kısmi kredi veren, Bölüm 14'ün adım-düzeyi skorlayıcısı; fazladan ya da eksik adımlar cezalandırılsın diye uzun diziye bölünür.
+- **Bootstrap CI**: Bölüm 6'nın güven aralığı, madde başına skorları yerine koyarak B=2000 kez yeniden örnekleyerek, her yeniden örneklemeyi yeniden ortalayarak, ve o ortalamaların 2.5. ile 97.5. yüzdeliklerini okuyarak oluşur. Burada yeniden üretilebilir olsun diye sıfırla tohumlanır.
+- **Sürüm kapısı (release gate)**: yalnızca CI alt sınırı en az sürüm barajı kadarsa SHIP, aksi halde HOLD döndüren, Bölüm 11'in karar kuralı. Ortalamayı bilerek yok sayar, ki bu da bir skoru savunabilir bir sürüm kararına çeviren tek alışkanlıktır.
+- **Sürüm barajı (release bar)**: kapının CI alt sınırını karşılaştırdığı eşik. İstatistiksel bir çıktı değil, alan başına ayarlanan bir ürün kararıdır (QA çalıştırmaları için 0.35, ajan çalıştırması için 0.40).
+
+---
+
+Bu, bütün serinin açtığı döngüyü kapatır. RAG Bölüm 8 size bir erişim yanıtını skorlamanın bir yolunu verdi ve Agents Bölüm 17 size bir yörüngeyi notlamanın bir yolunu verdi, ve ikisi de artık her skorun ne kadar belirsiz olduğunu ve barajı aşıp aşmadığını da bilen tek bir motorun içinde oturuyor. On beş parça önce bir skor, bir toplantıda yüksek sesle söylenen yalnız tek bir sayıydı; artık o sayıyı elle kurabilir, etrafına dürüst bir aralık koyabilir, ve bir sürümü aralığın ortası yerine zeminine göre kapılayabilirsiniz. O tek alışkanlığı, bir nokta tahmini ile bir umut değil CI alt sınırı ile bir baraj, sonra ne inşa ederseniz edin yanınızda taşıyın, ve gerçek bir kazancı gürültüden her zaman ayırt edebilirsiniz.

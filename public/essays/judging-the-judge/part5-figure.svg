@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 640" width="100%" style="height:auto" role="img" aria-labelledby="jj-title jj-desc">
+  <title id="jj-title">Position and verbosity bias in a mock LLM judge, then the fix</title>
+  <desc id="jj-desc">A deterministic mock judge scores each answer as quality plus a +1.00 slot-A bonus for going first plus 0.02 points per word. On 12 paired comparisons of system X versus system Y, swapping who goes first flips the verdict on 7 of 12 pairs, a position-bias rate of 0.58. On 5 pairs with tied quality but different length, the longer answer wins all 5, a verbosity-bias rate of 1.00. The naive judge, always showing X first, disagrees with the true higher-quality winner on 5 of 12 pairs, a rate of 0.42. Running both orderings and averaging cancels the slot-A bonus: the corrected judge's position-bias rate drops to 0 of 12, 0.00, and its disagreement with the truth falls to 1 of 12, 0.08. The one surviving error is a verbosity mistake that order-averaging cannot fix, because it corrects where an answer sits, not how long it is.</desc>
+
+  <rect width="1180" height="640" fill="#ffffff"/>
+  <rect width="1180" height="640" fill="#fafafa"/>
+
+  <!-- Series eyebrow, top-right -->
+  <text x="1150" y="34" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#71717a" letter-spacing="0.08em">EVALS FROM FIRST PRINCIPLES</text>
+  <text x="1150" y="50" text-anchor="end"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" fill="#a1a1aa">Part 5, Figure 1</text>
+
+  <!-- Title, top-left -->
+  <text x="40" y="34"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#059669" letter-spacing="0.08em">PART 5 &#183; JUDGING THE JUDGE</text>
+  <text x="40" y="58"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="19" font-weight="700" fill="#18181b" letter-spacing="-0.01em">A biased judge, caught and corrected</text>
+  <text x="40" y="78"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12.5" fill="#71717a">12 paired comparisons, X vs Y &#183; slot-A bonus +1.00 &#183; +0.02 per word</text>
+
+  <!-- ============================================================
+       LEFT: two bias rates as stacked bars
+  ============================================================ -->
+  <text x="40" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">TWO BIASES, MEASURED</text>
+
+  <!-- Position bias bar -->
+  <text x="40" y="152"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="15" font-weight="700" fill="#18181b">Position bias</text>
+  <text x="580" y="155" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="26" font-weight="700" fill="#e11d48">7/12</text>
+  <text x="40" y="172"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#71717a">flips / pairs = 0.58 &#183; swap who goes first, count flipped verdicts</text>
+  <rect x="40" y="182" width="540" height="16" rx="8" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1"/>
+  <rect x="40" y="182" width="315" height="16" rx="8" fill="#fda4af"/>
+  <text x="200" y="194" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#881337">7 flips</text>
+  <text x="470" y="194" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="600" fill="#71717a">5 stable</text>
+
+  <!-- Verbosity bias bar -->
+  <text x="40" y="240"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="15" font-weight="700" fill="#18181b">Verbosity bias</text>
+  <text x="580" y="243" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="26" font-weight="700" fill="#d97706">5/5</text>
+  <text x="40" y="260"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#71717a">longer-wins / pairs = 1.00 &#183; equal quality, only length differs</text>
+  <rect x="40" y="270" width="540" height="16" rx="8" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1"/>
+  <rect x="40" y="270" width="540" height="16" rx="8" fill="#fcd34d"/>
+  <text x="310" y="282" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="10" font-weight="700" fill="#78350f">longer answer wins all 5 of 5 pairs</text>
+
+  <!-- 12-pair flip strip -->
+  <text x="40" y="330"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.08em">12 PAIRS &#183; DOES THE VERDICT FLIP WHEN ORDER SWAPS?</text>
+
+  <!-- p01..p12 boxes, 6 columns x 2 rows -->
+  <!-- flip: p01 p02 p03 p04 p09 p10 p11 = YES (7), stable: p05 p06 p07 p08 p12 = no (5) -->
+
+  <!-- row1: p01-p06 -->
+  <g font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" text-anchor="middle">
+    <rect x="40"  y="344" width="82" height="34" rx="7" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+    <text x="81" y="358" fill="#be123c">p01</text>
+    <text x="81" y="372" fill="#be123c" font-size="9">FLIP</text>
+
+    <rect x="130" y="344" width="82" height="34" rx="7" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+    <text x="171" y="358" fill="#be123c">p02</text>
+    <text x="171" y="372" fill="#be123c" font-size="9">FLIP</text>
+
+    <rect x="220" y="344" width="82" height="34" rx="7" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+    <text x="261" y="358" fill="#be123c">p03</text>
+    <text x="261" y="372" fill="#be123c" font-size="9">FLIP</text>
+
+    <rect x="310" y="344" width="82" height="34" rx="7" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+    <text x="351" y="358" fill="#be123c">p04</text>
+    <text x="351" y="372" fill="#be123c" font-size="9">FLIP</text>
+
+    <rect x="400" y="344" width="82" height="34" rx="7" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="441" y="358" fill="#047857">p05</text>
+    <text x="441" y="372" fill="#047857" font-size="9">stable</text>
+
+    <rect x="490" y="344" width="82" height="34" rx="7" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="531" y="358" fill="#047857">p06</text>
+    <text x="531" y="372" fill="#047857" font-size="9">stable</text>
+  </g>
+
+  <!-- row2: p07-p12 -->
+  <g font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="700" text-anchor="middle">
+    <rect x="40"  y="386" width="82" height="34" rx="7" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="81" y="400" fill="#047857">p07</text>
+    <text x="81" y="414" fill="#047857" font-size="9">stable</text>
+
+    <rect x="130" y="386" width="82" height="34" rx="7" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="171" y="400" fill="#047857">p08</text>
+    <text x="171" y="414" fill="#047857" font-size="9">stable</text>
+
+    <rect x="220" y="386" width="82" height="34" rx="7" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+    <text x="261" y="400" fill="#be123c">p09</text>
+    <text x="261" y="414" fill="#be123c" font-size="9">FLIP</text>
+
+    <rect x="310" y="386" width="82" height="34" rx="7" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+    <text x="351" y="400" fill="#be123c">p10</text>
+    <text x="351" y="414" fill="#be123c" font-size="9">FLIP</text>
+
+    <rect x="400" y="386" width="82" height="34" rx="7" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+    <text x="441" y="400" fill="#be123c">p11</text>
+    <text x="441" y="414" fill="#be123c" font-size="9">FLIP</text>
+
+    <rect x="490" y="386" width="82" height="34" rx="7" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="531" y="400" fill="#047857">p12</text>
+    <text x="531" y="414" fill="#047857" font-size="9">stable</text>
+  </g>
+
+  <!-- Legend -->
+  <rect x="40" y="440" width="14" height="14" rx="4" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="62" y="451"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">verdict flips when order swaps</text>
+  <rect x="290" y="440" width="14" height="14" rx="4" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="312" y="451"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">verdict stable, quality gap too large to flip</text>
+
+  <!-- Divider -->
+  <line x1="632" y1="100" x2="632" y2="560" stroke="#e4e4e7" stroke-width="1.5"/>
+
+  <!-- ============================================================
+       RIGHT: correction, disagreement with truth before/after
+  ============================================================ -->
+  <text x="672" y="118"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.1em">AVERAGE BOTH ORDERS &#8594; DISAGREEMENT WITH TRUTH</text>
+
+  <!-- Naive -->
+  <text x="672" y="160"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="15" font-weight="700" fill="#18181b">Naive judge</text>
+  <text x="1140" y="163" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="28" font-weight="700" fill="#e11d48">5/12</text>
+  <text x="672" y="180"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#71717a">X always shown first &#183; disagreement rate = 0.42</text>
+  <rect x="672" y="192" width="330" height="14" rx="7" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1"/>
+  <rect x="672" y="192" width="138" height="14" rx="7" fill="#fda4af"/>
+
+  <!-- Corrected -->
+  <text x="672" y="248"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="15" font-weight="700" fill="#18181b">Corrected judge</text>
+  <text x="1140" y="251" text-anchor="end"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="28" font-weight="700" fill="#059669">1/12</text>
+  <text x="672" y="268"
+    font-family="ui-monospace, JetBrains Mono, SFMono-Regular, Menlo, monospace"
+    font-size="12.5" fill="#71717a">both orders averaged &#183; disagreement rate = 0.08</text>
+  <rect x="672" y="280" width="330" height="14" rx="7" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1"/>
+  <rect x="672" y="280" width="28" height="14" rx="7" fill="#34d399"/>
+  <text x="710" y="311"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" fill="#a1a1aa">position-bias rate after correction: 0/12 = 0.00</text>
+
+  <!-- callout: the lone survivor -->
+  <rect x="672" y="336" width="468" height="150" rx="12" fill="#fffbeb" stroke="#fcd34d" stroke-width="2"/>
+  <text x="694" y="366"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="13" font-weight="700" fill="#92400e">The lone survivor: 1 of 12 pairs</text>
+  <text x="694" y="390"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#78350f">Order-averaging cancels the +1.00 slot-A bonus,</text>
+  <text x="694" y="410"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#78350f">since each answer sits in slot A exactly once.</text>
+  <text x="694" y="430"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#78350f">It does nothing to the +0.02-per-word bonus, so</text>
+  <text x="694" y="450"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#78350f">the one remaining error is a verbosity mistake:</text>
+  <text x="694" y="470"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" font-weight="700" fill="#92400e">fixes WHERE an answer sits, not HOW LONG it is.</text>
+
+  <!-- Bottom caption strip -->
+  <rect x="40" y="580" width="1100" height="40" rx="10" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1.2"/>
+  <text x="590" y="605" text-anchor="middle"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="12" fill="#52525b">Averaging both orderings cancels position bias (0.58 &#8594; 0.00) and cuts disagreement from 5/12 to 1/12, but verbosity bias is untouched.</text>
+</svg>

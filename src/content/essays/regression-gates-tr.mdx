@@ -1,0 +1,190 @@
+---
+title: "Regresyon Kapilari"
+description: "Hayır diyemeyen bir skorun hiçbir değeri yoktur. Bölüm 11, tüm seriyi tek bir CI kapısına dönüştürür: 20 öğelik bir değerlendirmenin iki aday çalışması üzerinde üç kontrol yürütür, bir bootstrap-CI eşiği, bir n-gram bulaşma taraması ve bir PSI kayma karşılaştırması, ve ortalaması iyi görünen ama aralığı ile dağılımı iyi görünmeyen çalışmanın dağıtımını engeller."
+date: 2026-07-24
+tags: ["Değerlendirme", "LLM", "AI", "CI/CD", "Bulaşma", "Kayma"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-11-regression-gates"
+lang: "tr"
+translationSlug: "regression-gates"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Bölüm 10, bir modelin belirttiği güvenin sözünü tutup tutmadığını sormuştu; bu bölüm *tüm değerlendirmenizin* hayır demesine izin verilip verilmediğini soruyor. Serinin şimdiye kadar kurduğu her sayı, bir skor, bir altın küme, önyargısı giderilmiş bir jüri, bir güven aralığı, tek bir soruyu tek bir anda yanıtlamak için var: bu yeni model sürümü üretime ulaşmalı mı, ulaşmamalı mı? Bir **regresyon kapısı (regression gate)**, o sorunun bir toplantıdaki sohbet olmaktan çıkıp bir makinenin uygulayabileceği bir kurala dönüştüğü yerdir. Bir dağıtımdan önce çalışan, değerlendirme sonuçlarına bakan ve iki kelimeden birini döndüren küçük bir programdır: gönder ya da engelle.
+
+Bu bölümün yakalamak için kurulduğu tuzak, neredeyse herkesi kandıran tuzaktır: manşet ortalaması barajı geçen bir çalışma. Aynı küçük 20 öğelik değerlendirme kümesinin iki aday sürümünü, ortalaması `0.900` olan A çalışması ve ortalaması `0.725` olan B çalışması, `0.70` kalite barajına karşı notlayacağız. B çalışmasının ortalaması çizginin rahatça üzerinde oturuyor. "Ortalama eşiği geçer, o zaman gönder" naif kuralına göre B çalışması dağıtılır. Her biri ortalamanın ötesine bakan üç kontrol kuracağız ve sonunda üçü de B çalışmasının güvenli olmadığında hemfikir olacak: güven aralığı barajın altına iniyor ve skor dağılımı, güvendiğimiz çalışmadan anlamlı biçimde kaymış. Kapı dağıtımı engelliyor, ve bunu bir sezgiyle değil, bir sayıyla yapıyor.
+
+## Ön koşullar
+
+Temel Python (bir liste, bir döngü, bir bölme) ve serinin daha önceki bir fikri yeterli: Bölüm 6'daki, tek bir ortalamayı veriyi yerine koyarak yeniden örnekleyerek bir aralığa çeviren **bootstrap güven aralığı**. O ifade bulanıksa, kısa versiyonu burada da var. NumPy görünüyor (yeniden örnekleme ve bir logaritma için), ama egzotik bir şey yok. Eşlik eden dosya, [regression_gates.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-11-regression-gates), API anahtarı ve ağ olmadan offline çalışır, bootstrap tekrarlanabilir olsun diye sabit bir rastgele tohumla, ve doğrulanmış bir beklenen-çıktı bloğuyla biter. Bu yazıda basılan her sayı, o dosyanın gerçek çıktısıdır ve hepsini kendiniz yeniden üretebilirsiniz.
+
+## Senaryo: iki çalışma, bir baraj
+
+Bir kapının var olma sebebi olan durum şudur. Her biri `0.0` (yanlış), `0.5` (kısmi) ya da `1.0` (doğru) olacak biçimde bir öğe-başına kalite skoruna notlanmış 20 öğelik bir değerlendirme kümeniz var. Modelinizin iki sürümü, *aynı* 20 öğe üzerinde 20'şer skor üretir, dolayısıyla doğrudan karşılaştırılabilirler. A sürümü, hâlihazırda üretimde olan model ya da zaten güvendiğiniz bir aday. B sürümü, birinin göndermek istediği yeni olan. Her kalite kovasına kaç öğe düştüğünün sayımı olarak yazıldığında, iki çalışma şöyle:
+
+```python
+RUN_A = [1.0] * 17 + [0.5] * 2 + [0.0] * 1   # mean 0.900
+RUN_B = [1.0] * 12 + [0.5] * 5 + [0.0] * 3   # mean 0.725
+```
+
+A çalışmasında 17 doğru, 2 kısmi, 1 yanlış var: `0.900` ortalama. B çalışmasında 12 doğru, 5 kısmi, 3 yanlış var: `0.725` ortalama. Kalite barajınız `THRESHOLD = 0.70`. İkisi de onu geçiyor. Yalnızca ortalamayı kontrol eden tek satırlık bir kapı, ikisini de geçirirdi. Bu bölümün geri kalanı, o kapının B çalışması hakkında yanıldığına dair üç sebeptir.
+
+## Kontrol 1: CI eşik kapısı
+
+İlk kontrol, bir ortalamaya tek başına güvenmeyi reddeder. 20 örnekten hesaplanan bir ortalama bir **nokta tahminidir (point estimate)**: aynı değerlendirmeyi farklı bir 20 öğelik örneklem üzerinde çalıştırın ve biraz farklı bir sayı elde edersiniz. Bölüm 6, o titremeyi ölçen aracı öğretti: bootstrap. 20 skoru yerine koyarak yeniden örnekler, 20'lik yeni bir küme çeker ve yeniden ortalarsınız; bunu `N_BOOT = 10000` kez yapın ve elinizde ortalamanın 10000 olası değeri olur. Onları sıralayıp 2.5'inci ve 97.5'inci yüzdelikleri okuyun, elinizde bir **%95 güven aralığı** olur (bu da `ALPHA = 0.05`, iki kuyruğa bölünmüş):
+
+```python
+def bootstrap_ci(scores, n_boot, alpha, rng):
+    arr = np.asarray(scores, dtype=float)
+    n = len(arr)
+    idx = rng.integers(0, n, size=(n_boot, n))   # n_boot resamples of size n
+    boot_means = arr[idx].mean(axis=1)
+    lo = float(np.percentile(boot_means, 100 * alpha / 2))
+    hi = float(np.percentile(boot_means, 100 * (1 - alpha / 2)))
+    return float(arr.mean()), lo, hi
+```
+
+Kapının kuralı tek satır, ve kontrolün bütün amacı bu: **yalnızca CI'nin alt sınırı barajı geçerse geç, sadece ortalama değil.**
+
+```python
+def threshold_gate(scores, threshold, rng):
+    mean, lo, hi = bootstrap_ci(scores, N_BOOT, ALPHA, rng)
+    passed = lo >= threshold
+    return mean, lo, hi, passed
+```
+
+Bunu iki aday üzerinde çalıştırın ve aralarındaki fark saklanmayı bırakır:
+
+```text
+  run A: mean=0.900  95% CI=[0.775, 1.000]  low >= 0.70  -> PASS
+  run B: mean=0.725  95% CI=[0.550, 0.875]  low <  0.70  -> FAIL
+```
+
+A çalışmasının ortalaması `0.900` ve tüm aralığı, `[0.775, 1.000]`, barajın üzerinde oturuyor. Verinin olası olarak olabileceği kötümser köşede bile, A çalışması `0.70`'i payı ile geçiyor, dolayısıyla geçer. B çalışmasının ortalaması `0.725`, barajın üzerinde, ama aralığı `[0.550, 0.875]`, ve alt uç, `0.550`, `0.70`'in epey altında. İşte kapının vetosu bu: B çalışmasının *ortalaması* barajı geçiyor, ama veri, gerçek kalitenin `0.550` kadar düşük olmasıyla, yani rahatça barajın altında olmasıyla tutarlı. 20 öğelik bir kümede aralık geniştir, ve B'nin ortalaması çizginin güçbela üzerinde, dolayısıyla aralığın bir kısmı yanlış tarafa düşer. Kapı, savunması gereken barajın altında olabilecek bir sayıya bir dağıtımı yaslamayı reddeder.
+
+Bu, "ortalama geçti" ile "geçtiğinden eminiz" arasındaki farktır. Ortalamayı kontrol eden bir kapı, yazı tura ile gönderir. Alt sınırı kontrol eden bir kapı, yalnızca gürültünün sizi çizginin altına sürükleyemeyeceği durumda gönderir.
+
+## Kontrol 2: bulaşma
+
+İkinci kontrol daha ince bir başarısızlığa karşı korur, bir skoru kötü bir sebeple *iyi* gösteren birine. Bir değerlendirme sorusu eğitim verisine sızmışsa, model yanıta akıl yürüterek varmak yerine onu ezberlemiş olabilir. O öğede kazandığı skor, beceri kanıtı değildir; örtüşme kanıtıdır. Bulaşmış bir değerlendirme kümesi, kendisinden hesaplanan her sayıyı şişirir, dolayısıyla bir skora güvenmeden önce sızıntı için tararız.
+
+Kontrol, bir **sözcük n-gram örtüşmesidir**. Her değerlendirme sorusunu ve her eğitim belgesini `n = 3` ardışık sözcükten oluşan örtüşen pencerelere (sözcük trigramları) ayırın, sonra her değerlendirme öğesi için, trigramlarının hangi oranının eğitim korpusunda bir yerde de yer aldığını sorun. `1.00` örtüşme, sorunun her trigramının eğitimde bulunduğu anlamına gelir, ki bu da ifadenin tam ezberlenmesinin göründüğü şeydir.
+
+```python
+def word_ngrams(text, n):
+    tokens = text.lower().split()
+    return {tuple(tokens[i:i + n]) for i in range(len(tokens) - n + 1)}
+
+def contamination_overlap(eval_text, train_ngrams, n):
+    ev = word_ngrams(eval_text, n)
+    if not ev:
+        return 0.0
+    hit = sum(1 for g in ev if g in train_ngrams)
+    return hit / len(ev)
+```
+
+Dört değerlendirme sorusunu dört belgelik bir eğitim korpusuna karşı tarıyoruz, ve o eğitim belgelerinden biri dosdoğru yapıştırılmış bir değerlendirme sorusu. `0.80` sızıntı barajında ya da üzerinde örtüşmesi olan her şeyi işaretliyoruz:
+
+```text
+  E1: overlap=1.00  -> LEAKED   "what is the capital of france"
+  E2: overlap=0.00  -> clean   "how many legs does a spider have"
+  E3: overlap=0.00  -> clean   "who wrote the play romeo and juliet"
+  E4: overlap=0.20  -> clean   "what is the boiling point of water"
+```
+
+E1, "what is the capital of france," `1.00` örtüşmeye sahip. Dört trigramı (`what is the`, `is the capital`, `the capital of`, `capital of france`) korpusta görünüyor, çünkü tam olarak o soru eğitim kümesinde duruyor. O öğe işaretleniyor: kazandığı her skor bulaşmıştır ve atılmalı ya da öğe kaldırılmalıdır. E2 ve E3 eğitimle hiç trigram paylaşmıyor, örtüşme `0.00`, gerçekten görülmemiş. E4, "what is the boiling point of water," öğretici durum. Örtüşmesi `0.20`, sıfır değil. Beş trigramı var ve tam olarak biri, `what is the`, E1'in sızmış satırında da görünüyor, dolayısıyla beşte bir isabet. Ama `what is the` genel bir soru başlangıcı, sızmış bir yanıt değil, ve `0.20`, `0.80` barajının epey altında, dolayısıyla E4 doğru biçimde temiz bırakılıyor. Kontrol, ezberlenmiş bir soruyu tesadüfi bir ortak ifadeden ayırıyor, ki bu da bulaşma tespitinin bütün sanatıdır: yüksek örtüşme sızıntıyı işaretler, tesadüfi örtüşme işaretlemez.
+
+İki tasarım tercihi adlandırmaya değer. Tek sözcükler yerine trigram kullanmak, `what is the`'in her soruyu barajın üzerine sürüklemesini engelleyen şeydir; daha uzun pencereler, başıboş sözcüklerin değil, tüm ifadelerin eşleşmesini talep eder. Ve barajı `1.00` yerine `0.80`'e koymak, hafifçe yeniden ifade edilmiş sızmış bir öğenin yine de yakalanmasına yer bırakır. Bu, alanın gerçek korpuslar üzerinde yürüttüğü bulaşma araştırmasının kasıtlı olarak basit, offline bir vekilidir, ama ilke aynıdır: bir kıyaslama (benchmark), yalnızca model yanıtlarını daha önce görmediyse dürüsttür.
+
+## Kontrol 3: kayma
+
+Üçüncü kontrol, özet sayısı sakin görünse bile *şekli* değişmiş bir çalışmayı yakalar. İki çalışma, skor dağılımları birbirinden uzaklaşmışken benzer görünen ortalamalara sahip olabilir, ve o hareket çoğu zaman bir regresyonun ilk işaretidir. Onu görmek için ortalamayı değil, tüm dağılımı karşılaştırmalısınız.
+
+Önce her çalışmanın skorlarını kalite düzeyine göre kovalayın, `0.0`, `0.5` ve `1.0`, ve her birine kaç öğe düştüğünü sayın:
+
+```python
+def bucketize(scores, edges):
+    counts = [0] * len(edges)
+    for s in scores:
+        counts[edges.index(s)] += 1
+    return counts
+```
+
+İki çalışmamız için kova sayımları:
+
+```text
+  buckets           [0.0, 0.5, 1.0]
+  run A counts      [1, 2, 17]   (n=20)
+  run B counts      [3, 5, 12]   (n=20)
+```
+
+A çalışması, 20 öğesinin 17'sini en üstteki `1.0` kovasına koyuyor, yalnızca 2 kısmi ve 1 kaçırma ile. B çalışması çökmüş: yalnızca 12 öğe tamamen doğru, kısmiler 5'e yükselirken düpedüz kaçırmalar 3'e üçlenmiş. Kütle, "doğru" kovasından "kısmi" ve "yanlış"a doğru kaymış. **Popülasyon Kararlılık Endeksi (Population Stability Index)**, ya da PSI, tam olarak o kaymaya tek bir sayı koyar. Her kova için, iki çalışmanın `pA` ve `pB` oranlarını alın ve kovalar boyunca `(pA - pB) * ln(pA / pB)` toplayın:
+
+```python
+def psi(counts_a, counts_b):
+    na, nb = sum(counts_a), sum(counts_b)
+    total = 0.0
+    for a, b in zip(counts_a, counts_b):
+        pa, pb = a / na, b / nb
+        total += (pa - pb) * np.log(pa / pb)
+    return float(total)
+```
+
+PSI, iki dağılım aynı olduğunda sıfırdır ve ıraksadıkça büyür; simetriktir, dolayısıyla hangi çalışmayı taban çizgisi olarak adlandırdığınız fark etmez. Alışılmış okuma şudur: `0.10`'un altında dağılımlar kararlıdır, `0.10` ile `0.25` arası bakmaya değer ölçülü bir kaymadır ve `0.25`'in üzeri anlamlı kaymadır. İki çalışmamız şunu veriyor:
+
+```text
+  PSI = sum (pA-pB)*ln(pA/pB) = 0.334  -> SIGNIFICANT drift
+```
+
+`0.334`'lük bir PSI, `0.25` çizgisinin epey ötesinde, dolayısıyla dağılımlar anlamlı biçimde kaymış. Kontrol 1'in ortalamasının vurgulayamadığı şeyi bunun neyi yakaladığına dikkat edin: B çalışması yalnızca ortalamada biraz daha düşük skor almadı, sonuçların tüm *profilini* değiştirdi, gerçek yanıtlar kısmi ve yanlış olanlara dönüşerek. B'nin ortalaması bir şekilde tam A çalışmasının üstüne düşseydi bile, PSI yine de bağırıyor olurdu, çünkü şekil hareket etti. Ortalamalar bulanıklaştırır; PSI netleştirir.
+
+Aşağıdaki figür, üç kontrolü de aday B üzerinde yan yana koyuyor, ki bu da kapının onları tam olarak görme biçimidir: üç panel, tek bir hüküm.
+
+<Diagram number={1} caption="Aday B çalışması üzerindeki üç regresyon-kapısı kontrolü, kapının onları değerlendirdiği biçimde dizilmiş. Solda, CI eşik kapısı: A çalışmasının 0.900 ortalaması ve tamamen üzerinde olan %95 bootstrap CI [0.775, 1.000] (PASS) ile B çalışmasının 0.725 ortalaması ve alt sınırı 0.550 olarak barajın altına inen CI [0.550, 0.875] (FAIL) ile 0.70 barajı. Ortada, bulaşma: eğitime karşı sözcük 3-gram örtüşmesi için taranan dört değerlendirme sorusu, E1 1.00 ile LEAKED işaretli ve E2 (0.00), E3 (0.00) ve E4 (0.20) 0.80 barajının altında temiz. Sağda, dağılım kayması: A çalışmasının skor kovaları [1, 2, 17] ile B çalışmasının [3, 5, 12], her biri 20 öğe üzerinde, 0.25 anlamlı-kayma çizgisinin üzerinde 0.334'lük bir PSI veriyor. Alttaki bir bant, başarısız bir eşik kapısı ile anlamlı kaymayı karara birleştirir: DAĞITIMI ENGELLE.">
+  <img src="/essays/regression-gates/part11-figure.svg" alt="'Üç kontrol kapıya karar verir: gönder ya da engelle' başlıklı, B çalışmasının 0.725 ortalamasının barajı geçtiği ama CI'si ile kaymasının geçmediği alt başlıklı üç panelli bir figür. Sol panel, CI eşik kapısı, bir 0.70 barajı çizer; A çalışması 0.900 ortalamada tamamen barajın üzerinde 0.775'ten 1.000'e bir %95 bootstrap CI bıyığı ile çizilmiş ve PASS etiketli, B çalışması ise 0.725 ortalamada alt ucu barajın altını geçen 0.550'den 0.875'e bir CI bıyığı ile çizilmiş ve FAIL etiketli. Orta panel, örtüşme 0.80 ya da üzerinde işaretlenen sözcük 3-gramlarıyla bulaşma, E1 'what is the capital of france'i 1.00 örtüşmede gül renginde LEAKED işaretli listeler, ve E2 'how many legs does a spider have'i 0.00'da, E3 'who wrote the play romeo and juliet'i 0.00'da ve E4 'what is the boiling point of water'ı 0.20'de, üçü de zümrüt yeşilinde temiz işaretli. Sağ panel, PSI ile dağılım kayması, A çalışmasının skor kovalarını 1, 2, 17 sayımları ve B çalışmasınınkini 3, 5, 12 olarak, 0.0, 0.5, 1.0 kovaları boyunca çalışma başına 20 öğe üzerinde, 0.334 popülasyon kararlılık endeksi SIGNIFICANT drift etiketli gösterir. Altta bir bant şöyle okunur: CI eşik FAIL, Kayma SIGNIFICANT, KARAR DAĞITIMI ENGELLE, bir sayı, bir sezgi değil, regresyonu durdurur." class="w-full rounded-lg" />
+</Diagram>
+
+## Kapının hükmü
+
+Şimdi kapı asıl işini yapıyor, ki o da karar vermek. Aday B üzerindeki kontrolleri, birinin göndermek istediği çalışmayı, birleştirir ve tek bir kelime döndürür:
+
+```text
+GATE VERDICT on candidate B (the run we were about to deploy):
+  CI threshold gate : FAIL
+  distribution drift : SIGNIFICANT drift
+  DECISION: BLOCK THE DEPLOY
+```
+
+B çalışmasının `0.725` ortalaması `0.70` barajını geçti, ve tembel bir kapı onu gönderirdi. Ama CI eşik kapısı onu başarısız saydı, çünkü `[0.550, 0.875]` aralığı barajın altına iniyor, ve kayma kontrolü PSI `0.334`'te anlamlı kayma işaretledi, çünkü dağılımı güvenilen çalışmadan uzağa çöktü. Tek başına her iki sinyal de bir dağıtımı durdurmaya yeter; birlikte kesindirler. Karar `BLOCK THE DEPLOY` (DAĞITIMI ENGELLE). Regresyon hiçbir zaman üretime ulaşmaz, ve, çok önemlisi, sebep denetlenebilir: "daha kötü hissettirdi" değil, "%95 CI'nin alt sınırı `0.550`, `0.70` barajının altında, ve PSI `0.334`, `0.25` kayma çizgisinin üstünde." Onu bir sayı durdurdu, bir sezgi değil.
+
+Aşağıdaki interaktif figür, o karara yüklenmenize izin verir. Aday B'nin kova sayımlarını kaydırın, öğeleri yanlış, kısmi ve doğru sütunları arasında taşıyın, ve üç kontrolün canlı yeniden hesaplanmasını izleyin: B'nin ortalaması, baraja karşı güven aralığı ve A çalışmasına karşı PSI, gönder-ya-da-engelle nihai hükmü siz ilerledikçe güncellenerek. Üçünü de geçen bir çalışma kurmayı deneyin, ve bunun yalnızca ortalamayı geçmekten ne kadar daha zor olduğunu hissedeceksiniz.
+
+<IframeFigure src="/essays/regression-gates/part11-interactive.html" title="İnteraktif regresyon-kapısı gezgini: kaydırıcılar aday B çalışmasının 20 örnek üzerindeki yanlış, kısmi ve doğru öğe sayımlarını ayarlar, ve panel B'nin ortalamasını, 0.70 barajına karşı %95 bootstrap CI'sini, A çalışmasının sabit dağılımına karşı PSI kaymasını ve nihai gönder-ya-da-engelle kapı hükmünü yeniden hesaplar." height={860} />
+
+## Özet / Çıkarımlar
+
+- **Bir kapı ortalamayı değil, alt sınırı kontrol eder.** Barajın üzerindeki bir nokta tahmini yeterli değildir, çünkü 20 öğe geniş bir aralık üretir. B çalışmasının `0.725` ortalaması `0.70` barajını geçer, ama %95 bootstrap CI'si `[0.550, 0.875]` onun altına iner, dolayısıyla CI eşik kapısı onu başarısız sayar. A çalışması geçer çünkü tüm aralığı `[0.775, 1.000]` barajı geçer.
+- **Bulaşma skorları şişirir, dolayısıyla onu tarayın.** Bir sözcük-trigram örtüşme kontrolü, n-gramları hâlihazırda eğitim verisinde yaşayan her değerlendirme öğesini işaretler. E1 örtüşme `1.00` aldı (tamamen sızmış, `0.80` barajında işaretlendi); E4, genel `what is the` ifadesinden `0.20` aldı ve temiz kaldı. Yüksek örtüşme ezberlemedir; tesadüfi örtüşme değildir.
+- **Ortalamaları değil, dağılımları karşılaştırın.** İki çalışma, şekilleri hareket ederken birbirine yakın görünen ortalamalara sahip olabilir. A çalışmasının kova sayımları `[1, 2, 17]` ve B çalışmasının `[3, 5, 12]`, `0.25` çizgisinin üzerinde `0.334`'lük bir PSI verir, dolayısıyla her iki ortalama da barajın üzerinde olsa bile kayma anlamlıdır.
+- **Kapının kararı denetlenebilir.** Aday B üzerindeki hüküm `BLOCK THE DEPLOY`, iki somut sayı ile desteklenmiş (CI alt sınırı `0.550` barajın altında, PSI `0.334` kayma çizgisinin üstünde), sezgiyle değil. Bir kapıyı savunabileceğiniz ve otomatikleştirebileceğiniz bir şey yapan budur.
+- **Serinin karşılığını verdiği yer burası.** Skor (Bölüm 1), altın küme (Bölüm 2) ve güven aralığı (Bölüm 6) tam olarak bu anın, otomatik gönder-ya-da-engelle çağrısının, kanıtla yapılabilmesi için kuruldu.
+
+## Sözlük
+
+- **Regresyon kapısı (regression gate)**: bir dağıtımdan önce çalışan ve değerlendirme sonuçlarına dayanarak gönder ya da engelle döndüren otomatik bir kontrol. Burada bir CI eşik kapısı ile bir kayma kontrolünü birleştirir ve aday B'yi engeller.
+- **Nokta tahmini (point estimate)**: B çalışmasının `0.725` ortalaması gibi, farklı bir örneklemde ne kadar hareket edeceğine dair bir ölçü olmadan hesaplanmış tek bir değer. Yalnızca bir nokta tahminine güvenen bir kapı, gürültü üzerinde gönderir.
+- **Bootstrap güven aralığı**: bir metrik için olası değerlerin aralığı, veriyi yerine koyarak `N_BOOT = 10000` kez yeniden örnekleyip yeniden hesaplanan ortalamaların 2.5'inci ve 97.5'inci yüzdeliklerini okuyarak kurulur. Bölüm 6'da tanıtıldı.
+- **CI eşik kapısı**: bir çalışmanın yalnızca güven aralığının *alt sınırı* barajı geçerse geçtiği kural. B çalışmasını başarısız saydı (`0.550 < 0.70`) ve A çalışmasını geçirdi (`0.775 >= 0.70`).
+- **Bulaşma (sızıntı)**: eğitim verisinde görünmüş, dolayısıyla modelin yanıtını ezberlemiş olabileceği bir değerlendirme öğesi. Skoru, beceriyle hiçbir ilgisi olmayan bir sebeple şişirir.
+- **Sözcük n-gram örtüşmesi**: bir değerlendirme öğesinin `n`-sözcüklük pencerelerinin (burada trigramlar, `n = 3`) eğitim korpusunda da görünen oranı. `1.00` örtüşme, öğenin ifadesinin eğitimde tamamen bulunduğu anlamına gelir; buradaki sızıntı barajı `0.80`.
+- **Popülasyon Kararlılık Endeksi (PSI)**: iki dağılımın ne kadar kaydığını ölçen tek bir sayı, kovalar boyunca `sum (pA - pB) * ln(pA / pB)`. Sıfır aynı demektir; `0.10`'un altı kararlı, `0.10` ile `0.25` ölçülü, `0.25`'in üzeri anlamlı. A çalışması ile B çalışması `0.334` verir.
+- **Kayma (drift)**: çalışmalar arasında bir skor dağılımının yalnızca ortalamasının değil, *şeklinin* değişmesi. B çalışmasının kütlesi doğru kovadan kısmi ve yanlışa kaydı, ki bunu ortalama küçümser ve PSI netleştirir.
+
+---
+
+Kapı artık kötü bir çalışmayı engelleyebilir, ama hükmü ancak arkasındaki değerlendirme kümesi kadar iyidir, ve o küme kendini büyütmez. **Bölüm 12, Değerlendirme Çarkı (The Eval Flywheel)**, üretim günlüklerinizi onu beslemeye devam eden motora dönüştürür: gerçek izleri yeni etiketli örneklere madencilik yaparak, altın küme ve üzerine kurulan her kapı, her dağıtımla daha keskin hale gelsin diye.

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LLM-as-Judge by Hand: fix the judge, watch the score move, Part 4</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg: #ffffff;
+  --card-bg: #fafafa;
+  --chip-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --ink: #18181b;
+  --body: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --emerald: #059669;
+  --emerald-lt: #10b981;
+  --emerald-br: #34d399;
+  --emerald-bg: #ecfdf5;
+  --emerald-bd: #6ee7b7;
+  --emerald-ink: #047857;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-bd: #fcd34d;
+  --amber-ink: #b45309;
+  --rose: #e11d48;
+  --rose-bg: #fff1f2;
+  --rose-bd: #fda4af;
+  --rose-ink: #be123c;
+  --zinc-bg: #f4f4f5;
+  --zinc-bd: #d4d4d8;
+  --zinc-ink: #52525b;
+  --radius-card: 14px;
+  --radius-chip: 8px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--body);
+  padding: 24px 20px 40px;
+  max-width: 860px;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-chip);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+.hint strong { color: var(--body); font-weight: 600; }
+
+/* ── ITEM GRID ── */
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.item {
+  text-align: left;
+  border: 1.5px solid var(--border);
+  background: #ffffff;
+  border-radius: 11px;
+  padding: 10px 11px 11px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s, background 0.12s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(24,24,27,0.07); }
+.item:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+@media (prefers-reduced-motion: reduce) {
+  .item { transition: none; }
+  .item:hover { transform: none; }
+}
+.item.correct { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.item.fp      { background: var(--amber-bg);   border-color: var(--amber-bd); }
+.item.fn      { background: var(--rose-bg);     border-color: var(--rose-bd); }
+.item.abstain { background: var(--zinc-bg);     border-color: var(--zinc-bd); }
+
+.item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.item-id { font-family: var(--font-mono); font-size: 11px; color: var(--faint); font-weight: 600; }
+.cat-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.03em;
+}
+.cat-badge.correct { background: var(--emerald); color: #fff; }
+.cat-badge.fp      { background: var(--amber);   color: #fff; }
+.cat-badge.fn      { background: var(--rose);     color: #fff; }
+.cat-badge.abstain { background: var(--zinc-ink); color: #fff; }
+
+.item-note {
+  font-size: 11.5px;
+  color: var(--ink);
+  font-weight: 500;
+  line-height: 1.35;
+  min-height: 30px;
+}
+.item-labels { display: flex; flex-direction: column; gap: 3px; }
+.lab-row { display: flex; align-items: baseline; gap: 6px; font-size: 11px; }
+.lab-key { color: var(--faint); font-weight: 600; width: 40px; flex-shrink: 0; }
+.lab-val {
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.lab-val.pos { color: var(--emerald-ink); background: rgba(5,150,105,0.10); }
+.lab-val.neg { color: var(--muted); background: rgba(113,113,122,0.10); }
+.raw-row {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+.raw-row .fixed-tag { color: var(--emerald-ink); font-weight: 700; }
+.flip-hint { font-size: 10px; color: var(--faint); }
+
+.reset-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--body);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s;
+}
+.reset-btn:hover { background: var(--chip-bg); }
+.reset-btn:focus-visible { box-shadow: 0 0 0 2px var(--emerald); }
+
+/* ── RESULTS ROW (matrix + metrics) ── */
+.results {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  gap: 22px;
+  margin-top: 18px;
+  align-items: start;
+}
+@media (max-width: 600px) {
+  .results { grid-template-columns: 1fr; }
+}
+
+.mini-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.scorable-line {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--body);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 10px;
+}
+.scorable-line b { color: var(--ink); }
+.scorable-line .abst { color: var(--zinc-ink); font-weight: 700; }
+
+/* mini confusion matrix */
+.cm { border-collapse: separate; border-spacing: 5px; }
+.cm .axis {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+.cm .hdr { font-size: 11px; font-weight: 600; color: var(--body); padding: 0 2px; }
+.cm-cell {
+  width: 66px; height: 54px;
+  border-radius: 9px;
+  text-align: center;
+  vertical-align: middle;
+  border: 1.5px solid var(--border);
+  position: relative;
+}
+.cm-cell .cnt { font-family: var(--font-mono); font-size: 22px; font-weight: 700; line-height: 1; }
+.cm-cell .tag { font-family: var(--font-mono); font-size: 9px; font-weight: 700; display: block; margin-top: 2px; }
+.cm-cell.correct { background: var(--emerald-bg); border-color: var(--emerald-bd); }
+.cm-cell.correct .cnt, .cm-cell.correct .tag { color: var(--emerald-ink); }
+.cm-cell.fp { background: var(--amber-bg); border-color: var(--amber-bd); }
+.cm-cell.fp .cnt, .cm-cell.fp .tag { color: var(--amber-ink); }
+.cm-cell.fn { background: var(--rose-bg); border-color: var(--rose-bd); }
+.cm-cell.fn .cnt, .cm-cell.fn .tag { color: var(--rose-ink); }
+
+/* metric rows */
+.metric { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.metric:last-child { border-bottom: none; }
+.metric-head { display: flex; align-items: baseline; justify-content: space-between; }
+.metric-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+.metric-val { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--emerald); }
+.metric-formula { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.metric-formula .guard { color: var(--amber); }
+.meter { height: 6px; background: var(--chip-bg); border-radius: 3px; margin-top: 7px; overflow: hidden; }
+.meter > span {
+  display: block; height: 100%;
+  background: var(--emerald-br);
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+@media (prefers-reduced-motion: reduce) { .meter > span { transition: none; } }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PANEL ══════════════ -->
+<section class="panel" aria-labelledby="panel-heading">
+  <p class="eyebrow">Fix the judge, by hand</p>
+  <h2 id="panel-heading">Twelve items, a mock judge, and the score it earns</h2>
+  <p class="panel-subtitle">Each card is one support item: the human gold label on top, the judge's actual raw verdict below. Click a card to swap that one verdict for an idealized answer that agrees with the human, and watch the confusion matrix and all four metrics recompute.</p>
+
+  <div class="hint">
+    <strong>Click an item</strong> to toggle between the judge's actual verdict (as printed by the mock judge) and a fixed verdict that agrees with the human gold. Fixing Q05 removes the false positive; fixing Q06 and Q09 removes the two false negatives; fixing Q02 or Q07 pulls an abstained item back into the scorable set.
+  </div>
+
+  <div class="item-grid" id="item-grid" role="group" aria-label="Twelve support-QA items, click to toggle the judge's verdict"></div>
+
+  <button class="reset-btn" id="reset-btn" type="button">Reset to the judge's actual verdicts</button>
+
+  <div class="results">
+    <div>
+      <p class="mini-label">Scorable set</p>
+      <div class="scorable-line" id="scorable-line"></div>
+      <p class="mini-label">Judge vs human</p>
+      <table class="cm" aria-hidden="true">
+        <tr>
+          <td></td><td></td>
+          <td colspan="2" class="axis" style="text-align:center;padding-bottom:2px;">Judge</td>
+        </tr>
+        <tr>
+          <td></td><td></td>
+          <td class="hdr">PASS</td><td class="hdr">FAIL</td>
+        </tr>
+        <tr>
+          <td rowspan="2" class="axis"><span style="writing-mode:vertical-rl;transform:rotate(180deg);display:inline-block;">Human</span></td>
+          <td class="hdr">PASS</td>
+          <td class="cm-cell correct" id="cell-tp"><span class="cnt">0</span><span class="tag">TP</span></td>
+          <td class="cm-cell fn" id="cell-fn"><span class="cnt">0</span><span class="tag">FN</span></td>
+        </tr>
+        <tr>
+          <td class="hdr">FAIL</td>
+          <td class="cm-cell fp" id="cell-fp"><span class="cnt">0</span><span class="tag">FP</span></td>
+          <td class="cm-cell correct" id="cell-tn"><span class="cnt">0</span><span class="tag">TN</span></td>
+        </tr>
+      </table>
+    </div>
+
+    <div>
+      <p class="mini-label">Scores</p>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">Accuracy</span><span class="metric-val" id="acc-val">0.00</span></div>
+        <div class="metric-formula" id="acc-f"></div>
+        <div class="meter"><span id="acc-bar" style="width:0%"></span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">Precision</span><span class="metric-val" id="prec-val">0.00</span></div>
+        <div class="metric-formula" id="prec-f"></div>
+        <div class="meter"><span id="prec-bar" style="width:0%"></span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">Recall</span><span class="metric-val" id="rec-val">0.00</span></div>
+        <div class="metric-formula" id="rec-f"></div>
+        <div class="meter"><span id="rec-bar" style="width:0%"></span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-head"><span class="metric-name">F1</span><span class="metric-val" id="f1-val">0.00</span></div>
+        <div class="metric-formula" id="f1-f"></div>
+        <div class="meter"><span id="f1-bar" style="width:0%"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="sr-only" aria-live="polite" id="announcer"></div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── metric core, mirrors llm_judge.py exactly ── */
+  function confusion(gold, pred) {
+    var tp = 0, fp = 0, fn = 0, tn = 0;
+    for (var i = 0; i < gold.length; i++) {
+      var g = gold[i], p = pred[i];
+      if (g === 1 && p === 1) tp++;
+      else if (g === 0 && p === 1) fp++;
+      else if (g === 1 && p === 0) fn++;
+      else tn++;
+    }
+    return { tp: tp, fp: fp, fn: fn, tn: tn };
+  }
+  function accuracy(c) { var t = c.tp + c.fp + c.fn + c.tn; return t ? (c.tp + c.tn) / t : 0; }
+  function precision(c) { return (c.tp + c.fp) ? c.tp / (c.tp + c.fp) : 0; }
+  function recall(c) { return (c.tp + c.fn) ? c.tp / (c.tp + c.fn) : 0; }
+  function f1(p, r) { return (p + r) ? 2 * p * r / (p + r) : 0; }
+  function fmt(x) { return x.toFixed(2); }
+
+  /* ── the twelve items, exactly as llm_judge.py prints them ── */
+  /* label: "PASS" | "FAIL" | null (null = ABSTAIN, the judge's actual parsed verdict) */
+  var ITEMS = [
+    { qid: "Q01", human: 1, label: "PASS", raw: "VERDICT: PASS", note: "clean pass" },
+    { qid: "Q02", human: 1, label: null,   raw: "VERDICT: TIE  (too little content to grade...", note: "tie: judge won't commit" },
+    { qid: "Q03", human: 0, label: "FAIL", raw: "VERDICT: FAIL  (the answer refuses to resp...", note: "refusal: correctly failed" },
+    { qid: "Q04", human: 1, label: "PASS", raw: "VERDICT: PASS", note: "clean pass" },
+    { qid: "Q05", human: 0, label: "PASS", raw: "VERDICT: PASS", note: "keyword-gamed -> false positive" },
+    { qid: "Q06", human: 1, label: "FAIL", raw: "VERDICT: FAIL", note: "missed synonym -> false negative" },
+    { qid: "Q07", human: 1, label: null,   raw: "After weighing both sides, this answer loo...", note: "format drift: no VERDICT tag" },
+    { qid: "Q08", human: 1, label: "PASS", raw: "VERDICT: PASS", note: "clean pass" },
+    { qid: "Q09", human: 1, label: "FAIL", raw: "VERDICT: FAIL", note: "missed digit -> false negative" },
+    { qid: "Q10", human: 1, label: "PASS", raw: "VERDICT: PASS", note: "clean pass" },
+    { qid: "Q11", human: 0, label: "FAIL", raw: "VERDICT: FAIL", note: "correctly failed" },
+    { qid: "Q12", human: 0, label: "FAIL", raw: "VERDICT: FAIL", note: "correctly failed" }
+  ];
+  var fixed = ITEMS.map(function () { return false; });
+
+  function currentLabel(i) {
+    if (fixed[i]) return ITEMS[i].human === 1 ? "PASS" : "FAIL";
+    return ITEMS[i].label === null ? "ABSTAIN" : ITEMS[i].label;
+  }
+
+  function catOf(human, label) {
+    if (label === "ABSTAIN") return { cls: "abstain", tag: "ABSTAIN" };
+    var p = label === "PASS" ? 1 : 0;
+    if (human === 1 && p === 1) return { cls: "correct", tag: "TP" };
+    if (human === 0 && p === 1) return { cls: "fp", tag: "FP" };
+    if (human === 1 && p === 0) return { cls: "fn", tag: "FN" };
+    return { cls: "correct", tag: "TN" };
+  }
+
+  var grid = document.getElementById("item-grid");
+  function buildItems() {
+    grid.innerHTML = "";
+    for (var i = 0; i < ITEMS.length; i++) {
+      (function (idx) {
+        var it = ITEMS[idx];
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "item";
+        btn.setAttribute("data-i", idx);
+        btn.innerHTML =
+          '<div class="item-top">' +
+            '<span class="item-id">' + it.qid + '</span>' +
+            '<span class="cat-badge" data-role="badge"></span>' +
+          '</div>' +
+          '<div class="item-note">' + it.note + '</div>' +
+          '<div class="item-labels">' +
+            '<div class="lab-row"><span class="lab-key">human</span>' +
+              '<span class="lab-val ' + (it.human ? "pos" : "neg") + '">' + (it.human ? "PASS" : "FAIL") + '</span></div>' +
+            '<div class="lab-row"><span class="lab-key">judge</span>' +
+              '<span class="lab-val" data-role="judge"></span></div>' +
+          '</div>' +
+          '<div class="raw-row" data-role="raw"></div>' +
+          '<span class="flip-hint" data-role="hint">click to fix &#8646;</span>';
+        btn.addEventListener("click", function () {
+          fixed[idx] = !fixed[idx];
+          render();
+        });
+        grid.appendChild(btn);
+      })(i);
+    }
+  }
+
+  function render() {
+    var gold = [], pred = [];
+    var abstained = 0;
+
+    var cards = grid.querySelectorAll(".item");
+    cards.forEach(function (card) {
+      var i = parseInt(card.getAttribute("data-i"), 10);
+      var it = ITEMS[i];
+      var label = currentLabel(i);
+      var cat = catOf(it.human, label);
+
+      card.classList.remove("correct", "fp", "fn", "abstain");
+      card.classList.add(cat.cls);
+      var badge = card.querySelector('[data-role="badge"]');
+      badge.className = "cat-badge " + cat.cls;
+      badge.textContent = cat.tag;
+
+      var judgeEl = card.querySelector('[data-role="judge"]');
+      if (label === "ABSTAIN") {
+        judgeEl.className = "lab-val neg";
+        judgeEl.textContent = "ABSTAIN";
+      } else {
+        judgeEl.className = "lab-val " + (label === "PASS" ? "pos" : "neg");
+        judgeEl.textContent = label;
+      }
+
+      var rawEl = card.querySelector('[data-role="raw"]');
+      if (fixed[i]) {
+        rawEl.innerHTML = '<span class="fixed-tag">fixed &#8594; agrees with human</span>';
+      } else {
+        rawEl.textContent = "raw: " + it.raw;
+      }
+
+      var hintEl = card.querySelector('[data-role="hint"]');
+      hintEl.textContent = fixed[i] ? "click to revert" : "click to fix";
+
+      card.setAttribute("aria-pressed", fixed[i] ? "true" : "false");
+      card.setAttribute("aria-label",
+        it.qid + ": human " + (it.human ? "PASS" : "FAIL") +
+        ", judge " + label + " (" + cat.tag + "). " +
+        (fixed[i] ? "Fixed to agree with human. " : "Showing the judge's actual verdict. ") +
+        "Activate to toggle.");
+
+      if (label === "ABSTAIN") {
+        abstained++;
+      } else {
+        gold.push(it.human);
+        pred.push(label === "PASS" ? 1 : 0);
+      }
+    });
+
+    var c = confusion(gold, pred);
+    setCell("cell-tp", c.tp);
+    setCell("cell-fn", c.fn);
+    setCell("cell-fp", c.fp);
+    setCell("cell-tn", c.tn);
+
+    var n = c.tp + c.fp + c.fn + c.tn;
+    document.getElementById("scorable-line").innerHTML =
+      "n = <b>" + n + "</b> of 12 &nbsp; (abstained: <span class=\"abst\">" + abstained + "</span>)";
+
+    var acc = accuracy(c), prec = precision(c), rec = recall(c), f = f1(prec, rec);
+    setMetric("acc", acc, "(TP+TN)/n = (" + c.tp + "+" + c.tn + ")/" + n, n === 0);
+    setMetric("prec", prec, "TP/(TP+FP) = " + c.tp + "/(" + c.tp + "+" + c.fp + ")", (c.tp + c.fp) === 0);
+    setMetric("rec", rec, "TP/(TP+FN) = " + c.tp + "/(" + c.tp + "+" + c.fn + ")", (c.tp + c.fn) === 0);
+    setMetric("f1", f, "2PR/(P+R) = 2(" + fmt(prec) + ")(" + fmt(rec) + ")/(" + fmt(prec) + "+" + fmt(rec) + ")", (prec + rec) === 0);
+
+    document.getElementById("announcer").textContent =
+      "Scorable " + n + " of 12, abstained " + abstained +
+      ". TP " + c.tp + ", FP " + c.fp + ", FN " + c.fn + ", TN " + c.tn +
+      ". Accuracy " + fmt(acc) + ", precision " + fmt(prec) +
+      ", recall " + fmt(rec) + ", F1 " + fmt(f) + ".";
+  }
+
+  function setCell(id, val) {
+    document.getElementById(id).querySelector(".cnt").textContent = val;
+  }
+  function setMetric(key, val, formula, guarded) {
+    document.getElementById(key + "-val").textContent = fmt(val);
+    var fEl = document.getElementById(key + "-f");
+    if (guarded) {
+      fEl.innerHTML = formula + ' = <span class="guard">0.00 (guarded 0/0)</span>';
+    } else {
+      fEl.textContent = formula + " = " + fmt(val);
+    }
+    document.getElementById(key + "-bar").style.width = (val * 100) + "%";
+  }
+
+  document.getElementById("reset-btn").addEventListener("click", function () {
+    fixed = ITEMS.map(function () { return false; });
+    render();
+  });
+
+  buildItems();
+  render();
+})();
+</script>
+</body>
+</html>

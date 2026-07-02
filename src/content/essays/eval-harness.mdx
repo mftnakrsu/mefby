@@ -1,0 +1,170 @@
+---
+title: "A Tiny Eval Harness"
+description: "The capstone wires the whole series into one small pure-Python harness: a dataset, a swappable scorer, a bootstrap confidence interval, and a gate. We run it three ways on two tiny cases and watch swapping only the scorer flip the same ten-item QA data from HOLD to SHIP."
+date: 2026-07-28
+tags: ["Evals", "LLM", "AI", "Harness", "Bootstrap", "Release Gate"]
+seriesOrder: 15
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-15-eval-harness"
+lang: "en"
+translationSlug: "eval-harness-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Part 14 graded an agent by its path, scoring each step of a tool-call trajectory instead of only the final answer, and that was the last new metric this series will build. Now we stop adding pieces and start assembling them. Every part so far handed you one component: Part 1 gave you a metric that turns right and wrong into a number, Part 4 gave you an LLM-as-judge for the cases a strict metric gets wrong, Part 6 gave you the bootstrap that wraps a lone score in a confidence interval, and Part 11 gave you the gate that decides ship or hold. On their own each is a fragment. This part clicks them together into the smallest thing that deserves the name **eval harness**: one file you could actually run before a release.
+
+The harness is five reusable pieces. A **dataset** of labeled examples. A **scorer**, which is either a plain metric or a mock LLM judge, that turns one example into a number in the range zero to one. A **bootstrap CI** around the mean of those numbers. A **gate** that ships only when the interval's lower bound clears a release bar. And a thin **harness function** that wires the four together and prints a SHIP or HOLD verdict. The payoff of separating them is that you can swap any one without touching the rest. We prove that by running the identical harness three ways: the same ten-item QA set scored first strictly and then leniently, and a five-task agent-trajectory set. Swapping only the scorer will flip the same data from HOLD to SHIP, which is the whole series compressed into a single before-and-after.
+
+## Prerequisites
+
+You need basic Python (a list of dictionaries, a function passed as an argument, a loop) and one import of NumPy for the bootstrap's resampling. That is all. The concepts arrive pre-taught: if you have read Parts 1, 4, 6, and 11 you already own every idea here and this part just connects them, but each is re-explained in one sentence at the point it is used, so a first-time reader can follow the whole thing. The companion file, [eval_harness.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-15-eval-harness), runs offline with no API key and no network, and the only randomness is the bootstrap seeded at zero, so every number below reproduces exactly. As always, every figure in this prose is that file's printed output, unrounded.
+
+## The five pieces
+
+Let me name the pieces on the concrete data before wiring them, because the whole design is that each piece knows nothing about the others.
+
+**Piece one is the dataset.** For the QA runs it is ten capital-city questions, a nod to the RAG answer-quality eval of RAG Part 8. Each row holds a question, a gold short answer, and the system's candidate answer:
+
+```python
+QA = [
+    {"q": "capital of France",    "gold": "Paris",     "cand": "Paris"},
+    {"q": "capital of USA",       "gold": "Washington","cand": "Washington, D.C."},
+    {"q": "capital of India",     "gold": "New Delhi", "cand": "new delhi"},
+    # ... ten rows in total
+]
+```
+
+Row six is the interesting one. The candidate `Washington, D.C.` is a correct answer for the capital of the USA, but it is not the literal string `Washington`. Hold on to that row; it is where the two scorers will disagree.
+
+**Piece two is the scorer**, a function from one record to a number in the range zero to one. The strict version is exact match: normalize both strings by lowercasing and stripping whitespace, then return `1.0` only if they are identical.
+
+```python
+def _norm(s):
+    return s.strip().lower()
+
+def exact_match(rec):
+    return 1.0 if _norm(rec["cand"]) == _norm(rec["gold"]) else 0.0
+```
+
+That normalization is why `new delhi` scores a full point against `New Delhi`: after lowercasing they are the same string. But `Washington, D.C.` still fails against `Washington`, because the comma and the `D.C.` make them different strings. The lenient version is a mock LLM judge, a deterministic stand-in for the model grader of Part 4. Its rubric is transparent: accept the answer if the gold is contained in the candidate or the candidate is contained in the gold.
+
+```python
+def mock_judge(rec):
+    g, c = _norm(rec["gold"]), _norm(rec["cand"])
+    return 1.0 if (g in c or c in g) else 0.0
+```
+
+Now `washington` is contained in `washington, d.c.`, so the judge awards row six a full point where exact match awarded zero. A real judge would swap in behind a `generate()` call, but the verdict stays a zero or a one, so everything downstream is untouched. The trajectory scorer, for the agent runs, gives partial credit per step, exactly the step-level scoring of Part 14: count the positions where the gold and predicted tool call agree, then divide by the longer of the two sequences so an extra or missing step is penalized.
+
+```python
+def trajectory_match(rec):
+    gold, pred = rec["gold"], rec["pred"]
+    matches = sum(1 for i in range(min(len(gold), len(pred))) if gold[i] == pred[i])
+    return matches / max(len(gold), len(pred))
+```
+
+**Piece three is the bootstrap CI** from Part 6. Given the list of per-item scores, resample it with replacement `B=2000` times, re-average each resample, and read the 2.5th and 97.5th percentiles of those two thousand means. That pair is the 95% interval. The resampling is the only randomness in the whole file, so it runs off a NumPy generator seeded at zero and the interval is identical on every run.
+
+**Piece four is the gate** from Part 11, and it is one comparison. It does not look at the mean. It ships only if the interval's lower bound is at least the release bar, and holds otherwise:
+
+```python
+def gate(ci_lo, bar):
+    return "SHIP" if ci_lo >= bar else "HOLD"
+```
+
+**Piece five is the harness** that threads pieces one through four: score every record, average to a mean, bootstrap the interval, apply the gate, and print one line per item so nothing is hidden. Its signature takes the dataset and the scorer as arguments, which is the entire trick, because passing a different scorer changes the verdict without changing a line of the harness. The figure below lays out that flow as a pipeline so you can see the seam where the scorer plugs in.
+
+<Diagram number={1} caption="The tiny eval harness as a five-stage pipeline. A labeled DATASET flows into a swappable SCORER (exact match, mock judge, or trajectory match), producing per-item scores that are averaged into a mean and, in parallel, bootstrapped (B=2000, seed=0) into a 95% confidence interval. Only the interval's lower bound reaches the GATE, which compares it to a release bar and emits SHIP or HOLD. The three runs are shown side by side: the same ten-item QA data scored by exact match gives mean 0.60 with CI [0.30, 0.90] against a 0.35 bar and gates HOLD because 0.30 is below 0.35; the same QA data scored by the judge gives mean 0.70 with CI [0.40, 1.00] against the same 0.35 bar and gates SHIP because 0.40 clears it; the five-task agent-trajectory data gives mean 0.70 with CI [0.47, 0.93] against a 0.40 bar and gates SHIP. The scorer box is highlighted as the only swapped stage.">
+  <img src="/essays/eval-harness/part15-figure.svg" alt="A left-to-right pipeline diagram with five boxes: DATASET, SCORER, then a split into MEAN and BOOTSTRAP CI, then GATE, then a SHIP or HOLD verdict. The SCORER box is highlighted in emerald and labeled 'the only swapped stage'. Only the lower bound of the bootstrap CI is drawn as an arrow into the GATE; the mean is shown as a dimmed side output that the gate ignores. Below the pipeline, three rows summarize the runs. Row one, QA exact match: mean 0.60, CI [0.30, 0.90], bar 0.35, and because CI lower bound 0.30 is less than 0.35 the verdict is HOLD, shown in amber. Row two, QA judge: mean 0.70, CI [0.40, 1.00], bar 0.35, and because 0.40 is at least 0.35 the verdict is SHIP, shown in emerald. Row three, agent trajectory: mean 0.70, CI [0.47, 0.93], bar 0.40, and because 0.47 is at least 0.40 the verdict is SHIP, shown in emerald. A caption under the rows reads: the gate reads the interval, never the point estimate." class="w-full rounded-lg" />
+</Diagram>
+
+## Run one: strict exact match holds
+
+Feed the ten QA rows through the harness with the exact-match scorer and a release bar of 0.35. Seven of the ten candidates match their gold after normalization; three do not. Sydney is not Canberra, Rio de Janeiro is not Brasilia, and Milan is not Rome, so those three score zero. Row six, `Washington, D.C.`, also scores zero, because strict matching cannot see that it is right. That gives six ones and four zeros:
+
+```text
+  n = 10   mean score = 0.60
+  bootstrap 95% CI (B=2000 resamples, seed=0): [0.30, 0.90]
+  gate: release bar = 0.35 ; CI_lo = 0.30 -> 0.30 < 0.35 -> HOLD
+```
+
+A mean of 0.60 looks like a passing grade, the kind of number you might quote in a standup and move on. The harness refuses to. On only ten items the bootstrap interval is wide, stretching from 0.30 to 0.90, and the gate reads the floor of that interval, not the middle. The floor is 0.30, which sits below the 0.35 bar, so the verdict is HOLD. This is exactly the Part 6 lesson doing real work: the point estimate says ship, the interval says wait, and the gate believes the interval. There is also a substantive bug hiding underneath the statistics, which is that one of the four failures, `Washington, D.C.`, is a correct answer being punished by a scorer too rigid to recognize it. So the harness gives you two reasons to hold: the interval is too shaky, and the scorer is too strict. The fix for the second is to reach for a better scorer, which is precisely run two.
+
+## Run two: the judge ships the same data
+
+Change one argument. Keep the same ten QA rows, keep the same 0.35 bar, keep the same seed, and pass the mock judge instead of exact match. The judge accepts everything exact match accepted, and it additionally accepts row six, because `washington` is contained in `washington, d.c.`. Sydney, Rio, and Milan are still genuinely wrong and still score zero. So one zero flips to a one, seven ones become seven, and the mean climbs:
+
+```text
+  n = 10   mean score = 0.70
+  bootstrap 95% CI (B=2000 resamples, seed=0): [0.40, 1.00]
+  gate: release bar = 0.35 ; CI_lo = 0.40 -> 0.40 >= 0.35 -> SHIP
+```
+
+The mean rises from 0.60 to 0.70, and, more importantly, the interval's floor rises from 0.30 to 0.40. That floor is now above the 0.35 bar, so the identical gate returns SHIP. Sit with what just happened. Same dataset. Same bar. Same bootstrap seed. The only thing that changed was the scorer, and the verdict flipped from HOLD to SHIP. That is the argument for treating the scorer as a first-class, swappable component rather than a hard-coded string comparison buried in your test. A metric that unfairly fails correct answers does not just cost you a point of accuracy; it can be the difference between shipping and not shipping, and you will never see it unless the scorer is a knob you can turn. This is also the concrete payoff of Part 4: the judge exists precisely to catch the `Washington, D.C.` cases that a rigid metric cannot.
+
+## Run three: a different domain, the same harness
+
+Now swap the dataset too, not just the scorer, to show the harness does not care what it is grading. The agent-trajectory set is five tasks, a nod to Part 14 and Agents Part 17. Each task has a gold sequence of tool calls and the sequence the agent actually took, and the trajectory scorer gives partial step-level credit. Here is how the credit lands:
+
+```text
+  answer from a doc   gold=[search,read,answer]           pred=[search,read,answer]     -> 1.00
+  compute a total     gold=[search,calculator,answer]     pred=[search,weather,answer]  -> 0.67
+  summarize findings  gold=[search,read,summarize,answer] pred=[search,read,answer]     -> 0.50
+  quick lookup        gold=[search,answer]                pred=[search,search,answer]   -> 0.33
+  schedule a meeting  gold=[calendar,email]               pred=[calendar,email]         -> 1.00
+```
+
+Walk two of them. The perfect match, `answer from a doc`, agrees at all three positions and both sequences are length three, so it scores three over three, a full 1.00. `compute a total` agrees at positions one and three (`search` and `answer`) but the agent called `weather` where it should have called `calculator`, so two of three positions match and it scores 0.67. `summarize findings` matches the first two steps but the agent stopped short, giving a three-step path where four were needed, so three matches over a max length of four is 0.50. `quick lookup` matches only the first position and pads with an extra `search`, so one over three is 0.33. Average the five per-item scores (1.00, 0.67, 0.50, 0.33, 1.00) and you get:
+
+```text
+  n = 5   mean score = 0.70
+  bootstrap 95% CI (B=2000 resamples, seed=0): [0.47, 0.93]
+  gate: release bar = 0.40 ; CI_lo = 0.47 -> 0.47 >= 0.40 -> SHIP
+```
+
+Mean 0.70, interval floor 0.47, against a 0.40 bar, so the gate ships. Notice what did not change: the bootstrap, the gate, and the harness function are byte-for-byte the same code that graded the QA runs. All that moved was the dataset and the scorer that understands it. A harness that can gate a capital-cities QA eval and an agent tool-use eval with the same four downstream pieces is exactly the reusability the series was building toward. The bar here is 0.40 rather than 0.35 only because a different domain warrants a different release standard; the gate logic reading it is identical.
+
+## Reading the summary
+
+Stack the three runs and the discipline of the whole series shows up in one table:
+
+```text
+  eval                  mean          95% CI    bar  verdict
+  QA / exact-match      0.60    [0.30, 0.90]   0.35     HOLD
+  QA / judge            0.70    [0.40, 1.00]   0.35     SHIP
+  agent / trajectory    0.70    [0.47, 0.93]   0.40     SHIP
+```
+
+Two of these rows have means that would tempt you to ship on the point estimate alone, and one of them (the exact-match run at 0.60) is a trap: 0.60 is higher than nothing, but its interval floor of 0.30 is below the bar, so it holds. The gate never once reads the `mean` column. It reads the lower end of the `95% CI` column and compares it to `bar`. That single habit, CI lower bound versus a bar rather than point estimate versus a bar, is what separates a number you quoted from a decision you can defend, and it is the entire series distilled into one comparison. Everything upstream, the metric of Part 1, the golden set of Part 2, the agreement of Part 3, the judge of Part 4 and its de-biasing in Part 5, the interval of Part 6, the significance test of Part 7, and the rest, exists to make that final comparison trustworthy.
+
+The interactive figure lets you run the harness yourself. Toggle the scorer between exact match and the judge on the QA data and watch the QA row flip between HOLD and SHIP as the interval floor crosses the bar. Then drag the release bar for any run and see the verdict change the instant the bar crosses the CI lower bound, never at the mean. It is the clearest way to feel that the gate is reading the edge of the interval, not its center.
+
+<IframeFigure src="/essays/eval-harness/part15-interactive.html" title="An interactive eval harness: pick a dataset (QA or agent trajectory), toggle the scorer (exact match versus mock judge for QA), and see the per-item scores, the mean, the bootstrap 95% CI, and the SHIP or HOLD verdict update live; a draggable release bar shows the verdict flipping exactly when the bar crosses the CI lower bound rather than the mean." height={880} />
+
+## Key takeaways
+
+- **An eval harness is five separable pieces:** a dataset, a swappable scorer, a bootstrap CI, a gate, and a thin function that wires them. Keeping them independent is what lets you change one without disturbing the others, and it is the difference between a throwaway script and something you would run before a release.
+- **The scorer is a first-class, swappable component.** On the identical ten-item QA data with the identical 0.35 bar, exact match gives mean 0.60, CI [0.30, 0.90], and HOLD, while the mock judge gives mean 0.70, CI [0.40, 1.00], and SHIP. A metric too strict to recognize `Washington, D.C.` as correct did not just lose a point; it lost the release.
+- **The gate reads the interval, never the point estimate.** It ships only if the CI lower bound clears the bar. That is why 0.60 with a floor of 0.30 holds against a 0.35 bar, and why 0.70 with a floor of 0.40 ships. Point estimates tempt; intervals decide.
+- **The same harness generalizes across domains.** Swapping only the dataset and its scorer, the agent-trajectory run (five tasks, per-item scores 1.00, 0.67, 0.50, 0.33, 1.00) gives mean 0.70, CI [0.47, 0.93], and SHIP against a 0.40 bar, using byte-for-byte the same bootstrap, gate, and harness as the QA runs.
+- **Small n means wide intervals, and the harness respects that.** All the QA numbers come from ten items and all the agent numbers from five, so the intervals are wide and one of the three means that looked shippable was held. The fix is more labeled data, not a higher-sounding average.
+
+## Glossary
+
+- **Eval harness**: the assembled pipeline that takes a labeled dataset, applies a scorer to get per-item scores, summarizes them with a mean and a bootstrap confidence interval, and passes the interval to a gate that returns a ship or hold verdict. The smallest version fits in one file.
+- **Scorer**: a function from one dataset record to a number in the range zero to one. It can be a plain metric (exact match, trajectory match) or a model grader (the mock judge). Because it is passed to the harness as an argument, it is swappable without touching anything downstream.
+- **Exact match**: the strict string metric that scores 1.0 only when the candidate equals the gold after lowercasing and stripping whitespace. Simple and cheap, but it fails correct answers that are worded differently, like `Washington, D.C.` for `Washington`.
+- **Mock LLM judge**: a deterministic stand-in for an LLM-as-judge (Part 4) whose transparent rubric accepts an answer when the gold is contained in the candidate or the candidate in the gold. It is lenient enough to accept the cases exact match unfairly fails, and a real judge swaps in behind it without changing the verdict's shape.
+- **Trajectory match**: the step-level scorer from Part 14 that gives an agent partial credit equal to the fraction of positions where its tool-call sequence matches the gold, divided by the longer sequence so extra or missing steps are penalized.
+- **Bootstrap CI**: the confidence interval from Part 6, formed by resampling the per-item scores with replacement B=2000 times, re-averaging each resample, and reading the 2.5th and 97.5th percentiles of those means. Seeded at zero here so it is reproducible.
+- **Release gate**: the decision rule from Part 11 that returns SHIP only if the CI lower bound is at least the release bar, and HOLD otherwise. It deliberately ignores the mean, which is the one habit that turns a score into a defensible release decision.
+- **Release bar**: the threshold the gate compares the CI lower bound against. It is a product decision, set per domain (0.35 for the QA runs, 0.40 for the agent run), not a statistical output.
+
+---
+
+That closes the loop the whole series opened. RAG Part 8 handed you a way to score a retrieval answer and Agents Part 17 handed you a way to grade a trajectory, and both now sit inside one harness that also knows how uncertain each score is and whether it clears the bar. Fifteen parts ago a score was a single lonely number said out loud in a meeting; you can now build that number by hand, put an honest interval around it, and gate a release on the interval's floor instead of its middle. Carry that one habit, CI lower bound versus a bar rather than a point estimate versus a hope, into whatever you build next, and you will always be able to tell a real gain from noise.
