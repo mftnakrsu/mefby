@@ -1,0 +1,161 @@
+---
+title: "Bir Skor Nedir?"
+description: "Her istatistikten önce, değerlendirmenin üç atomu vardır: bir görev, bir altın etiket ve bir metrik. Bölüm 1, on notlanmış çıktıdan elle 2x2 hata matrisini kurar; dört sayısından doğruluk, kesinlik, duyarlılık ve F1'i türetir; dengesiz bir kümede doğruluğun tek başına neden yanılttığını gösterir."
+date: 2026-07-14
+tags: ["Değerlendirme", "LLM", "Metrikler", "Kesinlik", "Duyarlılık", "F1", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-01-what-is-a-score"
+lang: "tr"
+translationSlug: "what-is-a-score"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Neler öğreneceksin
+
+Biri yeni modelin "%90 doğru" olduğunu söyler ve odadaki herkes başını sallar. Çoğu değerlendirme hatası tam da o cümlede doğar, çünkü tek bir sayı, umursadığınız tek işte işe yaramaz bir sistemi gizleyebilir. Bunu yakalayabilmeden önce yavaşlayıp bir skorun aslında ne olduğunu sormamız gerekir. Ortaya çıkar ki her skor, en mütevazı doğruluktan en gösterişli LLM-as-judge rubriğine kadar, tam olarak üç atomdan kurulur: bir **görev** (notlanan şey), bir **altın etiket (gold label)** (bir insanın yazdığı doğru yanıt) ve bir **metrik** ("doğru" ile "yanlış"ı bir sayıya çeviren kural). Bu üçünü net tutun, değerlendirmenin geri kalanı aritmetiktir; onları birbirine karıştırın, hiçbir istatistik sizi kurtaramaz.
+
+Bu, RAG ve Agents serilerinin devamı olan yeni bir serinin, **Evals from First Principles**'ın ilk parçasıdır. O seriler size sistemleri *inşa etmeyi* öğretirken, bu seri onları *ölçmeyi* öğretiyor, çünkü ölçemediğiniz bir sistem, güvenemeyeceğiniz ve iyileştiremeyeceğiniz bir sistemdir. En alttan başlıyoruz. Bu parçada, tek bir küçük sınıflandırıcıdan on notlanmış çıktı alıyor ve bunları elle **2x2 hata matrisine (confusion matrix)** ayırıyoruz: her sınıflandırma metriğinin gizlice kendisinden yapıldığı dört sayı. Bu dört sayıdan doğruluk, kesinlik, duyarlılık ve F1'i türeteceğiz, her birinin kendi tek-satırlık formülüyle, ve her formülün hangi sayıya yaslandığını tam olarak göreceğiz. Sonra tek bir şeyi, verinin dengesini değiştireceğiz ve doğruluğun 0.90'a tırmanmasını izlerken modelin hiçbir şey yakalamadığını göreceğiz; böylece tek bir manşet sayının neden yalan söylediğini iliğinize kadar bilerek ayrılacaksınız.
+
+## Ön koşullar
+
+Temel Python yeterli: bir listeyi okumak, bir döngü ve bir bölme. Gerçekten hepsi bu kadar. Hiçbir istatistik geçmişi varsayılmıyor; her fikri saymadan inşa ediyoruz. RAG ya da Agents serisini bitirdiyseniz fazlasıyla yeterli birikiminiz var, ama bu parça tamamen kendi içinde bütünlüklü ve ikisine de bağlı değil. Eşlik eden dosya, [scoring_basics.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-01-what-is-a-score), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her sayıyı kendiniz yeniden üretebilirsiniz. Buradaki nesirde geçen her rakam, o dosyanın basılmış çıktısıdır, yuvarlanmamış ve düzenlenmemiş.
+
+## Üç atom
+
+Onlarla bir şey yapmadan önce atomları somut bir örnek üzerinde adlandırayım. Bir destek gelen kutusu düşünün. Gün boyu talepler (ticket) gelir ve birinin (ya da bir şeyin) hangilerinin **acil (urgent)** olduğuna, dolayısıyla sıranın başına geçeceğine, hangilerinin **acil olmadığına (not urgent)**, dolayısıyla bekleyeceğine karar vermesi gerekir. Bu ayrıştırmayı yapması için küçük bir sınıflandırıcı kuruyoruz. İşte bizim **görevimiz**: her talep için acilse `1`, acil değilse `0` çıktısı vermek. Bir görev, "doğru bir çıktının" ne olacağının kesin ifadesidir; hem bir insanın hem bir makinenin deneyebileceği ve her birinin doğru yapıp yapmadığını söyleyebileceğiniz kadar dar.
+
+**Altın etiket (gold label)**, o insanın önceden yazılmış yanıtıdır. Her talep için bir kişi onu okudu ve gerçek kararı kaydetti: acil ya da değil. Ona "altın" diyoruz çünkü karşısında notladığımız standart, tanım gereği doğru saydığımız şey odur. Altın etiket, modelin tahmini değildir ve evrenin nesnel gerçeği olmak zorunda da değildir; güvenmeye karar verdiğimiz referans yanıttır. (Bu serinin 2. Bölümü tamamen bunların güvenilir bir kümesini nasıl kuracağınızla ilgili, çünkü yanlış bir altın etiket, ondan hesaplanan her skoru zehirler. Şimdilik, insanın dikkatli olduğunu varsayın.)
+
+**Metrik**, modelin çıktısını altın etiketle karşılaştıran ve bir sayı döndüren kuraldır. "Doğru olanların oranı" bir metriktir. "Acil işaretlediklerimizden kaçı gerçekten acildi" farklı bir metriktir. Her metrik, karşılaştırmaya sorduğunuz belirli bir sorudur ve bu parçanın bütün dersi şudur: farklı metrikler farklı sorular sorar, dolayısıyla bir model *tam olarak aynı tahminler üzerinde* birinde harika, diğerinde berbat görünebilir.
+
+İşte verimiz, on talep, doğrudan eşlik eden dosyadan. `GOLD[i]`, `i` talebindeki insanın kararı; `PRED[i]`, aynı taleple ilgili modelin kararı:
+
+```python
+GOLD = [1, 1, 1, 0, 0, 1, 0, 0, 1, 0]   # the human's true labels
+PRED = [1, 1, 0, 0, 1, 1, 0, 0, 0, 0]   # the model's predictions
+```
+
+On talep, ve altın küme dengeli: beşi gerçekten acil (`GOLD`'daki beş `1`) ve beşi değil. Model bazılarını doğru, bazılarını yanlış yaptı. Bu parçanın geri kalanındaki bütün işimiz, o iki listeyi skorlara çevirmek ve her skorun bize gerçekte ne söylediğini anlamak.
+
+## Hata matrisi
+
+Henüz bir formüle uzanmayın. Önce sadece ayırın. İki listeyi birlikte, her seferinde bir talep olacak şekilde yürüyün ve her birini, altının ne dediğine ve modelin ne tahmin ettiğine göre dört kovadan birine bırakın:
+
+- Altın acil diyor, model acil diyor: bir **true positive** (TP, gerçek pozitif). İşaretledik ve haklıydık.
+- Altın acil değil diyor, model acil diyor: bir **false positive** (FP, yanlış pozitif). İşaretledik ama yanıldık. Bir yanlış alarm.
+- Altın acil diyor, model acil değil diyor: bir **false negative** (FN, yanlış negatif). Geçmesine izin verdik ama acildi. Kaçırılmış bir yakalama.
+- Altın acil değil diyor, model acil değil diyor: bir **true negative** (TN, gerçek negatif). Geçmesine izin verdik ve haklıydık.
+
+Sözcük dağarcığının tamamı bu. "Pozitif" ve "negatif", modelin tahminine gönderme yapar (pozitif sınıfı mı, yani acili mi söyledi, yoksa değil mi); "true" ve "false" ise o tahminin altınla eşleşip eşleşmediğine gönderme yapar. Dört kombinasyon, dört kova. Şimdi on talebi, listeleri adım adım birlikte okuyarak gerçekten ayıralım:
+
+```text
+  ticket   gold  pred   ->  bucket
+    1        1     1     ->  TP   (urgent, caught)
+    2        1     1     ->  TP   (urgent, caught)
+    3        1     0     ->  FN   (urgent, missed)
+    4        0     0     ->  TN   (not urgent, correct pass)
+    5        0     1     ->  FP   (not urgent, false alarm)
+    6        1     1     ->  TP   (urgent, caught)
+    7        0     0     ->  TN   (not urgent, correct pass)
+    8        0     0     ->  TN   (not urgent, correct pass)
+    9        1     0     ->  FN   (urgent, missed)
+   10        0     0     ->  TN   (not urgent, correct pass)
+```
+
+Kovaları sayın ve bu bütün ölçüm alanının üzerine oturduğu dört sayıyı elde edersiniz: **TP = 3** (1, 2, 6 nolu talepler), **FP = 1** (5 nolu talep), **FN = 2** (3, 9 nolu talepler) ve **TN = 4** (4, 7, 8, 10 nolu talepler). Toplamları 10, ki bu iyi bir sağlama: her talep tam olarak bir kovaya iner, dolayısıyla dört sayı toplamda tekrar toplama dönmelidir. Bu dört sayıyı, satırlarda altın ve sütunlarda tahmin olacak biçimde bir ızgaraya dizin, elinizde **hata matrisi (confusion matrix)** olur. Aşağıdaki figür tam olarak budur, hücre hücre serilmiş, birazdan türeteceğimiz dört skor yana taşınmış; böylece bunların bu dört hücreden, bölünmüş halinden başka bir şey olmadığını görebilirsiniz.
+
+<Diagram number={1} caption="Dengeli on-talep kümesi için elle sayılmış 2x2 hata matrisi. Satırlar altın etiket (acil, acil değil); sütunlar modelin tahmini. Dört hücre şu sayıları tutar: TP=3 (yakalandı ve doğru), FN=2 (kaçırılan acil), FP=1 (yanlış alarm) ve TN=4 (doğru geçiş). Doğru köşegen (TP ve TN) zümrüt yeşili, yanlış alarm (FP) kehribar, kaçırılan acil talep (FN) gül rengi. Satır toplamları 5 ve 5, sütun toplamları 4 ve 6, genel toplam 10. Sağdaki panel her metriğin yalnızca bu dört hücrenin bölünmüşü olduğunu gösterir: herhangi bir hücreyi değiştirin, her skor kımıldar.">
+  <img src="/essays/what-is-a-score/part1-confusion-matrix.svg" alt="5'i acil ve 5'i değil olmak üzere dengeli 10 talep kümesi için 'Elle sayılmış 2x2 hata matrisi' başlıklı bir 2x2 hata matrisi. Satırlar GOLD (acil, acil değil) etiketli; sütunlar PREDICTED (acil, acil değil) etiketli. Sol üst TP=3, yakalandı ve doğru, zümrüt yeşili; sağ üst FN=2, kaçırılan acil, gül rengi; sol alt FP=1, yanlış alarm, kehribar; sağ alt TN=4, doğru geçiş, zümrüt yeşili. Satır toplamları 5 ve 5, sütun toplamları 4 ve 6 okunur, genel toplam 10'dur. Sağdaki, 'dört sayıdan dört skora' başlıklı panel şunları listeler: Doğruluk 0.70 = (TP + TN) / n = (3 + 4) / 10, Kesinlik 0.75 = TP / (TP + FP) = 3 / (3 + 1), 4'lük tahmin-edilen-acil sütunu boyunca aşağı, Duyarlılık 0.60 = TP / (TP + FN) = 3 / (3 + 2), 5'lik altın-acil satırı boyunca, ve F1 0.67 = 2PR / (P + R). Bir dipnot şöyle der: sağdaki her skor yalnızca soldaki dört hücrenin bölünmüş halidir; bir hücreyi değiştirin, her sayı kımıldar." class="w-full rounded-lg" />
+</Diagram>
+
+O ızgarada iki toplama dikkat edin, çünkü birazdan onları kullanacağız. Üst **satır** boyunca (altın acil) okuyun, TP + FN = 3 + 2 = 5 elde edersiniz: gerçekten acil olan beş talep. Sol **sütun** boyunca (tahmin acil) aşağı okuyun, TP + FP = 3 + 1 = 4 elde edersiniz: modelin işaretlediği dört talep. Bu iki toplam, "kaçı gerçekten acildi" ve "kaçına acil dedik", en çok önem taşıyan iki metriğin paydalarıdır ve bunları net tutmak işin bütün püf noktasıdır.
+
+## Dört sayıdan dört metrik
+
+Şimdi metrikler, ve her biri o dört hücrenin bazılarının bazılarına bölünmesinden ibaret. Onlardan geriye başka bir şey yok.
+
+**Doğruluk (accuracy)**, tüm tahminlerin doğru olma oranıdır. "Doğru", doğru olmanın iki yolu, yani TP ve TN, her şeyin üzerinden:
+
+```text
+accuracy = (TP + TN) / n = (3 + 4) / 10 = 0.70
+```
+
+Yüzde yetmiş doğru. Manşet sayı budur, toplantılarda yüksek sesle söylenen, ve bu dengeli kümede yeterince dürüst. Ama her şeyi tek bir rakamda nasıl harmanladığına dikkat edin: kaçırılan bir acil talebi (FN) ile bir yanlış alarmı (FP) eşit derecede kötü sayar, bir yanlış bir yanlıştır, ve modelin özellikle acil talepler konusunda iyi olup olmadığını bir kez bile sormaz. Bu düşünceyi aklınızda tutun.
+
+**Kesinlik (precision)** daha dar bir soru sorar: acil *dediğimiz* taleplerden kaçı gerçekten acildi? Yalnızca tahmin-edilen-acil sütunundan aşağı bakar, TP'nin TP-artı-FP'ye oranı:
+
+```text
+precision = TP / (TP + FP) = 3 / (3 + 1) = 0.75
+```
+
+İşaretlediğimiz dört talepten üçü gerçekten acildi, dolayısıyla kesinlik 0.75. Kesinlik, bir yanlış pozitifin pahalı olduğu durumda önemsediğiniz metriktir. Bir talebi acil işaretlemek sabahın 3'ünde bir mühendisi uyandırıyorsa, acil diye bağırdığınızda bunu gerçekten kastettiğinizden emin olmak istersiniz. Düşük kesinlik, sizin yalancı çoban olduğunuz anlamına gelir.
+
+**Duyarlılık (recall)** ayna görüntüsü soruyu sorar: acil *olan* taleplerden kaçını yakaladık? Yalnızca altın-acil satırı boyunca bakar, TP'nin TP-artı-FN'ye oranı:
+
+```text
+recall = TP / (TP + FN) = 3 / (3 + 2) = 0.60
+```
+
+Beş talep gerçekten acildi ve üçünü yakaladık, dolayısıyla duyarlılık 0.60. Duyarlılık, bir yanlış negatifin pahalı olduğu, kaçırılan şeyin acıttığı durumda önemsediğiniz metriktir. Kaçırılan bir acil talep, bir kesintinin bir saat boyunca fark edilmemesi anlamına geliyorsa, ara sıra olan bir yanlış alarmdan çok, beşinin de yakalanmasını umursarsınız.
+
+Kesinlik ve duyarlılık birbirine karşı çeker ve bu gerilim bütün konunun kalbidir. Daha çok talebi acil işaretleyin, gerçek olanların daha çoğunu yakalarsınız (duyarlılık yükselir) ama daha çok yanlış alarm da çıkarırsınız (kesinlik düşer). Daha azını işaretleyin, tersi olur. İkisini birden aynı anda genellikle en üst düzeye çıkaramazsınız, dolayısıyla bir modeli ikisinde de iyi olduğu için ödüllendiren tek bir sayıya ihtiyacınız var. O sayı **F1**, kesinlik ile duyarlılığın harmonik ortalamasıdır:
+
+```text
+F1 = 2 * P * R / (P + R) = 2 * 0.75 * 0.60 / (0.75 + 0.60) = 0.67
+```
+
+Neden sıradan ortalama değil de *harmonik* ortalama? Çünkü harmonik ortalama dengesizliği cezalandırır. 0.75 ile 0.60'ın düz ortalaması 0.675, güçbela farklı, ama harmonik ortalama sertçe iki sayının küçüğüne doğru çeker; böylece bir model, kesinlikte mükemmel ve duyarlılıkta umutsuz (ya da tam tersi) olarak iyi bir F1 skoru alamaz. İkisinde de düzgün olmak zorundadır. Burada kesinlik ile duyarlılık birbirine yakın, dolayısıyla F1 tam aralarında, 0.67'ye iner. Ayrıştıklarında F1 çok daha alttakine yakın oturur, ki bu da ikisini birden özetlemesi gereken bir metrikten tam olarak isteyeceğiniz davranıştır.
+
+Yani dört sayıdan dört skor elde ettik: doğruluk 0.70, kesinlik 0.75, duyarlılık 0.60, F1 0.67. Aynı on talep, aynı tahminler, dört farklı soru, dört farklı yanıt. Hiçbiri "o" skor değil. Her biri bir mercek, ve hangi mercekten bakacağınızı seçmek, en az hangi tür hatayı göze alabileceğinize dair bir karardır.
+
+## Doğruluk neden yanıltır
+
+Şimdi asıl vurucu nokta, ve bu bütün serinin neden p-değerleri ve anlamlılık testleriyle değil de burada başladığının sebebi. Dengeli kümede doğruluk makul bir özetti. Gerçek veri nadiren dengelidir. Acil talepler, neyse ki, seyrektir: gerçek bir gelen kutusunda belki onda biri acildir, ya da ellide biri. Sınıflar o kadar çarpık olduğunda, doğruluk ölçtüğünü sandığınız şeyi ölçmeyi bırakır.
+
+Bozulmasını izleyin. Yalnızca 2'sinin gerçekten acil ve 18'inin acil olmadığı yeni bir 20 talep kümesi alın. Şimdi mümkün olan en tembel modeli kurun, talebi okumak zahmetine bile girmeyen ve her zaman "acil değil" tahmin eden bir model. Tek satır: her seferinde `return 0`. Notlayın:
+
+```text
+Always-negative baseline (2 urgent out of 20):
+  confusion:  TP=0  FP=0  FN=2  TN=18
+  accuracy  = (TP + TN) / n  = (0 + 18) / 20 = 0.90
+  precision = TP / (TP + FP) = 0 / (0 + 0)   = 0.00
+  recall    = TP / (TP + FN) = 0 / (0 + 2)   = 0.00
+  F1        = 2PR / (P + R)                   = 0.00
+```
+
+Yüzde doksan doğru. "Acil" kelimesini bir kez bile söylememiş, her gerçek acil durumu sonsuza dek sırada bekletecek bir model, insanların toplantılarda dile getirdiği sayıda 0.90 alıyor. Aptalca bir sebeple iyi skor alıyor: 20 talebin 18'i gerçekten acil değil ve her seferinde körlemesine "acil değil" diye tahmin ederek o 18'in hepsini bedavaya doğru yapıyor. Kaçırdığı ikisi (FN = 2), 20'lik bir paydayı güçbela çentiyor. Doğruluk onu kolay çoğunluk için ödüllendirdi ve önemli olan tek talepleri başaramadığı için hiç sorumlu tutmadı.
+
+Duyarlılık dolandırıcılığı anında açığa çıkarır. 2 acil talepten model 0'ını yakaladı, dolayısıyla duyarlılık 0.00, dümdüz sıfır. Kesinlik de 0.00 (haklı çıkacağı hiçbir pozitif karar vermedi ve bizim kabulümüze göre 0/0, 0.00'dır). Hata matrisi bundan daha açık olamazdı: TP = 0. Bütün çalışmada yakalanmış tek bir acil talep yok. O 0.90 hiçbir zaman aciliyetle ilgili değildi; kupa takınmış 18 doğru geçişti. Bu **sınıf dengesizliği (class imbalance)** ve ders kalıcı: çarpık veride doğruluk, modelin becerisinden çok çoğunluk sınıfının büyüklüğünü ölçer; dolayısıyla herhangi bir manşet sayıya inanmadan önce bütün 2x2'ye, özellikle de seyrek sınıftaki duyarlılığa bakmalısınız.
+
+Aşağıdaki interaktif figür bunu yalnızca okumak yerine hissetmenizi sağlar. Üst panelde on dengeli talepten herhangi birine tıklayıp tahminini çevirebilir ve dört skorun birlikte kımıldamasını izleyebilirsiniz; böylece her metriğin dört hücrenin aşağı akışında olduğunu kendiniz görürsünüz. Alt panelde dengesizliği doğrudan siz sürersiniz: her-zaman-negatif modeli koruyun, taleplerin kaçının gerçekten acil olduğunu kaydırın ve doğruluğun inatla yüksek kalmasını izlerken gerçek bir acil talep belirir belirmez duyarlılığın sıfıra düşmesini izleyin.
+
+<IframeFigure src="/essays/what-is-a-score/part1-metrics-explorer.html" title="İnteraktif metrik gezgini: bir talebe tıklamanın modelin tahminini çevirdiği ve canlı hata matrisiyle dört skorun hepsini güncellediği on destek talebinden oluşan bir üst panel, ve yirmi talep üzerinde her-zaman-negatif bir temel modelin kaçının gerçekten acil olduğunu kaydırmanıza ve doğruluk yüksek kalırken duyarlılığın sıfırda kalmasını izlemenize izin verdiği bir alt panel." height={860} />
+
+## Özet / Çıkarımlar
+
+- **Her skor üç atomun üzerine oturur:** bir görev (doğru bir çıktı olarak neyin sayıldığı), bir altın etiket (karşısında notladığınız insan referans yanıtı) ve bir metrik (doğruyu ve yanlışı bir sayıya çeviren kural). Herhangi birini karıştırın, sayı hiçbir anlam ifade etmez.
+- **2x2 hata matrisi her sınıflandırma metriğinin kaynağıdır.** Her tahmini TP, FP, FN ya da TN'e ayırın, ve doğruluk, kesinlik, duyarlılık ile F1'in hepsi yalnızca o dört sayının bölünmüş halidir. Dengeli on-talep kümemizde: TP=3, FP=1, FN=2, TN=4, ki bu doğruluk 0.70, kesinlik 0.75, duyarlılık 0.60, F1 0.67 verir.
+- **Kesinlik ve duyarlılık zıt soruları yanıtlar ve birbirine karşı takas edilir.** Kesinlik (burada 0.75) işaretlediğiniz öğelerden kaçının doğru olduğunu sorar ve yanlış alarmlar pahalı olduğunda önemlidir; duyarlılık (burada 0.60) gerçek öğelerden kaçını yakaladığınızı sorar ve kaçırmalar pahalı olduğunda önemlidir. F1 (0.67), ikisinde de iyi olmayı ödüllendiren harmonik ortalamadır.
+- **Doğruluk sınıf dengesizliği altında yalan söyler.** 20'de 2'lik bir kümede her-zaman-negatif bir model 0.90 doğruluk ama 0.00 duyarlılık alır: önemli olan taleplerin sıfırını yakaladı. Çarpık veride doğruluk, modelden çok çoğunluk sınıfını ölçer, dolayısıyla her zaman bütün 2x2'yi okuyun.
+- **Bir skor bir nokta tahminidir, gerçeğin kendisi değil.** Buradaki her sayı, sabit bir on (ya da yirmi) örnek kümesinden geldi; değerlendirmeyi farklı bir örneklem üzerinde çalıştırın, sayılar kayardı. 6. Bölüm bunu güven aralığıyla (confidence interval) kesinleştirir, ki bu da 0.70 gibi yalnız bir sayıyı gerçekten güvenebileceğiniz bir aralığa dönüştürür.
+
+## Sözlük
+
+- **Altın etiket (gold label)**: bir insanın önceden yazdığı, tanım gereği doğru saydığımız ve modeli karşısında notladığımız referans yanıt. Bizim görevimizde, her talep için insanın gerçek "acil" ya da "acil değil" kararı. Modelin tahmini değil ve nesnel gerçek olmak zorunda da değil, yalnızca güvenmeyi seçtiğimiz standart.
+- **Hata matrisi (confusion matrix)**: her tahmini altın etikete (satırlar) karşı modelin tahminine (sütunlar) göre ayıran ve dört sayı (TP, FP, FN, TN) üreten 2x2 ızgara. Her sınıflandırma metriği bu dört sayıdan türetilir.
+- **True positive (TP, gerçek pozitif)**: altın pozitif (acil) ve model pozitif tahmin etti; doğru bir yakalama. Dengeli kümede 3 taneydi.
+- **False positive (FP, yanlış pozitif)**: altın negatif (acil değil) ama model pozitif tahmin etti; bir yanlış alarm. 1 taneydi.
+- **False negative (FN, yanlış negatif)**: altın pozitif (acil) ama model negatif tahmin etti; kaçırılmış bir yakalama. 2 taneydi.
+- **True negative (TN, gerçek negatif)**: altın negatif ve model negatif tahmin etti; doğru bir geçiş. 4 taneydi.
+- **Doğruluk (accuracy)**: tüm tahminlerin doğru olma oranı, (TP + TN) / n. Basit ve sezgisel, ama dengesiz veride yanıltıcı, çünkü modeli kolay çoğunluk sınıfı için ödüllendirir.
+- **Kesinlik (precision)**: modelin pozitif dediği öğelerden gerçekten öyle olanların oranı, TP / (TP + FP). Yanlış pozitiflerin pahalı olduğu durumda izlenecek metrik.
+- **Duyarlılık (recall)**: gerçekten pozitif olan öğelerden modelin yakaladığının oranı, TP / (TP + FN). Yanlış negatiflerin (kaçırılan öğeler) pahalı olduğu durumda izlenecek metrik.
+- **F1**: kesinlik ile duyarlılığın harmonik ortalaması, 2PR / (P + R). Model hem kesinlikte hem duyarlılıkta düzgün olmadıkça düşük kalan tek bir sayı, dolayısıyla yalnızca birinde parlayarak oyunla geçilemez.
+- **Sınıf dengesizliği (class imbalance)**: bir sınıfın diğerinden çok daha kalabalık olması (burada, çok sayıda acil-olmayan arasında az sayıda acil talep). Dengesizlik altında doğruluk, modelin gerçek becerisinden çok çoğunluk sınıfını izler, ki bu da bütün 2x2'nin, özellikle de duyarlılığın neden vazgeçilmez olduğunun sebebidir.
+
+---
+
+Artık bir modeli skorlayabiliriz, ama yalnızca bir insan doğru yanıtları önceden yazdıysa, ve bunu "insanın dikkatli olduğunu varsayın" diyerek geçiştirdik. O varsayım muazzam bir iş görüyor. **2. Bölüm, Altın Küme Kurmak (Building a Golden Set)**, onu hak etmekle ilgili: örnekleri nasıl seçeceğiniz, iki kişinin üzerinde anlaşacağı etiketleri nasıl yazacağınız, o anlaşmayı nasıl ölçeceğiniz ve gerçekten üzerine bir skor koyabileceğiniz bir altın küme ile nasıl sonuçlanacağınız.
