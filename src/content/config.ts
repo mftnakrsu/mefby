@@ -22,7 +22,7 @@ const essays = defineCollection({
     // (RAG, Agents) coexist without bleeding into each other. Only meaningful when
     // seriesOrder is set. Defaults to 'rag' so the 20 existing RAG essays need no
     // change; new Agents essays set series: 'agents'.
-    series: z.enum(['rag', 'agents']).default('rag'),
+    series: z.enum(['rag', 'agents', 'evals']).default('rag'),
     draft: z.boolean().default(false),
     // i18n: an essay and its translation point at each other via translationSlug
     // (the counterpart's slug) and declare their own `lang`. The secondary copy
