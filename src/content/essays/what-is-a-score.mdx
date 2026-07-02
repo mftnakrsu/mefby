@@ -1,0 +1,162 @@
+---
+title: "What Is a Score?"
+description: "Before any statistic, evals need three atoms: a task, a gold label, and a metric. Part 1 builds the 2x2 confusion matrix by hand from ten graded outputs, derives accuracy, precision, recall, and F1 from its four counts, and shows on an imbalanced set why accuracy alone lies."
+date: 2026-07-14
+tags: ["Evals", "LLM", "Metrics", "Precision", "Recall", "F1", "AI"]
+seriesOrder: 1
+series: "evals"
+codeUrl: "https://github.com/mftnakrsu/evals-by-hand/tree/main/part-01-what-is-a-score"
+lang: "en"
+translationSlug: "what-is-a-score-tr"
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## What you'll learn
+
+Somebody says the new model is "90% accurate" and the room nods. That sentence is where most eval mistakes are born, because a single number can hide a system that is useless at the only job you care about. Before we can catch that, we have to slow down and ask what a score even is. It turns out every score, from the humblest accuracy to the fanciest LLM-as-judge rubric, is built from exactly three atoms: a **task** (the thing being graded), a **gold label** (the right answer a human wrote down), and a **metric** (the rule that turns "right" and "wrong" into a number). Get those three straight and the rest of evaluation is arithmetic; get them muddled and no amount of statistics will save you.
+
+This is the first part of a new series, **Evals from First Principles**, the sequel to the RAG and Agents series. Where those series taught you to *build* systems, this one teaches you to *measure* them, because a system you cannot measure is a system you cannot trust or improve. We start at the bottom. In this part we take ten graded outputs from one small classifier and, by hand, sort them into the **2x2 confusion matrix**: the four counts that every classification metric is secretly made of. From those four counts we will derive accuracy, precision, recall, and F1, each with its own one-line formula, and we will see exactly which count each formula leans on. Then we will change one thing, the balance of the data, and watch accuracy climb to 0.90 while the model catches nothing, so you leave knowing in your bones why a single headline number lies.
+
+## Prerequisites
+
+You need basic Python: reading a list, a loop, and a division. That is genuinely all. No statistics background is assumed; we build every idea from counting. If you finished the RAG or Agents series you already have more than enough, but this part is fully self-contained and does not depend on either. The companion file, [scoring_basics.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-01-what-is-a-score), runs offline with no API key, no network, and no dependencies, so you can read every line and reproduce every number in this essay yourself. Every figure in prose here is that file's printed output, unrounded and unedited.
+
+## The three atoms
+
+Let me name the atoms on a concrete example before we do anything with them. Imagine a support inbox. Tickets arrive all day, and someone (or something) has to decide which ones are **urgent**, so they jump the queue, and which are **not urgent**, so they wait. We build a small classifier to do that triage. That is our **task**: for each ticket, output `1` for urgent or `0` for not urgent. A task is just the precise statement of what "a correct output" would be, narrow enough that a human and a machine could both attempt it and you could tell whether each got it right.
+
+The **gold label** is that human's answer, written down in advance. For every ticket, a person read it and recorded the true call: urgent or not. We call it "gold" because it is the standard we grade against, the thing we treat as correct by definition. The gold label is not the model's guess and it is not necessarily the objective truth of the universe; it is the reference answer we have decided to trust. (Part 2 of this series is entirely about how you build a trustworthy set of these, because a wrong gold label poisons every score computed from it. For now, assume the human was careful.)
+
+The **metric** is the rule that compares the model's output to the gold label and returns a number. "Fraction correct" is a metric. "Of the ones we flagged urgent, how many really were" is a different metric. Every metric is a specific question you ask of the comparison, and the whole lesson of this part is that different metrics ask different questions, so a model can look wonderful under one and terrible under another *on the exact same predictions*.
+
+Here is our data, ten tickets, straight from the companion file. `GOLD[i]` is the human's call on ticket `i`; `PRED[i]` is the model's call on the same ticket:
+
+```python
+GOLD = [1, 1, 1, 0, 0, 1, 0, 0, 1, 0]   # the human's true labels
+PRED = [1, 1, 0, 0, 1, 1, 0, 0, 0, 0]   # the model's predictions
+```
+
+Ten tickets, and the gold set is balanced: five are truly urgent (the five `1`s in `GOLD`) and five are not. The model got some right and some wrong. Our entire job for the rest of this part is to turn those two lists into scores, and to understand what each score is really telling us.
+
+## The confusion matrix
+
+Do not reach for a formula yet. First just sort. Walk the two lists together, one ticket at a time, and drop each into one of four buckets depending on what the gold said and what the model predicted:
+
+- Gold says urgent, model says urgent: a **true positive** (TP). We flagged it, and we were right.
+- Gold says not urgent, model says urgent: a **false positive** (FP). We flagged it, but we were wrong. A false alarm.
+- Gold says urgent, model says not urgent: a **false negative** (FN). We let it through, but it was urgent. A missed catch.
+- Gold says not urgent, model says not urgent: a **true negative** (TN). We let it through, and we were right.
+
+That is the whole vocabulary. "Positive" and "negative" refer to the model's prediction (did it say the positive class, urgent, or not); "true" and "false" refer to whether that prediction matched the gold. Four combinations, four buckets. Now let us actually sort the ten tickets by reading down the lists in lockstep:
+
+```text
+  ticket   gold  pred   ->  bucket
+    1        1     1     ->  TP   (urgent, caught)
+    2        1     1     ->  TP   (urgent, caught)
+    3        1     0     ->  FN   (urgent, missed)
+    4        0     0     ->  TN   (not urgent, correct pass)
+    5        0     1     ->  FP   (not urgent, false alarm)
+    6        1     1     ->  TP   (urgent, caught)
+    7        0     0     ->  TN   (not urgent, correct pass)
+    8        0     0     ->  TN   (not urgent, correct pass)
+    9        1     0     ->  FN   (urgent, missed)
+   10        0     0     ->  TN   (not urgent, correct pass)
+```
+
+Count the buckets and you get the four numbers that this entire field of measurement rests on: **TP = 3** (tickets 1, 2, 6), **FP = 1** (ticket 5), **FN = 2** (tickets 3, 9), and **TN = 4** (tickets 4, 7, 8, 10). They sum to 10, which is a good sanity check: every ticket lands in exactly one bucket, so the four counts must add back up to the total. Arrange those four counts in a grid, gold along the rows and prediction along the columns, and you have the **confusion matrix**. The figure below is exactly that, laid out cell by cell, with the four scores we are about to derive floated off to the side so you can see they are nothing but these four cells, divided.
+
+<Diagram number={1} caption="The 2x2 confusion matrix for the balanced ten-ticket set, counted by hand. Rows are the gold label (urgent, not urgent); columns are the model's prediction. The four cells hold the counts TP=3 (caught and correct), FN=2 (missed urgent), FP=1 (false alarm), and TN=4 (correct pass). The correct diagonal (TP and TN) is emerald, the false alarm (FP) is amber, and the missed urgent ticket (FN) is rose. Row totals are 5 and 5, column totals are 4 and 6, grand total 10. The panel on the right shows every metric is just these four cells divided: change any one cell and every score moves.">
+  <img src="/essays/what-is-a-score/part1-confusion-matrix.svg" alt="A 2x2 confusion matrix titled 'The 2x2 confusion matrix, counted by hand' for a balanced set of 10 tickets, 5 urgent and 5 not. Rows are labelled GOLD (urgent, not urgent); columns are labelled PREDICTED (urgent, not urgent). Top-left is TP=3, caught and correct, in emerald; top-right is FN=2, missed urgent, in rose; bottom-left is FP=1, false alarm, in amber; bottom-right is TN=4, correct pass, in emerald. The row totals read 5 and 5, the column totals read 4 and 6, and the grand total is 10. A panel on the right, headed 'four counts to four scores', lists Accuracy 0.70 = (TP + TN) / n = (3 + 4) / 10, Precision 0.75 = TP / (TP + FP) = 3 / (3 + 1) down the predicted-urgent column of 4, Recall 0.60 = TP / (TP + FN) = 3 / (3 + 2) across the gold-urgent row of 5, and F1 0.67 = 2PR / (P + R). A footnote reads: every score on the right is just the four cells on the left, divided; change a cell and every number moves." class="w-full rounded-lg" />
+</Diagram>
+
+Notice two totals in that grid, because we will use them in a moment. Read across the top **row** (gold urgent) and you get TP + FN = 3 + 2 = 5: the five tickets that were truly urgent. Read down the left **column** (predicted urgent) and you get TP + FP = 3 + 1 = 4: the four tickets the model flagged. Those two totals, "how many were actually urgent" and "how many we said were urgent", are the denominators of the two metrics that matter most, and keeping them straight is the whole trick.
+
+## Four numbers from four counts
+
+Now the metrics, and every one of them is just some of those four cells divided by some others. There is nothing more to them than that.
+
+**Accuracy** is the fraction of all predictions that were correct. "Correct" means the two ways of being right, TP and TN, over everything:
+
+```text
+accuracy = (TP + TN) / n = (3 + 4) / 10 = 0.70
+```
+
+Seventy percent correct. That is the headline number, the one that gets said out loud in meetings, and on this balanced set it is honest enough. But watch how it blends everything into one figure: it treats a missed urgent ticket (FN) and a false alarm (FP) as equally bad, one wrong is one wrong, and it never once asks whether the model is any good at the urgent tickets specifically. Hold that thought.
+
+**Precision** asks a narrower question: of the tickets we *called* urgent, how many really were? It looks only down the predicted-urgent column, TP over TP-plus-FP:
+
+```text
+precision = TP / (TP + FP) = 3 / (3 + 1) = 0.75
+```
+
+Of the four tickets we flagged, three were genuinely urgent, so precision is 0.75. Precision is the metric you care about when a false positive is expensive. If flagging a ticket urgent pages an engineer at 3am, you want to be sure that when you cry urgent, you mean it. Low precision means you are the boy who cried wolf.
+
+**Recall** asks the mirror-image question: of the tickets that *were* urgent, how many did we catch? It looks only across the gold-urgent row, TP over TP-plus-FN:
+
+```text
+recall = TP / (TP + FN) = 3 / (3 + 2) = 0.60
+```
+
+Five tickets were truly urgent and we caught three, so recall is 0.60. Recall is the metric you care about when a false negative is expensive, when the missed thing hurts. If a missed urgent ticket means an outage goes unnoticed for an hour, you care far more about catching all five than about the occasional false alarm.
+
+Precision and recall pull against each other, and that tension is the heart of the whole subject. Flag more tickets urgent and you will catch more of the real ones (recall rises) but you will also raise more false alarms (precision falls). Flag fewer and the reverse happens. You cannot usually maximize both at once, so you need a single number that rewards a model for doing well on both. That number is **F1**, the harmonic mean of precision and recall:
+
+```text
+F1 = 2 * P * R / (P + R) = 2 * 0.75 * 0.60 / (0.75 + 0.60) = 0.67
+```
+
+Why the *harmonic* mean and not the ordinary average? Because the harmonic mean punishes imbalance. The plain average of 0.75 and 0.60 is 0.675, barely different, but the harmonic mean pulls hard toward the smaller of the two numbers, so a model cannot score a good F1 by being excellent at precision and hopeless at recall (or vice versa). It has to be decent at both. Here precision and recall are close, so F1 lands at 0.67, right between them. When they diverge, F1 sits much nearer the lower one, which is exactly the behavior you want from a metric meant to summarize both.
+
+So from four counts we got four scores: accuracy 0.70, precision 0.75, recall 0.60, F1 0.67. Same ten tickets, same predictions, four different questions, four different answers. None of them is "the" score. Each is a lens, and choosing which lens to look through is a decision about what kind of mistake you can least afford.
+
+## Why accuracy lies
+
+Now the punchline, and it is the reason this whole series starts here rather than with p-values and significance tests. On the balanced set, accuracy was a reasonable summary. Real data is rarely balanced. Urgent tickets are, thankfully, rare: in a real inbox maybe one in ten is urgent, or one in fifty. When the classes are that lopsided, accuracy stops measuring what you think it measures.
+
+Watch it break. Take a new set of 20 tickets where only 2 are truly urgent and 18 are not. Now build the laziest possible model, one that does not even read the ticket and always predicts "not urgent." It is a single line: `return 0`, every time. Grade it:
+
+```text
+Always-negative baseline (2 urgent out of 20):
+  confusion:  TP=0  FP=0  FN=2  TN=18
+  accuracy  = (TP + TN) / n  = (0 + 18) / 20 = 0.90
+  precision = TP / (TP + FP) = 0 / (0 + 0)   = 0.00
+  recall    = TP / (TP + FN) = 0 / (0 + 2)   = 0.00
+  F1        = 2PR / (P + R)                   = 0.00
+```
+
+Ninety percent accurate. A model that has never once said the word "urgent," that would let every genuine emergency sit in the queue forever, scores 0.90 on the number people quote in meetings. It scores well for a stupid reason: 18 of the 20 tickets really are not urgent, and by blindly guessing "not urgent" every time it gets all 18 of those for free. The two it misses (FN = 2) barely dent a denominator of 20. Accuracy rewarded it for the easy majority and never charged it for failing the only tickets that mattered.
+
+Recall exposes the fraud instantly. Of the 2 urgent tickets, the model caught 0, so recall is 0.00, a flat zero. Precision is 0.00 too (it never made a positive call to be right about, and by our convention 0/0 is 0.00). The confusion matrix could not be blunter: TP = 0. There is not a single caught urgent ticket in the whole run. The 0.90 was never about urgency at all; it was 18 correct passes wearing a trophy. This is **class imbalance**, and the lesson is permanent: on skewed data, accuracy measures the size of the majority class more than the skill of the model, so you must look at the whole 2x2, and especially at recall on the rare class, before you believe any headline number.
+
+The interactive figure below lets you feel this instead of just reading it. In the top panel you can click any of the ten balanced tickets to flip its prediction and watch all four scores move together, so you can see for yourself that every metric is downstream of the four cells. In the bottom panel you drive the imbalance directly: keep the always-negative model, slide how many of the tickets are truly urgent, and watch accuracy sit stubbornly high while recall drops to zero the instant a real urgent ticket appears.
+
+<IframeFigure src="/essays/what-is-a-score/part1-metrics-explorer.html" title="Interactive metrics explorer: a top panel of ten support tickets where clicking a ticket flips the model's prediction and updates the live confusion matrix and all four scores, and a bottom panel where an always-negative baseline over twenty tickets lets you slide how many are truly urgent and watch accuracy stay high while recall stays at zero." height={860} />
+
+## Key takeaways
+
+- **Every score rests on three atoms:** a task (what counts as a correct output), a gold label (the human reference answer you grade against), and a metric (the rule that turns right and wrong into a number). Muddle any one and the number means nothing.
+- **The 2x2 confusion matrix is the source of every classification metric.** Sort each prediction into TP, FP, FN, or TN, and accuracy, precision, recall, and F1 are all just those four counts divided. On our balanced ten-ticket set: TP=3, FP=1, FN=2, TN=4, giving accuracy 0.70, precision 0.75, recall 0.60, F1 0.67.
+- **Precision and recall answer opposite questions and trade against each other.** Precision (0.75 here) asks how many of your flagged items were right and matters when false alarms are costly; recall (0.60 here) asks how many of the real items you caught and matters when misses are costly. F1 (0.67) is the harmonic mean that rewards being good at both.
+- **Accuracy lies under class imbalance.** An always-negative model on a 2-of-20 set scores 0.90 accuracy but 0.00 recall: it caught zero of the tickets that mattered. On skewed data, accuracy measures the majority class more than the model, so always read the whole 2x2.
+- **A score is a point estimate, not the truth.** Every number here came from one fixed set of ten (or twenty) examples; run the eval on a different sample and the numbers would shift. Part 6 makes this precise with the confidence interval, which turns a lone number like 0.70 into a range you can actually trust.
+
+## Glossary
+
+- **Gold label**: the reference answer, written by a human in advance, that we treat as correct by definition and grade the model against. In our task, the human's true "urgent" or "not urgent" call for each ticket. Not the model's guess, and not necessarily objective truth, just the standard we have chosen to trust.
+- **Confusion matrix**: the 2x2 grid that sorts every prediction by gold label (rows) against model prediction (columns), producing four counts (TP, FP, FN, TN). Every classification metric is derived from these four numbers.
+- **True positive (TP)**: gold is positive (urgent) and the model predicted positive; a correct catch. There were 3 in the balanced set.
+- **False positive (FP)**: gold is negative (not urgent) but the model predicted positive; a false alarm. There was 1.
+- **False negative (FN)**: gold is positive (urgent) but the model predicted negative; a missed catch. There were 2.
+- **True negative (TN)**: gold is negative and the model predicted negative; a correct pass. There were 4.
+- **Accuracy**: the fraction of all predictions that were correct, (TP + TN) / n. Simple and intuitive, but misleading on imbalanced data because it credits the model for the easy majority class.
+- **Precision**: of the items the model called positive, the fraction that truly were, TP / (TP + FP). The metric to watch when false positives are expensive.
+- **Recall**: of the items that truly were positive, the fraction the model caught, TP / (TP + FN). The metric to watch when false negatives (missed items) are expensive.
+- **F1**: the harmonic mean of precision and recall, 2PR / (P + R). A single number that stays low unless the model is decent at both precision and recall, so it cannot be gamed by excelling at only one.
+- **Class imbalance**: when one class vastly outnumbers the other (here, few urgent tickets among many non-urgent ones). Under imbalance, accuracy tracks the majority class rather than the model's real skill, which is why the whole 2x2, and recall in particular, becomes essential.
+
+---
+
+We can now score a model, but only if a human already wrote down the right answers, and we waved that away with "assume the human was careful." That assumption is doing enormous work. **Part 2, Building a Golden Set**, is about earning it: how to choose examples, write labels that two people would agree on, measure that agreement, and end up with a gold set you can actually stake a score on.

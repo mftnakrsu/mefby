@@ -13,8 +13,9 @@ const byOrder = (a: CollectionEntry<'essays'>, b: CollectionEntry<'essays'>) =>
   (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0);
 const ragSeries = all.filter((e) => e.data.seriesOrder != null && e.data.series === 'rag').sort(byOrder);
 const agentsSeries = all.filter((e) => e.data.seriesOrder != null && e.data.series === 'agents').sort(byOrder);
+const evalsSeries = all.filter((e) => e.data.seriesOrder != null && e.data.series === 'evals').sort(byOrder);
 const rest = all.filter((e) => e.data.seriesOrder == null).sort(byDateDesc);
-const essays = [...ragSeries, ...agentsSeries, ...rest];
+const essays = [...ragSeries, ...agentsSeries, ...evalsSeries, ...rest];
 const newestSlug = [...all].sort(byDateDesc)[0]?.slug;
 // Count canonicals that have a Turkish counterpart (translations are filtered out above),
 // so the bilingual claim stays accurate as more essays get translated.
