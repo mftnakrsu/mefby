@@ -16,7 +16,7 @@ const agentsSeries = all.filter((e) => e.data.seriesOrder != null && e.data.seri
 const evalsSeries = all.filter((e) => e.data.seriesOrder != null && e.data.series === 'evals').sort(byOrder);
 const rest = all.filter((e) => e.data.seriesOrder == null).sort(byDateDesc);
 const essays = [...ragSeries, ...agentsSeries, ...evalsSeries, ...rest];
-const newestSlug = [...all].sort(byDateDesc)[0]?.slug;
+const newestSlug = [...all].sort(byDateDesc)[0]?.id;
 // Count canonicals that have a Turkish counterpart (translations are filtered out above),
 // so the bilingual claim stays accurate as more essays get translated.
 const bilingualCount = all.filter((e) => e.data.translationSlug).length;
@@ -44,7 +44,7 @@ const bilingualCount = all.filter((e) => e.data.translationSlug).length;
 
       <ul class="border-t border-zinc-100">
         {essays.map((essay) => (
-          <EssayRow essay={essay} featured={essay.slug === newestSlug} />
+          <EssayRow essay={essay} featured={essay.id === newestSlug} />
         ))}
       </ul>
     </div>

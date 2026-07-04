@@ -11,6 +11,8 @@ npm run build      # astro check + astro build → dist/
 npm run preview    # serve the built dist/ locally
 ```
 
+Requires Node >= 22.12 (Astro 6). An `.nvmrc` pins 22 for nvm users.
+
 TypeScript and Astro syntax are validated by `astro check` (run automatically during `npm run build`). There is no test runner, linter, or formatter configured.
 
 ## Environment
@@ -19,11 +21,11 @@ The project has no required environment variables. `.env.example` is empty.
 
 ## Architecture
 
-**Astro 5, static-by-default.** Pages live in `src/pages/`; layouts in `src/layouts/`; reusable components in `src/components/`. All pages render server-side at build time. No client JS unless an island opts in via `client:visible` / `client:idle`.
+**Astro 6, static-by-default.** Pages live in `src/pages/`; layouts in `src/layouts/`; reusable components in `src/components/`. All pages render server-side at build time. No client JS unless an island opts in via `client:visible` / `client:idle`.
 
 **Content split.**
 - **Résumé data** (profile, experience, projects, publications, education, certifications, external writings) stays in `constants.ts` and is imported by `src/pages/index.astro`. Rendered at build time as static HTML.
-- **Essays** live as MDX files in `src/content/essays/`. Frontmatter is validated by a Zod schema in `src/content/config.ts` (Astro Content Collections). The dynamic route `src/pages/essays/[...slug].astro` renders each essay through `src/layouts/EssayLayout.astro`.
+- **Essays** live as MDX files in `src/content/essays/`. Frontmatter is validated by a Zod schema in `src/content.config.ts` (Astro Content Layer, `glob` loader; an entry's `id` is its filename without extension and doubles as the URL slug). The dynamic route `src/pages/essays/[...slug].astro` renders each essay through `src/layouts/EssayLayout.astro`.
 
 **Adding a new essay.** Drop an MDX file into `src/content/essays/`, add frontmatter matching the schema (title, description, date, tags), write the prose. The home page and `/essays` index pick it up automatically. Embed figures with the `Diagram` component:
 

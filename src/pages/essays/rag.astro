@@ -19,7 +19,7 @@ const itemListJsonLd = {
   itemListElement: parts.map((p) => ({
     '@type': 'ListItem',
     position: p.data.seriesOrder,
-    url: new URL(`/essays/${p.slug}`, Astro.site).toString(),
+    url: new URL(`/essays/${p.id}`, Astro.site).toString(),
     name: p.data.title,
   })),
 };
@@ -29,7 +29,7 @@ const itemListJsonLd = {
   title="RAG from First Principles — Meftun Akarsu"
   description="A from-scratch course on Retrieval-Augmented Generation: build a working RAG system by hand, one concept at a time, with runnable code and interactive figures."
 >
-  <script type="application/ld+json" set:html={JSON.stringify(itemListJsonLd)} />
+  <script is:inline type="application/ld+json" set:html={JSON.stringify(itemListJsonLd)} />
   <div class="min-h-screen bg-white text-zinc-500 font-sans">
     <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
       <a href="/essays" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors mb-12 inline-block">&larr; all essays</a>
@@ -45,7 +45,7 @@ const itemListJsonLd = {
 
       {first && (
         <a
-          href={`/essays/${first.slug}`}
+          href={`/essays/${first.id}`}
           class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 mb-12"
         >
           Start with Part 1: {first.data.title}
@@ -60,7 +60,7 @@ const itemListJsonLd = {
       <ol class="border-t border-zinc-100">
         {core.map((p) => (
           <li class="border-b border-zinc-100">
-            <a href={`/essays/${p.slug}`} class="group flex gap-3 py-4 -mx-2 px-2 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
+            <a href={`/essays/${p.id}`} class="group flex gap-3 py-4 -mx-2 px-2 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
               <span class="shrink-0 mt-0.5 w-7 text-right font-mono text-[11px] text-zinc-400">{p.data.seriesOrder}</span>
               <span class="min-w-0">
                 <span class="block text-[15px] font-medium text-zinc-900 group-hover:text-emerald-700 transition-colors">{p.data.title}</span>
@@ -83,7 +83,7 @@ const itemListJsonLd = {
           <ol class="border-t border-zinc-100">
             {frontier.map((p) => (
               <li class="border-b border-zinc-100">
-                <a href={`/essays/${p.slug}`} class="group flex gap-3 py-4 -mx-2 px-2 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
+                <a href={`/essays/${p.id}`} class="group flex gap-3 py-4 -mx-2 px-2 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
                   <span class="shrink-0 mt-0.5 w-7 text-right font-mono text-[11px] text-zinc-400">{p.data.seriesOrder}</span>
                   <span class="min-w-0">
                     <span class="block text-[15px] font-medium text-zinc-900 group-hover:text-emerald-700 transition-colors">{p.data.title}</span>

@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
@@ -10,12 +13,12 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/mdx": "^4.0.0",
-    "@astrojs/rss": "^4.0.0",
-    "@astrojs/sitemap": "^3.0.0",
+    "@astrojs/mdx": "^5.0.6",
+    "@astrojs/rss": "^4.0.19",
+    "@astrojs/sitemap": "^3.7.3",
     "@fontsource-variable/inter": "^5.0.0",
     "@tailwindcss/vite": "^4.0.0",
-    "astro": "^5.0.0",
+    "astro": "^6.4.8",
     "katex": "^0.17.0",
     "rehype-katex": "^7.0.0",
     "remark-math": "^6.0.0",
@@ -24,6 +27,6 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@types/node": "^24.0.0",
-    "typescript": "~5.8.2"
+    "typescript": "^6.0.3"
   }
 }
