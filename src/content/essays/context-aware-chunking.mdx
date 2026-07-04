@@ -40,17 +40,17 @@ Now the user asks: *"what is Alice's refund window?"* The answer is chunk `[1]`.
 The retriever has trouble. We embed each chunk string on its own, embed the query, and rank by cosine similarity. Here is what comes back, top to bottom, from the offline run in the companion code:
 
 ```
-   1.  0.434  [2] Returns outside that window are declined automatically.
-   2.  0.413  [1] She set the refund window at 30 days.
-   3.  0.214  [0] Alice founded Acme in 2019.
-   4.  -0.116 [3] The error code E-4042 means the window has already closed.
+   1.  0.915  [2] Returns outside that window are declined automatically.
+   2.  0.910  [1] She set the refund window at 30 days.
+   3.  0.335  [3] The error code E-4042 means the window has already closed.
+   4.  0.289  [0] Alice founded Acme in 2019.
 ```
 
 The actual answer, chunk `[1]`, lands at rank 2. It got beaten by chunk `[2]`, which is *about* the refund window in the sense that it shares the word "window" and talks about returns, but does not contain the answer at all. Why did `[1]` lose? Because the version of `[1]` we embedded reads "She set the refund window at 30 days." The word that ties this sentence to the query, "Alice", is not in the chunk. It is in chunk `[0]`, one sentence earlier, and when we embedded `[1]` in isolation that link was severed. The embedding model never saw "Alice" while encoding chunk `[1]`, so the chunk's vector does not point strongly toward a query about Alice.
 
 This is the context-loss problem, and it has a precise name in linguistics. **Coreference** is when a word refers to something named elsewhere, like a pronoun ("she", "it", "that window") standing in for an antecedent introduced earlier. Coreference is everywhere in real documents. "The policy" without the paragraph that named which policy. "That error" without the line that described it. "The above" in a legal clause. Every one of these is a little time bomb: harmless in the full document, defused into noise the instant you chunk and embed.
 
-It is worth being honest about how strong this effect is. With a powerful modern embedding model, the trap does not always bite. The companion code, when it runs against the real `all-MiniLM-L6-v2` encoder, sometimes resolves "She" well enough on its own to rank `[1]` first anyway, and when that happens the code says so and points you to the deterministic offline path where the trap reliably bites. The point is not that every chunk is broken. The point is that *some fraction of them are*, that you cannot tell which from the chunk text alone, and that the fraction is large enough to matter at scale. We saw this exact decoupling instinct in Part 9: what you embed does not have to be what you slice. Here we take that instinct two steps further.
+It is worth being honest about how strong this effect is. With a powerful modern embedding model, the trap does not always bite. The companion code, when it runs against a real long-context encoder (`jinaai/jina-embeddings-v2-small-en`, via `--online`), sometimes resolves "She" well enough on its own to rank `[1]` first anyway, and when that happens the code says so and points you to the deterministic offline path where the trap reliably bites. The point is not that every chunk is broken. The point is that *some fraction of them are*, that you cannot tell which from the chunk text alone, and that the fraction is large enough to matter at scale. We saw this exact decoupling instinct in Part 9: what you embed does not have to be what you slice. Here we take that instinct two steps further.
 
 ## Late chunking
 
@@ -83,13 +83,13 @@ That mean over a token span is the same averaging a normal embedding model does 
 Does it actually fix our ranking? Here is the same query, *"what is Alice's refund window?"*, scored against the late-chunked vectors:
 
 ```
-   1.  0.443  [1] She set the refund window at 30 days.
-   2.  0.378  [2] Returns outside that window are declined automatically.
-   3.  0.253  [0] Alice founded Acme in 2019.
-   4.  -0.078 [3] The error code E-4042 means the window has already closed.
+   1.  0.885  [1] She set the refund window at 30 days.
+   2.  0.878  [2] Returns outside that window are declined automatically.
+   3.  0.424  [3] The error code E-4042 means the window has already closed.
+   4.  0.394  [0] Alice founded Acme in 2019.
 ```
 
-Chunk `[1]` moved from rank 2 to rank 1. Its score went up, from 0.413 to 0.443, because its vector now carries a trace of "Alice" from the whole-document pass, even though the word "Alice" never appears in the chunk text. The off-topic chunk `[2]` dropped below it. Same chunk text, same query, same averaging, and the right answer surfaces, purely because we pooled late.
+Chunk `[1]` moved from rank 2 to rank 1. The scores barely move, `[1]` going 0.910 to 0.885 while `[2]` slips from 0.915 to 0.878, but the order flips: `[1]`'s vector now carries a trace of "Alice" from the whole-document pass, even though the word "Alice" never appears in the chunk text, and the off-topic chunk `[2]` dropped below it. Same chunk text, same query, same averaging, and the right answer surfaces, purely because we pooled late.
 
 It is important to separate this from something we did back in Part 5. There, one fix for context loss was to *prepend a static title* to every chunk: stick "Refund Policy" at the front of each chunk before embedding. That helps a little, but it is static and crude. It adds the same fixed string to every chunk regardless of what the chunk says, and it does nothing for sentence-to-sentence coreference like "She". Late chunking is different in kind. It does not edit the chunk text at all. It lets the transformer's attention do the contextualizing, so each chunk vector is shaped by the *specific* surrounding content, not a hand-picked header. Nothing is prepended, nothing is trained, and the model is one you already have, as long as it has a long-enough context window.
 
@@ -108,13 +108,13 @@ The recipe is prepend-then-embed, and the only moving part that is not in your e
 Here is the same query against the contextually-retrieved vectors:
 
 ```
-   1.  0.479  [1] She set the refund window at 30 days.
-   2.  0.461  [2] Returns outside that window are declined automatically.
-   3.  0.354  [0] Alice founded Acme in 2019.
-   4.  0.108  [3] The error code E-4042 means the window has already closed.
+   1.  0.973  [1] She set the refund window at 30 days.
+   2.  0.968  [2] Returns outside that window are declined automatically.
+   3.  0.700  [3] The error code E-4042 means the window has already closed.
+   4.  0.631  [0] Alice founded Acme in 2019.
 ```
 
-Chunk `[1]` is at rank 1 again, with the highest score of any approach we have tried, 0.479. The prepended sentence pulled "Alice" and "refund policy" directly into the text the embedder encoded, so the chunk vector aligns strongly with the query. Notice that every chunk's score rose, because every chunk now carries the shared situating context, but `[1]` rose the most because the situating sentence resolved exactly the ambiguity that was hurting it.
+Chunk `[1]` is at rank 1 again, with the highest score of any approach we have tried, 0.973. The prepended sentence pulled "Alice" and "refund policy" directly into the text the embedder encoded, so the chunk vector aligns strongly with the query. Notice that every chunk's score rose, because every chunk now carries the shared situating context; the background chunks `[0]` and `[3]` climbed the most, while `[1]` keeps its lead because the situating sentence resolved exactly the ambiguity that was hurting it.
 
 One detail worth flagging, because it is the difference between this and the toy version: the situating sentence is generated *per chunk*, from the chunk plus its document, not a single fixed header for the whole file. That is what makes it richer than the Part 5 static-title trick. A chunk about damaged goods gets a sentence about damaged goods; a chunk about the refund window gets a sentence about the refund window. It is a small, targeted note, written for that chunk.
 

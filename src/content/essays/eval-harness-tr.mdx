@@ -27,7 +27,7 @@ Temel Python (bir sözlük listesi, argüman olarak geçirilen bir fonksiyon, bi
 
 Onları birbirine bağlamadan önce parçaları somut veri üzerinde adlandırayım, çünkü bütün tasarımın özü her parçanın diğerleri hakkında hiçbir şey bilmemesidir.
 
-**Birinci parça veri kümesidir.** QA çalıştırmaları için bu, on başkent sorusudur; RAG Bölüm 8'in yanıt-kalitesi değerlendirmesine bir selam. Her satır bir soru, bir altın kısa yanıt ve sistemin aday yanıtını tutar:
+**Birinci parça veri kümesidir.** QA çalıştırmaları için bu, on başkent sorusudur; RAG Bölüm 11'in yanıt-kalitesi değerlendirmesine bir selam. Her satır bir soru, bir altın kısa yanıt ve sistemin aday yanıtını tutar:
 
 ```python
 QA = [
@@ -38,7 +38,7 @@ QA = [
 ]
 ```
 
-Altıncı satır ilginç olanı. Aday `Washington, D.C.`, ABD'nin başkenti için doğru bir yanıttır, ama birebir `Washington` dizesi değildir. O satırı aklınızda tutun; iki skorlayıcının anlaşamayacağı yer orası.
+ABD satırı ilginç olanı. Aday `Washington, D.C.`, ABD'nin başkenti için doğru bir yanıttır, ama birebir `Washington` dizesi değildir. O satırı aklınızda tutun; iki skorlayıcının anlaşamayacağı yer orası.
 
 **İkinci parça skorlayıcıdır**, tek bir kayıttan sıfır ile bir arasında bir sayıya giden bir fonksiyon. Katı sürüm tam eşleşmedir (exact match): her iki dizeyi küçük harfe çevirip boşlukları kırparak normalize et, sonra yalnızca özdeşlerse `1.0` döndür.
 
@@ -58,7 +58,7 @@ def mock_judge(rec):
     return 1.0 if (g in c or c in g) else 0.0
 ```
 
-Şimdi `washington`, `washington, d.c.` içinde geçiyor, dolayısıyla jüri, tam eşleşmenin sıfır verdiği altıncı satıra tam puan verir. Gerçek bir jüri bir `generate()` çağrısının arkasında devreye girerdi, ama karar yine bir sıfır ya da bir olarak kalır, dolayısıyla aşağı akıştaki her şey dokunulmadan kalır. Ajan çalıştırmaları için yörünge skorlayıcısı, adım başına kısmi kredi verir, tam olarak Bölüm 14'ün adım-düzeyi skorlaması: altın ve tahmin edilen araç çağrısının uyuştuğu konumları say, sonra fazladan ya da eksik bir adım cezalandırılsın diye iki dizinin uzun olanına böl.
+Şimdi `washington`, `washington, d.c.` içinde geçiyor, dolayısıyla jüri, tam eşleşmenin sıfır verdiği ABD satırına tam puan verir. Gerçek bir jüri bir `generate()` çağrısının arkasında devreye girerdi, ama karar yine bir sıfır ya da bir olarak kalır, dolayısıyla aşağı akıştaki her şey dokunulmadan kalır. Ajan çalıştırmaları için yörünge skorlayıcısı, adım başına kısmi kredi verir, tam olarak Bölüm 14'ün adım-düzeyi skorlaması: altın ve tahmin edilen araç çağrısının uyuştuğu konumları say, sonra fazladan ya da eksik bir adım cezalandırılsın diye iki dizinin uzun olanına böl.
 
 ```python
 def trajectory_match(rec):
@@ -84,7 +84,7 @@ def gate(ci_lo, bar):
 
 ## Birinci çalıştırma: katı tam eşleşme bekletir
 
-On QA satırını, tam eşleşme skorlayıcısı ve 0.35 sürüm barajıyla motordan geçirin. On adaydan yedisi normalizasyondan sonra altınıyla eşleşir; üçü eşleşmez. Sydney, Canberra değildir; Rio de Janeiro, Brasilia değildir; ve Milan, Rome değildir, dolayısıyla o üçü sıfır alır. Altıncı satır, `Washington, D.C.`, de sıfır alır, çünkü katı eşleşme onun doğru olduğunu göremez. Bu, altı bir ve dört sıfır verir:
+On QA satırını, tam eşleşme skorlayıcısı ve 0.35 sürüm barajıyla motordan geçirin. On adaydan yedisi doğru yanıttır; üçü değildir. Sydney, Canberra değildir; Rio de Janeiro, Brasilia değildir; ve Milan, Rome değildir, dolayısıyla o üçü sıfır alır. ABD satırı, `Washington, D.C.`, de sıfır alır, çünkü katı eşleşme onun doğru olduğunu göremez. Bu, altı bir ve dört sıfır verir:
 
 ```text
   n = 10   mean score = 0.60
@@ -96,7 +96,7 @@ On QA satırını, tam eşleşme skorlayıcısı ve 0.35 sürüm barajıyla moto
 
 ## İkinci çalıştırma: jüri aynı veriyi gönderir
 
-Tek bir argümanı değiştirin. Aynı on QA satırını koruyun, aynı 0.35 barajını koruyun, aynı tohumu koruyun, ve tam eşleşme yerine sahte jüriyi geçirin. Jüri, tam eşleşmenin kabul ettiği her şeyi kabul eder, ve ek olarak altıncı satırı da kabul eder, çünkü `washington`, `washington, d.c.` içinde geçer. Sydney, Rio ve Milan hâlâ gerçekten yanlış ve hâlâ sıfır alır. Dolayısıyla bir sıfır bire döner, yedi bir yedi bir olarak kalır, ve ortalama tırmanır:
+Tek bir argümanı değiştirin. Aynı on QA satırını koruyun, aynı 0.35 barajını koruyun, aynı tohumu koruyun, ve tam eşleşme yerine sahte jüriyi geçirin. Jüri, tam eşleşmenin kabul ettiği her şeyi kabul eder, ve ek olarak ABD satırını da kabul eder, çünkü `washington`, `washington, d.c.` içinde geçer. Sydney, Rio ve Milan hâlâ gerçekten yanlış ve hâlâ sıfır alır. Dolayısıyla bir sıfır bire döner, altı bir altı bir olarak kalır, ve ortalama tırmanır:
 
 ```text
   n = 10   mean score = 0.70
@@ -118,7 +118,7 @@ Ortalama 0.60'tan 0.70'e yükselir, ve daha önemlisi, aralığın zemini 0.30'd
   schedule a meeting  gold=[calendar,email]               pred=[calendar,email]         -> 1.00
 ```
 
-İkisini yürüyelim. Kusursuz eşleşme, `answer from a doc`, üç konumda da uyuşur ve her iki dizi de üç uzunluğunda, dolayısıyla üç bölü üç, tam 1.00 alır. `compute a total`, birinci ve üçüncü konumlarda uyuşur (`search` ve `answer`) ama ajan `calculator` çağırması gerekirken `weather` çağırdı, dolayısıyla üç konumdan ikisi eşleşir ve 0.67 alır. `summarize findings`, ilk iki adımda eşleşir ama ajan erken durdu, dördü gereken yerde üç adımlık bir yol verdi, dolayısıyla dört maksimum uzunluğu üzerinden üç eşleşme 0.50'dir. `quick lookup`, yalnızca birinci konumda eşleşir ve fazladan bir `search` ile doldurur, dolayısıyla bir bölü üç 0.33'tür. Beş madde başına skoru (1.00, 0.67, 0.50, 0.33, 1.00) ortalayın ve şunu alın:
+İkisini yürüyelim. Kusursuz eşleşme, `answer from a doc`, üç konumda da uyuşur ve her iki dizi de üç uzunluğunda, dolayısıyla üç bölü üç, tam 1.00 alır. `compute a total`, birinci ve üçüncü konumlarda uyuşur (`search` ve `answer`) ama ajan `calculator` çağırması gerekirken `weather` çağırdı, dolayısıyla üç konumdan ikisi eşleşir ve 0.67 alır. `summarize findings`, ilk iki adımda eşleşir ama ajan erken durdu, dördü gereken yerde üç adımlık bir yol verdi, dolayısıyla dört maksimum uzunluğu üzerinden iki eşleşme 0.50'dir. `quick lookup`, yalnızca birinci konumda eşleşir ve fazladan bir `search` ile doldurur, dolayısıyla bir bölü üç 0.33'tür. Beş madde başına skoru (1.00, 0.67, 0.50, 0.33, 1.00) ortalayın ve şunu alın:
 
 ```text
   n = 5   mean score = 0.70
@@ -166,4 +166,4 @@ Bu satırlardan ikisinin ortalaması sizi yalnız nokta tahmini üzerinden gönd
 
 ---
 
-Bu, bütün serinin açtığı döngüyü kapatır. RAG Bölüm 8 size bir erişim yanıtını skorlamanın bir yolunu verdi ve Agents Bölüm 17 size bir yörüngeyi notlamanın bir yolunu verdi, ve ikisi de artık her skorun ne kadar belirsiz olduğunu ve barajı aşıp aşmadığını da bilen tek bir motorun içinde oturuyor. On beş parça önce bir skor, bir toplantıda yüksek sesle söylenen yalnız tek bir sayıydı; artık o sayıyı elle kurabilir, etrafına dürüst bir aralık koyabilir, ve bir sürümü aralığın ortası yerine zeminine göre kapılayabilirsiniz. O tek alışkanlığı, bir nokta tahmini ile bir umut değil CI alt sınırı ile bir baraj, sonra ne inşa ederseniz edin yanınızda taşıyın, ve gerçek bir kazancı gürültüden her zaman ayırt edebilirsiniz.
+Bu, bütün serinin açtığı döngüyü kapatır. RAG Bölüm 11 size bir erişim yanıtını skorlamanın bir yolunu verdi ve Agents Bölüm 17 size bir yörüngeyi notlamanın bir yolunu verdi, ve ikisi de artık her skorun ne kadar belirsiz olduğunu ve barajı aşıp aşmadığını da bilen tek bir motorun içinde oturuyor. On beş parça önce bir skor, bir toplantıda yüksek sesle söylenen yalnız tek bir sayıydı; artık o sayıyı elle kurabilir, etrafına dürüst bir aralık koyabilir, ve bir sürümü aralığın ortası yerine zeminine göre kapılayabilirsiniz. O tek alışkanlığı, bir nokta tahmini ile bir umut değil CI alt sınırı ile bir baraj, sonra ne inşa ederseniz edin yanınızda taşıyın, ve gerçek bir kazancı gürültüden her zaman ayırt edebilirsiniz.

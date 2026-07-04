@@ -21,7 +21,7 @@ Dürüst kısmı, dersin tamamıdır. Uyumu ölçmenin bariz yolu, iki notlayıc
 
 ## Ön koşullar
 
-Bölüm 1'in söz dağarcığına (iki etiketin birbirine karşı çaprazlandığı 2x2 ızgara) ve temel Python'dan (bir liste, bir döngü, bir bölme) fazlasına ihtiyacınız yok. Hiçbir istatistik geçmişi varsayılmıyor; kappayı saymadan inşa ediyoruz, tam olarak kesinlik ve duyarlılığı inşa ettiğimiz gibi. Eşlik eden dosya, [agreement.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-03-annotator-agreement), API anahtarı, ağ ve bağımlılık olmadan offline çalışır (bu kez NumPy bile yok, saf Python), böylece her satırı okuyup buradaki her figürü kendiniz yeniden üretebilirsiniz. Üç işlev sunar, `cohen_cells`, `cohen_kappa` ve `fleiss_kappa`, ve aşağıda adım adım yürüdüğümüz tam izi basar.
+Bölüm 1'in söz dağarcığına (iki etiketin birbirine karşı çaprazlandığı 2x2 ızgara) ve temel Python'dan (bir liste, bir döngü, bir bölme) fazlasına ihtiyacınız yok. Hiçbir istatistik geçmişi varsayılmıyor; kappayı sayarak inşa ediyoruz, tam olarak kesinlik ve duyarlılığı inşa ettiğimiz gibi. Eşlik eden dosya, [agreement.py](https://github.com/mftnakrsu/evals-by-hand/tree/main/part-03-annotator-agreement), API anahtarı, ağ ve bağımlılık olmadan offline çalışır (bu kez NumPy bile yok, saf Python), böylece her satırı okuyup buradaki her figürü kendiniz yeniden üretebilirsiniz. Üç işlev sunar, `cohen_cells`, `cohen_kappa` ve `fleiss_kappa`, ve aşağıda adım adım yürüdüğümüz tam izi basar.
 
 ## İki notlayıcı, yirmi talep
 

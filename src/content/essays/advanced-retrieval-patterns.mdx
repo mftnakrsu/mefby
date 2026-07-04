@@ -248,7 +248,7 @@ But look at the pipeline we have built. For all its sophistication, it is still 
 These are the framework docs that turn the four patterns into running code, useful when you want a maintained implementation rather than the by-hand version above.
 
 - LangChain, ["ParentDocumentRetriever."](https://reference.langchain.com/python/langchain-classic/retrievers/parent_document_retriever/ParentDocumentRetriever) API reference for the parent-document pattern: retrieve small child chunks, then return the larger parent documents they belong to.
-- LangChain, ["ContextualCompressionRetriever."](https://reference.langchain.com/python/langchain-classic/retrievers/contextual_compression/ContextualCompressionRetriever) API reference for the contextual-compression idea: a retriever that wraps a base retriever and compresses the results, with document compressors such as `LLMChainExtractor` (abstractive) and `EmbeddingsFilter` (extractive).
+- LangChain, ["ContextualCompressionRetriever."](https://reference.langchain.com/python/langchain-classic/retrievers/contextual_compression/ContextualCompressionRetriever) API reference for the contextual-compression idea: a retriever that wraps a base retriever and compresses the results, with document compressors such as `LLMChainExtractor` (LLM-driven verbatim extraction) and `EmbeddingsFilter` (similarity-threshold filtering).
 - LlamaIndex, ["Auto Merging Retriever."](https://developers.llamaindex.ai/python/examples/retrievers/auto_merging_retriever/) Example walking through auto-merging retrieval over a hierarchy of parent and child nodes, merging children back into a parent once enough of that parent's children are retrieved.
 
 ## Glossary

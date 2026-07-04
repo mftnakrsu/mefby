@@ -11,7 +11,7 @@ import Diagram from '../../components/essay/Diagram.astro';
 
 ## The headline that isn't the story
 
-I fine-tuned a LoRA adapter on top of OpenAI's open-weight `gpt-oss-20b` for UAV combat doctrine Q&A. On a stratified test set of 1,873 questions, a pair-wise GPT‑5.4 judge picked the adapter ("v4") over the un-adapted base model **82.6% of the time** (95% CI 80.9–84.4%). Headline-grade number. End of story.
+I fine-tuned a LoRA adapter on top of OpenAI's open-weight `gpt-oss-20b` for UAV combat doctrine Q&A. On a stratified test set of 1,875 questions (1,873 valid judge verdicts), a pair-wise GPT‑5.4 judge picked the adapter ("v4") over the un-adapted base model **82.6% of the time** (95% CI 80.9–84.4%). Headline-grade number. End of story.
 
 Except: **91.8% of the baseline's outputs were empty.**
 
@@ -154,7 +154,7 @@ The corollary, which the ablation table earlier in this essay quietly demonstrat
 - Model-agreement rate: **94.7%** (284 / 300 examples had original and swap agree on which model won)
 - Bias-corrected v4 win rate: **80.7%** (95% CI 76.3–85.0%)
 
-48.5% is indistinguishable from 50%. The chat-arena literature reports ≈5–10pp toward A on free-form preference judging; this rubric (three axes scored 1–5 plus a strict winner field) appears to be largely position-symmetric. The reproducibility delta on the win rate (82.6 → 80.7%, i.e. -1.9pp) is also within the original CI. **Position bias may be a property of free-form preference judging, not strict rubric judging.** If you're judging on a rubric like this one, the symmetry-vs-randomization cost may not be worth paying for every run.
+48.5% is indistinguishable from 50%. The chat-arena literature reports ≈5–10pp toward A on free-form preference judging; this rubric (three axes scored 1–5 plus a strict winner field) appears to be largely position-symmetric. The reproducibility delta on the win rate (82.6 → 80.7%, i.e. -1.9pp) is also small, with 80.7% sitting just below the original CI's lower bound (80.9%). **Position bias may be a property of free-form preference judging, not strict rubric judging.** If you're judging on a rubric like this one, the symmetry-vs-randomization cost may not be worth paying for every run.
 
 ## Honest limitations
 

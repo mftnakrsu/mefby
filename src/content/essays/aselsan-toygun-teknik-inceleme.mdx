@@ -155,7 +155,7 @@ Sistem kısa bir lazer darbesi gönderir, hedeften dönen yankının **gidiş-d�
 
 Bağıntı: **d = c · t / 2**, burada *c* ışık hızı, *t* gidiş-dönüş süresidir. İkiye bölünür çünkü ışık yolu hedefe gidip geri döner. Örnek: 35 km için *t* ≈ 233 mikrosaniye. Bu sürede 233 nanosaniyelik bir zamanlama hatası 35 metrelik mesafe hatasına denk gelir; yani saatleme elektroniği nanosaniye sınıfı olmak zorundadır.
 
-Birkaç pratik incelik: hedef bulutun arkasındaysa veya yağmurda darbe çok soğurulur ve geri dönmez (mesafe ölçüm kaybı); sahnede birden çok yansıtıcı yüzey varsa (camlar, koruyuculu binalar) çoklu yankı oluşur ve sistem bunlar arasından doğru olanı seçmek için "first/last pulse logic" kullanır. Üstelik hava molekülleri tarafından oluşan saçılım, atış-azaltıcı (eye-safe) dalga boyunda daha da belirgindir.
+Birkaç pratik incelik: hedef bulutun arkasındaysa veya yağmurda darbe çok soğurulur ve geri dönmez (mesafe ölçüm kaybı); sahnede birden çok yansıtıcı yüzey varsa (camlar, koruyuculu binalar) çoklu yankı oluşur ve sistem bunlar arasından doğru olanı seçmek için "first/last pulse logic" kullanır. Üstelik hava molekülleri kaynaklı (Rayleigh) saçılım dalga boyunun dördüncü kuvvetiyle ters orantılı azaldığından, daha uzun eye-safe dalga boyunda (1570 nm) 1064 nm'ye göre belirgin biçimde zayıftır.
 
 ### İşaretleme: kodlu darbe ve güdüm
 
@@ -179,7 +179,7 @@ Sorun şu ki optik elemanlar sabit kalmaz: sıcaklık (−40 °C ile +70 °C ara
 
 Böylece görev boyunca, değişen koşullara rağmen "**görülen nokta = vurulan nokta**" eşitliği korunur.
 
-**Neden bu kadar önemli?** Geolocation (Bölüm 10) ve lazer güdümü (Bölüm 7), kameranın ve lazerin *aynı yöne baktığı* varsayımına dayanır. Boresight bu varsayımı sürekli geçerli kılan sessiz ama kritik alt sistemdir; o olmadan koordinat üretimi de işaretleme de güvenilmez hale gelir. F-35 gibi platformlarda da IBS aynı kritiklikte bir alt sistemdir; Block 4 yükseltmelerinin önemli bir kısmı bu hizalama disiplinini iyileştirmeye yöneliktir.
+**Neden bu kadar önemli?** Geolocation (Bölüm 10) ve lazer güdümü (Bölüm 8), kameranın ve lazerin *aynı yöne baktığı* varsayımına dayanır. Boresight bu varsayımı sürekli geçerli kılan sessiz ama kritik alt sistemdir; o olmadan koordinat üretimi de işaretleme de güvenilmez hale gelir. F-35 gibi platformlarda da IBS aynı kritiklikte bir alt sistemdir; Block 4 yükseltmelerinin önemli bir kısmı bu hizalama disiplinini iyileştirmeye yöneliktir.
 
 ## Geolocation: açıyı koordinata çevirme
 
@@ -216,11 +216,11 @@ Asıl önemli nokta **pasifliktir**. Termal kamera hiçbir sinyal yaymaz; yalnı
 
 Şimdiye dek anlatılan tüm alt sistemleri, gerçek bir görevdeki sıraya dizelim.
 
-<Diagram number="10" caption="Uçtan uca tipik angajman. Tarama ve tanıma tamamen pasiftir; yalnızca 5. adımda kısa süreli, dar bir lazer ışını dışarı çıkar. 6. adımda ya güdümlü mühimmat hedefe kilitlenir ya da üretilen koordinat başka bir platforma devredilir.">
+<Diagram number="10" caption="Uçtan uca tipik angajman. Tarama ve tanıma tamamen pasiftir; ilk aktif emisyon 4. adımdaki kısa lazer mesafe ölçüm darbesidir, 5. adımda ise dar bir işaretleme ışını dışarı çıkar. 6. adımda ya güdümlü mühimmat hedefe kilitlenir ya da üretilen koordinat başka bir platforma devredilir.">
   <img src="/essays/aselsan-toygun-teknik-inceleme/10-end-to-end.svg" alt="Uçtan uca angajman akışı: tarama → tespit → kilitlenme → menzil → işaretleme → vuruş/devir." class="w-full" />
 </Diagram>
 
-Aşağıdaki akış, bir hedefin tespitinden vuruşuna (ya da başka bir birime devrine) kadar olan tipik adımları gösteriyor. Dikkat edilmesi gereken şey, tüm bu adımlar boyunca uçağın **radarının kapalı** kalabilmesidir; sistem baştan sona pasif çalışır, yalnızca işaretleme anında dar bir lazer ışını dışarı çıkar.
+Aşağıdaki akış, bir hedefin tespitinden vuruşuna (ya da başka bir birime devrine) kadar olan tipik adımları gösteriyor. Dikkat edilmesi gereken şey, tüm bu adımlar boyunca uçağın **radarının kapalı** kalabilmesidir; sistem tarama ve tanıma boyunca pasif çalışır; lazer yalnızca mesafe ölçümü (4. adım) ve işaretleme (5. adım) anlarında kısa süreliğine devreye girer.
 
 1. **Tarama:** MWIR ile sahneyi gözle (IRST), sıcak imzaları topla.
 2. **Tespit & tanı:** ATR hedefi bulur ve sınıflandırır; operatör doğrulama eşiğine göre değerlendirir.
@@ -229,7 +229,7 @@ Aşağıdaki akış, bir hedefin tespitinden vuruşuna (ya da başka bir birime 
 5. **İşaretleme:** Kodlu lazerle hedefi "boya" (kısa süreli, dar konide).
 6. **Vuruş / devir:** Güdümlü mühimmat kilitlenir; ya da üretilen koordinat başka bir birime devredilir (bir başka uçak, bir batarya, vb.).
 
-Bu sıralama, "ne zaman pasif ne zaman aktif" sorusunu da yanıtlar: 1–4. adımlarda sistem sessizdir, hiçbir emisyon yoktur. Tek aktif moment, 5. adımdaki kısa lazer atışıdır; ve onun da yön/zaman dilimi dardır. Lazer dalga boyu (1064 nm muharebede) tipik düşman ESM/RWR sensörleriyle değil özel lazer uyarı alıcılarıyla (LWR) algılanabilir; yani angajmanın görünür ayak izi minimumdur.
+Bu sıralama, "ne zaman pasif ne zaman aktif" sorusunu da yanıtlar: 1–3. adımlarda sistem sessizdir, hiçbir emisyon yoktur. İlk aktif an, 4. adımdaki kısa lazer mesafe ölçüm darbesidir; onu 5. adımdaki işaretleme atışı izler ve ikisinin de yön/zaman dilimi dardır. Lazer dalga boyu (1064 nm muharebede) tipik düşman ESM/RWR sensörleriyle değil özel lazer uyarı alıcılarıyla (LWR) algılanabilir; yani angajmanın görünür ayak izi minimumdur.
 
 ## Teknik özellikler & F-35 EOTS karşılaştırması
 
