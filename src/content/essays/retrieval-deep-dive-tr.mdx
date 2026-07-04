@@ -1,0 +1,326 @@
+---
+title: "Retrieval'e Derin Dalış"
+description: "6. bölümdeki uygulamamız çalışıyor, ama getirmesi saf: sabit bir top-k ile salt anlamsal arama. Retrieval-Augmented Generation üzerine sıfırdan bir serinin 7. bölümü: yoğun (dense) getirmenin tam kodlarda ve isimlerde neden şaştığı, bunları tam isabetle yakalayan seyrek (sparse/anahtar kelime) getirme, sezgiyle anlatılan TF-IDF ve BM25, hibrit aramanın ikisini nasıl birleştirdiği (ağırlıklı toplam ve Reciprocal Rank Fusion) ve top-k'nin gerçek bir kadran olduğu, lost-in-the-middle tuzağıyla birlikte. Yoğun ve seyrek getirme zıt yönlerde başarısız olur; onları birleştir."
+date: 2026-06-13
+tags: ["RAG", "Retrieval", "BM25", "Hybrid Search", "Vector Search", "NLP", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-07-retrieval-deep-dive"
+ogImage: "/og/retrieval-deep-dive.png"
+summary: "Yoğun getirme tam kodlarda ve isimlerde şaşıyor; seyrek getirme onları tam isabetle yakalıyor. 7. Bölüm: TF-IDF, BM25, hibrit arama (ağırlıklı toplam ve RRF) ve top-k tuzağı."
+lang: "tr"
+translationSlug: "retrieval-deep-dive"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+6. bölümde nihayet anlatmayı bırakıp işi kurduk: küçük bir bilgi tabanını gömen, kullanıcının sorusunu gömen, parçaları kosinüs benzerliğine göre sıralayan, en iyilerini tutan ve bir dil modeline teslim eden eksiksiz, çalışan bir RAG uygulaması. Çalışıyor. Ama üstünkörü geçtiğimiz belirli bir noktada saf: sabit bir top-k ile salt anlamsal arama kullanıyor ve bu, sessizce ne kadar iyi olabileceğini sınırlıyor. Bu bölüm getirmenin kendisiyle, yani RAG'in kalbiyle ilgili. Anlamsal aramanın, tüm zekasına rağmen, tam gözünün önünde duran kesin bir terimi (bir ürün kodu, bir hata kodu, bir isim) nasıl kaçırabildiğini; **seyrek (sparse)** anahtar kelime getirmenin ne olduğunu ve tam olarak bu durumları neden yakaladığını; ikisini **hibrit arama (hybrid search)** halinde birleştirmenin iki klasik yolunu; ve sabit bir sayı gibi ele aldığımız **top-k**'nin aslında gerçek bir ödünleşimi ve şaşırtıcı bir başarısızlık biçimi olan bir kadran olduğunu öğreneceksin. Sonunda getirmenin üç tadını da, her birinin ne zaman parladığını ve başarısız olduğunu, ve onları nasıl kaynaştıracağını anlamış olacaksın.
+
+## Ön koşullar
+
+1'den 6'ya kadar olan bölümler, özellikle de [Gömüler (Embeddings), Gerçekten Anlaşılmış](/essays/embeddings-tr) (2. bölüm), [Benzerliği Ölçmek](/essays/measuring-similarity-tr) (3. bölüm) ve [İlk RAG'ini İnşa Et](/essays/build-your-first-rag-tr) (6. bölüm). Metnin bir vektöre dönüştüğü, benzer anlamların birbirine yakın durduğu, adayları kosinüs benzerliğine göre sıraladığımız ve top-k'yi tuttuğumuz konusunda rahat olmalısın; tam da bunu yapan uçtan uca bir uygulaman olmalı. Odaklı tek kod eklemesi için temel Python işine yarar, ama bu çoğunlukla bir kavram bölümü: sezgiyle ve görsellerle ilerliyoruz.
+
+## Her şeyi tetikleyen kaçırılan cevap
+
+Sana uygulamamızın nasıl başarısız olduğunu göstereyim, çünkü bu bölümün var olma sebebi tam olarak bu başarısızlık.
+
+6. bölümdeki bilgi tabanımızda kısa bir destek makalesi var: *"Error E-4042: the authentication token has expired. Refresh the token and retry the request."* Bir kullanıcı dünyanın en doğal sorusunu yazıyor:
+
+```text
+how do I fix error E-4042 at checkout?
+```
+
+Uygulamanın o makaleyi döndüreceğine bahse girersin. Döndürmüyor. En üstte çıkan sonuçlar şunlar: *"Troubleshooting checkout and payment failures,"* *"Resolving login and authentication issues,"* ve *"The checkout page shows a generic error after Pay."* Hepsi makul biçimde ilgili görünüyor. Hiçbiri soruyu harfiyen cevaplayan makale değil. İhtiyacımız olan parça beşinci sırada duruyor, sabit top-k eşiğinin altında; bu yüzden dil modeli onu hiç görmüyor ve belirsiz bir tahminle cevap veriyor.
+
+Ne ters gitti? Hiçbir şey bozuk değildi. Gömme modeli işini yaptı: checkout hataları ve kimlik doğrulamayla *ilgili* parçaları buldu, çünkü sorgu anlamsal olarak tam da bununla ilgili. Ama tüm sorgudaki en bilgilendirici tek token, yani tam kod `E-4042`, neredeyse hiç ağırlık taşımadı; çünkü bir gömme modeli için nadir bir alfasayısal kod neredeyse anlamsızdır. Anlamı, çevresindeki konunun içine bulanıklaşıyor. Model, tam da ihtiyacımız olan token'ı yuvarlayıp geçti.
+
+Bu, yamalanacak bir hata değil. Bir tür getirmenin yapısal bir sınırı ve çaresi türleri anlamaktan geçiyor. Bu bölümün amacı: getirmenin farklı tatlarını öğrenmek, her birinin tam olarak ne zaman parladığını ve başarısız olduğunu görmek, ve yukarıdaki başarısızlık bir daha yaşanmasın diye onları nasıl birleştireceğini öğrenmek.
+
+## Yoğun (anlamsal) getirme: özet ve sınırlar
+
+Zaten kurduğumuz şeyle başlayalım. **Yoğun getirme (dense retrieval)**, 2. ve 3. bölümlerdeki yaklaşım: sorguyu ve her parçayı vektörlere göm, sonra parçaları sorguya kosinüs benzerliğine göre sırala. *Yoğun* denmesinin sebebi, vektörlerin kısa ve dolu olması; birkaç yüz ya da bin boyutlarının her biri gerçek bir sayı taşır ve anlam bunların hepsine aynı anda yayılmıştır.
+
+Gücü anlamda yatıyor. 2. bölüm metni, benzer fikirlerin yakın durduğu bir geometriye çevirdiği için, yoğun getirme eş anlamlıları ve başka sözcüklerle ifade etmeyi bedavaya anlar. *"automobile"* hakkında bir sorgu, *"car"* hakkında bir parçayı bulur, hiçbir harfi paylaşmasalar bile, çünkü iki kelime uzayda birbirine yakın düşer. *"ways to lower my monthly bill"* iste, *"reducing your recurring charges"* çıkabilir. Bu gerçekten güçlü bir şey ve anlamsal aramayı ilk kurduğumuzda sihir gibi hissettirmesinin sebebi de bu.
+
+Ama yoğun getirmeyi güçlü kılan aynı özellik, onu öngörülebilir bir noktada zayıf bırakıyor. Bunu 2. bölüme bağlayalım: anlam geometriye dönüşür ve geometri *pürüzsüzdür*. Genellemek, yakın eş anlamlıları neredeyse özdeş saymak üzere inşa edilmiştir. İşte bu pürüzsüzleştirme, tam bir token'ı bulanıklaştıran şeydir. `E-4042` gibi nadir bir kod, bir SKU, bir kişinin adı, bir fonksiyon adı, sıra dışı bir kısaltma: bunların boyutlara yayacak öğrenilmiş anlamı azdır, bu yüzden cümlenin genel havasına karışıp eşleşmeden fiilen kaybolurlar. Yoğun getirme, eğitimde nadiren gördüğü terimlerde de (nadir ya da sözlük dışı token'larda) en zayıf halindedir; kodların ve tanımlayıcıların genelde tam da böyle olması tesadüf değil. Ormanı güzelce anlar, ama işaret ettiğin o tek belirli ağacı kaybeder.
+
+## Seyrek (anahtar kelime / sözcüksel) getirme
+
+Ters yaklaşım çok daha uzun süredir var ve klasik arama motorlarının üzerine kurulduğu şey de bu. **Seyrek getirme (sparse retrieval)** (anahtar kelime ya da sözcüksel getirme de denir), bir parçayı, gerçek kelimelerinin sorgunun gerçek kelimeleriyle ne kadar örtüştüğüne göre puanlar. Gömü yok, anlamın geometrisi yok: sadece terimlerin terimlerle eşleşmesi.
+
+Neden "seyrek"? Vektörlerin görünüşünden. Tüm sözlüğündeki her farklı kelime için bir yuvası olan bir vektör hayal et: on binlerce, yüz binlerce yuva. Belirli bir parça bu kelimelerin sadece birkaç düzinesini kullanır, yani neredeyse her yuva sıfırdır. Vektör çoğunlukla boştur, seyrektir; gerçekten görünen kelimeleri işaretleyen birkaç sıfır olmayan girdi vardır. Bu, her yuvanın dolu olduğu yoğun bir gömünün ayna görüntüsüdür.
+
+Bu sıfır olmayan girdileri ağırlıklandırmanın en basit yolu, iki sezgisel niceliğin çarpımı olan **TF-IDF**'tir.
+
+- **Terim frekansı (term frequency, TF)** şunu sorar: bu terim bu parçada ne sıklıkla geçiyor? *"refund"* kelimesini beş kez söyleyen bir parça, bir kez söyleyen bir parçadan daha çok iadelerle ilgilidir. Daha fazla geçiş, daha yüksek ağırlık.
+- **Ters belge frekansı (inverse document frequency, IDF)** şunu sorar: bu terim tüm koleksiyon genelinde ne kadar nadir? *"the"* gibi bir kelime her yerde geçer ve sana hiçbir şey söylemez, bu yüzden sıfıra doğru ezilir. *"E-4042"* gibi bir kelime neredeyse hiçbir belgede geçmez, bu yüzden son derece bilgilendiricidir ve IDF ona yüksek bir ağırlık verir. Yaygın terimler aşağı, nadir terimler yukarı.
+
+İkisini çarptığında, *burada* sık ama *başka her yerde* nadir terimler içeren bir parçayı ödüllendiren bir puan elde edersin; bu da "bu parça özellikle senin sorgunla ilgili" önermesinin iyi bir vekilidir.
+
+Pratikte artık neredeyse kimse ham TF-IDF kullanmıyor; onun sağlam bir rafine hali olan **BM25**'i kullanıyorlar ve bu, Lucene, Elasticsearch, OpenSearch ve karşılaşacağın çoğu anahtar kelime motorunda varsayılan sıralama fonksiyonu. İyi kullanmak için formülüne ihtiyacın yok, sadece neyi düzelttiğine dair iki sezgiye:
+
+- **Terim frekansı doygunluğu (term-frequency saturation).** Düz TF sınırsız büyür: *"refund"*'dan yirmi kez bahseden bir parça, iki kez bahsedenden on kat yüksek puan alırdı, ki bu saçma. BM25 terim frekansını *doyurur*: ilk birkaç geçiş çok önemlidir, her ek geçiş giderek daha az önemli olur. Azalan getiriler, tıpkı bir insan okuyucunun ilgiliği yargılama biçimi gibi.
+- **Belge uzunluğu normalizasyonu (document-length normalization).** Uzun bir parça daha çok kelime içerir, bu yüzden sırf uzunluğu yüzünden sorgu terimlerini tesadüfen içerme ihtimali daha yüksektir. BM25 uzunluğa göre normalize eder, böylece uzun bir parça, kısa ve odaklı bir parçaya karşı haksız bir avantaj kazanmaz.
+
+BM25'in bu kadar güvenilir olmasının sebebi bu iki düzeltme. Eğitilecek bir modeli yok, hızlı, yorumlanabilir (hangi terimlerin ne kadar puan aldığını ve neden aldığını tam olarak görebilirsin) ve yoğun getirmenin en kötü olduğu şeyde mükemmel: anahtar kelimelerin, kodların, isimlerin ve tanımlayıcıların tam eşleşmesi. `E-4042` ara, BM25 `E-4042` içeren parçayı en tepeye koyar, çünkü o token nadir ve belirleyicidir.
+
+Zayıflığı, yoğun getirmenin gücünün tam tersi. BM25 harfidir. Anlam kavramı yoktur, bu yüzden *"car"*'ı *"automobile"*'a bağlayamaz: sorgu ve parça aynı fikri farklı kelimelerle ifade ediyorsa, BM25 hiçbir örtüşme görmez ve sıfır puan verir. Bu, klasik **sözcük dağarcığı uyuşmazlığı (vocabulary mismatch)** problemi ve kelimeleri yüzeysel anlamıyla almanın bedeli budur.
+
+## Seyrek getirmenin işe yarayıp yaramayacağına tokenizasyon karar verir
+
+Yukarıdaki her şeyin içine gömülü, sessiz bir varsayım var ve üretimde insanları ısıran da bu. Bu bölümdeki tüm kurtarma, `E-4042`'nin hem sorguda hem parçada *tek bir token* olarak hayatta kalmasına bağlı. BM25 bir şeyi indeksler, sorgun başka bir şey üretirse, güvendiğin o nadir ve belirleyici terim asla hizalanmaz ve seyrek getirme, sahiplenmesi gereken tam da o durumda başarısız olur. Sorun nadiren puanlama formülüdür. Genelde ondan önce çalışan **tokenizer (tokenleyici)**dır.
+
+Sorun şu ki, çoğu arama motoruyla birlikte gelen varsayılan metin analizörleri, kodlar ve tanımlayıcılar için değil, doğal dil düz yazısı için ayarlanmıştır ve önem verdiğin token'ları sessizce paramparça eden üç şey yaparlar.
+
+- **Tire ve alt çizgide bölme.** Yaygın bir analizör `-` ve `_`'yi kelime sınırı sayar, bu yüzden `E-4042`, `e` ve `4042` diye iki token'a, `error_code_4042` de üç token'a bölünür. Şimdi `E-4042` sorgusu, düzinelerce ilgisiz parçada geçebilecek çıplak `4042` ile eşleşir ve o kesin, nadir eşleşme yok olur. Sorgudaki en bilgilendirici tek token, sıradan bir toza öğütülmüştür.
+- **Gövdeleme (stemming).** Gövdeleyiciler kelimeleri bir köke indirger: `authentication`, `authent` olur, `expired`, `expir` olur. Düz yazı için zararsız, tanımlayıcılar için zaman zaman zararlı; çünkü bir gövdeleyici, gövdelenebilir bir sonekle biten bir token'ı bozabilir ve sorgu formuyla indekslenmiş form birbirini tutmaz hale gelir.
+- **Küçük harfe çevirme ve agresif normalizasyon.** Küçük harfe çevirme genelde sorun yaratmaz (ve eşlik eden kodumuzdaki `tokenize`, tutarlı kalması için bunu her iki tarafta da bilinçli olarak yapar), ama noktalama işaretlerini silen ya da karakter sınıflarını katlayan bir normalizasyon, `SKU#A12`'yi ya da `v2.0.1`'i kullanıcının yazdığıyla artık eşleşmeyen bir şeye dönüştürebilir.
+
+Seni beladan uzak tutan kural basit: **sorgu ve belgeler aynı şekilde tokenize edilmeli ve bu tokenizasyon tanımlayıcılarını bütün tutmalı.** Eşlik eden `tokenize`'ımız bunu tam olarak tek bir regex'le yapıyor, `[a-z0-9]+(?:-[a-z0-9]+)*`; bu, küçük harfe çevirir ve sonra `e-4042` gibi tireli kodları tire üzerinden bölmek yerine tek bir token olarak sağlam tutar. Gerçek bir motorda bunun karşılığı, kodları tutan alanlar için, düz yazı için kullandığın gövdelenmiş tam metin analizöründen ayrı olarak bir anahtar kelime alanı, bir boşluk analizörü ya da özel bir analizör yapılandırmaktır. SKU sütununu tam bir terim olarak indeksle; açıklamayı analiz edilmiş metin olarak indeksle. Birisi "BM25 verinin tam orada duran bir kodu bulamıyor" diye şikayet ettiğinde, sebep neredeyse her zaman burasıdır, sıralamada değil.
+
+## Tamamlayıcılık içgörüsü
+
+İki başarısızlık biçimini yan yana koy, bölümün tamamı yerine oturur.
+
+Yoğun getirme anlamı anlar ama tam terimlerde bulanıktır. Seyrek getirme tam terimleri eşleştirir ama anlama karşı kördür. Tek seferde düzeltebileceğin benzer biçimlerde başarısız olmuyorlar; *zıt* yönlerde başarısız oluyorlar. Biri zayıf olduğu yerde, diğeri tam olarak güçlü. Yoğun getirme sözcük dağarcığı uyuşmazlığından sorunsuzca geçer ama nadir kodlarda boğulur; seyrek getirme nadir kodları tam isabetle yakalar ama sözcük dağarcığı uyuşmazlığında boğulur.
+
+<Diagram number={1} caption="Zıt başarısızlık biçimleri. Solda: yoğun getirmenin kazandığı, seyrek getirmenin kaçırdığı bir eş anlamlı sorgusu (automobile, car'ı buluyor). Sağda: seyrek getirmenin kazandığı, yoğun getirmenin kaçırdığı bir tam kod sorgusu (E-4042). Her biri, diğerinin zayıf olduğu yerde tam olarak güçlü.">
+  <img src="/essays/retrieval-deep-dive/part7-dense-vs-sparse.svg" alt="Yan yana iki panel. 'dense wins' etiketli sol panel, automobile prices sorgusunu gösteriyor: yoğun bir getirici, car prices hakkındaki cümleyi yeşil bir onay işaretiyle eşleştirirken, seyrek bir getirici onu kırmızı bir çarpıyla kaçırıyor, çünkü automobile kelimesi hiç geçmiyor. 'sparse wins' etiketli sağ panel, error E-4042 sorgusunu gösteriyor: seyrek bir getirici tam hata kodu parçasını yeşil bir onay işaretiyle eşleştirirken, yoğun bir getirici kırmızı bir çarpıyla genel bir sorun giderme metni döndürüyor, çünkü kod yuvarlanıp kayboluyor." class="w-full rounded-lg" />
+</Diagram>
+
+İki yöntem zıt yönlerde başarısız olduğunda, yapılacak hamle açık: aralarında seçim yapmayı bırak ve onları birleştir.
+
+## Hibrit arama
+
+**Hibrit arama (hybrid search)**, aynı sorgu üzerinde iki getiriciyi de çalıştırır ve sonuçlarını tek bir sıralı listede birleştirir; amaç, yoğun getirmenin anlamsal recall'unu ve seyrek getirmenin sözcüksel kesinliğini bir arada tutmaktır. Asıl soru *nasıl* birleştireceğin ve iki yaygın strateji var.
+
+### Puan birleştirme (ağırlıklı toplam)
+
+Doğrudan yaklaşım: her getiricinin puanlarını al, parça başına tek bir sayıya birleştir ve yeniden sırala. Genelde **alpha** denen bir kadranla yönetilen dışbükey bir birleşim olan ağırlıklı toplamı kullanıyoruz:
+
+```text
+combined = alpha * dense_score + (1 - alpha) * sparse_score
+```
+
+Alpha ikisi arasında ödünleşim yapar: onu 1'e doğru it, anlama yaslanırsın; 0'a doğru it, anahtar kelimelere yaslanırsın. 0.5 civarında bir değer farkı ortadan böler.
+
+Atlayamayacağın bir tuzak var: **yoğun ve seyrek puanlar tamamen farklı ölçeklerde yaşar.** Kosinüs benzerlikleri 0 ile 1 arasında düzgün bir aralıkta durur, oysa BM25 puanları sınırsızdır ve iki haneli sayılara çıkabilir. Onları ham haliyle toplarsan BM25, kosinüsü basitçe boğar; alpha kadranı anlamsızlaşır. Bu yüzden herhangi bir ağırlıklı toplamdan önce her puan listesini ortak bir aralığa (genelde 0'dan 1'e min-max ölçekleme) **normalize** etmelisin. Normalizasyon burada isteğe bağlı bir cila değil; birleşimi dürüst yapan şey bu.
+
+### Reciprocal Rank Fusion (RRF)
+
+İkinci strateji, ham puanları tamamen bir kenara atıp bunun yerine **sıraya (rank)** göre birleştirerek ölçek sorununu tamamen atlatır. **Reciprocal Rank Fusion (RRF)**, her parçaya her listedeki *konumuna* göre puan verir: 1. sırada olan bir parça `1 / (k + 1)` kazanır, 2. sırada olan `1 / (k + 2)` kazanır, ve böyle devam eder; burada `k` küçük bir sabittir (60 yaygın varsayılan değerdir). Bir parçanın iki listedeki puanlarını topla ve toplama göre yeniden sırala.
+
+Sezgi şu: listelerden *herhangi birinin* tepesine yakın çıkmak çok değerlidir, *ikisinin de* tepesine yakın çıkmak daha da değerlidir; tam puan büyüklükleri hiçbir zaman resme girmez. Sadece konumları karşılaştırdığı için, RRF ağırlıklı toplamı rahatsız eden normalizasyon baş ağrısına karşı bağışıktır. Bu sağlamlık, artı tek ve yumuşak bir parametreye sahip olması, RRF'nin bu kadar popüler bir varsayılan olmasının ve birçok vektör veritabanına yerleşik birleştirme yöntemi olmasının sebebi.
+
+### Hangisine uzanmalısın?
+
+Bunlardan birini kazanan ilan etmek cazip, ama farklı sorulara cevap veriyorlar ve dürüst çerçeve *varsayılan* ile *tavan* arasındaki fark.
+
+**RRF daha iyi bir varsayılan.** Ayar gerektirmez, uyuşmayan puan ölçekleriyle bozulamaz ve onu bağlar bağlamaz makul davranır. Ona iki sıralı liste verirsin ve öylece çalışır; bu da tam olarak, etiketli bir geliştirme kümen ya da iki getiricinin puanlarının nasıl dağıldığına dair bir fikrin olmadan önce istediğin şey. Çoğu ekip burada başlamalı ve belki hiç ayrılmaya ihtiyaç duymaz.
+
+**Ağırlıklı toplamın tavanı daha yüksek, ama sadece onu hak edersen.** Maliyet gerçek: dürüstçe normalize etmen gerekiyor ve alpha'yı, ilgililiği bilinen parçalara sahip bir sorgu geliştirme kümesine karşı ayarlaman gerekiyor. O maliyeti ödedikten sonra, ağırlıklı toplam RRF'yi geçebilir, çünkü RRF'nin bilerek attığı bilgiyi kullanır. RRF sadece bir parçanın ikinci sırada olduğunu bilir; ağırlıklı toplam ise onun 0.91 puan aldığını, bir sonraki parçanın 0.40 aldığını, aradaki farkın devasa olduğunu, bu eşleşmenin marjinal değil belirleyici olduğunu bilir. Puanların *kalibre* olduğunda (0.9'luk bir kosinüsün güvenilir biçimde 0.6'dan daha fazlasını ifade ettiğinde ve BM25 puanların sorgular arasında istikrarlı olduğunda), bu büyüklük bilgisi bir sinyaldir ve ayarlanmış bir alpha bundan yararlanır. Madalyonun öbür yüzü başarısızlık biçimi: kötü normalize edilmiş bir ağırlıklı toplamda, sorgu başına tek bir aykırı puan her şeye baskın çıkabilir, oysa RRF bunu umursamaz.
+
+Yani pratik yol önce RRF, sonra da karşısında ayar yapmaya değer bir değerlendirme kümen ve fazladan tavanın ayar yükünü hak ettiğine dair kanıtın olduğunda ağırlıklı toplam. Tavana ancak gerçekten ulaşıp ulaşmadığını ölçebildiğinde uzan.
+
+Her iki durumda da genelde kazanan hibrit oluyor. Anlamsal recall ve sözcüksel kesinliği tek bir listede topluyor ve sorgu türleri arasında daha sağlam: hem o dağınık kavramsal soru hem de "şu tam kodu bana ver" sorusu iyi cevaplanıyor; sistem birinde harika, diğerinde çaresiz olmak yerine.
+
+Aşağıdaki figür bunu somutlaştırıyor. Bu bölümün merkez parçası, bir dakikanı ayır.
+
+<Diagram number={2} caption="Aynı sorgu üç farklı şekilde sıralanıyor. Yoğun getirmenin 5. sıraya gömdüğü tam eşleşme parçasını seyrek getirme birinci sıraya koyuyor, ve birleştirme onu en üst sonuçlara kurtarıyor. Yoğun ile seyreği canlı olarak yeniden ağırlıklandırmak için alpha kadranını sürükle, ya da puan yerine sıraya göre birleştirmek için RRF'ye geç.">
+  <IframeFigure
+    src="/essays/retrieval-deep-dive/part7-hybrid-search.html"
+    title="İnteraktif hibrit arama: sabit bir sorgu ile üç paralel sıralı liste; anlama göre sıralanan yoğun, anahtar kelime örtüşmesine göre sıralanan seyrek, ve yoğun ile seyreği ödünleştiren bir alpha kaydırıcısını sürüklerken canlı olarak yeniden sıralanan birleştirilmiş bir liste; ağırlıklı toplam ile reciprocal rank fusion birleştirmesi arasında bir geçiş anahtarı var ve yoğun getirmenin kaçırdığı tam eşleşme parçasının birleştirmede yükseldiğini gösteriyor"
+    height={720}
+  />
+</Diagram>
+
+Ne olduğuna dikkat et. Yoğun listede, `E-4042` parçası dibe yakın bir yerde sürünüyor. Seyrek listede birinci. Birleştirilmiş listede en üst sonuçlara tırmanıyor, kurtarılmış; ve alpha'yı seyrek tarafa doğru kaydırdıkça daha da yükseliyor. İşte hibrit arama, tam olarak saf uygulamamızın başarısız olduğu sorguda kendini kanıtlıyor.
+
+{/* From experience: swap in your own first-person anecdote here, e.g. the week a class of "users searching by exact order ID / SKU / error code" kept failing in production, you assumed the embedding model or chunking was at fault, and adding BM25 + RRF fixed the entire category overnight. Keep the blockquote below or replace it. */}
+
+> 💡 **Deneyimden**
+>
+> Hibrit aramanın beni ilk kurtardığında, iki gün boyunca gömme modelini suçlamıştım. Kullanıcı sorgularının bütün bir sınıfı, içinde tam bir sipariş numarası ya da parça numarası olanlar, mantıklı görünen ama yanlış parçalar döndürmeye devam ediyordu ve ben, sorunun yukarıda bir yerde olduğuna ikna olmuş halde daha gösterişli gömme modelleri ve daha ince parçalama arasında dönüp duruyordum. Sorun orada değildi. Sorguların hepsinin ortak bir özelliği vardı: anlamsal aramanın unutulmaya yuvarladığı nadir, harfi harfine bir token'a dayanıyorlardı. Var olan hatta bir BM25 getirici eklemek ve RRF ile kaynaştırmak, bütün kategoriyi bir öğleden sonrada düzeltti. Ders akılda kaldı: getirme özellikle kodlarda, isimlerde ve ID'lerde başarısız olduğunda, daha büyük bir modele değil, anahtar kelimelere uzan.
+
+## Diller arası getirme
+
+Şimdiye kadar sorgu ile corpus'un aynı dili konuştuğunu varsaydık. Birçok gerçek corpus böyle değil: Alman bir kullanıcı İngilizce bir bilgi tabanına soru soruyor, ya da bir destek arşivi Türkçe, İngilizce ve hiçbir dile ait olmayan bir avuç ürün adını karıştırıyor. Bu, her iki getirici için de hesabı değiştirir ve tökezlemeden önce başarısızlık biçimlerini bilmekte fayda var.
+
+Yoğun getirmenin burada gerçek bir avantajı var, *eğer* gömme modeli çok dilli olacak şekilde eğitildiyse. Diller arasında hizalanmış metin üzerinde eğitilmiş bir model, *"car"*, *"Auto"* ve *"araba"*'yı aynı uzayda birbirine yakın yerleştirir, böylece Alman bir sorgu hiçbir çeviri adımı olmadan İngilizce bir parçayı bulabilir. Bu, diller arası getirmenin en temiz hali ve corpus'un karışık olduğu durumda çok dilli bir gömme modelini tercih etmek için gerçek bir sebep. Gömme modelin tek dilliyse yaygın alternatif, **önce sorguyu çevir sonra getir (translate-query-then-retrieve)**: sorguyu makine çevirisiyle corpus'un diline çevir, sonra sıradan aynı-dilde getirmeyi çalıştır. Basit ve artık çok iyi olan makine çevirisine yaslanıyor, ama her çeviri hatasını devralıyor ve tüm yükü tek, kırılgan bir adıma yığıyor.
+
+Sık tekrarladığı için adlandırmaya değer iki başarısızlık biçimi var.
+
+- **Harf çevirisi (transliteration) ve çeviriden sağ çıkan harfi harfine token'lar.** Bu bölümün başındaki tam-token sorunu diller arasında daha da kötüleşir, çünkü korunmasına en çok ihtiyaç duyduğun token, çevirinin en çok bozacağı token'dır. Bir ürün adı, bir kişinin adı ya da bir yer adı çoğunlukla çevrilmek yerine *harf çevirisine uğrar* (başka bir alfabeye ya da yazımına aktarılır), bu yüzden `İstanbul`, `Istanbul` olur, bir isim aksan işaretleri kazanır ya da kaybeder, ve seyrek getiricinin tam eşleşmesi sessizce bozulur. Bu, ekstra bir düşmanla birlikte yine tokenizasyon dersi. Kodlar ve tanımlayıcılar çevrilmeden geçmeli; hattının onları "yardımseverce" yeniden yazmadığından emin ol.
+- **Diller arası kalibrasyon.** Puanlar, varsaydığın gibi diller arasında karşılaştırılabilir değildir. Çevrilmiş bir sorguya karşı çalıştırılan tek dilli bir BM25, aynı sorgunun kendi ana dilindeki halinden farklı bir zeminde puanlar üretir ve çok dilli bir gömme modeli genelde bir dil içinde, dil çiftleri arasında olduğundan daha iyi kalibre olur (0.7'lik bir kosinüs İngilizce'den İngilizce'ye bir şey ifade ederken, Almanca'dan İngilizce'ye başka bir şey ifade edebilir). Bu, daha önceki ağırlıklı-toplam füzyonunu bozar, çünkü alpha bir zeminde ayarlanmış ve başka bir zeminde uygulanıyordur. Büyüklükleri tamamen görmezden gelen RRF burada daha hoşgörülü; bu da onu makul bir diller arası varsayılan yapan bir sebep daha.
+
+Kısa versiyonu: corpus'un gerçekten karışıksa çok dilli bir gömme modelini tercih et, makine çevirisini bilinen sızıntıları olan bir yedek çözüm olarak gör, tanımlayıcılarını harf çevirisine karşı koru ve puanlar karşılaştırılabilir olmaktan çıktığında sıraya dayalı birleştirmeye yaslan.
+
+## Top-k artık gerçek bir kadran
+
+Getirdiğimiz ve üretici modele geçtiğimiz parça sayısı olan **top-k**'yi sabit bir değer gibi ele alıyorduk. Değil. Bir kadran ve getirme artık daha iyi olduğuna göre, onu nereye ayarladığın gerçekten önemli.
+
+Ödünleşim her iki yönde de dürüst.
+
+**k'yi çok küçük** ayarla, cevabı tutan parçayı kaçırma riskin var. Bu tam olarak açılıştaki başarısızlığımız: doğru makale beşinci sıradaydı, ama eşik üçte olduğu için ağın dışında kaldı ve üretici model onu hiç görmedi. Düşük recall, ve kanıttan mahrum bırakıldığı için sadece tahmin edebilen bir üretici model.
+
+**k'yi çok büyük** ayarla, farklı bir sorun çıkar. Prompt, marjinal ölçüde ilgili parçalarla dolar ve bu gürültü sana üç şekilde mal olur: bağlam penceresi bütçesini yakar (1. bölümdeki duvar hâlâ gerçek), her çağrı başına daha fazla paraya mal olur, ve en az sezgisel olanı, cevabı gerçekten *daha kötü* yapabilir. Uzun, dolgulu bağlamlar, **lost in the middle (ortada kaybolma)** denen, iyi belgelenmiş bir etkiyi tetikler: modeller, uzun bir bağlamın başında ve sonundaki bilgiyi, ortasına gömülü bilgiden daha güvenilir kullanma eğilimindedir; [Liu ve ark. (2023)](https://arxiv.org/abs/2307.03172) tarafından ölçülen U şeklindeki doğruluk eğrisi. Uzun bir yığının ortasında mahsur kalmış ilgili bir parça, getirilmiş olmasına rağmen fiilen görmezden gelinebilir. (Önde gelen açıklama, transformer'ların konumu kodlama biçimindeki bir konumsal önyargı; daha yeni uzun-bağlam modelleri bunu hafifletiyor ama tamamen ortadan kaldırmıyor.) Daha fazla bağlam bedava değil ve bir noktadan sonra yardımcı bile olmuyor.
+
+<Diagram number={3} caption="Tek bir sıralı liste üzerinde top-k kadranı. Çok küçük, cevap parçasını tamamen düşürür (düşük recall); çok büyük, onu gürültünün arasına gömer, modelin en az güvenilir kullandığı ortada mahsur bırakır; tatlı nokta ise onu az gürültüyle tepeye yakın tutar.">
+  <img src="/essays/retrieval-deep-dive/part7-topk-tradeoff.svg" alt="Aynı, on iki parçalık sıralı liste üzerinde üç panel; cevap parçası yeşille çizilmiş. k eşittir bir ile 'çok küçük' etiketli ilk panel, sadece en üstteki parçayı tutuyor ve dördüncü sıradaki cevabı düşürüyor, 'answer never retrieved' diye etiketlenmiş. k eşittir on iki ile 'çok büyük' etiketli ikinci panel, tüm parçaları tutuyor, dikkatin gevşediğini göstermek için ortadakiler soluklaştırılmış, ve altıncı sırada gömülü cevap 'lost in the middle' durumunda. k eşittir beş ile 'tatlı nokta' etiketli üçüncü panel, cevabı da içeren en üstteki beşi tutuyor ve gürültülü kuyruğu kırpıyor." class="w-full rounded-lg" />
+</Diagram>
+
+Peki çözüm ne? Hem cevabı yakalayacak kadar geniş hem de temiz kalacak kadar sıkı, tek ve mükemmel bir k seçmek zorunda değilsin, çünkü genelde böyle bir değer yok. Bir sonraki bölümün etrafında kurulduğu pratik model, işi ikiye bölmek: **önce geniş bir ağ at, sonra en iyi birkaçına kırp.** Cömertçe getir (büyük bir k, böylece cevap neredeyse kesinlikle aday havuzunda olur), sonra o adayları yeniden sıralayan ve prompt için sadece en iyi bir avucu tutan ikinci, daha keskin bir geçiş uygula. O ikinci geçiş **yeniden sıralama (reranking)**'dır ve 8. bölümün kalbi budur. Şimdilik çıkarım şu: top-k, gerçek bir ödünleşimi olan gerçek bir karar ve çıkış yolu, sonunda kullanacağından daha fazlasını getirmek.
+
+## Uygulamayı genişlet: seyreği ekle ve kaynaştır
+
+Odaklı bir kod eklemesiyle döngüyü kapatayım. Bu, 6. bölümdeki uygulamanın bir yeniden inşası değil, bir uzantısı: yoğun getiricisini tamamen olduğu gibi tutuyoruz ve yanına bir BM25 getirici ile bir füzyon adımı ekliyoruz. Çalıştırılabilir tam dosya [`rag_hybrid.py`](/essays/retrieval-deep-dive/rag_hybrid.py) adresinde; işte önemli olan parçalar.
+
+Her parçayı sorguya karşı puanlayan kompakt bir BM25. Yorumlar, daha önceki iki BM25 fikrini işaretliyor: doygunluk ve uzunluk normalizasyonu:
+
+```python
+import math, re
+from collections import Counter
+
+def tokenize(text):
+    # keep hyphenated codes like "e-4042" intact as one token
+    return re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)*", text.lower())
+
+class BM25:
+    def __init__(self, corpus, k1=1.5, b=0.75):
+        self.k1, self.b = k1, b                  # k1: saturation, b: length norm
+        self.docs = [tokenize(d) for d in corpus]
+        self.avgdl = sum(len(d) for d in self.docs) / len(self.docs)
+        df = Counter(t for d in self.docs for t in set(d))
+        # IDF: rare terms (small df) weigh far more than common ones
+        self.idf = {t: math.log(1 + (len(self.docs) - n + 0.5) / (n + 0.5))
+                    for t, n in df.items()}
+
+    def scores(self, query):
+        q = tokenize(query)
+        out = []
+        for doc in self.docs:
+            tf, s = Counter(doc), 0.0
+            for term in q:
+                if term not in tf:
+                    continue
+                freq = tf[term]
+                # term frequency that saturates, then length-normalized
+                s += self.idf.get(term, 0.0) * freq * (self.k1 + 1) / (
+                    freq + self.k1 * (1 - self.b + self.b * len(doc) / self.avgdl))
+            out.append(s)
+        return out
+```
+
+İki füzyon fonksiyonu. Ağırlıklı toplam önce normalizasyon gerektirir; RRF gerektirmez:
+
+```python
+def min_max(scores):
+    lo, hi = min(scores), max(scores)
+    if hi == lo:
+        return [0.0 for _ in scores]
+    return [(s - lo) / (hi - lo) for s in scores]   # onto 0..1 so scales match
+
+def weighted_fusion(dense, sparse, alpha=0.5):
+    d, s = min_max(dense), min_max(sparse)          # MUST normalize before summing
+    return [alpha * d[i] + (1 - alpha) * s[i] for i in range(len(d))]
+
+def rrf(*rankings, k=60):
+    # each ranking is a list of doc indices, best first; merge by rank, not score
+    fused = Counter()
+    for ranking in rankings:
+        for rank, doc_id in enumerate(ranking, start=1):
+            fused[doc_id] += 1.0 / (k + rank)
+    return fused
+```
+
+Ve çalıştırma. Yoğun puanlar için 6. bölümün `dense_search`'ünü yeniden kullanıyoruz, seyrek puanlar için BM25 ekliyoruz ve kaynaştırıyoruz:
+
+```python
+dense  = dense_search(QUERY, CORPUS)   # from Part 6: cosine over embeddings
+sparse = BM25(CORPUS).scores(QUERY)    # new: keyword overlap
+
+fused  = rrf(order(dense), order(sparse))   # order() = indices sorted best-first
+```
+
+Bunu problem sorgumuz üzerinde çalıştırmak, kurtarmayı açıkça yazdırır:
+
+```text
+Query: 'how do I fix error E-4042 at checkout?'
+
+DENSE only (meaning):
+  1. Troubleshooting checkout and payment failures...
+  2. Resolving login and authentication issues...
+  3. The checkout page shows a generic error after Pay...
+
+SPARSE only (BM25 keywords):
+  1. Error E-4042: the authentication token has expired...   <- found it
+  2. The checkout page shows a generic error after Pay...
+  3. Troubleshooting checkout and payment failures...
+
+HYBRID via RRF:
+  1. Troubleshooting checkout and payment failures...
+  2. The checkout page shows a generic error after Pay...
+  3. Error E-4042: the authentication token has expired...   <- rescued
+```
+
+Yoğun getirme tek başına `E-4042` parçasını hiçbir zaman ilk üçe çıkarmaz (beşinci sırada durur, kod yuvarlanıp kaybolmuştur). Seyrek getirme onu birinci sıraya koyar. Kaynaştırılmış liste onu ilk üçe geri çeker, ve `weighted_fusion` içinde alpha'yı seyrek tarafa itmek onu daha da yükseltir. Bu, bu bölümün açılışındaki tam başarısızlık; zaten sahip olduğumuz uygulamaya belki kırk satır eklenerek düzeltilmiş.
+
+Bir güncellik notu: BM25'in de yoğun gömmenin de mükemmel hazır kütüphaneleri var (`rank_bm25`, `sentence-transformers`, ve çoğu vektör veritabanına yerleşik hibrit mod), ve API'leri hızlı değişiyor. Yukarıdaki elle yazılmış BM25, mekanizmayı anlamak için. Yayına almadan önce, bakımı yapılan bir kütüphaneyi tercih et ve güncel kullanımını doğrula.
+
+> ⚠️ **Yaygın tuzaklar**
+>
+> - **Tokenizer kodlarını parçalıyor.** "BM25 tam orada duran bir kodu bulamıyor" şikayetinin en yaygın tek sebebi bu. Varsayılan bir analizör `E-4042`'yi tire üzerinden `e` ve `4042`'ye böler, parçaları gövdeler ya da normalize eder, ve güvendiğin nadir, belirleyici token sıradan bir toza dönüşür. Sorguyu ve belgeleri aynı şekilde tokenize et, ve tanımlayıcılar için tam/anahtar kelime bir alan yapılandır. Doğrula: bilinen bir kod için token listesini yazdır ve bütün kaldığını onayla.
+> - **Sorgu başına min-max normalizasyonu kırılgan.** 0..1'e min-max ölçekleme *sorgu başına* hesaplanır, bu yüzden tek bir aykırı puan tüm aralığı gerer ya da sıkıştırır, ve rastgele fırlamış tek bir BM25 puanı döndüren bir sorgu, diğer her parçayı sıfıra doğru ezebilir. Ortalama görünen sorgularda ayarladığın alpha, tuhaf olanda yanlış davranır. RRF, büyüklükleri görmezden gelerek bunu tamamen atlatır; ağırlıklı toplam kullanıyorsan, sadece temiz sorgularında değil, tuhaf sorgularında da sağlık kontrolü yap.
+> - **Kaynaştırmadan önce dedup yapmayı unutmak.** Yoğun ve seyrek getirme örtüşen aday kümeleri döndürür, ve aynı parça iki farklı id altında görünüyorsa (ya da listeleri kopyaları birleştirmeden birleştiriyorsan), füzyon onu iki kez sayar ve neredeyse aynı bir kopyayı tepeye yüzdürür. RRF ya da ağırlıklı toplam çalışmadan *önce*, adayların birleşimini parça başına tek bir girdiye indirge, yoksa birleştirme sessizce fazlalığı ödüllendirir.
+
+## Kendin dene
+
+İnteraktif figür ve [`rag_hybrid.py`](/essays/retrieval-deep-dive/rag_hybrid.py), didiklenmek için yapıldı. Üç deney, bölümün iddialarını birkaç dakikada somutlaştırıyor.
+
+1. **RRF'nin `k`'sını 1'den 100'e tara.** `rrf` içinde, `k` sabiti bir üst sıranın ne kadar baskın olduğunu söndürür. `rrf(dense_rank, sparse_rank, k=1)`'i, sonra `k=100`'ü çağır ve her seferinde yeniden sırala. Küçücük bir `k`'da, her iki listedeki 1. sıra ezici biçimde belirleyicidir (`1/2` ile `1/3` arasındaki fark büyüktür), bu yüzden seyrek getirmenin birinci sıraya koyduğu `E-4042` parçası birleştirmede 2. sıraya sıçrar; büyük bir `k`'da tüm sıralar eşit ağırlığa doğru düzleşir ve iki liste daha yumuşak karışır, onu 3. sırada oturtur. Makalenin 60'lık varsayılanı, bilinçli olarak o sakin üst bölgede oturuyor. Kadranı çevirdikçe kod parçasının 2. ve 3. sıra arasında kaydığını izle, ve tüm etkinin ne kadar *yumuşak* olduğuna dikkat et: `k` karışımı şekillendirir, sonucu tersine çevirmez.
+2. **`E-4042`'nin 1. sıraya ulaştığı yeri bulmak için alpha'yı çevir.** `a`, 1.0'dan 0.0'a doğru adımlanırken `weighted_fusion(dense, sparse, alpha=a)`'yı çağır ve her seferinde yeniden sırala. `alpha=1.0`'da saf yoğun getirmen var ve kod parçası 5. sırada sürünüyor; seyreğe doğru yaslandıkça tırmanıyor, alpha yaklaşık 0.2'ye düştüğünde 1. sıraya ulaşıyor. Tam geçiş noktasını kaydet. O tek sayı, tüm yoğun-karşı-seyrek ödünleşiminin tek bir sorguda görünür kılınmış hali.
+3. **`tokenize`'ı boz ve kodun parçalandığını izle.** `tokenize` içindeki regex'i geçici olarak `re.findall(r"[a-z0-9]+", text.lower())` yap (`(?:-[a-z0-9]+)*` kısmını düşürerek), bu da tıpkı saf bir analizör gibi tirelerde böler. `tokenize("Error E-4042")`'yi öncesinde ve sonrasında yazdır: `["error", "e-4042"]`'nin `["error", "e", "4042"]`'ye dönüştüğünü göreceksin. Demoyu yeniden çalıştır ve nadir token yaygın `4042`'nin içine karışıp eridikçe `E-4042` için seyrek sıralamanın bozulduğunu izle. Bu, tokenizasyon bölümündeki üretim başarısızlığının, bir regex'ten on beş karakter silinerek yeniden üretilmiş hali.
+
+## Özet ve sırada ne var
+
+7. bölüme, çalışan ama saf bir uygulamayla başladık: saf yoğun getirme ve sabit bir top-k, cevabı tam orada duran bir soruda başarısız oluyordu. Artık nedenini anlıyoruz. Yoğun getirme anlamda akıcı ama tam token'ları bulanıklaştırıyor; seyrek getirme tam token'larda kesin ama anlama karşı sağır; ve zıt yönlerde başarısız oldukları için hibrit arama, ağırlıklı toplamla ya da Reciprocal Rank Fusion ile onları kaynaştırarak ikisinin de en iyisini alıyor. Ayrıca top-k'yi gizli bir sabitten, bir yanında düşük recall diğer yanında gürültü ve lost-in-the-middle olan bilinçli bir kadrana terfi ettirdik.
+
+Ama mükemmel bir getirme bile sana sadece *kabaca* doğru bir sıralı liste verir. Soru için gerçekten en iyi parça, cömertçe getirdiğin adayların hâlâ beşinci sırasında oturuyor olabilir, sadece ilgili *görünen* parçalardan daha düşük puan alarak. 8. bölüm, o listeden son kalite kırıntısını da sıkıp çıkarmakla ilgili: **çapraz kodlayıcılarla (cross-encoders) yeniden sıralama** (sorgu ve parçayı birlikte okuyarak en üst adayları yeniden puanlayan, daha yavaş ve daha keskin bir model), artı metadata filtreleme ve sorgu dönüşümleri. Biz burada geniş ağı attık; sırada onu ustaca kırpıyoruz.
+
+## Özet çıkarımlar
+
+- **Yoğun (anlamsal) getirme**, anlama göre sıralar ve eş anlamlılarda ve başka sözcüklerle ifadede üstündür, ama tam token'ları (kodlar, ID'ler, isimler, nadir kısaltmalar) bulanıklaştırır: gömü, ihtiyacın olan tam anahtar kelimeyi yuvarlar.
+- **Seyrek (anahtar kelime) getirme**, harfi harfine terim örtüşmesine göre puanlar. **TF-IDF**, terimleri burada-sıklık çarpı her-yerde-nadirlik ile ağırlıklandırır; **BM25** bunu terim frekansı doygunluğu ve belge uzunluğu normalizasyonuyla rafine eder ve anahtar kelime motorlarında güvenilir varsayılandır. Tam eşleşmeleri tam isabetle yakalar ama **sözcük dağarcığı uyuşmazlığını** (car'a karşı automobile) köprüleyemez.
+- İkisi **zıt yönlerde** başarısız olur, ki onları birleştirmenin işe yaramasının tam sebebi de bu.
+- **Hibrit arama** ikisini de birleştirir. **Ağırlıklı toplam** önce **puan normalizasyonu** gerektirir (ölçekler farklıdır) ve ikisi arasında ödünleşim için bir **alpha**; **Reciprocal Rank Fusion (RRF)** sıraya göre birleştirir, normalizasyonu atlatır, bu da onu sağlam bir varsayılan yapar.
+- **Top-k** gerçek bir kadrandır: çok küçük olursa cevabı kaçırır (düşük recall, aç bırakılmış üretici model); çok büyük olursa gürültü ekler, bütçeyi harcar ve **lost in the middle**'ı tetikler.
+- Top-k gerilimini çözen kalıp, cömertçe getirmek, sonra en iyi birkaçına **yeniden sıralamaktır (rerank)**; bu da 8. bölüm.
+
+## Referanslar
+
+- Robertson, S., & Zaragoza, H. (2009). *The Probabilistic Relevance Framework: BM25 and Beyond.* Foundations and Trends in Information Retrieval, 3(4), 333-389. [https://doi.org/10.1561/1500000019](https://doi.org/10.1561/1500000019): BM25'in kesin işlenişi; terim frekansı doygunluğunu ve belge uzunluğu normalizasyonunu olasılıksal ilgililik modelinden türetiyor.
+- Cormack, G. V., Clarke, C. L. A., & Buettcher, S. (2009). *Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods.* SIGIR '09, 758-759. [https://doi.org/10.1145/1571941.1572114](https://doi.org/10.1145/1571941.1572114): RRF'yi tanıtan makale; pilot çalışması k=60'ın neredeyse optimal olduğunu buldu ve bu seçimin "kritik olmadığını" belirtti, 60'ın yaygın varsayılan olmasının sebebi de bu.
+- Liu, N. F., Lin, K., Hewitt, J., Paranjape, A., Bevilacqua, M., Petroni, F., & Liang, P. (2023). *Lost in the Middle: How Language Models Use Long Contexts.* [https://arxiv.org/abs/2307.03172](https://arxiv.org/abs/2307.03172): top-k gürültü başarısızlık biçimi için referans gösterilen ampirik U şeklindeki doğruluk eğrisi.
+
+## Sözlük
+
+- **Yoğun getirme (dense retrieval)**: parçaları, yoğun sorgu ve parça gömüleri arasındaki kosinüs benzerliğine göre sıralamak; anlamda güçlü, nadir tam token'larda zayıf.
+- **Seyrek getirme (sparse retrieval)**: parçaları harfi harfine terimlerin örtüşmesine göre sıralamak; vektör tüm sözlüğü kapsar ve neredeyse tamamen sıfırdır, bu yüzden "seyrek."
+- **TF-IDF**: terim frekansı çarpı ters belge frekansı; bir parçada sık ama koleksiyon genelinde nadir olan terimleri kayıran klasik bir seyrek ağırlıklandırma.
+- **Terim frekansı (TF)**: bir terimin belirli bir parçada ne sıklıkla geçtiği; daha fazla geçiş, daha yüksek ağırlık.
+- **Ters belge frekansı (IDF)**: bir terimin tüm parçalar genelinde ne kadar nadir olduğu; yaygın kelimeler ezilir, nadir kelimeler yükseltilir.
+- **BM25**: çoğu anahtar kelime motorunda kullanılan, TF-IDF'in sağlam rafine hali; terim frekansı doygunluğu (azalan getiriler) ve belge uzunluğu normalizasyonu ekler.
+- **Sözcük dağarcığı uyuşmazlığı (vocabulary mismatch)**: sorgu ve parçanın aynı fikri farklı kelimelerle ifade etmesi, bu yüzden harfi harfine bir anahtar kelime yönteminin hiçbir örtüşme görmemesi; seyrek getirmenin kaçamadığı zayıflık.
+- **Hibrit arama (hybrid search)**: yoğun ve seyrek getirmeyi birlikte çalıştırıp sonuçlarını tek bir sıralı listede birleştirmek.
+- **Puan normalizasyonu (score normalization)**: her getiricinin puanlarını ortak bir aralığa (genelde 0'dan 1'e) yeniden ölçeklemek, böylece bir ağırlıklı toplam anlamlı olur; yoğun ve seyrek puanlar farklı ölçeklerde yaşadığı için zorunludur.
+- **Alpha (ağırlıklı birleşim)**: bir ağırlıklı toplamda yoğunu seyreğe karşı ödünleştiren kadran (1 tamamen yoğun, 0 tamamen seyrek).
+- **Reciprocal Rank Fusion (RRF)**: ham puan yerine sıraya göre birleştirmek; her parça her listeden 1/(k + sıra) kazanır. Normalizasyon gerektirmediği için sağlam.
+- **Top-k**: tutulan ve üretici modele geçilen getirilmiş parça sayısı; recall ile gürültü arasında bir ödünleşim.
+- **Lost in the middle (ortada kaybolma)**: dil modellerinin, uzun bir bağlamın ortasındaki bilgiyi başında ya da sonundaki bilgiden daha az güvenilir kullanma eğilimi (Liu ve ark., 2023); bu yüzden orada gömülü ilgili bir parça fiilen görmezden gelinebilir.
+
+---
+
+**Sırada, 8. Bölüm: Retrieval'ı Daha Akıllı Hale Getirmek.** Bu bölümde geniş bir ağ attık; sırada onu çapraz kodlayıcı yeniden sıralaması, metadata filtreleme ve sorgu dönüşümleriyle kırpıyoruz, böylece en iyi parça sadece getirilmekle kalmaz, ilk sıraya da yerleşir.

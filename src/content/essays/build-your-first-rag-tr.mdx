@@ -1,0 +1,396 @@
+---
+title: "İlk RAG'ini İnşa Et"
+description: "Beş bölüm teori, şimdi çalışan tek bir program. Retrieval-Augmented Generation üzerine sıfırdan bir serinin 6. bölümü: Python'da, mekaniği gizleyen hiçbir framework olmadan, elle eksiksiz bir 'belgelerinle sohbet' uygulaması inşa et. Yerel bir modelle göm, vektörleri düz NumPy'da sakla, kosinüs benzerliğiyle skorla, top-k getir, prompt'u dayanakla ve üret; sonra yerine gerçek bir vektör veritabanı tak. Her satır, zaten öğrendiğin bir kavrama bağlanıyor."
+date: 2026-06-12
+tags: ["RAG", "Python", "Embeddings", "Vector Search", "LLM", "Tutorial", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-06-build-your-first-rag"
+ogImage: "/og/build-your-first-rag.png"
+lang: "tr"
+translationSlug: "build-your-first-rag"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+İşte ödül anı. Beş bölüm boyunca anlayış inşa ettik: RAG neden var (1. Bölüm), gömüler (embeddings) nedir (2. Bölüm), kosinüs benzerliği parçaları nasıl sıralar (3. Bölüm), vektör veritabanları ölçekte nasıl hızlı getirir (4. Bölüm) ve belgeler iyi parçalara nasıl bölünür (5. Bölüm). Şimdi hepsini tek bir çalışan programa dönüştürüyoruz: bir dosyaya yapıştırıp bugün çalıştırabileceğin küçük bir "belgelerinle sohbet" uygulaması. Onu elle, ilkel yapı taşlarından inşa ediyoruz; böylece mekaniği gizlemesi için bir framework'e güvenmek yerine her satırı anlıyorsun. Sonunda çalışan bir uygulaman olacak ve her fonksiyonu işaret edip hayata geçirdiği kavramın adını söyleyebileceksin.
+
+## Ön koşullar
+
+1'den 5'e kadar olan bölümler; özellikle [Gömüler (Embeddings)](/essays/embeddings-tr) (2. Bölüm), [Benzerliği Ölçmek](/essays/measuring-similarity-tr) (3. Bölüm) ve [Belgeler ve Parçalama](/essays/documents-and-chunking-tr) (5. Bölüm). Temel Python (fonksiyonlar, listeler, sözlükler) ve `pip install` çalıştırabileceğin bir terminal lazım. Hepsi bu.
+
+## Ödül: beş bölüm tek programa dönüşüyor
+
+Pazarlamanın altında her RAG sistemi aynı kısa döngüdür. Kullanıcının sorusunu al, kendi belgelerinin en ilgili parçalarını (chunk) bul, o parçaları sorunun yanına prompt'a yapıştır ve bir dil modelinin onlardan cevap vermesine izin ver. Getir, zenginleştir, üret. Her parçayı tek tek inceledik; bu bölüm hepsini, baştan sona senin kontrolünde olan tek bir dosyada birbirine bağlıyor. Çekirdek inşada büyük framework'lerden (LangChain, LlamaIndex) bilerek uzak duruyoruz; çünkü tam da beş bölüm boyunca öğrendiğimiz mekaniğin üstünü örtüyorlar. Bunu sonradan sıkıştırmak için gerçekten faydalılar, nerede olduğunu da söyleyeceğim; ama önce bir kez elle inşa etmelisin. Bir daha hiçbir RAG pipeline'ı sana gizemli gelmeyecek.
+
+## Stack ve nedenleri
+
+İşte stack; ilk inşa şeffaf, yerel ve düşük ya da sıfır maliyetli olsun diye seçildi.
+
+- **Python**, çünkü bu ekosistem orada yaşıyor.
+- **Embedding'ler:** yerelde küçük bir model çalıştıran `sentence-transformers`. Ücretsiz, çevrimdışı çalışıyor ve API anahtarı istemiyor; bu da onu öğrenmek için mükemmel yapıyor. Bu, 2. Bölüm'ün gerçeğe dönüşmüş hali.
+- **Vektör deposu:** hayal edilebilecek en şeffaf depoyla başlıyoruz: parçaların bir Python listesi artı vektörlerinin bir NumPy dizisi; kosinüs benzerliğini de kendimiz hesaplıyoruz. Hiçbir şey gizli değil. Bu, 3. Bölüm'ün gerçeğe dönüşmüş hali. Sonra gerçek bir gömülü vektör veritabanına, **Chroma**'ya yükseltiyoruz; sunucusuz, yerelde çalışıyor ve 4. Bölüm'ü pekiştiriyor.
+- **Üretim:** dil modelini tek bir `generate(prompt)` fonksiyonunun arkasına saklıyoruz; böylece sağlayıcı, tek fonksiyonluk bir değişimden ibaret. Bunu yaygın bir barındırılan API ile gösteriyoruz ve sıfır maliyetli, anahtarsız alternatif olarak yerel bir model çalıştırıcısı olan **Ollama**'yı veriyoruz.
+
+Herhangi bir koddan önce dürüst bir uyarı: **LLM SDK söz dizimleri, model adları ve sürümler hızla değişiyor ve benim bir bilgi kesim tarihim var.** Sağlayıcıya özgü satırları bir anlık görüntü olarak gör, tam import ve model adı için güncel dokümanlara bak ve şuna dikkat et: tüm bunları minicik tek bir fonksiyonda tutuyoruz, böylece bir değişiklik tek bir yere dokunuyor.
+
+İhtiyacımız olanları kur:
+
+```bash
+pip install sentence-transformers numpy openai chromadb
+```
+
+Üretim için şunlardan biri lazım: barındırılan sağlayıcın için bir API anahtarı (ortam değişkeni olarak ayarla, asla koda gömme) ya da yerelde kurulu, bir modeli çekilmiş (`ollama pull llama3.1`) [Ollama](https://ollama.com). Embedding modeli ilk çalıştırmada kendini otomatik indiriyor.
+
+## Adım 0: minik bir corpus
+
+Getirmenin (retrieval) çalışıp çalışmadığını elle kontrol edemiyorsan bilemezsin; o yüzden kafanda tutabileceğin kadar küçük bir bilgi tabanıyla başlıyoruz: tek bir online mağazanın politikaları hakkında bir avuç kısa belge. Bu bizim **derlemimiz (corpus)**.
+
+```python
+CORPUS = [
+    "Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.",
+    "To start a return, email support@example.com with your order number. Refunds are processed within five business days of us receiving the item.",
+    "Standard shipping takes 3 to 5 business days. Express shipping arrives the next business day.",
+    "Shipping fees are non-refundable, and items marked final sale cannot be returned or exchanged.",
+    "All electronics include a one-year limited warranty covering manufacturing defects.",
+]
+```
+
+Beş kısa olgu. *"İade süremiz ne kadar?"* diye sorduğumuzda doğru cevabın ilk belgede yaşadığını zaten biliyoruz. Bu da inşa ederken makineye güvenmemizi sağlıyor.
+
+## Adım 1: yükle ve parçala
+
+Gerçek bir sistemde PDF'leri ya da HTML'i yükler ve 5. Bölüm'deki bir chunker ile bölerdin. Bizim belgelerimizin her biri zaten tek bir kısa cümle, yani her belge zaten bir chunk. Yine de onları bir `chunk` adımından geçiriyoruz; çünkü parçalamanın (chunking) ve **üstverinin (metadata)** yeri orası. Ayrıca sonradan kaynak gösterebilelim diye her parçada bir `source` alanı tutuyoruz.
+
+```python
+def chunk(corpus):
+    # Each doc is already chunk-sized; we attach metadata as we go (Part 5).
+    return [{"text": doc, "source": f"doc_{i}"} for i, doc in enumerate(corpus)]
+
+chunks = chunk(CORPUS)
+print(len(chunks), "chunks")
+print(chunks[0])
+```
+
+Çıktı:
+
+```text
+5 chunks
+{'text': 'Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.', 'source': 'doc_0'}
+```
+
+## Adım 2: göm (embed)
+
+Şimdi her parçanın metnini yerel modelle bir vektöre çeviriyoruz. Bu, 2. Bölüm'deki gömme (embedding) adımı: benzer anlamlar yakın noktalara dönüşür.
+
+```python
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer("all-MiniLM-L6-v2")  # small, fast, 384 dimensions
+
+def embed(texts):
+    # normalize_embeddings=True makes every vector length 1, so a dot
+    # product IS cosine similarity later (the trick from Part 3).
+    return model.encode(texts, normalize_embeddings=True)
+
+vectors = embed([c["text"] for c in chunks])
+print(vectors.shape)
+```
+
+Çıktı:
+
+```text
+(5, 384)
+```
+
+Beş parça, 5'e 384'lük bir matrise dönüştü: parça başına bir tane 384 boyutlu vektör. `normalize_embeddings=True`'ya dikkat. 3. Bölüm, kosinüs benzerliğinin birim uzunluktaki vektörlerin nokta çarpımından ibaret olduğunu göstermişti; burada normalize ederek, ileride düz bir nokta çarpımıyla skorlama hakkını kazanıyoruz.
+
+## Adım 3: sakla (store)
+
+"Vektör deposu" kulağa ağır geliyor. Özünde, yan yana tutulan iki şeyden ibaret: parçalar (metin artı metadata) ve vektörlerinin matrisi. Bizimki tamamen program belleğinde yaşıyor: bir **bellek-içi depo (in-memory store)**, en basit tür. İkisi de zaten elimizde.
+
+```python
+# That is the entire store: `chunks` (text + metadata) and `vectors` (the matrix).
+# We keep the text next to the vectors because the vector is only used to FIND
+# a chunk; the text is what we will actually feed the model.
+```
+
+O yorum, 4. Bölüm'ün "bir veritabanı matematikten fazlasıdır" dersinin tamamı: gömü parçayı bulur, ama kullanılan şey saklanan metindir. İkisini bir arada tut.
+
+## Adım 4: getir (retrieve)
+
+İşte kalp burası ve saf 3. Bölüm. Sorguyu (query) *aynı modelle* göm, her parça vektörüne karşı kosinüs benzerliğiyle skorla ve top-k'yı tut.
+
+```python
+import numpy as np
+
+def retrieve(query, k=3):
+    q = embed([query])[0]            # same model as the chunks. This matters.
+    scores = vectors @ q             # dot product = cosine, because all are unit length
+    top = np.argsort(-scores)[:k]    # indices of the k highest scores
+    return [(chunks[i]["text"], float(scores[i])) for i in top]
+
+for text, score in retrieve("What is our refund window?"):
+    print(f"{score:.2f}  {text}")
+```
+
+Çıktı:
+
+```text
+0.61  Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.
+0.34  To start a return, email support@example.com with your order number. Refunds are processed within five business days of us receiving the item.
+0.18  Shipping fees are non-refundable, and items marked final sale cannot be returned or exchanged.
+```
+
+İşte orada: `vectors @ q`, 3. Bölüm'deki kosinüs benzerliği; tüm parçalara karşı tek seferde hesaplanıyor ve `argsort` **top-k**'yı tutuyor. İade belgesi açık ara kazanıyor, tam tahmin ettiğimiz gibi. (Tam skorlar model sürümüyle oynar; önemli olan sıralama, ondalıkların kendisi değil.) Yeni başlayanların en sık düştüğü bug ilk satırda saklı: sorguyu, parçaları gömdüğün *aynı modelle* gömmek zorundasın; yoksa vektörler farklı uzaylarda yaşar ve skorlar anlamsızlaşır.
+
+## Adım 5: zenginleştir (augment)
+
+Getirme doğru parçaları buldu. Şimdi onları sorunun etrafına saran prompt'u kuruyoruz. Bir **prompt şablonu (prompt template)** kullanıyoruz: getirilen bağlam ve kullanıcının sorusu için yuvaları olan sabit bir metin. O bağlam yuvasını getirilen parçalarla doldurmak **bağlam enjeksiyonu (context injection)**; üstüne, modele yalnızca bağlamdan cevap vermesini ve veremediğinde bunu itiraf etmesini söyleyen açık bir **dayanaklandırma (grounding)** talimatı ekliyoruz.
+
+```python
+PROMPT_TEMPLATE = """Answer the question using ONLY the context below.
+If the answer is not in the context, say "I don't know based on the provided documents."
+
+Context:
+{context}
+
+Question: {question}
+Answer:"""
+
+def build_prompt(query, retrieved):
+    context = "\n".join(f"- {text}" for text, _score in retrieved)
+    return PROMPT_TEMPLATE.format(context=context, question=query)
+
+print(build_prompt("What is our refund window?", retrieve("What is our refund window?")))
+```
+
+Çıktı:
+
+```text
+Answer the question using ONLY the context below.
+If the answer is not in the context, say "I don't know based on the provided documents."
+
+Context:
+- Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.
+- To start a return, email support@example.com with your order number. Refunds are processed within five business days of us receiving the item.
+- Shipping fees are non-refundable, and items marked final sale cannot be returned or exchanged.
+
+Question: What is our refund window?
+Answer:
+```
+
+O grounding talimatı, 1. Bölüm'deki halüsinasyon sorununun panzehiri. Modele yalnızca verilen bağlamı kullanmasını, yoksa "bilmiyorum" demesini söyleyerek, kendinden emin bir tahminciyi ya senin belgelerinden cevap veren ya da boşluğu itiraf eden bir şeye çeviriyoruz. Garanti değil, ama tüm prompt'taki en yüksek kaldıraçlı tek satır bu.
+
+## Adım 6: üret (generate)
+
+Son parça model çağrısı; sağlayıcı tek hamlede değişebilsin diye tek bir fonksiyonun arkasına izole edilmiş.
+
+```python
+def generate(prompt):
+    from openai import OpenAI
+    client = OpenAI()                  # reads the API key from your environment
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",           # a small, cheap chat model; check current names
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,                 # we want grounded, not creative
+    )
+    return resp.choices[0].message.content
+```
+
+Tamamen yerel ve ücretsiz çalıştırmayı mı tercih ediyorsun? Gövdeyi Ollama ile değiştir, başka hiçbir şeye dokunma:
+
+```python
+def generate(prompt):
+    import requests
+    r = requests.post(
+        "http://localhost:11434/api/generate",
+        json={"model": "llama3.1", "prompt": prompt, "stream": False},
+    )
+    return r.json()["response"]
+```
+
+Diğer her fonksiyon yalnızca `generate(prompt)` ile konuştuğu için, sağlayıcı değiştirmek de onu bir testte mock'lamak da tam olarak bu tek yere dokunur.
+
+## Adım 7: bir uygulamaya sar
+
+Üç satır döngüyü birbirine bağlıyor: getir, zenginleştir, üret. Sonra minik bir oku-değerlendir-yazdır döngüsü (**REPL**) ona gerçek bir uygulama hissi veriyor.
+
+```python
+def ask(question, k=3):
+    retrieved = retrieve(question, k=k)   # Part 3 + 4: find relevant chunks
+    prompt = build_prompt(question, retrieved)  # Part 5 + 1: ground the prompt
+    return generate(prompt)               # the LLM answers from the context
+
+if __name__ == "__main__":
+    print("Ask about the store policy (Ctrl-C to quit).\n")
+    while True:
+        try:
+            q = input("> ").strip()
+            if q:
+                print(ask(q), "\n")
+        except (EOFError, KeyboardInterrupt):
+            print("\nBye.")
+            break
+```
+
+Çalıştır ve birkaç soru dene; cevabı corpus'ta *olmayan* bir tane de dahil:
+
+```text
+> What is our refund window?
+You can get a refund within 30 days of purchase, as long as the item is unused and in its original packaging.
+
+> Do you offer gift wrapping?
+I don't know based on the provided documents.
+```
+
+Bütün mesele ikinci cevap. Corpus hediye paketi hakkında hiçbir şey söylemiyor, getirme yalnızca zayıf ilişkili parçalar döndürüyor ve grounding talimatı, modele bir politika uydurmak yerine reddettiriyor. O dürüst "I don't know", RAG'in tasarlandığı gibi çalışması demek.
+
+Eksiksiz, çalıştırılabilir dosyayı buradan alabilirsin: [`rag_app.py`](/essays/build-your-first-rag/rag_app.py) ve [`requirements.txt`](/essays/build-your-first-rag/requirements.txt).
+
+Aşağıdaki diyagram, az önce yazdığın fonksiyonları 1. Bölüm'deki pipeline aşamalarıyla hizalıyor: bir kez çalışan bir **veri alımı (ingestion)** aşaması (yükle, parçala, göm, sakla) ve soru başına çalışan bir aşama (getir, zenginleştir, üret). Program, mimarinin *ta kendisi*.
+
+<Diagram number={1} caption="Uygulamanın pipeline'a eşlenmiş hali. İndeksleme aşaması (yükle, parçala, göm, sakla) bir kez çalışır; sorgu zamanı (getir, zenginleştir, üret) her soruda çalışır. Her kutu, onu uygulayan fonksiyonu ve onu anlatan bölümü söyler.">
+  <img src="/essays/build-your-first-rag/part6-code-to-pipeline.svg" alt="İki şeritli bir diyagram. 'İndeksleme, bir kez kur' etiketli üst şerit dört bağlı kutu gösterir: Load (CORPUS), Chunk (chunk fonksiyonu), Embed (embed fonksiyonu), Store (vectors artı chunks); 5, 5, 2 ve 4. bölümlerle etiketli. 'Sorgu zamanı, her soruda' etiketli alt şerit üç bağlı kutu gösterir: Retrieve (retrieve fonksiyonu, kosinüs top-k), Augment (build_prompt fonksiyonu), Generate (generate fonksiyonu); 3 ve 4. Bölüm, 1. Bölüm ve 1. Bölüm ile etiketli, hepsi ask fonksiyonuyla sarılı. Kesikli bir ok Store kutusundan aşağı Retrieve kutusuna iner." class="w-full rounded-lg" />
+</Diagram>
+
+Sorgu zamanı akışını adım adım hissetmek için aşağıdan bir soru seç ve gömme, skorlama, top-k, kurulan prompt ve dayanaklı cevaptan geçişini izle. Son hazır sorunun cevabı corpus'ta yok; böylece reddedişin gerçekleşmesini izleyebilirsin.
+
+<Diagram number={2} caption="Hazır sorulardan birini seç ve uygulamanın yaptıklarında adım adım ilerle: sorguyu göm, her parçayı kosinüs benzerliğiyle skorla, en iyi üçü tut, dayanaklı prompt'u kur ve cevapla. Hediye paketi sorusu corpus'ta yok; o yüzden dürüst bir 'I don't know' ile bitiyor.">
+  <IframeFigure
+    src="/essays/build-your-first-rag/part6-retrieval-walkthrough.html"
+    title="İnteraktif getirme turu: üç hazır sorudan birini seç ve sorguyu gömme, her corpus parçasını kosinüs benzerliğiyle skorlama, en iyi üçü seçme, zenginleştirilmiş prompt'u kurma ve dayanaklı cevabı görme adımlarında ilerle; corpus dışı bir soru dürüst bir 'bilmiyorum' ile bitiyor"
+    height={720}
+  />
+</Diagram>
+
+## Yükseltme: yerine gerçek bir vektör veritabanı tak
+
+Elle yazdığımız depo, bize bir vektör deposunun tam olarak ne yaptığını öğretti. Üretimde gömmeyi, saklamayı ve indekslemeyi, yani 4. Bölüm'ün işini, gerçek birine bırakırdın. İşte aynı uygulama, yerine yerel bir gömülü veritabanı olan Chroma takılmış hali. `add` ve `query`'nin elle yazdığımız göm-sakla-kosinüs kodunu iki çağrıya nasıl indirdiğine bak.
+
+```python
+import chromadb
+from chromadb.utils import embedding_functions
+
+client = chromadb.Client()   # in-memory; use PersistentClient(path="...") to keep it
+ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+    model_name="all-MiniLM-L6-v2"        # the SAME model as before
+)
+collection = client.create_collection(
+    "policy",
+    embedding_function=ef,
+    metadata={"hnsw:space": "cosine"},   # match the cosine metric we used by hand
+)
+
+# add() embeds and stores in one call; ids and metadata travel with the text
+collection.add(
+    documents=[c["text"] for c in chunks],
+    ids=[c["source"] for c in chunks],
+)
+
+def retrieve(query, k=3):
+    res = collection.query(query_texts=[query], n_results=k)
+    # Chroma returns distances, where smaller means closer (Part 4's metrics)
+    return list(zip(res["documents"][0], res["distances"][0]))
+```
+
+Tek değişiklik bu. `ask`, `build_prompt` ve `generate` fonksiyonlarına dokunulmadı; çünkü arayüz (bana bir sorgu ver, ilgili parçaları geri al) aynı. Chroma artık elle yazdığımız indekslemeyi ve en yakın komşu aramasını yapıyor ve beş belgen beş milyon olduğunda da yapmaya devam edecek. Doğru anlamaya değer bir not: Chroma bir *benzerlik* (büyük olan yakındır) değil, bir *mesafe* (küçük olan yakındır) raporlar. Yapılandırdığımız kosinüs uzayında o mesafe `1 - cosine_similarity`; yani kullandığımız birim vektörler için `0`'dan (özdeş) `2`'ye (zıt) uzanır, `0`'dan `1`'e değil; dik olan da `0.5`'e değil `1.0`'a düşer. Üzerinde sıralayabileceğin ya da eşik koyabileceğin tanıdık bir benzerliği `1 - distance` ile geri kazan. Yani o sayı üzerinde sıralama ya da eşikleme yapacaksan hem yöne hem ölçeğe dikkat et; bu, tam olarak 3. Bölüm'deki benzerlik-mesafe tuzağı.
+
+## Maliyet, gecikme ve ilk ısıran tuzaklar
+
+Çalışan bir uygulama henüz iyi bir uygulama değil. Gözden kaçırmaman gereken birkaç şey:
+
+- **Maliyet ve gecikme.** Yerel embedding'ler ücretsiz ama CPU'nu ya da GPU'nu kullanır; barındırılan LLM çağrıları token başına para tutar ve ağ gecikmesi ekler, üstelik barındırılan API'lar hız limiti (rate limit) uygular. Yerel LLM (Ollama) ücretsiz ve mahrem, ama büyük bir barındırılan modelden daha yavaş ve genelde daha zayıftır. Ödünleşimini bilinçli seç.
+- **Aynı model kuralı.** Sorgunu, parçaları gömdüğün *aynı* modelle göm. Modelleri karıştırmak klasik sessiz hatadır: hata mesajı yok, sadece sessizce anlamsız skorlar ve saçma sapan retrieval.
+- **top-k ayarı.** Çok düşükse modeli bağlamsız bırakırsın; çok yüksekse cevabı gürültüye gömer ve token israf edersin. 3 ila 5 civarında başla ve gerçek sonuçları izleyerek ayarla.
+- **Boş durumu ele al.** İlgili hiçbir şey bulunamadığında ne olacağına karar ver. Grounding talimatımız modeli zaten "I don't know" demeye itiyor; ayrıca en yüksek skora bir eşik koyup en iyi eşleşme çok zayıf olduğunda LLM'i tamamen atlayabilirsin. (Chroma yolundaysan, önce mesafesini `1 - distance` ile benzerliğe geri çevir; çünkü onun sayısı `0`-`1` değil, `0`-`2` aralığında koşar.)
+
+{/* From experience callout: drop in a real first-person anecdote here (e.g. the time the query and chunks were embedded with different models, or a normalized vs unnormalized mismatch, and retrieval silently returned nonsense with no error, costing hours of debugging), then wrap it as: > 💡 **From experience** ...story... */}
+
+## Kendin dene
+
+Uygulama çalışıyor; şimdi nerede kırıldığını anlayana kadar kurcala. Üç küçük deney; her biri döngünün farklı bir parçasına dokunuyor.
+
+**Bir ilgililik tabanı ekle.** Şu anda her soru LLM'e ulaşıyor; en iyi parçası gürültüyü zar zor aşan bile. En yüksek skora eşik koy ve bir model çağrısı harcamadan önce devreyi kes:
+
+```python
+RELEVANCE_FLOOR = 0.30   # tune by watching real top scores; cosine, unit vectors
+
+def ask(question, k=3):
+    retrieved = retrieve(question, k=k)
+    if not retrieved or retrieved[0][1] < RELEVANCE_FLOOR:
+        return "I don't know based on the provided documents."
+    prompt = build_prompt(question, retrieved)
+    return generate(prompt)
+```
+
+*"Hediye paketi yapıyor musunuz?"* diye sor ve modeli hiç çağırmadan reddi döndürmesini izle. Elle yazılmış depoda en yüksek skor zaten bir kosinüs benzerliği, yani karşılaştırma doğrudan. Chroma yolunda ise elinde bir mesafe var; o yüzden tabana karşı karşılaştırmadan önce `1 - distance` ile çevir (ve o sayının `0`-`1` değil `0`-`2` aralığında koştuğunu unutma).
+
+**Kaynağı bir atıf olarak yüzeye çıkar.** Adım 1'de her parçada bir `source` alanı tuttuk, sonra retrieval'da onu sessizce düşürdük. Cevap nereden geldiğini işaret edebilsin diye sonuna kadar taşı. `retrieve`, parçanın kaynağını metni ve skoruyla birlikte döndürsün; sonra atıf yapılan belgeleri cevabın altına yazdır:
+
+```python
+def retrieve(query, k=3):
+    q = embed([query])[0]
+    scores = vectors @ q
+    top = np.argsort(-scores)[:k]
+    return [(chunks[i]["text"], chunks[i]["source"], float(scores[i])) for i in top]
+```
+
+`build_prompt`'u fazladan alanı açacak şekilde ayarla; artık her dayanaklı cevabın sonuna `Sources: doc_0, doc_1` gibi bir satır ekleyebilirsin. Demo ile kullanıcının güvenebileceği bir şey arasındaki fark bu: tıklayıp kaynağına dönebilecekleri bir iddia.
+
+**Bilerek boz.** *Sorguyu*, *parçalardan* farklı bir modelle göm ve retrieval'ın sessizce dağılmasını izle. Parçaları `all-MiniLM-L6-v2`'de tut ama sorguyu mesela `paraphrase-MiniLM-L3-v2` ile kodla; skorlar gürültüye döner: istisna yok, uyarı yok, sadece en üstte yanlış parçalar. (Farklı çıktı genişliğine sahip bir model seçersen nokta çarpımı en azından bir shape hatası fırlatır, ki bu daha merhametli bir başarısızlıktır; asıl tehlikeli olan, uzayları hiç örtüşmeyen iki 384 boyutlu model.) Bu, RAG'deki en pahalı bug'dır; tam da hiçbir şey çökmediği için. Onu burada bir kez, bilerek yaşa; gerçekten başına geldiğinde belirtiyi (makul görünen ama sinsice hep yanlış olan retrieval) tanırsın.
+
+Eksiksiz temel uygulamadan, [`rag_app.py`](/essays/build-your-first-rag/rag_app.py)'dan başla ve her deneyi üstüne aşıla: `source` alanı zaten her parçada var, yani atıf değişikliği küçük; taban ve bozuk model testi de her biri birkaç satır.
+
+> ⚠️ **Sık düşülen tuzaklar**
+>
+> - **Sorgu ve parçalar için farklı embedding modelleri.** En sık görülen sessiz hata. Aynı genişlik, farklı uzay, anlamsız skorlar, hata mesajı yok. Model adını tek bir sabite yaz ve her yerde onu yeniden kullan.
+> - **Nokta çarpımından önce normalize etmeyi unutmak.** `vectors @ q`, *yalnızca* iki taraf da birim uzunluktayken kosinüstür. `normalize_embeddings=True`'yu kaldır, nokta çarpımın 3. Bölüm'de üzerine akıl yürüttüğün sıralamayla artık örtüşmeyen, sınırsız bir büyüklük skoruna dönüşür.
+> - **Bir Chroma mesafesini kosinüs eşiğiyle karşılaştırmak.** Chroma bir benzerlik değil, bir mesafe döndürür (küçük olan yakındır, aralık `0`-`2`). Ham mesafeyi `0`-`1` aralığındaki bir kosinüs tabanıyla eşiklersen ilgililik kapın tersine çalışır.
+> - **Boş durum yok.** İlgililik tabanı olmadan konu dışı her soru yine de paralı, gecikmeli bir model çağrısı tetikler ve onu yakalamak için tamamen grounding talimatına yaslanırsın. Hem kemer hem pantolon askısı: skorla kapıla *ve* "yalnızca bağlamdan cevap ver" talimatını da tut.
+
+## Ne kadar hızlı, ne kadara?
+
+Birkaç somut sayı; çünkü "ücretsiz ve yerel" ile "hızlı" demesi kolay, sabitlemesi kıymetli.
+
+- **Embedding.** `all-MiniLM-L6-v2`, **384 boyutlu** vektörler üretir ve miniciktir (kabaca 90 MB fp32 ağırlık, ~23M parametre). Düz bir CPU'da saniyede birkaç bin kısa cümle mertebesinde gömer; yani beş belgelik corpus'umuz da, birkaç binlik olanı da fiilen anlıktır; GPU'da daha da hızlıdır. Mesele şu: kişisel bir corpus için darboğazın embedding değil. (Tam spesifikasyon için [model kartına](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) bak.)
+- **Üretim gecikmesi.** Duvar saati zamanının gittiği yer burası. Barındırılan bir LLM çağrısı, ağ gidiş-dönüşü dahil, kısa dayanaklı bir cevabı tipik olarak kabaca bir ila birkaç saniyede döndürür; token başına para tutar ve hız limitleri uygular. [Ollama](https://ollama.com) altındaki yerel bir model hiçbir şeye mal olmaz ve verini kendi makinende tutar, ama yalnızca CPU'lu donanımda benzer bir cevap çoğu zaman birkaç saniyeden onlarca saniyeye uzar; bir GPU o farkı epey kapatır. Ödünleşim her zamanki: barındırılan, para ve bir bağımlılık karşılığında sana hız ve kalite alır; yerel, gecikme ve daha zayıf bir model karşılığında mahremiyet ve sıfır marjinal maliyet alır. Karar vermeden önce ikisini de *kendi* donanımında ölç; yukarıdaki sayılar söz değil, mertebe.
+
+## Özet ve yolun devamı
+
+İlkel yapı taşlarından eksiksiz bir RAG uygulaması inşa ettin ve her satırını anladın: minik bir corpus, metadata'lı parçalama, yerel embedding'ler, şeffaf bir vektör deposu, kosinüs top-k retrieval, dayanaklı bir prompt şablonu, izole bir model çağrısı ve onu süren bir REPL; sonra da tek bileşenlik bir değişimle gerçek bir vektör veritabanı. Artık onda gizemli hiçbir şey yok.
+
+Aynı zamanda, bilerek, saf bir sistem. Sabit bir `k` ve sabit bir prompt'la saf yoğun (dense) retrieval yapıyor (tek embedding modeli, kosinüs benzerliği). Bu şaşırtıcı derecede iyi çalışır ve ilginç mühendisliğin başladığı yer de tam orası. Ya en iyi parça sorudan farklı kelimeler kullanıyorsa? Ya anahtar kelime aramasını anlamsal aramayla birleştirmek istersen? `k` sorguya nasıl uyum sağlamalı? İşte o, retrieval'a derin dalış ve 7. Bölüm'ün konusu.
+
+## Özet çıkarımlar
+
+- Bir RAG uygulaması tek bir kısa döngüdür: ilgili parçaları **getir**, prompt'u onlarla **zenginleştir**, bir cevap **üret**. Onu elle inşa ettik; böylece her satır, 1'den 5'e kadarki bölümlerden bir kavrama eşleniyor.
+- **Yerel bir embedding modeli** kullan (ücretsiz, çevrimdışı) ve **sorguyu parçalarla aynı modelle göm**. Bu tek kural, en yaygın sessiz hatayı önler.
+- En basit **vektör deposu**, bir parça listesi artı bir NumPy matrisidir; kosinüs **top-k** retrieval, bir nokta çarpımı üzerinde tek bir `argsort`tır (3. Bölüm). Parça metnini vektörünün yanında tut.
+- **Grounding** talimatlı bir **prompt şablonu** ("yalnızca bağlamdan cevap ver; yoksa bilmediğini söyle"), halüsinasyonu dizginlemek için en yüksek kaldıraçlı satırdır (1. Bölüm).
+- LLM'i tek bir `generate(prompt)` fonksiyonunun arkasına izole et; böylece sağlayıcı değiştirmek, barındırılan ya da yerel, tek satırlık bir değişiklik olur.
+- **Chroma** gibi gerçek bir vektör veritabanına terfi etmek, uygulamanın geri kalanına dokunmadan saklamayı ve indekslemeyi değiştirir; çünkü retrieve arayüzü aynı kalır (4. Bölüm).
+
+## Referanslar
+
+- Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich Küttler, Mike Lewis, Wen-tau Yih, Tim Rocktäschel, Sebastian Riedel ve Douwe Kiela. "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks." NeurIPS 2020. [arXiv:2005.11401](https://arxiv.org/abs/2005.11401). RAG'i adlandıran ve biçimselleştiren makale; bu uygulamanın baştan sona hayata geçirdiği getir-zenginleştir-üret döngüsü.
+- Nils Reimers ve Iryna Gurevych. "Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks." EMNLP 2019. [arXiv:1908.10084](https://arxiv.org/abs/1908.10084). Parçaları ve sorguları gömmek için kullandığımız `sentence-transformers` kütüphanesinin ([sbert.net](https://www.sbert.net/)) arkasındaki çalışma.
+- `all-MiniLM-L6-v2` model kartı, Hugging Face: [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2). Bu bölümde retrieval'ı süren küçük, hızlı, 384 boyutlu embedding modeli.
+
+## Sözlük
+
+- **Derlem (corpus / knowledge base)**: RAG sisteminin soruları cevaplamak için yararlanabileceği kaynak belgeler koleksiyonu.
+- **Veri alımı (ingestion)**: corpus'u getirmeye hazırlayan tek seferlik pipeline; onu yüklemek, parçalamak, gömmek ve saklamak.
+- **Bellek-içi depo (in-memory store)**: program belleğinde tutulan bir vektör deposu (burada, parçaların bir Python listesi artı vektörlerin bir NumPy dizisi); şeffaf ve basit, ama program kapanınca kaybolur.
+- **Prompt şablonu (prompt template)**: getirilen bağlam ve kullanıcının sorusu için yuvaları olan, sorgu anında doldurulan sabit bir prompt metni.
+- **Bağlam enjeksiyonu (context injection)**: model onlardan cevap verebilsin diye getirilen parçaları prompt'a yerleştirmek.
+- **Dayanaklandırma (grounding / grounded generation)**: modele yalnızca verilen bağlamdan cevap vermesini ve cevap orada değilse bunu itiraf etmesini söylemek; halüsinasyona karşı çekirdek savunma.
+- **REPL**: oku-değerlendir-yazdır döngüsü; bir soruyu okuyan, uygulamayı çalıştıran, cevabı yazdıran ve tekrarlayan basit interaktif istem.
+- **Top-k**: bir sorgu için en yüksek skorlu `k` parçayı döndürmek; `k`, senin ayarladığın küçük bir sayıdır (genelde 3 ila 5).
+
+---
+
+**Sırada, 7. Bölüm: Retrieval'a Derin Dalış.** Uygulamamız sabit bir `k` ile düz yoğun retrieval kullanıyor. Sırada retrieval'ı akıllandırmak var: yoğun (dense) aramaya karşı seyrek (sparse) arama, ikisini hibrit aramada birleştirmek ve `k`'yı bir sabitten daha akıllıca seçmek.

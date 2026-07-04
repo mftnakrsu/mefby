@@ -1,0 +1,233 @@
+---
+title: "Vektör Veritabanları ve İndeksleme"
+description: "Tek bir parçayı bir sorguya karşı skorlayabilirsin, ama bunu her parça için yapmak tam, kaba kuvvet k-NN'dir: kusursuz doğru ama acı verici derecede O(n). Retrieval-Augmented Generation üzerine sıfırdan bir serinin 4. bölümü: sıradan veritabanı indekslerinin yüksek boyutlarda neden çöktüğü, yaklaşık en yakın komşu (ANN) aramasının arkasındaki hız-recall dengesi, HNSW ve IVF'in sezgisi, ve bir vektör veritabanının gerçekte ne sakladığı ve ne yaptığı."
+date: 2026-06-10
+tags: ["RAG", "Vector Database", "ANN", "HNSW", "IVF", "Vector Search", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-04-vector-databases"
+ogImage: "/og/vector-databases.png"
+lang: "tr"
+translationSlug: "vector-databases"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+3. bölüm bizi çalışan bir sıralama fonksiyonu ve bir uyarıyla baş başa bıraktı. Kullanıcının sorusunu bir sorgu vektörüne gömebiliyoruz, onu kosinüs benzerliğiyle saklanan herhangi bir parça vektörüne karşı skorlayabiliyoruz ve en iyi `k` taneyi tutabiliyoruz. Uyarı maliyetle ilgiliydi: bunu saklanan *her* vektöre karşı yapmak birkaç bin parça için sorun değil ama milyonlarca için acımasız. Bu bölüm o boşluğu kapatıyor. Sonunda şunu bileceksin: o tüketici yaklaşım (tam, ya da kaba kuvvet, k-NN) neden bu kadar kötü ölçekleniyor, sıradan bir veritabanı indeksi bizi neden kurtaramıyor ve tüm alanın etrafında örgütlendiği tek denge nedir: muazzam derecede hızlanmak için bir parça doğruluktan vazgeçmek. Gerçekten karşılaşacağın iki indeks ailesi için sezgi kuracağız, **HNSW** ve **IVF**, vektörlerin nasıl sıkıştırıldığına göz atacağız ve bir **vektör veritabanının (vector database)** gerçekte ne olduğunu netleştireceğiz. Kavramsal kalıyoruz, en fazla birkaç satır açıklayıcı kod var; tam inşa serinin ilerisinde geliyor.
+
+## Ön koşullar
+
+1'den 3'e kadar olan bölümler: [RAG Neden Var?](/essays/why-rag-exists-tr), [Gömüler (Embeddings), Gerçekten Anlaşılmış](/essays/embeddings-tr) ve [Benzerliği Ölçmek](/essays/measuring-similarity-tr). Bir metin parçasının bir **gömüye (embedding)** dönüştüğünü (yüzlerce boyutlu bir uzayda bir nokta olan bir vektör), benzer anlamların orada birbirine yakın durduğunu ve parçaları genelde **kosinüs benzerliği (cosine similarity)** olan bir **benzerlik (similarity)** skoruyla sıraladığımızı ve **top-k**'yı tuttuğumuzu rahatça bilmelisin. Tek kısa kod parçası için temel Python işine yarar, ama bu bölümün özü resimler ve sezgidir.
+
+## Az önce aştığımız temel: kaba kuvvet k-NN
+
+Şimdiye kadar yaptığımız şeye bir isim koyayım, ki üzerine konuşabilelim. *"İade süremiz ne kadar?"* sorusunu cevaplamak için soruyu gömüyoruz, o sorgu vektörünü `refund-policy.md`'nin ve her diğer belgenin her bir parçasının saklanan vektörüne karşı karşılaştırıyoruz, her birini skorluyoruz ve en yakın `k` taneyi tutuyoruz. Tüm koleksiyona karşı karşılaştırma yapıp gerçekten en yakın `k` taneyi döndürmeye **tam en yakın komşu araması (exact nearest-neighbor search)** denir, ya da her şeyi kontrol etmenin salt gücüyle yaptığın için, **kaba kuvvet k-NN (brute-force k-NN)** (k-NN, k-en-yakın-komşu'nun kısaltması). Bunun bir harika özelliği, bir de ölümcül özelliği var.
+
+Harika özellik: tam olarak doğru olması. Tanım gereği her adayı inceler, dolayısıyla döndürdüğü `k` tane gerçekten en yakın `k` tanedir. Yaklaşıklık yok, en iyi parçayı kaçırma şansı yok.
+
+Ölümcül özellik ise maliyet. `N` tane saklı vektörün varsa, her sorgu `N` tane benzerlik skoru hesaplar, saklı vektör başına bir tane. Bu, sorgu başına **O(n)** iş demek: koleksiyonu iki katına çıkar, süreyi de iki katına çıkarırsın. Kodda tüm bu iş neredeyse utanç verici derecede kısa:
+
+```python
+import numpy as np
+
+# query  : the embedding of "What is our refund window?"  (shape: d)
+# chunks : an (N, d) matrix of stored chunk embeddings, already normalized
+def brute_force_topk(query, chunks, k=4):
+    scores = chunks @ query           # one dot product per stored vector -> O(N)
+    return np.argsort(-scores)[:k]    # indices of the k highest-scoring chunks
+```
+
+Birkaç bin parçalık bir hobi projesi için, ihtiyacın olan gerçekten bu kadarı. Modern donanım hızlıca çarpıp toplar, ve `chunks @ query` tam olarak en optimize edildiği işlem. Sorun `N` binler olmaktan çıktığında başlıyor. Ciddi bir bilgi tabanı (bir şirketin tüm belgeleri, bir ürün kataloğu, yıllarca birikmiş destek talepleri) milyonlarca ya da milyarlarca vektördür. Artık her kullanıcıdan gelen her sorgu, cevap verebilmek için milyonlarca çarpma-toplama geçişi yapmak zorunda, hem de bir sohbet botunu bekleyen birinin tolere edeceği saniyenin altındaki bütçe içinde. Sorgu başına O(n), saniyede çok sayıda sorguyla çarpılınca bir duvara dönüşür. En yakın vektörleri, hepsine *bakmadan* bulmamız gerekiyor.
+
+## Sıradan bir veritabanı neden yetmiyor
+
+Her mühendisin içgüdüsü şu: veritabanları "bir şeyi hızlı bulma" sorununu on yıllar önce çözdü, o yüzden üstüne bir indeks koy yeter. Bu içgüdünün burada tam olarak neden başarısız olduğunu anlamaya değer, çünkü bu başarısızlık vektör veritabanlarının var olma sebebinin ta kendisi.
+
+Geleneksel bir veritabanı, aramaları **B-ağacı (B-tree)** gibi yapılarla hızlandırır; `WHERE price = 19.99`, `WHERE date > '2024-01-01'` ve `ORDER BY name`'in arkasındaki iş atı indeks budur. Bir B-ağacı, bir sütunun değerlerini sıralı tutar; böylece motor onlar üzerinde ikili arama yapabilir, tüm tabloyu taramak yerine herhangi bir değere birkaç adımda ulaşır. Tam eşleşmelerde, aralıklarda ve sıralamada müthiştir, tabii **doğal bir sıraya sahip tek bir boyutun** olduğu anda.
+
+İşte can alıcı nokta bu son ifade. "768 boyutlu bir uzayda en yakın komşuları bul" sıralı-sütun sorusu değil. İkili arama yapabileceğin tek bir eksen yok; yakınlık 768 sayının hepsine birden bağlı, ve 1. boyutta yakın görünen bir vektör 2. boyutta uzak olabilir. Şöyle düşünebilirsin: tamam, birçok boyutta bölen bir ağaç kur (bunlar var, k-d ağaçları ve akrabaları). 2 ya da 3 boyutta harika çalışırlar. Sorun, boyutlar üst üste yığıldıkça ne olduğu; buna uygun şekilde tehditkâr bir isim verilmiş: **boyutluluk laneti (curse of dimensionality)**.
+
+İşte matematiksiz sezgisi. Uzay-bölen ağaçlar hızlarını bölgeleri eleyerek kazanırlar: "hedef bölünmenin bu tarafında, o yüzden öbür tarafı görmezden gel." Ama çok yüksek boyutlarda noktalar tuhaf davranır. Tüm çiftler arasındaki mesafeler ürkütücü derecede birbirine benzer hale gelir (neredeyse her şey her şeye kabaca eşit uzaklıktadır), ve uzayın hacmi o kadar hızlı patlar ki herhangi bir yerel komşuluk neredeyse boş kalır. Gerçek en yakın komşuya sahip olduğundan *emin* olmak için ağaç artık bölge eleyemez ve neredeyse hepsini ziyaret etmek zorunda kalır; bu da genelde düz kaba kuvvetten bile yavaş bir taramaya dönüşür. İki boyutta kazanan ağaç numaraları, birkaç yüz boyuta yapılan yolculuğu atlatamaz. İşte bu yüzden zaten bildiğimiz indeksi yeniden kullanamayız ve farklı bir tür indekse ihtiyaç duyarız.
+
+## Merkezi denge: tam değil, yaklaşık
+
+İşte tüm alanın döndüğü mihver, ve bu gerçek bir hedef değişikliği. *Tam* en yakın komşularda ısrar etmeyi bırakıyor ve *neredeyse her zaman doğru olanları* kabul ediyoruz. Bu tek taviz, büyüklük mertebeleri kadar hızlanma satın alır ve **Yaklaşık En Yakın Komşu (Approximate Nearest Neighbor, ANN)** aramasının temelidir.
+
+Ne yaptığımızı hatırlayana kadar bu pazarlık pervasız görünür. Bir dil modelini dayanaklandırmak için parça getiriyoruz. Gerçekten en iyi parça *"İadeler satın alımdan sonra 30 gün içinde kabul edilir"* yazan parçaysa, ve ANN matematiksel olarak optimum olan dört parça yerine bu parçayı, artı üç biraz daha az mükemmel komşuyu döndürürse, model soruyu tıpkı aynı iyilikte cevaplar. Kanıtlanabilir şekilde mükemmel kümeye ihtiyacımız yok; çok iyi bir kümeye, hızlı bir şekilde ihtiyacımız var.
+
+O ufak dilimden bahsetmek için bir kelimeye ihtiyacımız var. Bu en-yakın-komşu anlamında **recall**, yaklaşık aramanın gerçek top-k'nın hangi kesrini fiilen döndürdüğüdür. Tam top-10 on belirli parça içeriyorsa ve ANN indeksin bunlardan sekizini döndürüyorsa, bu 0.8, yani yüzde 80, recall demektir. (Bu, "recall" kelimesinin sınıflandırmadaki kullanımından farklı bir kullanım; burada sadece "gerçek komşulardan kaçını bulduk" anlamına gelir.) 0.95 recall'a ayarlanmış bir indeks, ortalama olarak gerçekten en yakın sonuçların yüzde 95'ini döndürür ve bunları kaba kuvvetin asla erişemeyeceği kadar hızlı bulur.
+
+Ve bu, bu bölümün geri kalanının ve ayar zamanının çoğunun içinde yaşadığı dengeyi kuruyor: **hız-recall dengesi.** Gerçek komşuların daha fazlasını döndürmek (daha yüksek recall) sorgu başına daha fazla iş demek (daha az hız); köşe kesmek (daha fazla hız) daha fazlasını kaçırmak demek (daha düşük recall). Karşılaşacağımız her indeks ve düğme, o eğri üzerinde farklı bir yerde durmaktan ibaret. Bedava öğle yemeği yok, sadece hız-recall eğrisinin neresinde yaşayacağına dair bir seçim var.
+
+Aşağıdaki animasyon bu pazarlığı içten hissettiriyor. Aynı saklı vektör bulutu, aynı sorgu, aynı cevap, iki farklı yoldan ulaşılıyor. Kaba kuvvet her noktaya bir çizgi çekiyor ve karşılaştırma sayacı koleksiyonun tam boyutuna kadar tırmanıyor. ANN ise yoluna çıkarken fiilen ziyaret ettiği bir avuç noktayı yakıyor, ve sayaç neredeyse hiç kımıldamıyor.
+
+<Diagram number={1} caption="Aynı noktalar, aynı sorgu, aynı cevap. Kaba kuvvet her vektöre karşı karşılaştırma yapar (sayaç tam N'ye kadar tırmanır); ANN yoluna çıkarken yalnızca bir avuç düğümü ziyaret eder (sayaç minik kalır). İki modu değiştir ve her birini adım adım izle.">
+  <IframeFigure
+    src="/essays/vector-databases/part4-bruteforce-vs-ann.html"
+    title="2 boyutlu bir nokta bulutu üzerinde kaba kuvvet ve yaklaşık en yakın komşu aramasının interaktif karşılaştırması: kaba kuvvet her saklı noktaya bir karşılaştırma çizgisi çekerken bir sayaç koleksiyonun tam boyutuna tırmanır; ANN ise aynı cevaba giden yolda ziyaret edilen küçük düğüm kümesini vurgular, çok daha küçük bir sayaçla"
+    height={720}
+  />
+</Diagram>
+
+## HNSW: bir komşu grafiğinde gezinmek
+
+Bugün en popüler ANN indeksi **HNSW**'dir, açılımı **Hierarchical Navigable Small World** (Hiyerarşik Gezinilebilir Küçük Dünya). İsim ağza dolanıyor, ama fikir, uzun bir mesafeyi verimli biçimde kat ettiğinde zaten kullandığın bir fikir; ve benzetme her şeyi yerine oturtuyor.
+
+Trenle bir ülkeyi baştan başa geçmeyi düşün. Her köyde duran yavaş yerel treni almazsın. Doğru bölgeye hızlı girmek için büyük şehirler arasında bir ekspres alırsın, sonra bir bölgesel hatta geçersin, sonunda tam istasyona son birkaç durak için bir yerel tren binersin. Önce uzun sıçramalar, sonda kısa sıçramalar. HNSW tam olarak bunu inşa eder, ama vektörler için.
+
+Vektörleri bir grafiğin düğümleri olarak düşün, her düğüm en yakın komşularından bazılarına bağlı. ("Gezinilebilir küçük dünya" grafiği, çoğunlukla kısa bağlantıların, artı birkaç uzun bağlantının, herhangi bir düğümden herhangi bir diğerine şaşırtıcı derecede az adımda yürümene izin verdiği bir grafiktir, "altı derece ayrım" etkisi.) Şimdi böyle birkaç grafiği katmanlar halinde üst üste yığ. **Alt katman** her vektörü tutar, yakın komşularına yoğun biçimde bağlıdır: yerel tren, kısa sıçramalar. Onun üstündeki her katman, bir alttakinin daha seyrek bir örneğidir, daha uzun bağlantılarla: bölgesel, sonra ekspres. **Üst katmanda** yalnızca birkaç düğüm var, uzun menzilli bağlantılarla birleşmiş.
+
+Bir arama, seyrek üst katmandaki bir giriş noktasında başlar ve **açgözlü (greedy)** bir biçimde yürür: mevcut düğümden, sorguya en yakın olan komşuya adım at, ve hiçbir komşu daha yakın olmayana kadar tekrarla. O uzun üst-katman bağlantıları sıçrama başına devasa mesafe kat eder, seni neredeyse anında doğru komşuluğa düşürür. Sonra bir katman aşağı iner ve daha kısa sıçramalarla inceltirsin, yine aşağı inersin ve yoğun alt katmanda ufak yerel adımlarla bitirirsin. Orada, arama ilk yerel en-iyide durmak yerine, gördüğü en yakın adayların kısa bir güncel listesini tutar (ayarlanabilir bir beam), ve tam bir top-k'yı böyle döndürür, tanındığı yüksek recall'a böyle ulaşır. Kaba bir genel bakıştan ince bir cevaba doğru gezinirsin, düğümlerin yalnızca minik bir kesrine dokunarak.
+
+<Diagram number={2} caption="Üst üste katmanlar olarak HNSW. Seyrek üst katman, giriş noktasından uzun sıçramalar yaparak hedefin yakınına hızlıca iner; her aşağı katman daha yoğun ve daha kısa sıçramalıdır; alt katman her vektörü tutar ve en yakın komşuya son ince adımları atar.">
+  <img src="/essays/vector-databases/part4-hnsw-layers.svg" alt="Bir grafiğin üst üste yığılmış üç katmanı. Üst katman seyrek, uzun kenarlarla birleşmiş dört düğüm ve bir giriş düğümü var; vurgulanmış bir yol onun üzerinde uzun sıçramalar yapıyor, sonra kesikli bir bağlayıcıyla orta katmana iniyor, orada daha çok düğüm ve daha kısa kenarlar var; tekrar, birbirine yakın çok sayıda düğümden oluşan yoğun alt katmana iniyor, kısa sıçramalar sorgu işaretinin yanındaki vurgulanmış en-yakın-komşu düğümüne götürüyor." class="w-full rounded-lg" />
+</Diagram>
+
+İşte bu katmanlı, açgözlü yürüyüş HNSW'in neden hızlı olduğunu ve recall'ının neden mükemmel olduğunu açıklıyor: pratikte, grafiğin yalnızca ufak bir diliminde gezinerek zamanın ezici çoğunluğunda gerçek en yakın komşuları buluyor. Ana maliyeti bellek. Grafik (tüm o düğümler ve bağlantıları) RAM'de yaşar, ve bağlantıları vektörlerin üzerine saklamak gerçek bir ek yük getirir. HNSW birçok vektör veritabanında varsayılan olarak seçilir, tam olarak şu yüzden: tipik iş yükleri için hızı ve recall'ı geçmek zordur, ve bunun bedelini bellekle ödersin.
+
+Bir "hız" rakamı vermek gerekirse, ve bunu bir kesin söz değil kaba bir tahmin olarak al: birkaç milyon vektör üzerinde, ayarlanmış bir HNSW indeksi genelde bir sorguyu tek haneli milisaniyelerde, 0.95 ya da daha iyi recall'da, tek bir makinede, RAM içinde cevaplar. Tam rakam senin boyutsallığına, donanımına ve recall'ı ne kadar zorladığına göre değişir (son birkaç recall puanının peşinden koşmak orantısız derecede daha fazla zamana mal olur), ama bu büyüklük mertebesi HNSW'nin bir sohbet botunda neden anlık hissettirdiğini ve aynı ölçekte çok daha uzun sürecek olan kaba kuvvetin neden kaçtığın şey olduğunu açıklar.
+
+## IVF: vektörleri raflara dizmek
+
+Karşılaşacağın diğer aile aynı hedefe farklı bir yoldan gider. **IVF**, **Inverted File Index (Ters Dosya İndeksi)**, zaten ilgisiz olduğunu bildiğin rafları aramamakla ilgilidir.
+
+Bir kütüphane düşün. Kitaplar rastgele saçılmış değildir; konularına göre raflara gruplanmıştır. Roma tarihi üzerine bir kitap istediğinde binadaki her rafı taramazsın, doğrudan tarih bölümüne yürür ve yalnızca orada bakarsın. IVF vektörleri aynı şekilde organize eder. Herhangi bir sorgu gelmeden önce, saklanan vektörleri yakınlığa göre bir miktar kümeye gruplayan bir kümeleme algoritması çalıştırır (genelde **k-means**). Her kümenin bir **merkezi (centroid)** vardır, üyelerinin ortalama konumu, ve bu kümenin adresi, raf etiketi olarak işlev görür.
+
+Sorgu anında her vektöre karşı karşılaştırma yapmazsın. Önce sorguyu (görece az sayıdaki) merkezlere karşı karşılaştırıp hangi kümelere en yakın düştüğünü bulursun, sonra yalnızca o kümelerin içinde arama yaparsın. Doğru raflara yürü, kütüphanenin geri kalanını görmezden gel. Bir milyon vektör bin tane, her biri bin vektörlük kümeye bölünmüşse, ve sen yalnızca bir kümeye bakarsan, bir milyon karşılaştırmayı, merkezler için yaklaşık bin artı kümenin içi için bin ile değiştirmiş olursun: bir milyon yerine birkaç bin.
+
+IVF'in hız-recall eğrisindeki yerini belirleyen düğme **nprobe**: fiilen aradığın küme sayısı. Yalnızca en yakın tek kümeyi ara (`nprobe = 1`) ve en hızlısı ama en riskilisi olursun, çünkü gerçek en yakın komşu, hiç açmadığın bir kümenin sınırının hemen öbür tarafında oturuyor olabilir. `nprobe`'u artırıp en yakın birkaç kümeyi ara ve recall tırmanır, çünkü artık o sınır bölgelerini de kapsıyorsundur, daha fazla karşılaştırma pahasına. `nprobe`, dengede ilerlemek için çevirdiğin kadran.
+
+<Diagram number={3} caption="IVF, uzayı kümelere böler, her birinin bir merkezi vardır (x işaretleri). Bir sorgu yalnızca merkezlere karşı karşılaştırılır, sonra en yakın birkaç kümenin (nprobe) içinde aranır, vurgulanmış olarak gösterilir, diğer her küme sönük ve dokunulmamış kalır.">
+  <img src="/essays/vector-databases/part4-ivf-clusters.svg" alt="Birkaç düzensiz hücreye bölünmüş 2 boyutlu bir uzay, her biri dağınık noktalar ve x ile işaretlenmiş bir merkez içeriyor. Bir eşkenar dörtgen olarak çizilmiş bir sorgu noktası bir hücre sınırının yakınında duruyor. Merkezleri sorguya en yakın olan iki hücre vurgulanmış ve noktaları sorguya ince karşılaştırma çizgileriyle bağlanmış, nprobe'un ikiye eşit olduğunu gösteriyor; kalan hücreler atlandıklarını göstermek için soluklaştırılmış." class="w-full rounded-lg" />
+</Diagram>
+
+HNSW ile karşılaştırıldığında, IVF'in profili farklıdır. Tipik olarak bellekte daha hafiftir, ve kümeleri diske doğal olarak eşlenir, bu yüzden çok büyük, disk-üstü koleksiyonlara rahatça ölçeklenir; HNSW'in grafiği RAM'de yaşamak ister. IVF'in recall'ı ve hızı, kaç küme oluşturduğuna ve `nprobe`'a büyük ölçüde bağlıdır, ve kümelemeyi iyi eğitmek için genelde verinin temsili bir örneğine ihtiyaç duyar. Kaba bir kural olarak: bellek elde varsa HNSW ham sorgu hızında ve recall'da kazanma eğilimindedir; koleksiyonlar devasa olduğunda ve bellek ya da disk ekonomisi baskın çıktığında IVF kazanma eğilimindedir. Hiçbiri evrensel olarak "daha iyi" değildir; sadece aynı eğrinin farklı noktalarında dururlar.
+
+HNSW seviyesinde recall istiyorsan ama grafiği RAM'e sığdıramıyorsan, ismen bilmen gereken seçenek **DiskANN**'dır, **Vamana** adlı bir grafik üzerine kurulu. Fikir, grafiği hızlı bir SSD'de tutmak ve aramanın fiilen dokunduğu komşu listelerini getirmek, böylece mütevazı, tek bir makine belleğe asla sığmayacak milyar-vektörlük bir indeksi hizmete sunabilir. "HNSW ölçeğinde recall hırslarım ve IVF ölçeğinde verim var" sorusunun disk-üstü grafik cevabıdır, ve birkaç veritabanı artık bunu bir indeks türü olarak sunuyor.
+
+İnsanları ilk kez şaşırtan bir başarısızlık modu da var, ve seni ısırmadan önce adını koymaya değer: **filtreli-ANN recall çöküşü**. Aşağıda göreceğin gibi, iyi veritabanları bir metadata filtresini aramanın içine kaynaştırır. Ama indeksin kendisi, HNSW grafiği ya da IVF kümeleri, yalnızca vektörlerin geometrisi üzerine kurulmuştur, filtrelerin hakkında hiçbir fikri yoktur. Yani "en yakın parçalar, ama yalnızca `2024` etiketli olanlar" diye sorduğunda, arama yine mesafeye göre grafikte yürür (ya da kümeleri yoklar), ve ancak sonradan filtreyi geçenleri tutar. Filtren çok seçiciyse (diyelim on binde bir parçayla eşleşiyor), aramanın doğal olarak ziyaret ettiği adaylar arasında filtreyi geçenlerin neredeyse hiçbiri olmayabilir, ve indeks sağlıklı olsa bile recall çöker: filtre aday kümesini aç bırakmıştır. Çareler hep filtreyi sonradan değil, aramanın içine sokmakla ilgilidir: aday bütçesini artır (daha büyük bir `ef` ya da `nprobe`), böylece daha fazla hayatta kalan sızar; filtrelemesi gerçekten geziye kaynaştırılmış bir veritabanına yaslan; ya da minik, aşırı seçici bir alt küme için, eşleşen bir avuç vektör üzerinde sadece kaba kuvvete geri dön. Tuzak, bir filtrenin bedava olduğunu varsaymak; bir ANN indeksinde, agresif bir filtre ile yüksek recall gerilim içindedir.
+
+## Vektörleri küçültmek: sıkıştırma üzerine bir söz
+
+Her iki yaklaşım da hâlâ vektörleri saklar, ve vektörler küçük değildir: standart 32-bit float'larla bir milyon 768-boyutlu vektör, herhangi bir indeks eklemeden önce bile birkaç gigabayttır. Yani indekse dik, üçüncü bir kol var: **sıkıştırma (compression)**.
+
+Tanıman gereken terim **Product Quantization (PQ, Ürün Nicemlemesi)**. Sezgisi şu: her vektörü tam hassasiyette saklamak yerine, PQ her vektörü kısa alt-vektörlere doğrar ve her parçayı küçük, öğrenilmiş bir kod defterindeki (codebook) en yakın girdiyle değiştirir; böylece uzun bir hassas float listesi bir avuç kompakt koda çöker. Vektörler bellekte çarpıcı biçimde küçülür, mesafeler sıkıştırılmış biçim üzerinde doğrudan hesaplanabilir, ve bedeli biraz kaybedilmiş hassasiyet, recall'a küçük bir darbedir. PQ sıklıkla kümelemeyle eşleştirilir, **IVF+PQ** diye yazıldığını göreceğin bir düzenleme: aramayı daraltmak için kümele, sonra küme üyelerini sıkıştırılmış sakla ki çok daha fazlası belleğe sığsın. İçini bugün bilmene gerek yok; bir veritabanının ayarlarında karşına çıktığında ismini ve fikrini (küçük bir doğruluk bedeliyle bellekten tasarruf için sıkıştır) tanıman yeterli.
+
+## PQ'nun ötesinde: skaler ve ikili nicemleme
+
+PQ ayrıntılı seçenek, ve bilinmeye değer, ama iki daha basit şema vektör veritabanı ayarlarında sürekli karşına çıkar, ve onlar hakkında akıl yürütmek daha kolaydır. İkisi de bir **nicemleme (quantization)** biçimidir: bir vektörün tam-hassasiyetli sayılarının her birini daha kaba ve daha küçük bir şeye dönüştürmek.
+
+**Skaler nicemleme (scalar quantization, int8)** yumuşak olanı. Bir 32-bit float dört bayt tutar; bir 8-bit tam sayı bir bayt tutar. Yani her boyutun float aralığını bir `int8`'in tutabileceği 256 değere eşlersin, tam sayıyı saklarsın, ve sonradan geri çevirmek için ölçeği hatırlarsın. Bu, çoğu embedding modeli için recall'ı neredeyse hiç kıpırdatmayacak kadar küçük bir hassasiyet bedeliyle, kabaca **4 kat daha küçük** bellek demektir. Uzanılacak varsayılan ilk sıkıştırma budur: büyük tasarruf, neredeyse hiç düşünmeye gerek yok, ve altta HNSW ya da IVF ile tertemiz bileşir.
+
+**İkili nicemleme (binary quantization)** agresif olanı. Her boyutu tek bir bite çök (kabaca, sıfırın üstünde mi altında mı), ve yaklaşık 3 kilobayt olan 768-boyutlu bir float vektör 768 bit'e, yaklaşık 96 bayt'a döner: **32 kat daha küçük** mertebesinde. İki ikili vektör arasındaki mesafe artık sadece bir Hamming mesafesidir, farklı bitlerin sayısı, ve CPU'lar bunu şaşırtıcı derecede hızlı hesaplar. Tuzak açık: neredeyse her şeyi attın, o yüzden yalnız-başına-ikili bir arama kendi başına vasat bir recall'a sahiptir. Onu kurtaran numara **yeniden skorlama (rescoring)** (bazen rerank ya da refinement de denir): ikili vektörleri, cömert bir aday kümesini (diyelim en iyi birkaç yüz) hızlıca bulmak için kullan, sonra yalnızca o adayları tam-hassasiyetli vektörlerle yeniden sırala ve nihai top-k'yı seç. Böyle yapıldığında, ikili nicemleme belleğin büyük kısmını bir büyüklük mertebesi küçültürken **yüzde 90 ya da daha iyi recall** tutabilir, çünkü hassasiyetin yalnızca fiilen yeniden skorladığın kısa liste için doğru olması gerekir, tüm koleksiyon için değil. İçselleştirilecek örüntü: daraltmak için kaba-ve-hızlı, bitirmek için hassas-ve-yavaş.
+
+Üçünün de (skaler, ikili, PQ) ardındaki zihinsel model, baştan beri gördüğün aynı kadran: bir dilim hassasiyeti bellekte büyük bir düşüşle takas et, ve yapabildiğin yerde, küçük bir aday kümesi üzerinde ucuz bir yeniden skorlama geçişiyle hassasiyeti geri kap.
+
+## Peki bir vektör veritabanı gerçekte nedir?
+
+İndeksleme sezgisi elimizde, bölümün başlığının sorduğu soruyu cevaplayabiliriz. Bir **vektör veritabanı (vector database)** yalnızca "ANN araması çalıştıran bir yer" değildir. İndeks motordur, ama veritabanı arabanın tamamıdır.
+
+Somut olarak, bir vektör veritabanı, aksi halde kendi başına inşa edip işletmen gereken birkaç şeyi bir araya paketler:
+
+- **Vektörler ve üzerlerinde bir ANN indeksi** (HNSW, IVF, ya da başkaları), 3. bölümden hatırlayacağın kosinüs, nokta çarpımı ya da Öklid seçimi olan yapılandırılabilir bir **benzerlik metriği** ile, embedding modeline uyacak şekilde ayarlanmış.
+- **Her vektörün yanında orijinal yük (payload)**: parçanın metni ve onun **metadata**'sı, kaynak belge, yazar, tarih, etiketler ya da dil gibi eklediğin yapılandırılmış alanlar. Embedding bir parçayı *bulmanı* sağlar; modele fiilen beslediğin şey saklanan metindir, ve ikisini bir arada tutmak, sonucu sadece bir indeks numarası olmaktan çıkarıp işe yarar hale getiren şeydir.
+- **Metadata filtreleme**: bir benzerlik aramasını o alanlara göre kısıtlamak, örneğin "en benzer parçaları bul, ama yalnızca `2024` etiketli belgeler arasında," ya da "yalnızca bu kullanıcının workspace'i içinde." Bu bir kolaylıktan fazlasıdır; gerçek sistemlerde doğruluk ve erişim kontrolü için zorunludur, ve iyi vektör veritabanları filtreyi sonradan eklemek yerine ANN aramasının içine kaynaştırır.
+- **Yazmalar ve yaşam döngüsü**: **upsert** (id'si yeniyse bir vektör ekle, id zaten varsa güncelle) ve silme, böylece belgeler değiştikçe indeks güncel kalır, artı verinin bir yeniden başlatmayı atlatması için diske kalıcılık, ve herhangi bir üretim veri deposunun ihtiyaç duyduğu ölçeklendirme, replikasyon ve yedekleme.
+- **Bir API ve operasyonel makine**: sorgulamak ve yönetmek için bir istemci, ve gösterişsiz ama hayati izleme, güvenlik ve kullanılabilirlik kaygıları.
+
+Yani dürüst tanım şu: bir vektör veritabanı, benzerlik araması etrafında organize edilmiş **indeks artı depolama artı bir API artı operasyonel makine**dir. ANN indeksi zekice kalptir, ama onun etrafındaki her şey, bir matematik numarasını üzerine bir ürün çalıştırabileceğin bir şeye çeviren şeydir.
+
+## Birini seçmek: arazi
+
+Şimdi pratik soru: hangisini kullanıyorsun? Tablodan önce önemli bir uyarı, ve bunu ciddiye alıyorum. **Vektör-veritabanı arazisi çok hızlı hareket ediyor, ve benim bir bilgi kesim tarihim var.** Aşağıdaki her şeyi, seni yönlendirecek temsili bir anlık görüntü olarak ele al, güncel ya da sıralı bir öneri olarak değil. Yetenekler, sınırlar ve fiyatlandırma sürekli değişiyor, ve projeler her ay yeni özellikler çıkarıyor. Bir şeye bağlanmadan önce güncel durumu kendin doğrula.
+
+Bunu sıkıca aklında tutarak, seçenekler üç kovaya ayrılır.
+
+| Seçenek | Kova | Yönetilen mi, kendin mi barındırıyorsun | Notlar (güncel durumu doğrula) |
+|---|---|---|---|
+| Pinecone | Özel vektör veritabanı | Yönetilen (bulut) | Tamamen barındırılan; minimal operasyon; hızlıca üretime geçmek için popüler |
+| Weaviate | Özel vektör veritabanı | İkisi de | Yönetilen bir bulutla açık kaynak; yerleşik modüller |
+| Qdrant | Özel vektör veritabanı | İkisi de | Açık kaynak, Rust ile yazılmış; güçlü metadata filtreleme |
+| Milvus | Özel vektör veritabanı | İkisi de | Açık kaynak; çok büyük ölçek için inşa edilmiş |
+| Chroma | Özel vektör veritabanı | İkisi de | Hafif; yerel geliştirme ve prototipler için popüler |
+| FAISS | Kütüphane / ham indeks | Kendin barındırırsın (kütüphane) | Bir veritabanı değil, ANN indekslerinden oluşan bir kütüphane: sunucu yok, yönetilen bir depolama katmanı yok, ve varsayılan olarak bir metadata katmanı yok (bir indeksi bir dosyaya serileştirebilirsin, ama onu kendin çalıştırırsın). İndekslerin kendisi için referans araç seti |
+| pgvector | Mevcut depoya eklenmiş | İkisi de | PostgreSQL'e vektör sütunları ve ANN ekler; vektörlerini ilişkisel verinin yanında tut |
+| Elasticsearch / OpenSearch | Mevcut depoya eklenmiş | İkisi de | Olgun metin araması ve filtrelemenin yanında vektör araması |
+| Redis | Mevcut depoya eklenmiş | İkisi de | Zaten çalıştırıyor olabileceğin bellek-içi bir deponun içinde vektör araması |
+
+Böyle bir listeyi okurken karşılaştırmaya değer birkaç eksen: **yönetilen mi kendin mi barındırılan** (onu kendin mi çalıştırmak istiyorsun, yoksa birine mi para ödemek istiyorsun), **bellek-içi mi disk-üstü mü** (hız, maliyet ve ölçeğe karşı), **metadata filtreleme** (ne kadar zengin, ve aramayla ne kadar iyi entegre), **ölçek** (binlerce, milyonlarca, ya da milyarlarca vektör), ve **başlamanın kolaylığı**.
+
+Tüm isimlerin altındaki pratik rehber basit, ve ürünler çalkalansa bile sabit:
+
+- **Öğreniyor ya da prototipliyor musun?** Basit ve yerel başla. Süreç-içi bir kütüphane ya da hafif bir yerel veritabanı (ya da birkaç bin parça için önceki kaba-kuvvet döngüsü bile) seni sıfır altyapıyla harekete geçirir, ve öğrenmenin en hızlı yoludur.
+- **Zaten artık vektör konuşan bir veritabanı mı çalıştırıyorsun?** PostgreSQL çalıştırıyorsan, `pgvector`'e uzanmak vektörlerini diğer verinin yanında tutar ve ikinci bir sistem çalıştırmaktan kaçınmanı sağlar. İhtiyacını hissetmeden önce özel bir vektör veritabanı ekleme.
+- **Ölçekte üretime mi gidiyorsun?** Hacim, gecikme, filtreleme ya da operasyonel yük bunu haklı çıkardığında, yönetilen ya da ölçeklenebilir özel bir veritabanına terfi et. İndeksi ve metriği iş yüküne uydur: bellekten artanın olduğu yerde hız ve recall için HNSW, ölçek ve bellek ekonomisi baskın çıktığında IVF ya da IVF+PQ, ve embedding modelinin eğitildiği benzerlik metriği.
+
+Ana hat şu: erken aşırı mühendislik yapma, ve geç kalınca kendini köşeye sıkıştırma. İşe yarayan en basit şeyle başla, ve yalnızca gerçek bir kısıt seni ittiğinde merdivende yukarı çık.
+
+{/* From experience callout: drop in a real first-person anecdote here (e.g. the time the speed-versus-recall trade-off bit you in production, or an early project where you reached for a heavyweight managed vector DB you did not actually need yet), then wrap it as: > 💡 **From experience** ...story... */}
+
+## RAG'e dönüş: ölçekte hızlı getirme
+
+Bir adım geri çekil ve hattın artık ne kadarının renklendiğini gör. Metni **embedding**'lere dönüştürebiliyoruz (2. bölüm). Bir sorguyu kosinüs benzerliğiyle bir parçaya karşı **skorlayabiliyoruz** ve ona göre sıralayabiliyoruz (3. bölüm). Ve şimdi o sıralamayı **ölçekte hızlı** yapabiliyoruz: milyonlarca vektörü bir vektör veritabanında saklıyoruz ve yaklaşık en yakın komşu araması, HNSW ya da IVF, kullanarak **top-k**'yı milisaniyeler içinde, hiç her şeye karşı karşılaştırma yapmadan getiriyoruz. Göm, skorla, ölçekte getir. Getirme motoru esasen tamamlanmış durumda.
+
+Ama 1. bölümden beri dayandığımız ve hiç incelemediğimiz varsayıma dikkat et. Sürekli "parçalar" diyoruz, sanki belgelerimiz baştan itibaren düzgün, kendi başına ayakta duran parçalara önceden kesilmiş gibi. Öyle değiller. Gerçek bir kaynak, dallanıp budaklanmış bir PDF'tir, uzun bir web sayfasıdır, bir mesaj dizisidir, ve gömüp saklayacağımız parçalara nereden keseceğimize *biz* karar vermek zorundayız. O kararın son derece önemli olduğu ortaya çıkıyor: kötü kes, yarım düşünceleri gömersin ve cevapları parçalar arasında bölersin, ve hiçbir miktarda hızlı, yüksek-recall'lı getirme, parçalamanın çoktan yok ettiği bir cevabı bulamaz. Belgeleri iyi bölmenin nasıl olduğu, ve bunun bir RAG sistemini nasıl sessizce yapıp bozduğu, 5. bölümün konusu.
+
+## Kendin dene
+
+Hız-recall eğrisini soyut olmaktan çıkarmanın en hızlı yolu, tek bir düğmeyi taramak ve iki sayının birlikte hareket ettiğini izlemek. Bunun için gerçek bir veritabanına ihtiyacın yok; tek bir ANN kütüphanesi ve birkaç yüz bin vektör fazlasıyla yeter.
+
+Bir indeks seç, bir kere inşa et, ve kaba kuvvetle *gerçek* top-k'sını hesapladığın sabit bir test sorgu kümesi tut (o kaba-kuvvet cevabı senin ground truth'un, recall'ın ölçüldüğü şey). Şimdi arama-çabası düğmesini tara: HNSW için `ef` (aday-liste boyutu, bazen `efSearch` da denir), ya da IVF için `nprobe` (yoklanan küme sayısı). Her ayar için tüm test sorgularını çalıştır ve iki şeyi kaydet: ortalama sorgu gecikmesi, ve recall (her sorgunun gerçek top-k'sının hangi kesrini indeks döndürdü). Recall'ı bir eksene, gecikmeyi diğerine çiz.
+
+Dengenin kendini çizdiğini izleyeceksin. Alt uçta sorgular çok hızlı ve recall zayıf; `ef` ya da `nprobe`'u artırdıkça, recall önce dik biçimde tırmanır, sonra 1.0'a doğru düzleşir, gecikme ise kabaca doğrusal biçimde artmaya devam eder. O düzleşme dersin ta kendisi: son birkaç recall puanı ilk birkaçından çılgınca daha fazla zamana mal olur, ve çoğu üretim sisteminin "0.95 civarında" oturmayı seçmesinin tam sebebi budur. Sonra bir şey daha değiştir, metriği, ya da vektörlerinin normalize edilip edilmediğini, ve tüm eğrinin kaydığını izle; bu da aşağıdaki tuzakları teorik değil somut hale getirir. (Bunu çalıştırmanın standart yolu bir `faiss` benchmark'ıdır: bir `IndexHNSWFlat` ya da `IndexIVFFlat` inşa et, `index.hnsw.efSearch` ya da `index.nprobe` üzerinde döngü kur, ve bir `IndexFlatIP` kaba-kuvvet temeline karşı karşılaştır. Ek bir `faiss-cpu` bağımlılığı gerektirir, bu yüzden bu serinin stdlib-artı-numpy yol arkadaşlarının dışında yaşar, ama döngü yalnızca bir düzine satır.)
+
+> ⚠️ **Yaygın tuzaklar**
+>
+> - **Filtreli-ANN recall çöküşü.** ANN gezisinden *sonra* uygulanan seçici bir metadata filtresi aday kümesini aç bırakabilir, çünkü indeks yalnızca geometri üzerine kurulmuştur ve filtrenden hiç haberi yoktur. İndeks sağlıklı görünürken recall sessizce çöker. Aday bütçesini artır (`ef` / `nprobe`), filtreyi aramanın içine kaynaştıran bir veritabanı kullan, ya da minik eşleşen alt kümeyi kaba kuvvetle tara.
+> - **Kör `ef` / `nprobe` ayarı.** Bu düğmeleri bir kaba-kuvvet ground truth'una karşı recall ölçmeden döndürmek kör uçmaktır: recall mi kazandığını yoksa sadece gecikme mi yaktığını anlayamazsın. Eğrinin nerede düzleştiğini görüp orada durabilmek için her zaman gerçek bir top-k temeline karşı tara.
+> - **Metrik / normalizasyon uyumsuzluğu.** İndeksin kullandığı benzerlik metriği, vektörlerinin nasıl üretildiğiyle eşleşmelidir. Embedding'lerin kosinüs benzerliği için birim uzunluğa normalize edildiyse ama indeksi bir Öklid ya da ham nokta-çarpımı metriğiyle sorguluyorsan (ya da tam tersi), "en yakın" komşular incelikle yanlıştır ve recall hiçbir `ef` miktarının düzeltemeyeceği sebeplerle kötüleşir. Metriği modele her zaman eşleştir.
+
+## Özet çıkarımlar
+
+- Bir sorguyu her saklı vektöre karşı karşılaştırmak **tam, kaba-kuvvet k-NN**'dir: kusursuz doğru ama sorgu başına **O(n)**, ki bu binlerce parça için sorun değil, milyonlarcası için işlemez.
+- **B-ağacı** gibi sıradan veritabanı indeksleri yardımcı olmaz, çünkü yüzlerce boyutta en-yakın-komşu bir sıralı-sütun sorgusu değildir, ve ağaç-tabanlı bölümleme **boyutluluk laneti** altında çöker.
+- Çözüm tam olmayı bırakmaktır: **Yaklaşık En Yakın Komşu (ANN)** araması, küçük bir miktar **recall**'ı (döndürdüğün gerçek top-k'nın kesri) devasa bir hız kazancıyla takas eder. Her indeks, **hız-recall** eğrisinde bir noktadır.
+- **HNSW**, katmanlı bir grafikte açgözlü biçimde gezinir, üstte uzun sıçramalar altta kısa sıçramalar, daha yüksek bir bellek maliyetiyle mükemmel hız ve recall için; bugünün en yaygın varsayılanıdır.
+- **IVF**, vektörleri **merkezler (centroid)** etrafında kümeler ve yalnızca en yakın birkaç kümeyi arar, `nprobe` ile ayarlanır; bellekte daha hafiftir ve diskte iyi ölçeklenir, ve veri RAM'e sığmadığında **DiskANN/Vamana**, disk-üstü bir grafikten HNSW seviyesinde recall sunar. **Nicemleme (quantization)**, küçük bir doğruluk bedeliyle bellekten tasarruf etmek için vektörleri sıkıştırır: skaler `int8` (~4 kat), ikili (~32 kat, en iyi adayları tam hassasiyette yeniden skorladığında yüzde 90 ya da daha iyi recall ile), ve **Product Quantization (PQ)**.
+- Bir **vektör veritabanı**, indeks artı depolama artı API artı operasyonel makinedir: vektörleri ve onların metnini ve **metadata**'sını tutar, **metadata filtreleme** ve **upsert**'leri destekler, ve kalıcılık sağlar ve ölçeklenir. Basit ve yerel başla; gerçek bir kısıt talep ettiğinde yönetilen ya da ölçeklenebilir bir depoya terfi et, ve hızla değişen arazi kendini doğrula.
+
+## Referanslar
+
+- Yu. A. Malkov and D. A. Yashunin (2018). *Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs.* IEEE Transactions on Pattern Analysis and Machine Intelligence. [arXiv:1603.09320](https://arxiv.org/abs/1603.09320). HNSW makalesi.
+- Hervé Jégou, Matthijs Douze, and Cordelia Schmid (2011). *Product Quantization for Nearest Neighbor Search.* IEEE Transactions on Pattern Analysis and Machine Intelligence, 33(1), 117-128. [hal.science/inria-00514462](https://inria.hal.science/inria-00514462). Product Quantization makalesi.
+- Hervé Jégou, Matthijs Douze, Jeff Johnson, et al. *FAISS (Facebook AI Similarity Search)*, ANN indekslerinin (HNSW, IVF, PQ, ve daha fazlası) referans açık kaynak araç seti. [github.com/facebookresearch/faiss](https://github.com/facebookresearch/faiss); GPU çalışması Johnson, Douze, ve Jégou'nun *Billion-scale similarity search with GPUs* makalesinde anlatılıyor, [arXiv:1702.08734](https://arxiv.org/abs/1702.08734).
+- Suhas Jayaram Subramanya, Devvrit, Rohan Kadekodi, Ravishankar Krishnaswamy, and Harsha Vardhan Simhadri (2019). *DiskANN: Fast Accurate Billion-point Nearest Neighbor Search on a Single Node.* NeurIPS 2019. [proceedings.neurips.cc](https://proceedings.neurips.cc/paper/2019/hash/09853c7fb1d3f8ee67a61b6bf4a7f8e6-Abstract.html). Disk-üstü Vamana grafiği.
+
+## Sözlük
+
+- **Tam / kaba-kuvvet k-NN**: sorguyu her saklı vektöre karşı karşılaştırıp gerçek en yakın `k` taneyi döndürmek; kusursuz doğru ama sorgu başına O(n) iş.
+- **Yaklaşık En Yakın Komşu (Approximate Nearest Neighbor, ANN)**: gerçek en yakın komşulara *neredeyse* eşit sonuçlar döndüren, küçük bir doğruluğu büyük bir hız kazancıyla takas eden arama; her vektör indeksinin temeli.
+- **Recall** (en-yakın-komşu anlamında): bir yaklaşık aramanın gerçek top-k'nın fiilen döndürdüğü kesir; 0.95 recall, gerçekten en yakın sonuçların yüzde 95'inin bulunduğu anlamına gelir.
+- **Boyutluluk laneti (curse of dimensionality)**: sezgilerin ve ağaç-tabanlı bölümlemenin yüksek boyutlarda çöküş biçimi; noktalar neredeyse eşit uzaklıkta hale gelir ve budama başarısız olur, bu da sıradan uzamsal indeksleri yener.
+- **B-ağacı (B-tree)**: bir sütunun değerlerini sıralı tutan standart veritabanı indeksi, böylece motor onlar üzerinde ikili arama yapabilir; tek, sıralı bir boyutta tam eşleşmeler, aralıklar ve sıralama için mükemmel, ama birçok boyutta en-yakın-komşu araması için işe yaramaz.
+- **HNSW (Hierarchical Navigable Small World)**: üst üste katmanlı, grafik-tabanlı bir ANN indeksi; açgözlü gezinme seyrek üst katmanlarda uzun sıçramalar, yoğun alt katmanda kısa sıçramalar yapar. Hızlı, yüksek recall, bellek açlığı çeken.
+- **IVF (Inverted File Index)**: vektörleri kümelere bölen ve yalnızca sorguya en yakın kümeleri arayan (`nprobe` ile ayarlanır), kümeleme-tabanlı bir ANN indeksi; HNSW'den bellekte daha hafif ve diskte iyi ölçeklenir.
+- **Merkez (centroid)**: bir kümenin üye vektörlerinin ortalama konumu; hangi kümelerin aranacağına karar vermek için sorgu anında karşılaştırılan temsili adresi.
+- **k-means**: vektörleri yakınlığa göre seçilen sayıda gruba bölen, her biri kendi merkeziyle özetlenen bir kümeleme algoritması; IVF'in arkasındaki kümeleme adımı.
+- **nprobe**: IVF'de, sorgu başına aranan küme sayısı; daha yüksek daha iyi recall ve daha yavaş demektir, daha düşük daha hızlı ve daha riskli demektir.
+- **Product Quantization (PQ)**: vektörleri alt-vektörlere bölen ve her birini küçük bir kod defteriyle kodlayan, hassasiyette küçük bir bedelle belleği küçülten bir sıkıştırma şeması; genelde IVF+PQ olarak birleştirilir.
+- **Skaler nicemleme (scalar quantization)**: her boyutu bir 32-bit float yerine 8-bit bir tam sayı olarak saklamak, çoğu embedding modeli için recall'a küçük bir bedelle yaklaşık 4 kat daha küçük bellek.
+- **İkili nicemleme (binary quantization)**: her boyutu tek bir bite çökertmek, yaklaşık 32 kat daha küçük bellek; yüksek recall'ı (yüzde 90 ya da daha iyi) geri kazanmak için en iyi adaylar üzerinde tam-hassasiyetli bir **yeniden skorlama (rescoring)** geçişi gerektirir.
+- **Yeniden skorlama (rescoring / rerank / refinement)**: hızlı, kaba bir aramanın döndürdüğü cömert bir aday kümesini tam-hassasiyetli vektörlerle yeniden sıralamak, sıkıştırmaya kaybedilen recall'ı geri kazanmak için.
+- **DiskANN / Vamana**: bir SSD'de tutulan (DiskANN), grafik-tabanlı bir ANN indeksi (Vamana); böylece tek bir makine, RAM'e sığmayacak milyar-vektörlük koleksiyonlara HNSW seviyesinde recall ile hizmet verebilir.
+- **Filtreli-ANN recall çöküşü**: seçici bir metadata filtresinin, yalnızca metriğe dayalı bir ANN gezisinden sonra uygulanması ve aday kümesini aç bırakmasıyla ortaya çıkan recall düşüşü; daha büyük aday bütçeleriyle, aramaya kaynaştırılmış filtrelemeyle, ya da eşleşen minik bir alt kümeyi kaba kuvvetle tarayarak hafifletilir.
+- **Vektör veritabanı (vector database)**: bir ANN indeksini, vektör ve payload depolamasını, bir API'yi ve operasyonel makineyi birleştiren, benzerlik araması etrafında organize edilmiş bir sistem.
+- **Metadata filtreleme**: bir benzerlik aramasını, her vektörle birlikte saklanan tarih, kaynak, etiketler ya da sahip gibi yapılandırılmış alanlara göre kısıtlamak.
+- **Upsert**: id'si yeniyse bir vektör ekleyen, id zaten varsa güncelleyen bir yazma işlemi; bir indeksi güncel tutmanın temel operasyonu.
+
+---
+
+**Sırada, 5. Bölüm: Belgeler ve Parçalama.** Doğru parçaları ölçekte hızlıca getirebiliyoruz, ama parçaların baştan makul biçimde kesildiğini varsayıyorduk. Sırada bölme işini ele alıyoruz: gerçek belgeleri gömmeye değer parçalara nasıl ayırırsın, ve bunu yanlış yapmanın akış aşağısındaki her şeyi nasıl sessizce sabote ettiği.

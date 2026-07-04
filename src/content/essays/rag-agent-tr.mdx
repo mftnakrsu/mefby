@@ -1,0 +1,224 @@
+---
+title: "Bir RAG Agent'ı İnşa Etmek"
+description: "Retrieval-Augmented Generation üzerine sıfırdan bir serinin 19. bölümü: 10. bölümün yalnızca nesir içinde gezdirdiği agentic RAG'i (ReAct döngüsü, araç kullanımı, yönlendirme, multi-hop) alıp elle gerçek bir agent inşa ediyoruz: dört araç, bir reason/act/observe döngüsü, dürüst bir adım bütçesi ve satır satır okuyabileceğin üç trace."
+date: 2026-06-25
+tags: ["RAG", "Agentic RAG", "ReAct", "Agents", "Tool Use", "Retrieval", "LLM", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-19-rag-agent"
+ogImage: "/og/rag-by-hand.png"
+lang: "tr"
+translationSlug: "rag-agent"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+On sekiz bölüm boyunca hattımız kendi şeklini yalnızca kenarlarda belirledi. 10. bölüm ona kontrol akışı verdi, 15. bölüm ona bir şef verdi, ama aradaki adımları önceden kablolamak hep bize düştü. Bu bölümde o kablolamayı modele devrediyoruz. Küçük bir **agent** inşa edeceğiz: her adımda, o ana kadar yaptıklarının ilerleyen kaydını okuyan, sırada ne yapacağına düşünen, tam olarak bir araç seçen, sonucu gözlemleyen ve bitirdiğine karar verene dek döngüye giren bir sistem. Kodu yazarken rota sabitlenmiyor. Rotaya çalışma anında, adım adım karar veriliyor. O döngünün bir adı var, **ReAct** (Reason artı Act'in kısaltması), ve 10. bölüm onu hiç çalıştırmadan nesir içinde gezdirmişti: multi-hop kulaklık sorusu, dört araç, yönlendirme kararı — hepsi anlatıldı, hiçbiri çalıştırılmadı. Bu bölüm onları çalıştırıyor. Dört araç, gerçek bir reason/act/observe döngüsü, sonsuza dek dönmeye karşı dürüst bir koruma ve satır satır okuyabileceğin üç trace inşa edeceğiz. 10. bölümün agentic RAG hakkında anlattığı her şeyi yeniden anlatmayacağım; onun anlattığı şeyi inşa edeceğim.
+
+## Ön koşullar
+
+Bu bölüm, ana serideki getirme makinesinin üzerine oturuyor; bu yüzden o parçalar zaten kafanda yerleşikse en çoğunu buradan alırsın. [İlk RAG'ini İnşa Et](/essays/build-your-first-rag-tr) (6. bölüm) lazım, çünkü dört aracımızdan ikisi retriever ve tam olarak oradaki getir-sonra-kullan döngüsü, yalnızca bir agent'ın çağırabileceği biçimde sarılmış. [Retrieval'ı Daha Akıllı Hale Getirmek](/essays/making-retrieval-smarter-tr) (8. bölüm) lazım, çünkü zor bir sorunun genelde birden fazla getirmeye ihtiyaç duyduğu fikri multi-hop'un tohumu. Ve [Gelişmiş RAG Mimarileri](/essays/advanced-rag-architectures-tr) (10. bölüm) lazım, çünkü ReAct döngüsü, araç kullanımı, sorgu yönlendirme ve multi-hop kulaklık örneği ilk orada, nesir içinde tanıtıldı. Bu bölüm, o bölümün çalıştırılabilir hâli. Yeni matematik yok. Kontrol akışı ve muhakeme, artı bir oturuşta okuyabileceğin birkaç düzine satır deterministik Python.
+
+## Bir pipeline'dan bir agent'a
+
+Şimdiye kadarki her bölüm bir **pipeline** inşa etti: önceden seçtiğimiz sabit bir adım dizisi. Sorguyu göm, depoda ara, yeniden sırala, bir prompt kur, üret. 15. bölüm üç böyle pipeline'ın önüne bir sınıflandırıcı koydu ve birini seçmesine izin verdi, ama her pipeline yine de bizim çizdiğimiz düz bir çizgiydi. Bir **agent** ise tek bir belirli açıdan farklı. Bir agent, bizim çizdiğimiz bir rotayı koşmaz. Bir döngü koşar, ve o döngünün içinde bir controller duruma bakar ve sıradaki eylemi kendisi seçer. Koşunun şekli — kaç adım attığı, hangi araçları hangi sırayla çağırdığı — kaynak kodda yazılı değildir. Controller'ın devam ederken verdiği bir karar dizisinden, çalışma anında ortaya çıkar.
+
+İnşa ettiğimiz desen **ReAct**, Yao ve meslektaşları tarafından "ReAct: Synergizing Reasoning and Acting in Language Models" makalesinde tanıtıldı (Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan ve Yuan Cao, ICLR 2023, arXiv:2210.03629). O makaledeki içgörü küçük ve güçlü: akıl yürütmeyi ve eylemi aynı döngüde iç içe geçir. Modele her şeyi baştan planlamasını, ya da kendini açıklamadan körlemesine eylemesini istemek yerine, sırayla değiştirmesine izin verirsin. Bir **Thought** yazar (sırada ne yapılacağına dair kısa bir akıl yürütme satırı), sonra bir **Action** alır (tek bir araç çağrısı), sonra bir **Observation** okur (aracın döndürdüğü sonuç), ve sonra az önce gözlemlediğini kullanabilecek yeni bir Thought'a geri döner. Akıl yürütme eylemi yönlendirir; eylem akıl yürütmeyi besler. Bu değiş tokuş fikrin tamamı, ve düz bir pipeline'ı kendi adımlarını zincirleyebilen bir şeye dönüştüren de tam olarak budur.
+
+<Diagram number={1} caption="reason/act/observe çevrimi. Her turda controller bir Thought yayınlar (kehribar), dört-araçlık paletten bir Action seçer ve yeni bir Thought'a dönmeden önce bir Observation okur (camgöbeği). İki retriever (search_policy, search_products) teal renginde; calculator, retrieval-dışı bir araç; finish (zümrüt) döngüyü bitiren tek çıkış. Figürün vurguladığı kritik nokta, çevrimin çalışma anında karara bağlanmasıdır: kodun hiçbir yerinde kaç kez döneceği ya da her turda hangi aracın seçileceği sabitlenmemiştir. Döngü, finish çağrılana ya da bir adım bütçesi onu durdurana kadar çalışır.">
+  <img src="/essays/rag-agent/part19-react-loop.svg" alt="Dairesel bir döngü diyagramı. Üstte, Thought (sırada ne yapılacağına dair akıl yürüt) etiketli kehribar rengi bir düğümden, Action (bir araç seç) etiketli bir düğüme bir ok gidiyor; bu düğüm dört araçlık bir palete dallanıyor: teal renginde search_policy ve search_products, ikisi de bir chunk getir etiketli; calculator, aritmetik değerlendir etiketli; ve zümrüt rengindeki finish, cevapla döngüyü bitir etiketli. Finish-dışı araçlar, Observation (araç sonucu) etiketli camgöbeği bir düğüme yukarı bir ok döndürüyor; bu düğüm de çevrimi kapatarak Thought'a geri dönüyor. Finish aracı bunun yerine Answer etiketli zümrüt bir çıkış düğümüne işaret ediyor. Alttaki bir alt yazı şeridi şunu söylüyor: rota çalışma anında karara bağlanır, kodda sabitlenmez; döngü finish'e ya da bir maksimum-adım bütçesine kadar döner." class="w-full rounded-lg" />
+</Diagram>
+
+## Dört araç
+
+Bir agent, yapabildiği şeyler kadar yeteneklidir, ve yapabildiği şeyler onun **araçlarıdır (tools)**. Bir araç, controller'ın çağırmasına izin verilen, belgelenmiş bir argümanı ve döndürdüğü bir sonucu olan, adlandırılmış bir fonksiyondan başka bir şey değildir. Agent, altta yatan veriye asla doğrudan dokunmaz; yalnızca bu sabit fonksiyon kümesi üzerinden hareket edebilir, ve her biri controller'ın bir sonraki turda okuyacağı bir Observation string'i geri verir. Bu genelde **araç kullanımı (tool use)** ya da function calling olarak adlandırılan fikirdir. Bugün pratikte kullandığın sağlayıcı-tarzı function-calling API'leri için tek bir kanonik makale yok, çünkü bunlar bir araştırma sonucundan çok bir API kuralı; ama dil modellerine araç kullanmayı öğretmenin erken akademik çalışması bir selamı hak ediyor: Toolformer (Schick ve Dwivedi-Yu ve meslektaşları, arXiv:2302.04761, 2023), bir modelin kendi kendini denetleyen bir biçimde araç çağırmayı öğrenmesini gösterdi. Devreye alınan function-calling tarzı o yaklaşımdan farklı, ama araç kullanımının nereden geldiğine dair yararlı bir arka plan.
+
+Agent'ımızın dört aracı var, ve çeşitlilik hakkında bir nokta koymak için seçildiler:
+
+1. **search_policy(query)**, 6'dan 12'ye kadarki bölümlerden taşıdığımız destek ve politika corpus'undan tek en iyi chunk'ı getirir: iadeler, E-4042 ödeme-reddedildi hatası, kargo, garanti. Bu bir retriever, bildiğin türden.
+2. **search_products(query)**, bir satın almayı ve bir garanti zincirini anlatan küçük yeni bir ürün kaynağından getirir. Bilerek öyle bölünmüştür ki hiçbir tek chunk hem "Acme'yi kim satın aldı" hem de "kulaklık garantisi"ni birlikte tutmaz, ve bu tam olarak ilerideki gerçek multi-hop'u zorunlu kılan şeydir.
+3. **calculator(expr)**, basit aritmetiği değerlendirir. Her sorunun bir retrieval sorusu olmadığını kanıtlamak için var. Bazı cevaplar hesaplanır, aranmaz.
+4. **finish(answer)**, döngüyü nihai cevapla sonlandırır. "Dur"u bir araç olarak ele almak küçük, temiz bir hile: controller, koşuyu tıpkı başka her şeyi yaptığı gibi bir eylem seçerek bitirir.
+
+Kodda bunlar bir registry'de toplanmış sıradan Python fonksiyonlarıdır, ve bu tam olarak gerçek bir LLM controller'ına verilecek mevcut-eylem paletidir:
+
+```python
+TOOLS = {
+    "search_policy": search_policy,
+    "search_products": search_products,
+    "calculator": calculator,
+    "finish": finish,
+}
+```
+
+İki retriever, serinin tamamında kullanılan aynı lexical retriever; bu yüzden demo, sentence-transformers indirmesi ve ağ çağrısı olmadan offline çalışır, ve seçilen araçlar ile gözlemlenen olgular yeniden üretilebilir. Bir ortam bayrağının arkasında gerçek bir dense-embedding yolu var, ama bu yalnızca yazdırılan benzerlik skorlarını değiştirir; agent'ın hangi aracı seçtiği ve hangi chunk'a indiği her iki durumda da aynıdır.
+
+## Döngü: reason, act, observe, tekrarla
+
+Şimdi işin kalbi. Controller, her turda sırada ne yapılacağına karar veren parçadır. Üretim sisteminde controller bir dil modelidir: ona hedefi, ilerleyen transkripti ve araç paletini verirsin, ve o bir sonraki Thought ile Action'ı yayınlar. Bu artifact'ta controller bunun yerine küçük bir deterministik kurallar kümesidir, ve bu tercih bilinçlidir. 15. bölümün `classify_complexity`'sinin burada bir kural bloğu, üretimde eğitilmiş bir model olmasını birebir yansıtır. Şeffaf bir kural politikasının öğretim değeri, agent'ın her adımı neden attığını, bir modelin içinde hiçbir şey saklı kalmadan, tam olarak okuyabilmendir. Eşlik eden kod, gerçek LLM yolunu `generate()`'in arkasında tutar (OpenAI aktif, yorum satırlarında Ollama ve bir claude-opus-4-8 varyantı, repo geleneği) ve bir API anahtarı ayarlıysa bir başlık yazdırır, ama dosyanın her yerde çalışabilmesi için her zaman deterministik politikaya düşer.
+
+İşte controller, çalıştırılabilir artifact'tan birebir, [rag_agent.py](/essays/rag-agent/rag_agent.py). Hedefi ve önceki adımların listesini alır ve bir sonraki adımı bir Thought, bir araç adı ve bir argüman olarak döndürür:
+
+```python
+def controller(goal, transcript_steps):
+    """Decide the next ReAct step deterministically (the offline policy).
+
+    `transcript_steps` is the list of prior (thought, tool, arg, observation)
+    tuples. Returns (thought, tool_name, argument) for the next step.
+    """
+    g = goal.lower()
+    n = len(transcript_steps)
+
+    # --- No-retrieval branch: arithmetic. Compute once, then finish. ---------
+    pct = _PERCENT_RE.search(g)
+    if pct:  # only enter when the percent pattern actually matched
+        if n == 0:
+            rate, base = pct.group(1), pct.group(2)
+            expr = f"{float(rate) / 100} * {base}"
+            return ("This is arithmetic, not a knowledge lookup; use the calculator.",
+                    "calculator", expr)
+        value = transcript_steps[-1][3]               # the calculator observation
+        return ("I have the computed value; finish.",
+                "finish", f"18% of a $250 order is ${float(value):.2f}.")
+
+    # --- Multi-hop branch: an acquisition + downstream warranty question. -----
+    # NO single chunk holds both facts, so the agent must chain two retrievals:
+    # hop 1 finds WHO acquired Acme; hop 2 uses that name to find the warranty.
+    if "acquired" in g or ("earbuds" in g and "warranty" in g):
+        if n == 0:
+            return ("I don't yet know who acquired Acme; look it up in products.",
+                    "search_products", "who acquired Acme")
+        if n == 1:
+            # Read the hop-1 observation to learn the acquirer's name, then use
+            # it to phrase hop 2. THIS is multi-hop: an observation feeds the
+            # next action, which a single-pass pipeline can never do.
+            obs1 = transcript_steps[0][3]
+            acquirer = _acquirer_from(obs1)           # "Globex" from the obs text
+            return (f"Acme was acquired by {acquirer}; now find {acquirer}'s earbuds warranty.",
+                    "search_products", f"{acquirer} earbuds warranty")
+        obs2 = transcript_steps[1][3]
+        acquirer = _acquirer_from(transcript_steps[0][3])
+        return ("I have the warranty term for the earbuds; finish.",
+                "finish", f"The earbuds are made by {acquirer} (which acquired Acme), "
+                          f"and they carry a 2-year limited warranty.")
+
+    # --- Routing branch: a policy question goes to the POLICY index. ----------
+    if n == 0:
+        # Strip the question framing so retrieval scores the content words.
+        sub = re.sub(r"^(what'?s?|what is)\s+(our\s+)?", "", g).strip(" ?")
+        return ("This is a policy question; search the policy index.",
+                "search_policy", sub or goal)
+    obs = transcript_steps[-1][3]
+    return ("The policy chunk answers the question; finish.", "finish", obs)
+```
+
+Dikkat edilmesi gereken şey, her dalın sırada ne yapılacağına karar vermek için `transcript_steps`'i, yani o ana kadar olanların kaydını, okumasıdır. Bunu bir düz çizgi değil bir döngü yapan şey de budur. Özellikle multi-hop dalı, zaten atılan adım sayısı olan `n`'e bağlıdır: sıfırıncı adımda Acme'yi kimin satın aldığını hiç bilmez, bu yüzden arar; birinci adımda cevabı ilk gözlemden okur ve o ismi ikinci aramayı ifade etmek için kullanır; ikinci adımda bitirir. Her turun kararı, önceki turun sonucuna bağlıdır. Buradaki kurallar, bir dil modelinin zaten tartacağı aynı ucuz sinyallere bağlıdır: hedefteki aritmetik onu calculator'a gönderir, bir satın-alma-artı-garanti sorusu onu iki-hop'luk bir aramaya gönderir, ve başka her şey bir politika araması olarak ele alınır.
+
+Controller'ı saran şey döngünün kendisi, ve bu kafanda tutabilecek kadar küçük. Her turda controller'dan bir sonraki Thought'u, aracı ve argümanı ister, aracı çağırır, gözlemi kaydeder ve döner. Çıkmanın tam olarak iki yolu var, ve ikisi de dürüst. Birincisi controller'ın `finish`'i seçmesi, cevabı döndüren normal çıkış. İkincisi **adım bütçesiyle sonlanma (termination by step budget)**: döngü `finish`'i hiç çağırmadan `max_steps` tur çalışırsa, yine de durur. Bu ikinci çıkış bir lüks değildir. Bir agent döngüsü takılabilir (başarısız bir eylemi tekrarlayarak, iki durum arasında salınarak ya da basitçe bittiğine hiç karar vermeyerek), ve tek güvenilir savunma adım sayısına sert bir tavan koymaktır. Neredeyse her üretim agent'ının tam olarak bu yüzden bir tanesi vardır. Artifact'ta bütçe varsayılan olarak altı, üç koşumuzun herhangi birinin ihtiyaç duyduğundan rahatça fazla, ve döngü, eğer tavana çarparsa dürüst bir "step budget exhausted" satırı yazdırır.
+
+## Multi-hop, gerçekten
+
+İşte bölümün tamamını hak eden koşu. Soru, 10. bölümün nesir içinde kullandığı ve hiç çalıştırmadığı soru, birebir: "Acme'yi satın alan şirketin ürettiği kulaklıkların garantisi nedir?" Tek bir retrieval'la cevaplanamaz, ve nedeni yapısaldır. Cevap, ikinci aramayı ifade edebilmen için bile önce ihtiyaç duyduğun bir olguya (hangi şirketin Acme'yi satın aldığına) bağlıdır (o şirketin kulaklık garantisi). Products corpus'unda hiçbir tek chunk, tasarım gereği, ikisini birden tutmaz. Tek-geçişli bir pipeline, tüm cümleye karşı bir kez getirir, tek tek ilgili birkaç chunk'ı geri çeker, ve onları bağlamanın hiçbir yolu yoktur. Satın alma olgusunu ya da garanti olgusunu ortaya çıkarabilir, ama birincisini ikincisini bulmak için kullanamaz, çünkü yalnızca tek bir bakış hakkı vardır.
+
+Agent, ihtiyacı kadar çok bakış hakkı alır. Trace'i izle:
+
+```text
+  Step 1
+    Thought: I don't yet know who acquired Acme; look it up in products.
+    Action: search_products("who acquired Acme")
+    Observation: Acme Corp was acquired by Globex in 2024. (score=0.58)
+  Step 2
+    Thought: Acme was acquired by Globex; now find Globex's earbuds warranty.
+    Action: search_products("Globex earbuds warranty")
+    Observation: Globex-branded wireless earbuds carry a 2-year limited warranty. (score=0.58)
+  Step 3
+    Thought: I have the warranty term for the earbuds; finish.
+    Action: finish("The earbuds are made by Globex (which acquired Acme), and they carry a 2-year limited warranty.")
+```
+
+İkinci adımı dikkatle oku, çünkü **multi-hop retrieval** kavramının tamamı tek satırda. Agent "Globex" için aramıyor çünkü biz bir yere "Globex" yazdık. "Globex" için arıyor çünkü birinci adımın gözlemi ona Globex'in Acme'yi satın aldığını söyledi, ve controller bir sonraki sorguyu ifade etmek için o gözlemi transkriptten geri okudu. Bir gözlem, bir sonraki eylemi besledi. Bu geri besleme (bir getirmenin sonucunun bir sonraki getirmenin sorgusunu şekillendirmesi), tek-geçişli bir pipeline'ın yapısal olarak yapamayacağı hamledir, ve agent'ın pipeline'ın cevaplayamadığı bir soruyu cevaplamasının nedeni de budur. Üç adım, iki retrieval, Acme'yi Globex'e ve garanti süresine zincirleyen tek bir doğru cevap.
+
+<Diagram number={2} caption="Aynı kulaklık sorusu iki farklı biçimde. Solda, naif tek-geçişli bir pipeline tüm cümleye karşı bir kez getirir ve tek tek ilgili ama izole chunk'lar geri çeker: Acme satın alma olgusunu ve garanti olgusunu ayrı, birbirine bağlanmamış parçalar olarak ortaya çıkarır ve onları köprüleyemez, bu yüzden yanlış ya da eksik cevap verir (gül rengi). Sağda, agent hop bir'i yapar (Acme'yi kim satın aldı, Globex'i döndürür), sonra o sonucu hop iki'yi ifade etmek için kullanır (Globex kulaklık garantisi, 2 yıl döndürür), sonra bitirir (zümrüt). Fark zincirlemedir: pipeline tek bakış hakkı alır, agent her gözlemin bir sonraki sorguyu yönlendirmesine izin verir.">
+  <img src="/essays/rag-agent/part19-agent-vs-pipeline.svg" alt="İki sütunlu bir karşılaştırma diyagramı. Üstteki ortak soru şöyle: Acme'yi satın alan şirketin ürettiği kulaklıkların garantisi nedir? Sol sütun, tek-geçişli pipeline etiketli, tek bir Retrieve kutusunun iki izole chunk kartını beslediğini gösterir: biri Acme'nin Globex tarafından satın alındığını, biri kulaklıkların 2 yıl garantisi olduğunu söyler, aralarında kopuk bir bağlantıyla birbirinden ayrık çizilmiştir ve yanlış ya da eksik: Acme'yi Globex'e ve garantiye bağlayamıyor etiketli gül rengi bir Answer kutusunda biter. Sağ sütun, agent (ReAct) etiketli, dikey bir zincir gösterir: hop 1, search_products Acme'yi kim satın aldı, Globex döndürür; Globex kelimesini taşıyan bir ok aşağı, hop 2'ye iner, search_products Globex kulaklık garantisi, 2 yıllık sınırlı garanti döndürür; sonra tam dayanaklı cevapla zümrüt bir finish kutusu. Alt bilgi şöyle der: pipeline bir kez getirir ve zincirleyemez; agent her gözlemin bir sonraki sorguyu yönlendirmesine izin verir." class="w-full rounded-lg" />
+</Diagram>
+
+Aşağıdaki interaktif figür, bu koşuyu kendin adım adım ilerletmeni ve karşıtlık için retrieval'sız koşuya geçmeni sağlar. Her basış bir sonraki Thought, Action ve Observation'ı ortaya çıkarır, çağrılan aracı vurgular, ve transkripti biriktirir, finish'te sona erer.
+
+<Diagram number={3} caption="Agent'ın trace'inde adım adım ilerle. Mod düğmesini multi-hop kulaklık koşusu ile retrieval'sız calculator koşusu arasında geçiş yapmak için kullan, sonra tek seferde bir adım yürü. Her adım bir sonraki Thought, Action ve Observation'ı ortaya çıkarır, agent'ın çağırdığı aracı yakar, ve satırı ilerleyen transkripte ekler; multi-hop koşusu iki zincirlenmiş arama ve bir finish'ten sonra, calculator koşusu ise indekse sıfır kez dokunarak tek bir hesaplama ve bir finish'ten sonra biter.">
+  <IframeFigure
+    src="/essays/rag-agent/part19-agent-loop.html"
+    title="İnteraktif ReAct trace oynatıcısı. Bir mod düğmesi, agent'ın iki koşusu arasında geçiş yapar. Multi-hop koşusunda hedef, Acme'yi satın alan şirketin ürettiği kulaklıkların garantisi nedir; ileri adımlamak, agent'ın products indeksinde Acme'yi kimin satın aldığını aramasını (Globex'in Acme'yi satın aldığını gözlemlemesini), sonra o ismi Globex kulaklık garantisini aramak için kullanmasını (2 yıllık sınırlı garanti gözlemlemesini), sonra zincirlenmiş cevapla finish çağırmasını gösterir. Retrieval'sız koşuda hedef, 250 dolarlık bir siparişin yüzde 18'i nedir; agent calculator'ı 0.18 çarpı 250 ile çağırır, 45 gözlemler, ve 45 dolarla finish çağırır, hiçbir indekse hiç dokunmadan. Her adım çağrılan aracı vurgular ve Thought, Action ve Observation'ı ilerleyen bir transkripte ekler, finish'te sona erer."
+    height={760}
+  />
+</Diagram>
+
+## Yönlendirme, ve ne zaman hiç getirmemeli
+
+Diğer iki koşu, aynı derecede önemli, daha sessiz bir nokta koyar: agent yalnızca kaç kez getireceğine değil, getirip getirmeyeceğine ve hangi indeksi kullanacağına da karar verir. Bu, agent'ın 10. bölümün tanıttığı aynı fikri, ama şimdi bir anlatım değil canlı bir karar olarak yaptığı **sorgu yönlendirmedir (query routing)**.
+
+Retrieval'sız koşu, "250 dolarlık bir siparişin yüzde 18'i nedir?" sorusu. Burada aranacak hiçbir şey yok. Cevap aritmetik, ve doğru araç bir indeks değil calculator. Agent onu hesaplar ve bitirir:
+
+```text
+  Step 1
+    Thought: This is arithmetic, not a knowledge lookup; use the calculator.
+    Action: calculator("0.18 * 250")
+    Observation: 45.0
+  Step 2
+    Thought: I have the computed value; finish.
+    Action: finish("18% of a $250 order is $45.00.")
+```
+
+İki adım, sıfır retrieval. Agent hiçbir indekse dokunmadı. Bu, calculator aracının paletteki yerini haklı çıkarması: agent'ın, retrieval'ın yalnızca engel olacağı bir soruyu tanımasına ve onu doğrudan cevaplamasına izin verir. Yalnızca getirebilen bir RAG sistemi, gönül rahatlığıyla "18% of $250"ı gömer, bir politika deposunda arar ve ilgisiz chunk'ları bir prompt'a tıkıştırır, sorunun asla ihtiyaç duymadığı bir makine için ödeme yaparak. Bir calculator'ı olan bir agent basitçe aritmetiği yapar.
+
+Yönlendirme koşusu, "iade süremiz ne kadar?" sorusu. Bu gerçek bir politika sorusu, ve agent onu products değil policy indeksine gönderir:
+
+```text
+  Step 1
+    Thought: This is a policy question; search the policy index.
+    Action: search_policy("refund window")
+    Observation: Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging. (score=0.20)
+  Step 2
+    Thought: The policy chunk answers the question; finish.
+    Action: finish("Refunds are accepted within 30 days of purchase, provided the item is unused and in its original packaging.")
+```
+
+İki adım, bir retrieval, ve ilk denemede doğru depoya indi. Bu, 10. bölümün uyardığı naif yanlış-yönlendirmenin tam tersi: iki indeksi olan ve yönlendirme yapmayan bir sistem yanlış olanı arar, ya da ikisini de arayıp umut eder; ama önce soru hakkında akıl yürüten bir agent, soru politikayla ilgili olduğu için policy indeksini seçer. Üç koşu boyunca agent her seferinde farklı bir yol seçti (iki zincirlenmiş arama, bir calculator çağrısı, tek bir yönlendirilmiş arama) ve bu yolların hiçbiri koda sabit bir rota olarak yazılmamıştı. Her biri controller'ın adım-başına kararlarından ortaya çıktı.
+
+## Dürüst çekinceler
+
+Agent'ların pipeline'lara göre bedava bir yükseltme olduğunu düşünmeni bırakırsam sana kötülük etmiş olurum. Bunlar gerçek bir takas, ve takas, güvenilirliğin özerkliğe karşı değişimi. İşte dürüst çerçeveleme, ve içinde uydurulmuş hiçbir sayı olmadığına dikkat et, çünkü gerçek özellikler doğrudan döngünün yapısından çıkar ve hiçbirine ihtiyaç duymaz.
+
+Her adım başka bir controller çağrısı yaptığından, çok-adımlı bir agent, tek bir getir-ve-cevapla geçişinden daha çok token ve daha çok gecikmeye mal olur. Daha kötüsü, bu maliyet önceden bilinmez. Bir pipeline her zaman aynı sabit adım sayısını çalıştırır, bu yüzden onu tam olarak bütçeleyebilirsin. Bir agent, controller'ın almaya karar verdiği kadar çok akıl yürütme-ve-eyleme çevrimi çalıştırır, bu da herhangi bir sorgunun maliyetinin değişken olduğu ve yalnızca döngü çalışırken keşfedildiği anlamına gelir. Basit bir soru için bu iki adım olabilir; karmaşık biri için çok daha fazlası olabilir, ve gerçekleşene kadar hangisi olduğunu bilmezsin.
+
+Agent'lar ayrıca takılabilir. Agent'ın hop'ları zincirlemesine izin veren aynı özerklik, başarısız bir eylemi tekrar tekrar yapmasına, iki durum arasında salınmasına ya da bittiğine hiç karar vermemesine de izin verir. Bunların hiçbiri egzotik değil; yineleme sayısı kod yerine model tarafından belirlenen bir döngüden doğrudan çıkarlar. Üretim sistemlerinin adım sayısına neredeyse her zaman sert bir tavan koymasının, döngüye kurduğumuz **adım bütçesinin (step budget)**, tam nedeni budur. Bu bir cila detayı değildir. Agent'ın hiç değilse sonlanacağının tek garantisidir.
+
+Ve sonra hata ayıklama var. Yanlış cevap döndüren bir pipeline, işaret edebileceğin bir yerde başarısız olur, çünkü adımlar sabittir. Yanlış cevap döndüren bir agent, kimsenin öngörmediği bir yol izlemiş olabilir: hatalı biçimlendirilmiş bir argümanla çağrılan bir araç, yanlış okunmuş bir gözlem, atlanmış bir hop. Burada transkript senin can simidin, ve ReAct'in açık Thought, Action ve Observation satırlarının bu kadar değerli olmasının bir nedeni de bu. Bunlar süs değil; agent'ın neden yaptığını yaptığını bilmen gerektiğinde okuduğun trace'tir. Agent'ını, o trace her zaman yakalanacak şekilde inşa et, çünkü bir şeyler ters gittiğinde sana nerede olduğunu söyleyecek tek şey odur.
+
+> 💡 **Deneyimden.** Sevkettiğim ilk agent'ın bir araştırma aracı ve bir özetleme aracı vardı, ve bir soruyu birden fazla kaynak boyunca nasıl kovaladığıyla gurur duyuyordum. Sonra bir hafta sonu, bir on-call uyarısı bana tek bir kullanıcı oturumunun, günün geri kalan trafiğinin toplamından daha fazla token yaktığını söyledi. Transkripti çektim ve agent'ın aradığını, beğenmediği bir sonucu okuduğunu, sorguyu birazcık yeniden ifade ettiğini, tekrar aradığını, neredeyse özdeş bir sonuç aldığını, tekrar yeniden ifade ettiğini ve düzinelerce adım boyunca böyle döngüye girdiğini, aynı duvara doğru yavaşça parafraz ederek ilerlediğini izledim. Hiç çökmedi ve hiç hata vermedi. Mükemmelen mutluydu. Ortalıkta hiçbir `finish` yoktu, çünkü onun küçük dünyasında hiçbir şey ona sorunun elindeki kaynaklardan cevaplanamaz olduğunu söylemiyordu, bu yüzden denemeye devam etti. Düzeltme utanç verecek kadar basitti ve ilk günden itibaren elimde olmalıydı: sert bir adım bütçesi, artı ardışık iki aramanın esasen aynı sonucu döndürmesi durumunda agent'ın ya bitirmesi ya da vazgeçmesi gerektiğine dair bir kural. Çıkardığım ders şuydu: bütçesi olmayan bir agent bir agent değildir, açık uçlu bir faturadır, ve bütçe, kullanıcıların önüne koyabileceğin bir araç ile dadılık etmen gereken bir bilim deneyi arasındaki farktır.
+
+{/* author: swap the above for your own real first-person agent story if you have a better one, e.g. a deployed ReAct loop that repeated a failing tool call or never called finish and ran up token cost; keep the concrete failure (looping / over-calling) and the lesson that a hard step budget is non-negotiable, and keep it em-dash-free. */}
+
+## Özet çıkarımlar
+
+- Bir **agent**, sabit bir pipeline değil bir döngü koşar. Her adımda bir controller ilerleyen transkripti okur, bir Thought yayınlar, bir Action seçer (bir araç çağrısı), bir Observation okur ve tekrarlar. Koşunun şekli çalışma anında karara bağlanır, koda yazılmaz.
+- Desen **ReAct**'tir (Reason artı Act): bir akıl yürütme adımını ve bir eylem adımını aynı döngüde iç içe geçir, böylece akıl yürütme bir sonraki eylemi yönlendirsin ve her gözlem bir sonraki düşünceyi beslesin. 10. bölümün yalnızca anlattığı agentic RAG'in çalıştırılabilir hâlidir.
+- **Araçlar (tools)**, agent'ın çağırabileceği adlandırılmış fonksiyonlardır. Bizimkiler dört tane: iki retriever (search_policy, search_products), bir calculator (her sorunun bir retrieval olmadığını kanıtlayan) ve finish (döngüyü bitiren). Agent yalnızca bunlar üzerinden hareket eder.
+- **Multi-hop retrieval**, tek-geçişli bir pipeline'ın yapamayacağı hamledir: bir retrieval'ın gözlemi bir sonraki retrieval'ın sorgusunu şekillendirir. Kulaklık sorusu (Acme'den Globex'e, oradan garantiye) iki zincirlenmiş arama gerektirir, çünkü hiçbir tek chunk her iki olguyu da tutmaz.
+- Agent ayrıca canlı bir karar olarak **sorgu yönlendirme (query routing)** yapar: aritmetik calculator'a gider ve hiçbir indekse dokunmaz, bir politika sorusu products değil policy deposuna gider, her biri önce soru hakkında akıl yürütülerek seçilir.
+- Agent'lar **güvenilirliği özerklikle takas eder**. Tek bir geçişten daha çok token ve gecikmeye mal olurlar, maliyet değişkendir ve önceden bilinmez, ve döngüye takılıp kalabilir ya da hiç bitirmeyebilirler. Sert bir **adım bütçesi (step budget)**, pazarlığa kapalı koruma, ve açık transkript, hata ayıklamak için kullandığın şeydir.
+
+## Sözlük
+
+- **Agent**: önceden yazılmış sabit bir adım dizisini çalıştırmak yerine, bir controller'ın her adımda sıradaki eylemi kendisi seçtiği bir döngü koşarak bir hedefi çözen sistem.
+- **ReAct döngüsü**: controller'ın bir Thought yayınladığı, bir Action aldığı, bir Observation okuduğu ve tekrarladığı reason/act/observe çevrimi (Reason artı Act); akıl yürütme ve eylem iç içe geçirilir, böylece her biri diğerini yönlendirir.
+- **Araç kullanımı (tool use)**: bir agent'ın dünya üzerinde eylemde bulunma mekanizması; çağırmasına izin verilen, her biri belgelenmiş bir argümanı ve döndürülen bir sonucu olan, sabit bir adlandırılmış fonksiyon (araç) kümesi üzerinden; function calling olarak da adlandırılır.
+- **Sorgu yönlendirme (query routing)**: agent'ın belirli bir soru için getirip getirmeyeceğine ve hangi indeksi ya da aracı kullanacağına dair kararı; eylemden önce soru hakkında akıl yürüterek verilir (aritmetik calculator'a, bir politika sorusu policy deposuna).
+- **Multi-hop retrieval**: birden fazla retrieval'a ihtiyaç duyan bir soruyu cevaplamak; daha önceki bir retrieval'ın sonucu, sonraki birini ifade etmek için kullanılır; tek-geçişli bir pipeline'ın gerçekleştiremediği zincirlenmiş-arama hamlesi.
+- **Sonlanma / adım bütçesi (termination / step budget)**: bir agent döngüsünün bittiği iki yol, yani controller'ın cevapla finish çağırması, ya da hiç bitirmese bile döngüyü durduran sert bir maksimum adım sayısı; adım bütçesi, sonsuza dek dönen bir agent'a karşı savunmadır.
+
+---
+
+Seri, 18. bölümde, veritabanlarında yaşayan yapılandırılmış bilgiyle, sonuna gelmiş gibi görünen bir noktaya varmıştı. Burası, onun anlattığı ama hiç çalıştırmadığı tek hamlenin üzerinden devam ettiği yer: modelin kendi retrieval döngüsünü sürmesine izin vermek. 10. bölümün yalnızca gezdirdiği agentic RAG'i aldık ve elle inşa ettik: dört araç, gerçek bir reason/act/observe döngüsü, dürüst bir adım bütçesi, ve her biri çalışma anında kendi yolunu seçen üç trace. Ama agent'ımız tek bir soruyu cevapladı ve durdu; daha önce söylenen hiçbir şeyin hafızası yoktu. Gerçek asistanlar bir konuşmanın içinde yaşar, orada "garantisi ne olacaktı?" ancak az önce kulaklıklardan bahsettiğimizi hatırlarsan anlam kazanır. 20. bölüm, Konuşmalı RAG, tam olarak bununla ilgili: bağlamı turlar boyunca taşımak, takip sorularını bağımsız sorulara dönüştürmek, ve tek bir sorgu yerine bir diyaloğa karşı getirme yapmak. Agent'ı da getir. Hatırlamaya başlamak üzere.

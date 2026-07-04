@@ -1,0 +1,223 @@
+---
+title: "Bağlama Duyarlı Chunking"
+description: "Tek başına gayet düzgün okunan bir chunk, belgesinden ayrıldığı anda yorumlanamaz hale gelebilir: 'she' artık 'Alice'e çözümlenmez, 'politika' öncülünü kaybeder. Retrieval-Augmented Generation üzerine sıfırdan bir serinin 14. bölümü, Frontier Track'te: eğitim gerektirmeyen iki çözüm, late chunking (token aralıklarını transformer'dan sonra havuzla) ve Anthropic'in Contextual Retrieval'ı (gömmeden önce LLM'in yazdığı konumlandırıcı bir cümleyi başa ekle), elle inşa edilip karşılaştırılıyor."
+date: 2026-06-20
+tags: ["RAG", "Chunking", "Late Chunking", "Contextual Retrieval", "Embeddings", "Retrieval", "LLM", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-14-context-aware-chunking"
+ogImage: "/og/context-aware-chunking.png"
+lang: "tr"
+translationSlug: "context-aware-chunking"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+Ta 5. bölümde belgelerimizi chunk'lara bölmüş ve her chunk'ı kendi başına yeterli bir birim olarak ele almıştık: göm, sakla, getir. Bu bölüm, o hamledeki sessiz kusur hakkında. Belgesinin içinde gayet güzel okunan bir chunk, onu kesip tek başına gömdüğümüz anda belirsizleşebilir, hatta anlamsızlaşabilir. "She set the refund window at 30 days" cümlesi bağlam içinde kristal gibi nettir, tek başına ise neredeyse işe yaramazdır; çünkü "She", işaret ettiği ismi kaybetmiştir. Bu başarısızlığı somutlaştıracağız, doğru cevabı bir sıralamanın dibine gömüşünü izleyeceğiz ve sonra hiçbir şey eğitmeden iki farklı yolla düzelteceğiz. İlk çözüm, late chunking, token'ları bir chunk vektörüne *ne zaman* havuzladığımızı değiştirir; böylece belgenin tamamı her chunk'ı bilgilendirebilir. İkincisi, Contextual Retrieval, gömmeden önce her chunk'ın başına kısa bir konumlandırıcı cümle ekler. İkisi de eğitim gerektirmez, ikisi de bugün pratikte kullanılabilir ve birlikte de çalışırlar. Bölümün sonunda her birinin mekanik olarak nasıl çalıştığını, alıntılamaya değer o tek sayıyı ve nasıl seçeceğini biliyor olacaksın.
+
+## Ön koşullar
+
+Bu bölüm, iki eski bölümün üzerine kuruluyor. [Belgeler ve Chunking](/essays/documents-and-chunking-tr) (5. bölüm), belgeleri ilk böldüğümüz ve benim bağlam kaybı sorununu ilk kez el sallayıp geçtiğim yer; o yüzden onun kafanda olması işine yarar. [İleri Retrieval Desenleri](/essays/advanced-retrieval-patterns-tr) (9. bölüm), gömdüğün şeyi sakladığın ve modele verdiğin şeyden ayırma fikrini tanıtmıştı; late chunking de aynı fikrin keskin bir örneği. Ayrıca [Benzerliği Ölçmek](/essays/measuring-similarity-tr) (3. bölüm)'ten kosinüs benzerliğini hatırlıyor olmalısın; çünkü aşağıdaki her sıralama, sıralanmış kosinüs skorlarından ibaret. Bir ortalama ve bir nokta çarpımı dışında yeni matematik yok. Eşlik eden kod framework'süz ve çevrimdışı kalmaya devam ediyor, yalnızca numpy ve standart kütüphane; gerçek long-context encoder ise bir fallback'in arkasında, böylece her yerde çalışıyor.
+
+Bunun nerede durduğuna dair kısa bir not. Çekirdek seri 12. bölümde, yani finalde bitti. Burası Frontier Track: çekirdek pipeline sağlamlaştıktan sonra uzandığın, isteğe bağlı 2026-sınırı malzemesi. Buradaki hiçbir şey iyi bir RAG sistemi çıkarmak için zorunlu değil. Sıkıcı ama iyi ayarlanmış chunking sana recall kaybettirmeye başladığında ve bir sonraki hamlenin ne olduğunu bilmek istediğinde diye burada.
+
+## Bağlam kaybı sorunu
+
+Kırılan en küçük örnekle başlayayım. İşte dört cümlelik bir iade politikası notu; 6. bölümden beri mağaza asistanımızın hakkında soruları cevapladığı türden bir destek belgesi. Cümle başına bir chunk olacak şekilde bölüyoruz, ki bu gayet makul bir chunking tercihi:
+
+```
+[0] Alice founded Acme in 2019.
+[1] She set the refund window at 30 days.
+[2] Returns outside that window are declined automatically.
+[3] The error code E-4042 means the window has already closed.
+```
+
+Şimdi kullanıcı soruyor: *"what is Alice's refund window?"* Cevap chunk `[1]`. Düz kelimelerle, refund window'un 30 gün olduğunu söylüyor. Notun tamamını okuyan bir insan olarak hiç zorlanmazsın: "She" Alice'tir, pencere 30 gündür, bitti.
+
+Retriever zorlanıyor. Her chunk dizesini kendi başına gömüyoruz, query'yi gömüyoruz ve kosinüs benzerliğine göre sıralıyoruz. İşte eşlik eden koddaki çevrimdışı çalıştırmadan, yukarıdan aşağıya gelen sonuç:
+
+```
+   1.  0.915  [2] Returns outside that window are declined automatically.
+   2.  0.910  [1] She set the refund window at 30 days.
+   3.  0.335  [3] The error code E-4042 means the window has already closed.
+   4.  0.289  [0] Alice founded Acme in 2019.
+```
+
+Asıl cevap, chunk `[1]`, 2. sıraya düştü. Onu chunk `[2]` geçti; "window" kelimesini paylaşması ve iadelerden bahsetmesi anlamında refund window *hakkında*, ama cevabı hiç içermiyor. `[1]` neden kaybetti? Çünkü gömdüğümüz `[1]` sürümü "She set the refund window at 30 days." diye okunuyor. Bu cümleyi query'ye bağlayan kelime, "Alice", chunk'ın içinde değil. Bir cümle önce, chunk `[0]`'da ve `[1]`'i tek başına gömdüğümüzde o bağ koparıldı. Embedding modeli chunk `[1]`'i kodlarken "Alice"i hiç görmedi; dolayısıyla chunk'ın vektörü, Alice hakkındaki bir query'ye güçlü biçimde işaret etmiyor.
+
+Bu, bağlam kaybı sorunu ve dilbilimde kesin bir adı var. **Eşgönderim (coreference)**, bir kelimenin başka yerde adlandırılmış bir şeye gönderme yapmasıdır; daha önce tanıtılmış bir öncülün yerini tutan bir zamir ("she", "it", "that window") gibi. Eşgönderim gerçek belgelerde her yerdedir. Hangi politika olduğunu adlandıran paragraf olmadan "politika". Onu tanımlayan satır olmadan "o hata". Bir hukuk maddesindeki "yukarıdakiler". Bunların her biri küçük bir saatli bomba: tam belgenin içinde zararsız, chunk'layıp gömdüğün anda gürültüye dönüşüveriyor.
+
+Bu etkinin ne kadar güçlü olduğu konusunda dürüst olmakta fayda var. Güçlü, modern bir embedding modeliyle tuzak her zaman ısırmaz. Eşlik eden kod, gerçek bir long-context encoder'a karşı çalıştığında (`jinaai/jina-embeddings-v2-small-en`, `--online` üzerinden) bazen "She"yi kendi başına yeterince iyi çözer ve `[1]`'i zaten ilk sıraya koyar; bu olduğunda kod bunu söyler ve seni, tuzağın güvenilir biçimde ısırdığı deterministik çevrimdışı yola yönlendirir. Mesele her chunk'ın bozuk olması değil. Mesele *bir kısmının* bozuk olması, hangilerinin bozuk olduğunu chunk metnine bakarak anlayamayacağın ve bu kesrin, ölçekte önem taşıyacak kadar büyük olması. Aynı ayırma içgüdüsünü 9. bölümde görmüştük: gömdüğün şey, dilimlediğin şey olmak zorunda değil. Burada o içgüdüyü iki adım daha ileri taşıyoruz.
+
+## Late chunking
+
+İlk çözüm Jina AI ekibinden geliyor; **geç parçalama (late chunking)** adıyla tanıttılar (makale: "Late Chunking: Contextual Chunk Embeddings Using Long-Context Embedding Models", arXiv 2409.04701). İsim numarayı tam olarak anlatıyor: yine chunk'lıyoruz, ama *geç* chunk'lıyoruz; transformer ağır işini yaptıktan sonra.
+
+İşte 5. bölümden beri kullandığımız sıradan, naif tarif. Her chunk için chunk metnini embedding modelinden geçir; model içeride token başına bir vektör üretir ve sonra o token vektörlerini, genelde ortalayarak, tek bir chunk vektörüne havuzlar. Göm, havuzla, sakla. İşin kritik yanı, modelin her seferinde yalnızca tek bir chunk görmesi; dolayısıyla chunk `[1]`'deki bir token'ın, "Alice"in chunk `[0]`'da geçtiğinden haberi yoktur.
+
+Late chunking, iki işlemin sırasını ters çevirir. "Chunk'la, sonra her chunk'ı göm" yerine "belgenin tamamını göm, sonra token vektörlerini chunk'la" yapar. Somut olarak: belgenin tamamını, dört cümleyi tek uzun bir dize olarak al ve bir **uzun bağlamlı kodlayıcıdan (long-context encoder)** geçir; yani bağlam penceresi belgenin tamamını bir kerede tutacak kadar uzun olan bir embedding modelinden. Encoder, belgenin tamamı boyunca token başına bir bağlamsallaştırılmış vektör üretir. O tek forward pass sırasında her token diğer her token'a dikkat ettiği (attend) için, chunk `[1]`'in altında oturan token vektörleri, belgenin başka yerlerindeki "Alice", "Acme" ve "refund"dan gelen bilgiyi çoktan emmiştir. Havuzlamayı ancak o tüm-belge geçişinden *sonra* yaparız. Token-vektör dizisini token offset'lerine göre yeniden chunk'lara böleriz ve her chunk için yalnızca ona ait token vektörlerinin ortalamasını alarak tek bir chunk vektörü üretiriz.
+
+Havuzlama adımı neredeyse utandıracak kadar basit. İşte eşlik eden koddan fonksiyon ([context_aware_chunking.py](/essays/context-aware-chunking/context_aware_chunking.py); üç yaklaşımın hepsini tam da bu iade notu üzerinde skorluyor), olduğu gibi:
+
+```python
+def late_chunk(token_vecs, spans):
+    """Pool token spans into chunk vectors AFTER the encoder, so each chunk
+    vector is contextualized by the whole document. spans are (start, end)
+    token indices. Returns (n_chunks, d), L2-normalized."""
+    out = []
+    for s, e in spans:
+        v = token_vecs[s:e].mean(axis=0)
+        out.append(v / (np.linalg.norm(v) + 1e-9))
+    return np.array(out)
+```
+
+Bir token aralığı üzerindeki o ortalama, normal bir embedding modelinin içeride yaptığı ortalamanın aynısı. Bütün fark, o token vektörlerinin ne *bildiğinde*. Naif chunking'de yalnızca kendi küçük chunk'larını bilirler. Late chunking'de belgenin tamamını bilirler, çünkü hepsinin üzerinden tek geçişte üretilmişlerdir. İzole token'lar yerine bağlamsallaştırılmış token'ları havuzluyoruz.
+
+<Diagram number={1} caption="Naif chunking her chunk dizesini kendi başına gömer; bu yüzden chunk [1]'in altındaki token'lar 'Alice'i asla görmez. Late chunking önce belgenin tamamını bir long-context encoder'dan geçirir, token başına bir bağlamsallaştırılmış vektör üretir ve ancak ondan sonra her chunk'ın token aralığını bir chunk vektörüne havuzlar. Aynı ortalama, ama ortalanan token'lar belgenin bağlamını zaten taşıyor.">
+  <img src="/essays/context-aware-chunking/part14-late-chunking.svg" alt="Üst üste iki sıra. Naive chunking etiketli üst sıra, her biri ayrı ayrı bir embedder'a verilen dört izole chunk kutusu gösterir; chunk'lar arasında hiçbir bağlantı olmadan dört chunk vektörü üretilir. Late chunking etiketli alt sıra, belgenin tamamını tek uzun bir token şeridi olarak bir long-context encoder'dan bir kez geçirir ve kesintisiz bir bağlamsallaştırılmış token vektörü şeridi üretir; şeridin altındaki köşeli parantezler dört aralığı işaretler ve her aralık tek bir chunk vektörüne mean-pool'lanır; oklar, ikinci aralıktaki token'ların ilk aralıktaki Alice kelimesinden bilgi taşıdığını gösterir." class="w-full rounded-lg" />
+</Diagram>
+
+Peki sıralamamızı gerçekten düzeltiyor mu? İşte aynı query, *"what is Alice's refund window?"*, bu kez late-chunk'lanmış vektörlere karşı skorlanmış:
+
+```
+   1.  0.885  [1] She set the refund window at 30 days.
+   2.  0.878  [2] Returns outside that window are declined automatically.
+   3.  0.424  [3] The error code E-4042 means the window has already closed.
+   4.  0.394  [0] Alice founded Acme in 2019.
+```
+
+Chunk `[1]`, 2. sıradan 1. sıraya çıktı. Skorlar pek kımıldamıyor, `[1]` 0.910'dan 0.885'e giderken `[2]` 0.915'ten 0.878'e geriliyor, ama sıralama tersine dönüyor: `[1]`'in vektörü artık, "Alice" kelimesi chunk metninde hiç geçmediği halde, tüm-belge geçişinden gelen bir "Alice" izi taşıyor ve konu dışı chunk `[2]` onun altına düştü. Aynı chunk metni, aynı query, aynı ortalama; ve doğru cevap, sırf geç havuzladığımız için yüzeye çıkıyor.
+
+Bunu 5. bölümde yaptığımız bir şeyden ayırmak önemli. Orada bağlam kaybına karşı çözümlerden biri, her chunk'ın başına *statik bir başlık eklemekti*: gömmeden önce her chunk'ın önüne "Refund Policy" yapıştır. Bu biraz yardımcı olur ama statik ve kabadır. Chunk ne söylerse söylesin her chunk'a aynı sabit dizeyi ekler ve "She" gibi cümleden cümleye eşgönderim için hiçbir şey yapmaz. Late chunking tür olarak farklı. Chunk metnini hiç düzenlemez. Bağlamsallaştırma işini transformer'ın attention'ına bırakır; böylece her chunk vektörü, elle seçilmiş bir başlık tarafından değil, *özgül* çevre içeriği tarafından şekillendirilir. Hiçbir şey başa eklenmez, hiçbir şey eğitilmez ve model, yeterince uzun bir bağlam penceresi olduğu sürece, zaten elinde olan bir modeldir.
+
+## Contextual Retrieval
+
+İkinci çözüm Anthropic'ten geliyor; adına **Bağlamsal Getirme (Contextual Retrieval)** diyorlar. Late chunking *ne zaman* havuzladığını değiştirirken, Contextual Retrieval *neyi gömdüğünü* değiştirir ve bunu küçük, gayet açık bir adımla yapar.
+
+Her chunk için, gömmeden önce, bir dil modelinden bu chunk'ın belgesinin neresinde durduğunu söyleyen kısa bir konumlandırıcı cümle yazmasını istersin. Bizim iade notumuz için model şöyle yazabilir: *"This chunk is from a note about Alice and Acme's refund policy."* Sonra bu cümleyi chunk'ın başına ekler ve birleşimi gömersin. Eskiden çıplak "She set the refund window at 30 days" olan chunk, artık "This chunk is from a note about Alice and Acme's refund policy. She set the refund window at 30 days" olarak gömülür. "She" zamirinin öncülü artık, kodlanan metnin tam yanında oturuyor. Embedding modeli, sıradan bir kısa bağlamlı model bile, chunk'ı kodlarken "Alice"i ve "refund policy"yi görür; dolayısıyla ortaya çıkan vektör, doğru türden query'ye işaret eder.
+
+Tarif "başa ekle, sonra göm" ve mevcut pipeline'ında zaten olmayan tek hareketli parça, konumlandırıcı cümleyi yazan model çağrısı. Eşlik eden kodda bu iş, konumlandırıcı cümleyi belgeden kuran çevrimdışı, deterministik bir vekille yapılıyor; böylece her şey ağ bağlantısı olmadan çalışıyor. Üretimde ise gerçek bir dil modeli kullanır, "İşte bir belge. İşte ondan bir chunk. Bu chunk'ı belge içinde konumlandıran kısa bir cümle yaz." gibi bir prompt verir ve konumlandırılmış metni saklarsın.
+
+<Diagram number={2} caption="Contextual Retrieval, gömmeden önce her chunk'ın başına LLM'in yazdığı bir konumlandırıcı cümle ekler. Çıplak chunk 'She set the refund window at 30 days', 'This chunk is from a note about Alice and Acme's refund policy. She set the refund window at 30 days' haline gelir; böylece embedder, 'She'nin öncülünü kodladığı metnin içinde görür. Konumlandırıcı cümle chunk başına bir kez, index zamanında yazılır.">
+  <img src="/essays/context-aware-chunking/part14-contextual-retrieval.svg" alt="Bir akış diyagramı. Solda, ham chunk kutusunda She set the refund window at 30 days yazar. Kehribar renginde çizilmiş bir LLM düğümü, chunk'ı kaynak belgesiyle birlikte okur ve This chunk is from a note about Alice and Acme's refund policy diye okunan kısa bir konumlandırıcı cümle üretir. Konumlandırıcı cümle chunk'ın başına eklenir ve birleşik bir metin kutusu oluşur; bu kutu, mor renkte çizilmiş bir embedder düğümüne akarak bağlama duyarlı tek bir chunk vektörü üretir." class="w-full rounded-lg" />
+</Diagram>
+
+İşte aynı query, bu kez contextual-retrieval vektörlerine karşı:
+
+```
+   1.  0.973  [1] She set the refund window at 30 days.
+   2.  0.968  [2] Returns outside that window are declined automatically.
+   3.  0.700  [3] The error code E-4042 means the window has already closed.
+   4.  0.631  [0] Alice founded Acme in 2019.
+```
+
+Chunk `[1]` yine 1. sırada ve denediğimiz tüm yaklaşımların en yüksek skoruyla: 0.973. Başa eklenen cümle, "Alice"i ve "refund policy"yi doğrudan embedder'ın kodladığı metnin içine çekti; dolayısıyla chunk vektörü query ile güçlü biçimde hizalanıyor. Her chunk'ın skorunun yükseldiğine dikkat et; çünkü her chunk artık ortak konumlandırma bağlamını taşıyor; arka plandaki chunk'lar `[0]` ve `[3]` en çok yükseldi, `[1]` ise liderliğini koruyor, çünkü konumlandırıcı cümle tam da onu vuran belirsizliği çözdü.
+
+Belirtmeye değer bir ayrıntı var, çünkü bunu oyuncak sürümden ayıran fark bu: konumlandırıcı cümle, dosyanın tamamı için tek bir sabit başlık olarak değil, chunk artı belgesinden, *chunk başına* üretilir. Onu 5. bölümdeki statik başlık numarasından daha zengin yapan da bu. Hasarlı ürünlerle ilgili bir chunk, hasarlı ürünlerle ilgili bir cümle alır; refund window ile ilgili bir chunk, refund window ile ilgili bir cümle alır. O chunk için yazılmış küçük, hedefli bir not.
+
+## Kanıt gerçekte ne söylüyor
+
+Burası disiplinli olmam gereken bölüm; çünkü Contextual Retrieval'a iliştirilmiş bazı gösterişli sayılar var ve çoğu, insanların alıntılarken kastettiği anlama gelmiyor.
+
+İşte arkasında duracağım tek rakam. Anthropic'in kendi değerlendirmesinde, yalnızca contextual embedding'ler kullanmak, yani az önce kurduğumuz tür (konumlandırıcı bir cümle ekle, sonra göm), top-20 retrieval başarısızlık oranını **%35** düşürdü: %5.7'den %3.7'ye. "Top-20 retrieval başarısızlık oranı" şu demek: çalıştırdığın query'lerin ne kadarlık kısmı, doğru chunk'ı getirilen ilk 20 sonucun hiçbir yerinde yüzeye çıkaramıyor. Bunu %5.7'den %3.7'ye düşürmek gerçek, anlamlı bir iyileşme ve özellikle contextual-embedding adımına atfedilebilir.
+
+Alıntılamayacağım ve alıntılandığını görünce temkinli olman gereken şeyse, ortalıkta dolaşan daha büyük kümülatif sayılar. O daha büyük düşüşler tek başına contextual chunking'in etkisi değil. Contextual embedding'lerin üstüne başka bileşenleri de paketliyorlar. Anthropic, aynı konumlandırılmış metni bir anahtar kelime index'inde indeksleyen sparse-retrieval ikizi **Contextual BM25**'i eklemenin düşüşü **%49**'a getirdiğini (%5.7'den %2.9'a) ve ikisinin üstüne bir reranking aşaması bindirmenin bunu **%67**'ye ittiğini (%1.9'a) raporluyor. Bunlar *tam yığın* için gerçek sayılar ve özellikle %49, insanların tek başına contextual chunking'e en sık yanlış atfettiği rakam. Öyle değil: contextual embedding'ler *artı* contextual sparse retrieval. Bu denemedeki dense-embedding tekniğinin tek başına sayısı %35. Bu yöntem hakkında bir şey okuduğunda, alıntılanan iyileşmenin yalnızca contextual-embedding adımı mı yoksa tüm pipeline mı olduğunu kontrol et. Burada kurduğumuz teknik için dürüst rakam %35; %5.7'den %3.7'ye.
+
+Şimdi dürüst maliyet. Contextual Retrieval, ucuz olsa da bedava değil. Index zamanında, her konumlandırıcı cümleyi yazmak için chunk başına bir dil modeli çağrısı gerektirir. Yüz bin chunk'ın varsa, daha hiçbir şey indekslemeden yüz bin küçük üretim çağrısı demek. Kulağa ürkütücü geliyor ve en yaygın itiraz da bu, ama iki şey bunu yumuşatıyor. Birincisi, bu tek seferlik, çevrimdışı, index zamanı bir maliyet; query başına değil. Yani sunum gecikmene hiç dokunmuyor. İkincisi, prompt caching bunu pratikte çarpıcı biçimde ucuzlatıyor: belge metni, o belgenin tüm chunk'ları için aynı; dolayısıyla belgeyi bir kez cache'ler ve yalnızca küçük chunk başı varyasyonu ödersin. Konumlandırıcı cümleler kısa, belge cache'te ve fatura, ham chunk sayısının ima ettiğinden çok daha düşük. Yine de gerçek bir maliyet kalemi ve bunu bütçelemelisin; ama bir index-zamanı kalemi, query-zamanı değil.
+
+## İki çözüm, tek sorun
+
+Geri çekil ve iki yönteme yan yana bak; çünkü birebir aynı hastalığı pipeline'ın iki zıt ucundan çözüyorlar.
+
+Anthropic'in **Contextual Retrieval**'ı encoder'dan önce, *metin* üzerinde çalışır. Her chunk için bir dil modelinden, chunk'ın belgesinin neresinde durduğunu söyleyen, kabaca 50 ila 100 token'lık kısa bir konumlandırma notu yazmasını ister ve gömmeden önce o notu başa eklersin. Anthropic bunu, **Contextual BM25** dedikleri ikinci bir sparse-retrieval ikiziyle eşliyor: aynı konumlandırılmış metni bir BM25 anahtar kelime index'inden de geçirirsin; böylece başa eklenen bağlam, dense vektöre yardım ettiği kadar sözcüksel eşleşmeye de yardım eder. Tek başına contextual-embedding adımı, burada kurduğumuz teknik; contextual sparse ikizini eklemekse Anthropic'in daha büyük sayıyı raporladığı kombinasyon.
+
+Jina'nın **late chunking**'i *encoder'ın* içinde, token vektörleri üzerinde çalışır ve metne hiç dokunmaz. Belgenin tamamını long-context bir encoder'dan geçirirsin, her token diğer her token'a attend eder; sonra her chunk'ın token aralığını sonradan mean-pool'larsın. Dil modeli yok, prompt yok, üretim yok: **eğitim gerektirmez (training-free)**; zaten yaptığın iki işlemin yeniden sıralanmasından ibaret. Bütün cazibesi de bu. Bedeli ise, tamamen encoder'ın bağlam penceresinin belgeyi tutacak kadar uzun olmasına yaslanması.
+
+Bu da late chunking'in senin için erişilebilir olup olmadığına sessizce karar veren sayıyı gündeme getiriyor: **token bütçesi (token budget)**. 6. bölümden beri kullandığımız kısa bağlamlı embedding modeli `all-MiniLM-L6-v2`, 256 token'da kapanıyor, yani en fazla birkaç paragraf; dolayısıyla bir belgenin tamamını tek geçişte tutamaz ve late chunking'i hiç yapamaz. Jina'nın long-context encoder'ları 8192 token civarını kaldırıyor, kabaca otuz kat fazlası; tüm-belge forward pass'ini en başta mümkün kılan da bu. Encoder'ın kısa bağlamlıysa, late chunking basitçe masada değil ve pencereye yaslanmak yerine metni düzelten Contextual Retrieval senin hamlen. Encoder'ın uzun bağlamlıysa, late chunking bedavaya yakın.
+
+O token bütçesinin içinde saklanan keskin bir başarısızlık kipi var: sessiz kırpılma. Late chunking beklentisiyle 512 token'lık bir modele koca bir belge verirsen, encoder seni uyarmaz; penceresinden taşan her şeyi çöpe atar ve dışarıda kalan chunk'lar çöp vektörler olarak geri gelir. Çözüm tek satırlık bir alışkanlık: late chunking'e uzanmadan önce encoder'ın maksimum dizi uzunluğunu kontrol et; çünkü late chunking, ancak belgeyi döktüğün pencere kadar iyidir.
+
+Bir şey daha var ve bu, 9. bölümdeki içgüdünün aynısı: **sakladığın ve indekslediğin şey, sunmak zorunda olduğun şey değildir.** İki çözüm de *indekslediğin* ve üzerinde arama yaptığın vektörü (ve Contextual Retrieval için metni) değiştirir: konumlandırılmış metin ya da geç havuzlanmış embedding. Ama o oynanmış metni üreticiye vermeye seni mecbur bırakmazlar. Keskin retrieval için bağlama duyarlı vektörü indeksleyip modele yine *orijinal*, temiz chunk'ı verebilirsin; prompt'u dolduran başa eklenmiş bir not olmadan. Konumlandırıcı cümle ekmeğini index zamanında, eşleşmenin olduğu yerde kazanır ve üretim zamanında aradan çekilir. Eşlik eden kod tam da bu hatırlatmayla kapanıyor. İndekslenen birimi sunulan birimden ayırmak, bu serinin ikinci yarısının ana hattı ve bağlama duyarlı chunking, bunun karşılığını verdiği bir yer daha.
+
+## Seçmek ve birleştirmek
+
+Elimizde aynı hastalık için iki çözüm var. Nasıl seçersin?
+
+Late chunking'in long-context bir encoder'a ihtiyacı var; yani bağlam penceresi bir belgenin tamamını tek geçişte tutacak kadar uzun bir embedding modeline. Ama dil modeline hiç ihtiyacı yok. Üretim adımı yok, ekstra prompt yok, chunk başına çağrı yok. Encode zamanında biraz daha fazla ödersin, çünkü belgenin tamamını transformer'dan bir kerede geçirirsin; sonrasında havuzlama bedava. Zaten long-context bir embedding modelin varsa, late chunking bedavaya yakın bir yükseltme: aynı model, sadece geç havuzluyorsun.
+
+Contextual Retrieval bunun tam zıt takası. Embedding tarafında modelden bağımsız; herhangi bir embedder ile, kısa bağlamlı olanla bile çalışır, çünkü encoder'ın penceresine yaslanmak yerine chunk metninin kendisini düzeltir. Ama bedeli, index zamanındaki o chunk başına dil modeli çağrısı. Zaten bağlanmış bir üretim modelin varsa ve embedder'ın kısa bağlamlıysa, doğrudan takılıp çalışır.
+
+İşte bir bakışta karşılaştırma:
+
+| | Late chunking | Contextual Retrieval |
+|---|---|---|
+| Neyi değiştirir | Ne zaman havuzladığını (encoder'dan sonra) | Neyi gömdüğünü (konumlandırıcı cümle başa eklenir) |
+| İşlem sırası | Tüm token'ları göm, sonra aralıkları havuzla | Bir not üret, başa ekle, sonra göm |
+| Long-context encoder gerekir mi | Evet | Hayır, her embedder ile çalışır |
+| Dil modeli gerekir mi | Hayır | Evet, index zamanında chunk başına bir çağrı |
+| Ana maliyet | Belgenin tamamı üzerinde daha büyük bir encode geçişi | Index-zamanı LLM çağrıları (prompt caching hafifletir) |
+| Bilinecek sayı | (alıntılanacak manşet rakam yok) | %35 top-20 başarısızlık düşüşü (%5.7'den %3.7'ye) |
+
+Ve bilinecek en faydalı şey: birleşiyorlar. Bağlam kaybı sorununu farklı aşamalarda çözerler; late chunking encoder'ın attention'ının içinde, Contextual Retrieval encoder'dan önce metinde. Dolayısıyla ikisini birden yapabilirsin. Her chunk'ının başına konumlandırıcı bir cümle eklenmiş bir belgeyi long-context bir encoder'dan geçir ve geç havuzla. Çatışma yok. Aşağıdaki interaktif bileşen, aynı iade notu üzerinde naif chunking, late chunking ve Contextual Retrieval arasında geçiş yapıp her birinde hangi chunk'ın getirildiğini izlemeni sağlıyor. Doğru cevap, chunk `[1]`, naif chunking'de 2. sıraya gömülü ve iki çözümde de 1. sıraya çıkıyor.
+
+<Diagram number={3} caption="Aynı iade notu ve aynı eşgönderim sorgusu, üç şekilde skorlanmış. Naif chunking (cevap chunk'ı, yalnızca 'window' kelimesini paylaşan konu dışı bir chunk'ın altında 2. sıraya gömülü), late chunking (1. sıra; çünkü chunk'ın token'ları belgenin tamamıyla bağlamsallaştırıldı) ve Contextual Retrieval (1. sıra; çünkü bir konumlandırıcı cümle, gömmeden önce 'She'yi çözdü) arasında geçiş yap.">
+  <IframeFigure
+    src="/essays/context-aware-chunking/part14-context-aware-chunking.html"
+    title="Dört cümlelik bir iade politikası notu üzerinde, what is Alice's refund window eşgönderim sorgusu için üç chunking stratejisinin interaktif karşılaştırması. Bir anahtar üç mod arasında geçiş yapar: cevap cümlesi She set the refund window at 30 days'in yalnızca window kelimesini paylaşan konu dışı bir cümlenin arkasında ikinci sırada kaldığı naive chunking; aynı cümlenin, havuzlamadan önce belgenin tamamı tek geçişte kodlandığı için ilk sırada olduğu late chunking; ve aynı cümlenin, gömmeden önce Alice'i ve refund policy'yi adlandıran bir konumlandırıcı cümle başa eklendiği için ilk sırada olduğu Contextual Retrieval. Her mod, sıralanmış chunk'ları kosinüs skorlarıyla gösterir."
+    height={760}
+  />
+</Diagram>
+
+> 💡 **Deneyimden.** Bunun beni ilk ısırışında sorun bir zamir değil, bir tabloydu. Uzun bir yan haklar el kitabını bölüm başına bir chunk olacak şekilde parçalamıştık ve "Tier 2" gibi bir başlığın altında dolar tutarlarını listeleyen bir chunk, neredeyse aranamaz bir şeye gömülmüştü; çünkü chunk metni sadece sayılardan ve "Tier 2" kelimelerinden ibaretti, o sayıların hangi plana ya da hangi hakka ait olduğuna dair tek kelime yoktu. "How much is the dental copay on the premium plan" diye soran kullanıcılar o chunk'ı üst sonuçlarda hiç görmedi ve ben bir öğleden sonrayı embedding modelimizin bozuk olduğuna ikna olmuş halde geçirdim. Bozuk değildi. Chunk, biz onu kesip çıkardığımız anda bağlamını kaybetmişti; tam olarak bu denemedeki başarısızlık. Yayına giren çözüm ucuz olandı: index zamanında bir kez üretilen, gömmeden önce başa eklenen, chunk başına bir konumlandırıcı cümle. O el kitabında top-20 recall gözle görülür biçimde sıçradı ve ders aklımda kaldı: retrieval bariz bir chunk'ı gizemli biçimde kaçırdığında, chunk'ı *embedder'ın gördüğü gibi* oku; tek başına, çevresindeki her şeyden soyulmuş halde. Ve kendine sor: query'yi bu metinden ve yalnızca bu metinden cevaplayabilir miydin? Yarı yarıya cevap hayır ve o chunk'ın zaten hiç şansı yoktu.
+
+{/* author: swap the benefits-handbook anecdote above for your own real story of a chunk that lost its context and tanked retrieval, e.g. a contract clause that read "the above limitations" with no antecedent, or a changelog entry that said "fixed this" with no subject; keep the closing lesson about reading the chunk as the embedder sees it. */}
+
+## Kendin dene
+
+Contextual Retrieval'ın işe yaradığını hissetmek için long-context bir encoder'a ihtiyacın yok; çünkü yaptığı metin düzenlemesi, elle de yapabileceğin bir şey. Eşlik eden kodu aç, [context_aware_chunking.py](/essays/context-aware-chunking/context_aware_chunking.py), ve argümansız çalıştır. Çevrimdışı yol deterministik; dolayısıyla metindeki sayıları her seferinde alırsın: naif chunking'de cevap chunk'ı `[1]` 2. sırada, konu dışı `[2]`'nin altında gömülü ve iki çözüm de onu 1. sıraya kaldırıyor.
+
+Şimdi konumlandırıcı cümleyi kendin yaz ve sıralamanın oynayışını izle:
+
+1. Çıplak chunk `"She set the refund window at 30 days."` ile query `"what is Alice's refund window?"`'u al. Naif chunking altında skorla ve `[1]`'in nereye düştüğünü not et.
+2. Öncülü adlandıran tek cümlelik bir not başa ekle: `"This chunk is from a note about Alice and Acme's refund policy. She set the refund window at 30 days."` Yeniden göm ve yeniden skorla. Zamirin artık, kodlanan metinde hemen yanında "Alice" var ve `[1]` tırmanıyor.
+3. Notu değiştir. Yanlış şeyi adlandıran muğlak bir tane dene, mesela `"This is a document about shipping."`, ve kazanımın buharlaşmasını, hatta tersine dönmesini izle. Kazanç, notun belirsizliği gerçekten çözmesinden gelir; başa *herhangi bir* metin eklemekten değil. Chunk başına notun statik bir başlıktan daha önemli olmasının sebebi bu.
+4. Long-context bir encoder kuruluysa (jina), `--online` ile çalıştır ve karşılaştır. Güçlü, gerçek bir encoder `[1]`'i naif altında zaten ilk sıraya koyabilir; bu durumda tuzak o çalıştırmada ısırmaz ve script bunu sana söyler. Metindeki dürüst durum da bu: tuzak gerçek ama aralıklı ve güvenilir biçimde göründüğü yer çevrimdışı yol.
+
+Tüm alıştırma birkaç dakika sürüyor ve mekanizmayı elle tutulur hale getiriyor: embedder'ın okuduğu metni düzenliyorsun ve konumlandırıcı cümle işini yaparken, cevap chunk'ının kosinüs skorunun yükselişini izleyebiliyorsun.
+
+> ⚠️ **Sık düşülen tuzaklar.**
+> - **Late chunking'de offset eşleme hataları.** Late chunking'in tüm doğruluğu, belgenin token-vektör dizisini doğru chunk başı aralıklara geri bölmekte yaşar. Token offset'lerinde bir off-by-one, tokenizer'ın `[CLS]` ve `[SEP]` gibi özel token'lar eklediğini unutmak ya da bir alt-kelime token'ının chunk sınırına yayılmasına izin vermek; ve yanlış vektörleri yanlış chunk'a havuzlarsın. Havuzlama matematiği önemsiz; kırıldığı yer defter tutma. Chunk'ları ayrı ayrı yeniden tokenize etmek yerine tokenizer'ın kendi offset eşlemesini kullan.
+> - **Token vektörlerini asla dışa açmayan `[CLS]`-pooled modeller.** Late chunking, encoder'ın token başına çıktısına ihtiyaç duyar. Birçok embedding modeli sana yalnızca havuzlanmış cümle vektörünü verir (bir `[CLS]` token'ı ya da içsel bir ortalama) ve alttaki token vektörlerine ulaşmanın hiçbir yolunu bırakmaz. O modellerde late chunking, bağlam penceresi ne kadar uzun olursa olsun, basitçe uygulanabilir değildir. Etrafında plan kurmadan önce modelinin token embedding'lerini dışa açtığını kontrol et.
+> - **Konumlandırıcı cümle halüsinasyonu.** Contextual Retrieval'daki not bir dil modeli tarafından yazılır ve bir dil modeli olgu uydurabilir. Belge premium ya da 2023 hiç dememişken model "This chunk is from the 2023 premium-plan policy" yazarsa, az önce kendinden emin bir yalanı gömdün demektir ve bu, query'leri yanlış chunk'a doğru çeker. Prompt'u belgeyle sıkı sıkıya sınırla, uydurmacı değil alıntılayıcı ifadeyi tercih et ve üretilen cümleleri ara ara elle denetle.
+> - **Sakladığını sunduğunla karıştırmak.** Oynanmış metin (başa eklenen not) ve oynanmış vektör (geç havuzlanmış embedding) *index* zamanına aittir. Konumlandırıcı cümleyi üreticiye de verirsen, her prompt'u gereksiz kalıp metinle doldurmuş olursun; token israf eder, bazen de modelin kafasını karıştırırsın. Bağlama duyarlı temsili indeksle; orijinal chunk'ı sun.
+
+## Özet çıkarımlar
+
+- Belgesinin içinde gayet düzgün okunan bir chunk, tek başına gömüldüğünde yorumlanamaz olabilir. Olağan suçlu **eşgönderim**dir: "She", "the policy", "that error", onlara anlam veren öncülleri kaybeder ve chunk'ın vektörü, cevaplaması gereken query'lere işaret etmeyi bırakır. İade notumuzda cevap chunk'ı "She set the refund window at 30 days", naif chunking altında 2. sıraya gömüldü.
+- **Late chunking** (Jina AI ekibi), belgenin tamamını long-context bir encoder'dan tek geçişte gömer, sonra her chunk'ın token aralığını *sonradan* havuzlar. Havuzlama sıradan bir ortalama; fark, ortalanan token'ların belgenin bağlamını zaten taşıması. Cevap chunk'ını 1. sıraya taşıdı; metin düzenlemesi yok, dil modeli yok.
+- **Contextual Retrieval** (Anthropic), gömmeden *önce* her chunk'ın başına LLM'in yazdığı kısa bir konumlandırıcı cümle ekler; böylece öncül, embedder'ın kodladığı metinde zamirin hemen yanında oturur. O da cevap chunk'ını 1. sıraya taşıdı ve not chunk başına yazıldığı için, 5. bölümün statik başlık ekleme numarasının daha zengin kuzeni.
+- Savunulabilir tek nicel iddia, tek başına contextual embedding'lerin top-20 retrieval başarısızlığını **%35** düşürdüğü (%5.7'den %3.7'ye). Görebileceğin daha büyük kümülatif sayılar sparse retrieval ve reranking'i de paketliyor; onları tek başına contextual chunking'e atfetme.
+- Late chunking long-context bir encoder ister ama dil modeli istemez; Contextual Retrieval embedder tarafında modelden bağımsızdır ama index zamanında chunk başına bir LLM çağrısına mal olur; prompt caching bunu ucuzlatır ve sunum gecikmesine asla dokunmaz. Sorunu farklı aşamalarda çözerler, dolayısıyla **birleşirler**. Bu alan hızlı ilerliyor ve benim bir bilgi kesim tarihim var; buradaki özgül rakamları ve model adlarını bir anlık görüntü olarak al ve güncel durumu doğrula.
+
+## Referanslar
+
+- Anthropic, "Introducing Contextual Retrieval" (2024). Contextual Retrieval'ın, Contextual BM25'in ve burada alıntılanan başarısızlık oranı sayılarının kaynağı: tek başına contextual embedding'ler için %35 (%5.7'den %3.7'ye), Contextual BM25 eklenince %49 (%2.9'a), reranking eklenince %67 (%1.9'a). [https://www.anthropic.com/news/contextual-retrieval](https://www.anthropic.com/news/contextual-retrieval)
+- Günther, M., Mohr, I., Williams, D. J., Wang, B., ve Xiao, H., "Late Chunking: Contextual Chunk Embeddings Using Long-Context Embedding Models," arXiv:2409.04701 (2024). Jina AI ekibinin late-chunking makalesi; yöntemin dayandığı long-context encoder'lar (8192 token civarı) dahil. [https://arxiv.org/abs/2409.04701](https://arxiv.org/abs/2409.04701)
+
+## Sözlük
+
+- **Eşgönderim (coreference)**: bir kelimenin başka yerde adlandırılmış bir şeye gönderme yapması; metinde daha önce tanıtılmış bir öncülün yerini tutan bir zamir ("she", "it", "that window") gibi.
+- **Bağlam kaybı (context loss)**: belgesinin içinde yorumlanabilir olan bir chunk'ın, kesilip tek başına gömüldüğünde belirsiz ya da anlamsız hale gelmesi; çünkü onu belirsizlikten kurtaran çevre metin artık yoktur.
+- **Uzun bağlamlı kodlayıcı (long-context encoder)**: bağlam penceresi bir belgenin tamamını (ya da büyük bir bölümünü) tek forward pass'te kodlayacak kadar uzun olan embedding modeli; böylece her token diğer her token'a attend eder.
+- **Geç parçalama (late chunking)**: bağlamsallaştırılmış token başı vektörler elde etmek için önce belgenin tamamını long-context bir encoder'dan geçirmek, sonra her chunk'ın token aralığını bir chunk vektörüne havuzlamak; böylece her chunk vektörü belgenin tamamı tarafından şekillendirilir.
+- **Bağlamsal Getirme (Contextual Retrieval)**: her chunk için, bir dil modeline chunk'ın belgesinin neresinde durduğunu anlatan kısa bir konumlandırıcı cümle yazdırmak, o cümleyi chunk'ın başına eklemek ve birleşimi gömmek.
+- **Konumlandırıcı cümle (situating sentence)**: Contextual Retrieval'ın üretip başa eklediği, belgeyi ve chunk'ın ondaki yerini adlandıran chunk başına kısa not; embedder eksik bağlamı böyle görür.
+- **Top-20 retrieval başarısızlık oranı (top-20 retrieval failure rate)**: doğru chunk'ın getirilen ilk 20 sonucun hiçbir yerinde görünmediği query'lerin oranı; retrieval'ın ne sıklıkta kaçırdığını ölçmenin standart bir yolu.
+- **Prompt caching**: tekrarlanan prompt içeriğinin (burada, tüm chunk'ları arasında paylaşılan bir belgenin) cache'lenmiş kodlamasını yeniden kullanmak; yalnızca çağrı başına küçük varyasyonu ödersin ve chunk başına üretimin maliyeti keskin biçimde düşer.
+
+---
+
+**Sırada, 15. Bölüm: Adaptive RAG.** Her chunk'a bağlamını taşıttık, ama hâlâ her query için tek bir sabit pipeline çalıştırıyoruz; bir selamlama için de çok parçalı bir karşılaştırma için de aynı makine. Sırada, her query'yi retrieval'sız, tek adımlı ya da çok adımlı retrieval'a yönlendiren küçük bir karmaşıklık sınıflandırıcısı ekliyoruz; 6'dan 10'a kadarki bölümlerde kurduğumuz pipeline'ların üzerindeki orkestra şefi ve Frontier Track'in kapanışı.

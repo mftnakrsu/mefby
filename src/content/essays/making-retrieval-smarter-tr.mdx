@@ -1,0 +1,255 @@
+---
+title: "Retrieval'ı Daha Akıllı Hale Getirmek"
+description: "Retrieval-Augmented Generation üzerine sıfırdan bir serinin 8. bölümü. İlk-geçiş getirme hızlıdır ama yalnızca kabaca doğrudur: en iyi parça altıncı sırada oturabilir. Onu, pipeline sırasına göre üç kaldıraçla keskinleştir. Getirmeden önce query'yi dönüştür (multi-query, HyDE, step-back, decomposition). Getirme sırasında metadata'ya göre filtrele. Getirmeden sonra geniş bir aday kümesini bir cross-encoder ile yeniden sırala (rerank) ve en iyilerini sakla. 6. Bölüm'de inşa ettiğin uygulamaya reranking ve bir metadata filtresi ekleyen odaklı bir kod eklemesi içerir."
+date: 2026-06-14
+tags: ["RAG", "Retrieval", "Reranking", "Cross-Encoder", "Vector Search", "LLM", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-08-making-retrieval-smarter"
+ogImage: "/og/making-retrieval-smarter.png"
+lang: "tr"
+translationSlug: "making-retrieval-smarter"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+7. Bölüm'de getirmeyi hybrid arama ile recall açısından güçlendirdik ve rahatsız edici bir gerçekle bitirdik: döndürdüğü sıralı liste yalnızca *kabaca* doğru. Soruyu en iyi cevaplayan parça, sadece daha alakalı *görünen* bir şeyin altında, beşinci ya da altıncı sırada oturabilir. Bu bölüm o listeyi keskinleştirmekle ilgili. Getirmenin etrafında müdahale edebileceğin üç yerin (burada kaldıraç diye adlandırıyoruz) net bir zihin haritasını edineceksin: *öncesinde* (query'yi yeniden yaz), *sırasında* (adayları filtrele) ve *sonrasında* (sonuçları yeniden sırala). Hızlı bir ilk geçişin neden yapısal olarak kesin olmadığını, bir cross-encoder'ın ne olduğunu ve onunla reranking yapmanın neden en yüksek kaldıraçlı düzeltme olduğunu öğreneceksin; ve birkaç satırda, 6. Bölüm'deki uygulamaya bir reranking adımı ile bir metadata filtresi ekleyeceksin.
+
+## Ön koşullar
+
+1'den 7'ye kadar olan bölümler, özellikle [Embeddings](/essays/embeddings-tr) (2. Bölüm), [Vektör Veritabanları ve İndeksleme](/essays/vector-databases-tr) (4. Bölüm) ve [Retrieval'a Derin Dalış](/essays/retrieval-deep-dive-tr) (7. Bölüm). Gömüler, kosinüs benzerliği, top-k ve hybrid (dense artı sparse) retrieval fikriyle rahat olman gerekiyor. Tek kod bölümü için temel Python yeterli.
+
+## 7. Bölüm'ün bizi bıraktığı yer ve çekilecek üç kaldıraç
+
+7. Bölüm'ün kapanış tavsiyesi bir stratejiydi: **geniş bir ağ at, sonra kırp.** Doğru parçanın ağın bir yerinde olması için cömertçe getir, *sıralamanın* kusurlu olacağını kabul et, sonra işleri sonradan sıkılaştır. O tavsiye, hiç düzeltmediğimiz bir sorunu sessizce itiraf ediyordu: ilk-geçiş getirme hızlıdır ama kesin değildir. "Bu yirmi parça doğru mahallede" konusunda çok iyidir, "tam olarak bu parça tek başına en iyi cevap" konusunda ise ancak vasattır.
+
+İyi haber: buradaki her zayıflığın adı konmuş, iyi anlaşılmış bir düzeltmesi var ve bunlar getirme adımının etrafında doğal olarak üç konuma yerleşiyor. Onlara üç **kaldıraç** diyeceğim ve pipeline sırasına göre çekeceğiz:
+
+- **Getirmeden önce, ÖNCE kaldıracı: query dönüşümleri.** Kullanıcının ham sorusu genelde kötü bir arama query'sidir. Onu, indeksin iyi eşleştirebileceği bir şeye yeniden yaz.
+- **Getirme sırasında, SIRASINDA kaldıracı: metadata filtreleme.** Onları hiç skorlamadan önce aramayı katı kriterleri sağlayan parçalarla (doğru müşteri, doğru tarih, doğru bölüm) sınırla.
+- **Getirmeden sonra, SONRA kaldıracı: reranking.** Geniş, kabaca sıralanmış aday kümesini al ve onu daha yavaş, çok daha isabetli bir modelle yeniden sırala, sonra yalnızca en iyi birkaçını sakla.
+
+Bu haritayı bölümün tamamı boyunca kafanda tut: içeri girerken query'yi iyileştir, alanı daralt, sonra dışarı çıkan sıralamayı keskinleştir. Reranking bu bölümün yıldızı, o yüzden önce ona neden ihtiyacımız olduğunu tam olarak anlayalım.
+
+## Getirme neden yalnızca "kabaca doğru": bi-encoder darboğazı
+
+6. Bölüm'de inşa ettiğin ve 7. Bölüm'de ayarladığın getirme bir **bi-encoder** kullanır: query ve her parça *ayrı ayrı* vektörlere gömülür, alaka ise ikisi arasındaki kosinüs benzerliğidir. "Bi" (iki) tam olarak buradaki nokta. Birbirini hiç görmeyen iki bağımsız kodlama geçişi vardır. Parça, indeksi kurarken bir kez, çevrimdışı gömülür; query, arama zamanında tek başına gömülür; sonra iki bitmiş vektörü ucuz bir aritmetikle karşılaştırırsın.
+
+Bu tasarım, getirmeyi işe yarayacak kadar hızlı yapan şey. Her parça vektörü önceden hesaplandığı için, bir query'yi cevaplamak, milyonlarca parça arasında bile (4. Bölüm) tek bir gömme artı bir en-yakın-komşu aramasıdır. Hız burada armağan.
+
+Bedeli isabet ve bu yapısal, ayarlayarak giderebileceğin bir bug değil. Her metin, ne kadar uzun ve nüanslı olursa olsun, neyle karşılaştırılacağına dair hiçbir fikri *olmadan önce* tek, sabit uzunlukta bir vektöre sıkıştırılır. Parça vektörü, parçanın *senin* sorun için önemli olan kısmını vurgulayamaz, çünkü sorun var olmadan çok önce hesaplanmıştır. Query vektörü de belirli bir parçadaki belirli bir ifadeye yaslanamaz, çünkü o da tek başına, izole inşa edilir. Karşılaştırılan iki özet, hiçbir zaman yan yana duran tam metinler değil. Yani query ile yüzeysel kelime dağarcığı paylaşan bir parça (diyelim, ikisi de "ceket" geçiyor), soruyu gerçekten cevaplayan ama farklı bir ifadeyle söyleyen parçadan daha yüksek skor alabilir. Sıralama makul, ama isabetli değil.
+
+Bu gevşeklik, tam olarak reranking'in kapattığı boşluk ve bu bölümün geri kalanının var olma sebebi bu.
+
+## ÖNCE kaldıracı: query dönüşümleri
+
+Bir query indekse ulaşmadan önce onu iyileştirebilirsin. Kullanıcılar arama query'si yazmaz; soru yazarlar, ve sorular genelde kısa, belirsiz, sohbet diliyle ya da gizlice birden fazla soru aynı andadır. Bir query dönüşümü, ham soruyu bir ya da daha fazla daha iyi arama query'sine yeniden yazar. Aşağıdaki her teknik, kaliteyi ekstra dil modeli çağrılarıyla satın alır, yani daha fazla gecikme ve daha fazla maliyet demektir; bu yüzden onlara varsayılan olarak değil, belirli bir query sınıfı sürekli başarısız oluyorsa uzan.
+
+İşte bilinmeye değer dört tanesi.
+
+**Multi-query, query expansion olarak da adlandırılır.** Bir dil modeline sorunun birkaç farklı ifadesini üretmesini söyle, her biri için getirme yap, sonra sonuçları birleştir (union) ve yinelenenleri kaldır. Farklı ifadeler farklı parçaları öne çıkarır; bu yüzden bu esas olarak **recall**'ı yükseltir: ağı genişletir, böylece kullanıcının tam kelimeleri eşleşmediği için doğru parçanın kaçırılma ihtimali azalır.
+
+**HyDE (Hypothetical Document Embeddings).** Kısa soruyla aramak yerine, bir dil modeline ona *varsayımsal bir cevap yazmasını* söyle, sonra *onu* göm ve onunla ara. Tersten işliyormuş gibi görünür, ama net bir sebeple çalışır: bir soruyu cevaplayan bir pasaj, kısa bir sorudan çok daha fazla gerçek hedef belgelere benzer, bu yüzden gömüsü vektör uzayında onlara daha yakın düşer. Uyarı gerçek: model kendinden emin ama yanlış bir "cevap" halüsinasyonu görebilir ve getirmeyi rotadan çıkarabilir, üstelik bir çağrı daha ekler; bu yüzden varsayımsal cevabı bir arama sondası olarak ele al, asla kullanıcıya göstereceğin bir içerik olarak değil.
+
+**Step-back prompting.** Sorunun daha genel, daha soyut bir versiyonunu üret ve önce onun için getirme yap; böylece özgül bir sorunun ihtiyaç duyduğu temel bağlamı toplarsın. "Yıpranmış bir keten blazer kapsam dahilinde mi" diye sorulduğunda, işe yarar bir step-back query'si "genel iade politikamız nedir"dir. Özgül cevabın, dar query'nin hiçbir zaman çekip getiremeyeceği bir arka plana bağlı olduğu, muhakeme ağırlıklı sorularda yardımcı olur.
+
+**Query decomposition (ayrıştırma).** Karmaşık, çok parçalı bir soruyu alt sorulara böl, her biri için getirme yap, sonra sonuçları birleştir. "Bir ürünü iade etmek nasıl işliyor ve bir ücreti var mı" aslında iki sorudur; onu iyi cevaplamak, ikisi için de getirme yapmak demektir. Decomposition, bileşik query'ler için şart ve 10. Bölüm'deki, sistemin kendi alt sorularını planladığı ajan (agentic) desenlerinin ilk tadımı.
+
+<Diagram number={1} caption="Getirme-öncesi kaldıraç. Tek, dağınık, çok parçalı bir soru dört farklı şekilde yeniden yazılıyor: birkaç farklı ifade (multi-query), gömülecek varsayımsal bir cevap (HyDE), bağlam için daha geniş bir soru (step-back) ve bir alt-soru kümesi (decomposition). Her biri getirmeyi besliyor, isabetleri de sonra birleştirilip (union) yinelenenlerden arındırılıyor.">
+  <img src="/essays/making-retrieval-smarter/part8-query-transformations.svg" alt="Solda 'Bir ürünü iade etmek nasıl işliyor ve geri göndermenin bana bir maliyeti var mı' yazan ham bir query kutusu bulunan bir diyagram. Dört ok, dört karta yayılıyor: Multi-query / Expansion (bir LLM birkaç farklı ifade yazıyor), 'ürünü nasıl geri gönderirim' ve 'bir siparişi iade etme adımları' çipleriyle; HyDE / Varsayımsal cevap (bir LLM gömülecek sahte bir cevap taslağı hazırlıyor), 'İadeler, ürün kullanılmamışsa satın alımdan sonra 30 gün içinde kabul edilir' çipiyle; Step-back / Daha geniş soru, 'genel iade politikamız nedir' çipiyle; ve Decomposition / Alt sorular, 'iade süreci nedir' ve 'iade etmenin maliyeti nedir' çipleriyle. Dört karttan gelen oklar sağda, 'her query'yi çalıştır, sonra isabetleri birleştir ve yinelenenlerden arındır' etiketli uzun bir Retrieval sütununda birleşiyor." class="w-full rounded-lg" />
+</Diagram>
+
+## SIRASINDA kaldıracı: metadata filtreleme
+
+4. ve 5. Bölümler'de, her parçanın üzerinde **metadata** tutmaya özen göstermiştik: kaynağı, tarihi, yazarı, bölümü, belge tipi ve gerçek sistemlerde, kimin görmeye yetkili olduğu. SIRASINDA kaldıracı, bunun karşılığını aldığın yer. **Metadata filtreleme**, getirmeyi yalnızca katı, pazarlığa açık olmayan kriterlere uyan parçalarla sınırlar; böylece benzerlik araması daha küçük, daha temiz bir havuz üzerinde çalışır. Yalnızca 2024 belgeleri. Yalnızca bu müşterinin dosyaları. Yalnızca "fiyatlandırma" bölümündeki parçalar.
+
+Benzerlik araması zaten şeyleri sıralarken, neden zahmet edelim? Dört sebep:
+
+- **İsabet.** Bir filtre, kesinlikle alakasız eşleşmeleri, düşük bir skorun onları gömmesini ummak yerine baştan kaldırır. Anlamsal olarak benzer 2019 politikası, güncel yıla filtrelersen ortaya çıkamaz bile.
+- **Güncellik.** Bir tarih filtresi, eskimiş belgelerin güncel olanlarla yarışmasını engellemenin en basit yolu. Gömülerin zaman duygusu yoktur; metadata'nın vardır.
+- **Güvenlik ve multi-tenancy.** Bu, opsiyonel değil. Paylaşımlı bir sistemde, bir erişim-seviyesi filtresi, bir kullanıcının query'sinin başka bir kullanıcının belgelerini hiçbir zaman getirmemesini sağlayan şeydir. Bunu güzel-olur bir şey değil, katı bir doğruluk ve güvenlik gereksinimi olarak ele al. O kadar önemli ki bunu doğru yapmaya 12. Bölüm'ün tamamını ayırıyoruz.
+- **Daha küçük, daha ucuz bir arama alanı.** Daha az aday, daha hızlı ve daha ucuz getirme demektir; bu da ölçekte önem taşır.
+
+Aklında tutulması gereken bir ayrım. **Pre-filtering (ön filtreleme)**, metadata kısıtını benzerlik aramasından *önce* uygular; böylece yalnızca zaten geçmiş olan parçaları skorlarsın. **Post-filtering (son filtreleme)** önce benzerlik aramasını çalıştırır, sonra filtreyi geçemeyen isabetleri düşürür. Genelde istediğin şey pre-filtering'dir, çünkü yalnızca eşleşen parçaları skorlar; böylece top-k'yı *eşleşen kümenin* içinden alırsın ve zaten atacağın parçaları skorlamakla hiç vakit kaybetmezsin. Post-filtering'in sorunu, bolca eşleşen parça olsa bile sessizce *k'dan daha az* sonuç, hatta hiç sonuç döndürebilmesidir; çünkü zaten en iyi genel eşleşmelere kırpılmış bir listeyi filtreler. (Pre-filtering de k'dan az döndürebilir, ama yalnızca k'dan az parçanın filtreye gerçekten uyduğu dürüst durumda.) Birçok vektör veritabanı düzgün pre-filtering'i doğrudan destekler; onu kullan.
+
+## SONRA kaldıracı: cross-encoder'larla reranking
+
+Bu, bölümün yıldızı ve doğrudan yukarıda tespit ettiğimiz bi-encoder darboğazına saldırıyor.
+
+Bir **cross-encoder**, query ile bir aday parçayı *birlikte*, tek bir birleşik girdi olarak alır ve tek bir sayı çıkarır: bu parçanın bu query ile ne kadar alakalı olduğu. İki metin de modelden aynı anda geçtiği için, query'nin her kelimesi parçanın her kelimesine dikkat edebilir (attend), ve tam tersi de geçerlidir. Model iki önceden pişirilmiş özeti karşılaştırmıyor; çifti okuyup eşleşmeyi doğrudan yargılıyor. Bir cross-encoder'ın alaka konusunda bir bi-encoder'dan çarpıcı biçimde daha isabetli olmasının sebebi bu. Adayları bir cross-encoder'ın skoruna göre yeniden sıralayan **reranking**'in de tam olarak teşhis ettiğimiz gevşekliği düzeltmesinin sebebi bu. Karşıtlığı yan yana görmek en kolayı.
+
+<Diagram number={2} caption="Bi-encoder'a karşı cross-encoder. Bi-encoder, query ve parçayı ayrı ayrı iki vektöre gömer ve onları kosinüsle karşılaştırır: hızlı, çünkü parçalar önceden hesaplanmış, ama kayıplı. Cross-encoder, query ve parçayı birlikte besler ve tek bir alaka skoru çıkarır: yavaş, çünkü query zamanında çift başına çalışır, ama isabetli. Bu tek karşıtlık, iki aşamalı desenin var olma sebebi.">
+  <img src="/essays/making-retrieval-smarter/part8-biencoder-vs-crossencoder.svg" alt="İki panel. Solda, Bi-encoder, hızlı ve kayıplı: bir query kutusu ve bir parça kutusu, her biri kendi ayrı Encoder'ından aşağı akıyor, iki vektör üretiyor; ucuz bir kosinüs adımı bunları tek bir 0.41 skoruna birleştiriyor; bir not, aynı modelin iki kez çalıştırıldığını ve parça tarafının önceden hesaplandığını söylüyor. Sağda, Cross-encoder, yavaş ve isabetli: query ve parça kutuları hemen tek bir birleşik girdide, CLS query SEP chunk, birleşiyor; bu, iki metnin birbirine dikkat ettiği tek bir Cross-Encoder'dan geçiyor ve tek bir 0.96 alaka skoru üretiyor." class="w-full rounded-lg" />
+</Diagram>
+
+Peki neden her şeyi rerank edip bi-encoder'ı tamamen atlamıyoruz? Çünkü bir cross-encoder, bi-encoder'ın hızlı olduğu tam biçimde yavaştır. Hiçbir şeyi önceden hesaplayamaz: skor query'ye bağlıdır, bu yüzden model her (query, parça) çifti için query zamanında bir kez çalışmak zorundadır. Onu tek bir arama için milyonlarca parça üzerinde çalıştırmak dakikalar sürer ve bir servete mal olur. Kısa bir listeyi yargılamakta harikadır, tüm bir korpus üzerinde ilk-geçiş arama olarak ise çaresizdir.
+
+Bu gerilimin net bir çözümü var ve bu bölümün başlıca deseni: **iki aşamalı getirme (two-stage retrieval)**, **retrieve-then-rerank** olarak da adlandırılır.
+
+1. **Geniş getir (hızlı).** 7. Bölüm'deki bi-encoder ya da hybrid aramayı kullanarak cömert bir aday kümesi çek, diyelim en iyi elli ila yüz parça. Bu aşamanın işi recall: sıralama nasıl olursa olsun, doğru parçayı *ağın içine* sok.
+2. **Dar rerank yap (isabetli).** Cross-encoder'ı yalnızca o adaylar üzerinde çalıştır, onları alaka skoruna göre yeniden sırala ve en iyi birkaçını sakla, diyelim en iyi üç ila beş. Bu aşamanın işi isabet: gerçekten en iyi parçayı en üste çıkarmak.
+
+Tüm korpus üzerinde bi-encoder'ın hızını, kısa liste üzerinde de cross-encoder'ın isabetini elde edersin ve pahalı modele yalnızca birkaç düzine çift için ödeme yaparsın. Bu, 7. Bölüm'ün "geniş bir ağ at, sonra kırp" tavsiyesinin ta kendisi, artık bir isim ve bir mekanizmayla: geniş ağ birinci aşama, kırpmayı cross-encoder yapıyor. Aşağıdaki animasyon, yeniden sıralamayı somutlaştırıyor. Yıpranmış bir ceketin iadesini soruyoruz, ilk-geçiş getirmenin on aday döndürdüğünü ve gerçekten en iyi olanın konu-dışı bir indirim reklamının altında, altıncı sırada sıkışıp kaldığını izliyoruz, sonra rerank'i tetikleyip sıralamanın yerine oturmasını izliyoruz; bir kesim çizgisi de modele gerçekten ulaşan top-k'yı işaretliyor.
+
+<Diagram number={3} caption="Hareket halinde iki aşamalı getirme. Hızlı bir ilk geçiş, kabaca doğru sırada on aday döndürüyor; soruyu gerçekten cevaplayan parça altıncı sırada oturuyor. Rerank'i adım adım izle: bir cross-encoder her adayı yeniden skorluyor, gerçek cevap en üste tırmanıyor, konu-dışı çeldirici batıyor ve bir kesim çizgisi üretici için yalnızca en iyi üçünü tutuyor.">
+  <IframeFigure
+    src="/essays/making-retrieval-smarter/part8-reranking.html"
+    title="İnteraktif iki aşamalı getirme. 'Zaten giydiğim bir ceket için iade alabilir miyim' query'si için, on aday parça ilk-geçiş dense sırasında beliriyor; konu-dışı bir kış ceketi indirimi ilk sırada, belirleyici 'giyilmiş kıyafet' parçası ise altıncı sırada sıkışmış durumda. İleri adım atmak, listeyi yeniden skorlayıp yeniden sıralayan bir cross-encoder rerank'ini çalıştırıyor; böylece 'giyilmiş kıyafet' parçası en üste tırmanıyor ve indirim reklamı batıyor, sonra bir kesim çizgisi üreticiye verilen yalnızca en iyi üç parçayı tutuyor."
+    height={900}
+  />
+</Diagram>
+
+Pratik bir not, her zamanki güncellik uyarısıyla. Hazır rerankerlar konusunda sağlıklı bir arz var: yerelde çalıştırabileceğin açık cross-encoder modelleri ve ağ üzerinden çağırdığın barındırılan (hosted) reranking API'leri. Reranking modelleri, API'leri ve önerilen model isimleri hızla değişiyor ve benim bir bilgi kesim tarihim var; bu yüzden aşağıdaki kodu minimal tutup yerel cross-encoder'a yaslanacağım. Yayına almadan önce bugünün en iyi modeli ve tam kullanımı için güncel dokümantasyonu kontrol et.
+
+## Reranking tek bir model değil, bir ailedir
+
+"Reranker"ı "`ms-marco-MiniLM` cross-encoder'ı" olarak okuyup orada durmak cazip, çünkü aşağıdaki kodun kullandığı da bu. Yapma. Pointwise cross-encoder (bir query-parça çiftini skorla, skorlara göre sırala), çok daha büyük bir ailenin en eski ve en basit üyesi ve son dönemdeki kazanımların çoğu ailenin geri kalanından geliyor. Kafanda tutmaya değer üç şey var.
+
+**Barındırılan (hosted) API'ler 2019 taban çizgisinin çok ötesine geçti.** Bir modeli kendin barındırmak istemiyorsan, birkaç sağlayıcı reranking'i tek bir ağ çağrısı olarak satıyor ve bu yazının yazıldığı sırada güncel nesiller daha büyük, daha uzun bağlamlı ve çok dilli. Cohere'in Rerank 4 serisi (bir `pro` ve bir `fast` varyantı) 32 bin token'lık bir bağlam penceresi ve 100'den fazla dil taşıyor. Voyage'ın `rerank-2.5` ve `rerank-2.5-lite`'ı talimat-takip edici (instruction-following), yani alakayı yalnızca bir query ile değil bir cümleyle de yönlendirebiliyorsun ("birincil kaynaklara atıf yapan belgeleri tercih et"), o da 32 bin token'da. Buradaki isimler ve sayılar bunu okuduğunda eskimiş olacak, ki tam olarak mesele bu: bir tutorial'a gömülmüş herhangi bir tek model ismine güvenmek yerine güncel dokümantasyonu kontrol et.
+
+**Açık modeller rekabetçi ve onları kendin çalıştırabilirsin.** Eski MiniLM'in ötesine geçmek için bir API'ye mahkum değilsin. Mixedbread'in `mxbai-rerank-v2`'si (bir 0.5B `base` ve bir 1.5B `large`, Apache-2.0) ve `bge-reranker-v2` ailesi, indirip servis edebileceğin açık cross-encoder'lar; özellikle BGE rerankerlar, yaygın ve kolay deploy edilen bir taban çizgisi haline geldi. Bunlar aşağıdaki koddaki yerel model gibi davranır: bir çift girer, bir alaka skoru çıkar, sen sıralarsın.
+
+**Listwise ve LLM rerankerlar sorunun şeklini değiştirir.** Bir pointwise cross-encoder her adayı *izole* olarak skorlar, bu yüzden ikinci adayla beşinci adayın neredeyse aynı şeyi söylediğini ya da üçüncü adayın yalnızca birinci aday verildiğinde anlamlı olduğunu hiçbir zaman göremez. Bunun yerine bir **listwise** reranker, query'yi ve *birkaç adayı birlikte* okur ve tüm küme üzerinde bir sıralama üretir; bu da karşılaştırmaların birbirini bilgilendirmesine izin verir. Jina'nın `jina-reranker-v3`'ü, örneğin, bir belge grubunu tek bir uzun-bağlam geçişinde işleyen listwise bir modeldir. Bu fikrin en esnek versiyonu, query'yi ve aday listesini doğrudan genel amaçlı bir dil modeline verip onları sıralamasını istemektir: bir **LLM reranker**. En yetenekli ve açık ara en pahalı seçenek, çünkü query başına tam üretim maliyeti ödersin, ama düşük hacimli, yüksek riskli sıralama için her özel modeli geçebilir. Ortak tema şu: "rerank" ucuz bir pointwise cross-encoder'dan orta-maliyetli bir listwise modele ve tam bir LLM hakemine kadar uzanır ve doğru seçim bir varsayılan değil, bir bütçe kararıdır.
+
+## Aday kümesi düğmesi
+
+İki aşamalı desenin tek, en önemli ayar kaldıracı var ve bu reranker modeli değil. Bu, **n**: birinci aşamadan ikinci aşamaya verdiğin aday kümesinin boyutu. Bu bölümdeki her şey, bu sayıyı doğru almanın yanında ikincil kalır, tek ve düz bir sebepten: **bir reranker, yalnızca kendisine verileni yeniden sıralayabilir.** Soruyu cevaplayan parça, birinci aşamanın top-n'inde değilse, ne kadar iyi olursa olsun hiçbir reranker onu ortaya çıkaramaz. O parça hiçbir zaman odada olmamıştır. Reranking *isabeti* (adayların sırasını) iyileştirir; *recall* için (doğru adayın hiç var olup olmadığı) hiçbir şey yapmaz. Recall tamamen yukarı akışta, n tarafından belirlenir.
+
+Yani izlenecek büyüklük, 11. Bölüm'ün sana ölçmeyi öğreteceği büyüklük, **1. aşama recall@n**: gerçek query'lerin genelinde, gerçekten doğru parça, ilk geçişin döndürdüğü top-n'in bir yerinde ne sıklıkla bulunuyor. Bu sayı, tüm pipeline'ının tavanı. recall@50 yüzde 90 ise, query'lerinin yüzde 10'u reranker çalışmadan önce zaten kaybedilmiştir ve daha iyi bir reranker onlarda hiçbir şey kazandırmaz. Bunların çözümü daha süslü bir reranker değil, daha büyük bir n ya da daha iyi bir birinci aşamadır (7. Bölüm'deki hybrid arama).
+
+Bu da seni n'i büyük tutmaya iter. Karşı baskı ise maliyettir, çünkü n tam olarak cross-encoder'ın skorlaması gereken çift sayısıdır ve bu bizi gecikme bütçesine getirir.
+
+Bir pointwise cross-encoder, query zamanında aday başına bir kez çalışır, bu yüzden maliyeti kabaca n ile doğrusaldır. Küçük bir MiniLM sınıfı model için somut, büyüklük mertebesinde rakamlar: 50 ila 100 adayı rerank etmek bir query'ye kabaca 30 ila 200 ms ekler ve bu aralık büyük ölçüde donanıma bağlıdır. CPU'da, 50 ila 100 çifti skorlamak tipik olarak düşük yüzlerce milisaniyeye oturur; bir GPU'da aynı iş 50 ms'nin altına düşer ve büyük bir hızlandırıcı 100 çifti düşük onlarca milisaniyede yapabilir. Çiftleri batch'lemek (bir döngü yerine tek bir ileri geçişte skorlamak), throughput'un çoğunun geldiği yerdir; bu yüzden aday listesinin tamamını her zaman `predict`'e tek seferde ver, hiçbir zaman çifti tek tek verme. 100-200 adayın çok ötesine geçersen rerank gecikmeni domine etmeye başlar; bu, n'in genelde 50-100 aralığına oturmasının pratik sebebidir: recall@n'i yüksek tutacak kadar büyük, cross-encoder'ı ucuz tutacak kadar küçük. Barındırılan reranking API'leri donanımı gizler ama skorlanan belge başına ücretlendirir; yani aynı aritmetik geçerlidir, sadece dolar cinsinden.
+
+Buradaki çıkarım sabit bir cevap değil, bir ayar döngüsü: n'i, kendi query'lerinde recall@n rahatça yüksek olana kadar yükselt, sonra dur; çünkü ondan sonraki her ekstra aday, rerankerin hiçbir zaman kazanmayacak parçaları yeniden sıralamak için harcadığı gecikme ve maliyettir.
+
+## Kaldıraçları bir araya getirmek
+
+İşte üç kaldıracın da yerinde olduğu, sırayla, geliştirilmiş query-zamanı pipeline'ı:
+
+1. **Dönüştür** ham query'yi (ÖNCE kaldıracı): bu tür bir query'nin ihtiyacı varsa onu yeniden ifade et, genişlet ya da ayrıştır.
+2. **Filtrele** metadata'ya göre (SIRASINDA kaldıracı): doğru tenant, tarih ya da bölümle sınırla. Güvenlik filtreleri zorunludur.
+3. **Geniş getir** (bi-encoder kosinüs ilk geçişi; production'da, 7. Bölüm'deki hybrid arama): recall'ı yüksek tutmak için cömert bir aday kümesi çek.
+4. **Rerank et** o kümeyi bir cross-encoder ile (SONRA kaldıracı) ve en iyi birkaçını sakla.
+5. **Üret**: yalnızca o en iyi parçaları, 6. Bölüm'deki dayanaklı (grounded) prompt ile birlikte modele ver.
+
+Kritik uyarı: neredeyse hiçbir zaman üç kaldıracın hepsine aynı anda ihtiyacın olmaz. Her biri gecikme, maliyet ve hareketli parça ekler. Disiplin, ileri düzey gibi göründüğü için değil, *başarısızlık analizinin* gerektirdiği yerde bir kaldıraç eklemektir. Kaçırdıkların çoğunlukla eskimiş ya da tenant'lar arası sonuçlarsa, ihtiyacın olan bir reranker değil bir filtredir. Doğru parça güvenilir biçimde en iyi elliye giriyor ama nadiren en üste çıkıyorsa, çözümün bir reranker'dır. 11. Bölüm tamamen getirmeyi ölçmekle ilgili; böylece bu kararları sezgiyle değil kanıtla verirsin. Şimdilik şu ilkeyi tut: karmaşıklık eklemeden önce ölç.
+
+## Uygulamayı genişlet: bir reranker ve bir filtre ekle
+
+Sırada bunu 6. Bölüm'deki uygulamada gerçeğe dönüştürmek var. Getirmenin etrafına bir metadata filtresi ve bir cross-encoder reranker ekleyeceğiz. Bu bir genişletme, yeniden inşa değil: embedding, saklama, zenginleştirme ve üretim hepsi değişmeden kalıyor. Her parçaya biraz metadata veriyoruz, geniş bir ilk-geçiş kümesi çekiyoruz ve onu top-k'ya kadar rerank ediyoruz. (Reranker model isimleri hızla değişiyor; güncel olanı doğrula.)
+
+```python
+from sentence_transformers import CrossEncoder
+
+# A cross-encoder scores a (query, chunk) PAIR directly. Check current names.
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+def rerank(query, candidates, top_k=3):
+    pairs = [(query, c["text"]) for c in candidates]   # one pair per candidate
+    rel = reranker.predict(pairs)                       # a relevance score per pair
+    ranked = sorted(zip(candidates, rel), key=lambda cr: cr[1], reverse=True)
+    return [{**c, "rerank": float(s)} for c, s in ranked[:top_k]]  # keep the best few, with their score
+
+def smart_retrieve(query, n=10, top_k=3, where=None):
+    candidates = first_pass(query, n=n, where=where)    # Part 6 retrieve, but wide
+    return rerank(query, candidates, top_k=top_k)        # then the accurate trim
+```
+
+`first_pass` fonksiyonu, yalnızca 6. Bölüm'deki `retrieve`'in daha büyük bir `n` ile istenmiş hali (burada on, gerçek bir korpusun elli ila yüz çekeceği yerde; bizim oyuncak korpusumuzun yalnızca on parçası var), isteğe bağlı olarak bir metadata filtresiyle daraltılmış. "Zaten giydiğim bir ceket için iade alabilir miyim?" query'sini çalıştır ve rerank öncesi ile sonrası sırayı yazdır:
+
+```text
+QUERY: Can I get a refund on a jacket I've already worn?
+
+STAGE 1, first-pass order (bi-encoder cosine, top 10):
+   1. 0.71  Our winter jacket collection is on sale through the end of the month.
+   2. 0.66  Refunds are accepted within 30 days of purchase, provided the item is unused.
+   3. 0.52  To start a return, email support@example.com with your order number.
+   4. 0.49  Items marked final sale cannot be returned or exchanged.
+   5. 0.44  Exchanges for a different size are free within the return window.
+   6. 0.41  Worn or washed clothing counts as used and is not eligible for a refund.
+   7. 0.37  Shipping fees are non-refundable; late returns get store credit.
+   8. 0.33  Gift cards never expire and are non-refundable.
+   9. 0.21  Standard shipping takes 3 to 5 business days; express is next-day.
+  10. 0.18  All electronics include a one-year limited warranty.
+
+STAGE 2, after cross-encoder rerank (top 3 kept):
+   1. 0.96  Worn or washed clothing counts as used and is not eligible for a refund.
+   2. 0.88  Refunds are accepted within 30 days of purchase, provided the item is unused.
+   3. 0.74  Items marked final sale cannot be returned or exchanged.
+```
+
+Ne olduğuna bak. İlk geçişte, konu-dışı bir indirim reklamı "ceket" kelimesini paylaştığı için ilk sırada yer aldı ve soruyu gerçekten cevaplayan parça ("giyilmiş kıyafet kullanılmış sayılır") saf bir top-three'nin alacağı kesimin altında, altıncı sırada mahsur kaldı. Her parçayı query ile *birlikte* okuyan cross-encoder, o belirleyici parçayı en üste çıkarıyor ve indirim reklamını dibe doğru düşürüyor. Model artık soruyu gerçekten çözen üç parçayı alıyor, böylece yanıltılmak yerine doğru cevap verebiliyor. (Hem ilk-geçiş sıralaması hem de bu skorlar açıklayıcı ve seçtiğin embedding ile reranker modellerine bağlı. Yukarıdaki yerel reranker aslında burada gösterilen düzgün 0 ila 1 sayıları değil, sınırsız bir alaka logit'i çıkarır; bu yüzden canlı çalıştırman farklı görünecek. Önemli olan yalnızca ortaya çıkan sıralama.)
+
+Metadata filtresi diğer yarısı. Her parça bir `section` taşıdığı için, ilk geçişi iade politikasıyla sınırlayabilirsin ve indirim reklamı hiç yarışmaya bile giremez:
+
+```text
+With a metadata filter (section == "returns"), the sale ad never even competes:
+   1. 0.66  Refunds are accepted within 30 days of purchase, provided the item is unused.
+   2. 0.52  To start a return, email support@example.com with your order number.
+   3. 0.49  Items marked final sale cannot be returned or exchanged.
+```
+
+Eksiksiz, çalıştırılabilir dosya burada: [`rag_rerank.py`](/essays/making-retrieval-smarter/rag_rerank.py). Doğrudan 6. Bölüm'deki `rag_app.py`'nin üzerine inşa ediliyor, bu yüzden `augment` ve `generate` dokunulmadan geçiyor.
+
+{/* From experience callout: drop in a real first-person anecdote here (e.g. the day adding a cross-encoder reranker visibly lifted answer quality on the same corpus and the same prompt, with retrieval the only thing that changed; or how much latency HyDE actually cost in production and when it was worth it), then wrap it as: > 💡 **From experience** ...story... */}
+
+## Özet ve önümüzdeki yol
+
+7. Bölüm'ün kabaca doğru sıralı listesini aldık ve getirmenin etrafındaki üç kaldıraçla keskinleştirdik. Öncesinde, query'yi yeniden yazdık (multi-query, HyDE, step-back, decomposition). Sırasında, adayları metadata'ya göre filtreledik, güvenlik filtrelemesi katı bir gereksinim olarak. Sonrasında, bölümün yıldızı, geniş bir aday kümesini bir cross-encoder ile rerank ettik; bu, 7. Bölüm'ün "geniş bir ağ at, sonra kırp" tavsiyesini nihayet gerçek bir mekanizmaya oturtan iki aşamalı retrieve-then-rerank deseni. Bir reranker ve bir filtreyle, tek-geçişli bir pipeline olabileceği kadar keskin.
+
+Yine de hâlâ tek-geçişli: bir kez getirir, bir kez üretir ve *hangi birimi* getirdiğimizi hiç sorgulamadık. Şimdiye kadarki her bölüm, modele hangi parça iyi skorladıysa onu, tam olarak saklandığı haliyle verdi. Ama getirmek için en iyi şey ile modele *göstermek* için en iyi şey her zaman aynı parça değil. Bu da 9. Bölüm'ün konusu.
+
+## Kendin dene
+
+Aday kümesi düğmesinin neden önemli olduğunu hissetmenin en hızlı yolu, onu kendin çevirmek. [`rag_rerank.py`](/essays/making-retrieval-smarter/rag_rerank.py) dosyasını aç ve 1. ve 2. aşama sıralamalarını yan yana görmek için olduğu gibi bir kere çalıştır. Sonra onunla oyna:
+
+- **`n`'i (geniş-ağ boyutu) değiştir ve hangi parçaların ikinci aşamaya hayatta kaldığını izle.** `smart_retrieve(query, n=3, top_k=3)`'ü, sonra `smart_retrieve(query, n=10, top_k=3)`'ü çağır. Belirleyici "giyilmiş kıyafet" parçası ilk geçişte altıncı sırada otururken, küçük bir `n` (diyelim 3 ya da 5), reranker onu hiç görmeden *önce* onu keser ve hiçbir yeniden sıralama onu geri getiremez. `n`'i genişlet, aday kümesinde yeniden belirir ve rerank onu en üste çıkarır. İşte bu, on parça üzerinde somutlaşmış, recall@n'in tavan haline gelmesi.
+- **`top_k`'yı (rerank'ten kaç tanesinin hayatta kaldığını) değiştir ve kesim çizgisinin hareket etmesini izle.** `n`'i geniş tut ve `top_k`'yı 1'den 5'e kademelendir. Bu, cross-encoder'ın *hangi* parçaları skorladığını değiştirmez, yalnızca üretici için kaç tane tuttuğunu değiştirir: bu, yukarıdaki recall ucundan ayrı, düğmenin isabet ucu.
+- **Reranker modelini değiştir.** Kod, `cross-encoder/ms-marco-MiniLM-L-6-v2`'yi sabit kodluyor. O tek string'i başka bir yerel cross-encoder'la (bir `bge-reranker` ya da `mxbai-rerank` checkpoint'i) değiştir ve yeniden çalıştır. Mutlak skorlar tamamen farklı görünecek (MiniLM modelinin 0-1 arası sayılar değil, sınırsız logit'ler ürettiğini hatırla), ama karşılaştırman gereken *sıralama*. İki farklı modelin kazanan konusunda hemfikir olduğunu ya da olmadığını görmek, model seçiminin bir detay değil gerçek bir karar olduğuna dair en ucuz sezgi.
+
+> ⚠️ **Yaygın tuzaklar**
+> - **Cross-encoder'lar uzun parçaları sessizce keser.** Her rerankerin bir maksimum girdi uzunluğu vardır ve query artı parça o tek bütçeye birleştirilir (concatenate). Bir parça sınırdan uzunsa, model kuyruğunu sessizce keser ve yalnızca sığanı skorlar; bu yüzden parçanın soruyu gerçekten cevaplayan kısmı hiç okunmamış olabilir. Hata yoktur, yalnızca yanlış bir skor vardır. Parçaları modelin maksimum token'ının rahatça altında tut, ya da uzun-bağlamlı bir reranker'a uzan; ve parçanın tamamının yargılandığını asla varsayma.
+> - **Reranking, bir 1. aşama recall kaçırmasını düzeltemez.** Bu, aday kümesi düğmesinin bir başarısızlık modu olarak yeniden ifadesi. Kaçırdıkların, doğru parçanın top-n'de hiç olmadığı query'lerse, daha iyi bir reranker boşa harcanmış paradır: yalnızca birinci aşamanın kendisine verdiğini yeniden sıralar. Önce teşhis koy (11. Bölüm), sonra ya `n`'i genişlet ya da birinci aşamayı iyileştir. Bir recall sorununu düzeltmek için rerankera uzanma.
+> - **Multi-query çarpı reranking maliyeti çarpar.** Dikkatli olmazsan ÖNCE kaldıracı ile SONRA kaldıracı kötü etkileşir. Multi-query bir soruyu beş farklı ifadeye yelpazelendirirse ve her biri için n aday getirirsen, reranker'ın artık n değil, 5n'e kadar çift skorlaması gerekir. Union'lanmış aday kümesini rerank'ten *önce* yinelenenlerden arındır ve cross-encoder'a verdiğin toplam çift sayısına bir üst sınır koy, yoksa iki "gelişmiş" teknik query başına gecikmeni sessizce çarpar.
+
+## Özet çıkarımlar
+
+- İlk-geçiş getirme yalnızca kabaca doğrudur çünkü bir **bi-encoder** kullanır: query ve parçalar ayrı ayrı gömülür, bu yüzden her metin, diğerini hiç göz önünde bulunduramayan tek bir vektöre sıkıştırılır. Hızlı, ama yapısal olarak kesin değil.
+- Getirmeyi pipeline sırasına göre üç kaldıraçla keskinleştir: **önce** (query'yi dönüştür), **sırasında** (metadata'ya göre filtrele), **sonra** (sonuçları rerank et).
+- **Query dönüşümleri** (multi-query, HyDE, step-back, decomposition), kötü bir soruyu daha iyi arama query'lerine dönüştürür. Her biri ekstra LLM çağrılarına mal olur, o yüzden onları bir query tipi sürekli başarısız olduğu yerde kullan.
+- **Metadata filtreleme**, katı kriterleri (tarih, bölüm ve kritik olarak, güvenlik ile multi-tenancy için erişim seviyesi) uygular ve arama alanını küçültür. Yalnızca eşleşen parçaları skorlayan **pre-filtering**'i, bolca parça eşleşse bile k'dan az sonuç döndürebilen **post-filtering**'e tercih et.
+- Bir **cross-encoder**, query ile bir parçayı birlikte skorlar ve alakayı bir bi-encoder'dan çok daha isabetli yargılar, ama tüm bir korpus üzerinde çalıştırmak için çok yavaştır.
+- "Reranker" tek bir model değil, bir **aile**: ucuz bir pointwise cross-encoder (`bge-reranker` ve `mxbai-rerank` gibi açık olanlar, ya da Cohere Rerank 4 ve Voyage `rerank-2.5` gibi hosted API'ler), birkaç adayı birlikte sıralayan orta-maliyetli bir listwise model ve tam bir LLM hakemi. Seçim bir bütçe kararıdır.
+- En önemli düğme **n**, aday kümesi boyutu, çünkü bir reranker yalnızca kendisine verileni yeniden sıralayabilir. **recall@n**'i (doğru parça top-n'de hiç var mı) yukarı akışta ayarla; reranking yalnızca sırayı düzeltir, recall'ı asla. Küçük bir cross-encoder, 50 ila 100 adayı rerank etmeye kabaca 30 ila 200 ms ekler, büyük ölçüde donanıma bağlı.
+- **İki aşamalı getirme (retrieve-then-rerank)**, gerilimi çözer: geniş bir ağı hızlıca getir, cross-encoder ile rerank et, en iyi birkaçını sakla. Kaldıraçları yalnızca başarısızlık analizinin gerektirdiği yere ekle; karmaşıklık eklemeden önce ölç (11. Bölüm).
+
+## Referanslar
+
+- Nogueira, R., & Cho, K. (2019). *Passage Re-ranking with BERT.* arXiv:1901.04085. [arxiv.org/abs/1901.04085](https://arxiv.org/abs/1901.04085): retrieve-then-rerank desenini kuran monoBERT cross-encoder'ı: (query, pasaj) çiftini BERT'ten birlikte geçir ve tek bir alaka skoru oku.
+- Gao, L., Ma, X., Lin, J., & Callan, J. (2022). *Precise Zero-Shot Dense Retrieval without Relevance Labels.* arXiv:2212.10496. [arxiv.org/abs/2212.10496](https://arxiv.org/abs/2212.10496): HyDE: bir LLM ile varsayımsal bir cevap üret ve kısa sorunun gömüsü yerine *onun* gömüsüyle ara.
+- Zheng, H. S., Mishra, S., Chen, X., Cheng, H.-T., Chi, E. H., Le, Q. V., & Zhou, D. (2023). *Take a Step Back: Evoking Reasoning via Abstraction in Large Language Models.* arXiv:2310.06117. [arxiv.org/abs/2310.06117](https://arxiv.org/abs/2310.06117): step-back prompting: dar bir query'nin kaçıracağı temel bağlamı toplamak için sorunun daha geniş, daha soyut bir versiyonunu türet.
+
+## Sözlük
+
+- **Bi-encoder**: query ve her parçayı *ayrı ayrı* vektörlere gömen ve onları kosinüs benzerliğiyle karşılaştıran bir model. Hızlıdır, çünkü parça vektörleri önceden hesaplanmıştır, ama kayıplıdır, çünkü her metin izole biçimde tek bir vektöre özetlenir. Bu, sıradan dense retrieval'dır.
+- **Cross-encoder**: query ile bir aday parçayı *birlikte*, tek bir girdi olarak alan ve tek bir alaka skoru çıkaran bir model. Bir bi-encoder'dan çok daha isabetlidir, çünkü iki metin birbirine dikkat eder, ama yavaştır, çünkü query zamanında çift başına çalışır.
+- **Reranking**: getirilmiş bir aday kümesini, daha isabetli bir alaka modeliyle (tipik olarak bir cross-encoder) yeniden sıralamak; böylece gerçekten en iyi parça en üste çıkar.
+- **İki aşamalı getirme (retrieve-then-rerank)**: hızlı bir ilk-geçiş getirmeyle geniş bir aday kümesi çek, sonra yalnızca o adayları yavaş, isabetli bir reranker ile yeniden sırala ve en iyi birkaçını sakla. Hız ve isabet bir arada.
+- **Pointwise'a karşı listwise reranker**: bir pointwise reranker (klasik cross-encoder), her adayı query'ye karşı *izole* olarak skorlar ve skorlara göre sıralar; bir listwise reranker, query'yi ve *birkaç adayı birlikte* okur ve tüm küme üzerinde bir sıralama üretir; böylece karşılaştırmalar birbirini bilgilendirir.
+- **LLM reranker**: query'yi ve aday listesini doğrudan genel amaçlı bir dil modeline verip onları sıralamasını istemek. En esnek ve en pahalı seçenek, çünkü query başına tam üretim maliyeti ödersin.
+- **Aday kümesi (n) ve recall@n**: n, geniş ilk geçişin rerankera verdiği parça sayısıdır; recall@n, gerçekten doğru parçanın o top-n'in bir yerinde ne sıklıkla olduğudur. Bir reranker yalnızca kendisine verileni yeniden sıralayabildiği için, recall@n tüm pipeline'ın tavanıdır.
+- **Query dönüşümü**: kullanıcının ham sorusunu, getirmeden önce bir ya da daha fazla daha iyi arama query'sine yeniden yazmak.
+- **Multi-query (query expansion)**: query'nin birkaç farklı ifadesini üretmek, her biri için getirme yapmak ve recall'ı yükseltmek için sonuçları birleştirmek.
+- **HyDE (Hypothetical Document Embeddings)**: bir LLM ile varsayımsal bir cevap yazmak ve *onun* gömüsüyle aramak, çünkü bir cevap, kısa bir sorudan daha çok hedef belgelere benzer.
+- **Step-back prompting**: sorunun daha geniş, daha genel bir versiyonunu üretmek ve temel bağlamı toplamak için onun için getirme yapmak.
+- **Query decomposition (ayrıştırma)**: karmaşık, çok parçalı bir soruyu alt sorulara bölmek, her biri için getirme yapmak ve sonuçları birleştirmek.
+- **Metadata filtreleme**: getirmeyi, metadata'sı katı kriterlere (tarih, kaynak, bölüm, erişim seviyesi) uyan parçalarla sınırlamak.
+- **Pre-filtering'e karşı post-filtering**: pre-filtering, metadata kısıtını benzerlik aramasından *önce* uygular, böylece top-k'yı eşleşen kümenin içinden alırsın; post-filtering onu *sonra* uygular, bu yüzden daha fazla parça eşleşecek olsa bile k'dan az döndürebilir.
+
+---
+
+**Sırada, 9. Bölüm: Gelişmiş Retrieval Desenleri.** Parçaları nasıl sıraladığımızı keskinleştirdik; sırada *neyi getirdiğimizi* yeniden düşünüyoruz: parent-document retrieval, sentence-window retrieval, self-querying ve contextual compression ile.

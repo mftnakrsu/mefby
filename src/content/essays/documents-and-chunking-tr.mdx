@@ -1,0 +1,189 @@
+---
+title: "Belgeler ve Parçalama (Chunking)"
+description: "Elimizde bir getirme motoru var, ama sessiz bir varsayımın üstünde duruyor: belgelerin derli toplu parçalar (chunk) hâlinde geldiği. Retrieval-Augmented Generation (RAG) üzerine sıfırdan bir serinin 5. bölümü: dağınık formatlardan temiz metin çıkarmak, neden parçaladığımız, çok küçük ile çok büyük gerilimi, başlıca bölme stratejileri (sabit boyutlu, özyinelemeli, yapıya duyarlı, anlamsal) ve getirme kalitesini sessizce belirleyen iki düğme: parça boyutu ve örtüşme. Kötü parçalar akışın aşağısındaki her şeyi zehirler."
+date: 2026-06-11
+tags: ["RAG", "Chunking", "Document Processing", "Vector Search", "NLP", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-05-chunking"
+ogImage: "/og/documents-and-chunking.png"
+lang: "tr"
+translationSlug: "documents-and-chunking"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+Dört bölümdür aynı makineyi geliştiriyoruz. Metni **gömülere (embeddings)** çeviriyoruz (2. bölüm), bir sorguyu kosinüs benzerliğiyle onlara karşı puanlayıp **top-k**'yı tutuyoruz (3. bölüm) ve bu getirmeyi bir vektör veritabanı ve yaklaşık en yakın komşu aramasıyla ölçekte hızlı yapıyoruz (4. bölüm). Ve bunca zaman, hakkını hiç vermeden tek bir kelimeye yaslandık: *parçalar (chunks)*. Sanki belgelerimiz önceden kesilmiş, derli toplu, kendi başına ayakta duran parçalar hâlinde geliyormuş gibi "parçalar" deyip durduk. Gelmiyorlar. Bu bölüm kesiğin kendisi hakkında: ham belgeler gömdüğümüz parçalara nasıl dönüşür, bu karar neden tüm RAG'deki en yüksek kaldıraçlı ve en az takdir edilen tercihlerden biridir ve nasıl iyi verilir. Sonunda şunları bileceksin: dağınık dosyalardan temiz metin nasıl çıkarılır, neden parçalarız, merkezi çok-küçük ile çok-büyük gerilimi, başlıca bölme stratejileri ve getirmenin ne kadar iyi olabileceğini sessizce belirleyen iki düğme: **parça boyutu (chunk size)** ve **parça örtüşmesi (chunk overlap)**.
+
+## Ön koşullar
+
+1'den 4'e kadar olan bölümler: [RAG Neden Var?](/essays/why-rag-exists-tr), [Gömüleri Gerçekten Anlamak](/essays/embeddings-tr), [Benzerliği Ölçmek](/essays/measuring-similarity-tr) ve [Vektör Veritabanları ve İndeksleme](/essays/vector-databases-tr). Metnin vektöre dönüştüğü, benzer anlamların yakın durduğu, benzerliğe göre sıralayıp top-k'yı tuttuğumuz ve bir vektör veritabanının o komşuları hızla getirdiği fikirleriyle rahat olmalısın. Tek kısa kod parçası için temel Python işe yarar, ama bu bir kavram bölümü: sezgi ve resimlerle ilerliyoruz.
+
+## Sessiz varsayım: parçalar nereden geliyor?
+
+İşte bu bölümün düzeltmek için var olduğu rahatsız edici gerçek. İnşa ettiğimiz her şey parçaların üstünde oturuyor ve nereden geldiklerini hiç söylemedik. Gerçek bir kaynak bir **parça (chunk)** değildir. Kırk sayfalık bir PDF'tir, uçsuz bucaksız bir web sayfası, bir destek mesajları zinciri, bir sunum destesi. Birinin, yani bizim, o kaynağı gömüp sakladığımız parçalara nereden dilimleyeceğine karar vermesi gerekir. O karar **parçalamadır (chunking)** ve tüm hattın en yüksek kaldıraçlı ve en az takdir edilen adımlarından biridir.
+
+Neden bu kadar yüksek kaldıraçlı? Çünkü parçalama yığının en dibinde oturur; hataları yukarı doğru, her şeyin içine yayılır. *"İade süremiz ne kadar?"* sorusunu cevaplaması gereken parça, *"İadeler satın alımdan sonra 30 gün içinde kabul edilir"* cümlesini hiçbir zaman temizce içermediyse, hiçbir gömü modeli, hiçbir benzerlik ölçütü, hiçbir akıllı indeks ve hiçbir büyük dil modeli, parçalamanın yok ettiği bir cevabı getiremez. Çöp parça girer, çöp getirme çıkar. İnsanlar RAG'leri düşük performans gösterince daha süslü bir re-ranker'a ya da daha büyük bir modele uzanır; oysa asıl suçlu çoğu zaman üç adım yukarıda, belgelerin nasıl bölündüğünde oturuyordur. Bunu doğru yap, sistemin geri kalanının bir şansı olur. Yanlış yap, akışın aşağısındaki hiçbir şey seni kurtaramaz.
+
+## Önce temiz metni çıkar
+
+Bir belgeyi parçalayabilmek için önce onu metne çevirmen gerekir ve o adım sessizce haincedir. **Belge yükleme (document loading)** (ya da **ayrıştırma (parsing)**), bir kaynağın kendi formatından temiz, okunabilir metin çıkarma işidir. Kulağa sıkıcı geliyor. Değil; çünkü o çıkarımın kalitesi, üstündeki her şey için sert bir tavandır.
+
+Her format kendi tarzında direnir. Bir **PDF** iki sütun hâlinde dizilmiş olabilir; saf bir okuyucu sol ve sağ sütunları iç içe geçirip karman çorman bir saçmalık üretir; içeride bırakılırsa her parçayı kirleten, sayfadan sayfaya tekrarlanan üst ve alt bilgiler taşır; ve tabloları, tek bir metin akışına düzleştirildiğinde, temiz bir sayı ızgarasını anlamsız bir çorbaya çevirebilir. **HTML**, navigasyon menüleri, çerez bantları, kenar çubukları ve alt bilgilerle sarılıdır; hepsi saf dolgudur (boilerplate) ve hiçbirini içerikmiş gibi gömmek istemezsin. **Word** belgeleri, **sunumlar** ve **Markdown**, her biri korunmaya değer kendi yapısını taşır. Ve **taranmış görüntülerde**, metni geri kazanmak için **OCR** (optik karakter tanıma) çalıştırana kadar hiç metin yoktur; o da kendi hatalarını getirir.
+
+Ders acımasız: çıkarım kaynağı hırpalarsa, yığının geri kalanı ne kadar iyi olursa olsun getirme mahkûmdur. Anlamsız harf yığınına dönmüş bir tablo ya da birbirine karışmış iki sütun, onlardan çıkan parçaları sessizce zehirler ve sen, en ilk adımda doğmuş bir sorunun peşinde gömüleri ve `nprobe`'u ayarlayarak günler harcarsın. O yüzden yüklemeye gerçek bir iş gibi davran. Tabloları, görüntüleri ve belgenin yapısını bilinçli biçimde ele al ve çıkanın, gerçekten giren kaynak gibi okunduğunu doğrula.
+
+## Neden parçalıyoruz ki?
+
+Diyelim metin temiz. Neden her belgeyi tek bir vektör olarak gömüp bölmeyi tamamen atlamıyoruz? Üç somut sebep elimizi mecbur bırakıyor.
+
+- **Gömü girdi sınırları.** Gömü modelleri, tek vektöre çevirecekleri metin miktarını sınırlar; modele göre birkaç yüz token'dan birkaç bine kadar (uzun bağlamlı modellerde 8k ve üzeri). Her hâlükârda sınır sonludur: modele koca bir kitap verip karşılığında tek bir gömü alamazsın. Girdinin bölünmesi gerekir.
+- **Getirme kesinliği.** Devasa bir belgeyi tek seferde gömebilsen bile, istememelisin. Uzun bir belge için tek bir vektör, içindeki her şeyin *bulanık bir ortalamasıdır*: iadeler, kargo, garantiler, iletişim bilgileri, hepsi uzayda tek bir noktaya bulaşmış hâlde. İadelerle ilgili bir sorgu o ortalamayla ancak zayıfça eşleşir. Küçük parçaların her biri odaklı tek bir fikri yakalar; böylece çok daha keskin, çok daha hedefli eşleşmeler üretirler. Kesinlik küçük parçalarda yaşar.
+- **Üretim anı ekonomisi.** Getirdiğimiz parçalar sadece puanlanmaz; kazananlar bağlam olarak dil modelinin prompt'una tıkılır (1. bölümdeki bağlam penceresi duvarı hâlâ gayet gerçek). Daha küçük, ilgili parçalar o sınırlı bütçeye daha çok işe yarar sinyal sığdırır ve sorunun hiç ihtiyaç duymadığı metne daha az token harcar.
+
+Yani parçalıyoruz çünkü mecburuz (girdi sınırları), çünkü getirmeyi keskinleştiriyor (kesinlik) ve çünkü bağlam bütçesini akıllıca harcıyor (ekonomi).
+
+## Merkezi gerilim: çok küçük, çok büyük, tam kararında
+
+Daha küçük düpedüz daha iyi olsaydı parçalama kolay olurdu. Değil; sebebi de aşağıdaki her stratejinin aşmaya çalıştığı gerçek bir gerilim.
+
+**Çok küçük** kes, bağlamı yok edersin. Sadece *"30 gün içinde"* diye okunan bir parça işe yaramaz: neyin otuz günü, ne zamandan itibaren? Cümlesinden koparılan fragman muğlaktır ve gömüsü işe yarar hiçbir yeri göstermez. **Çok büyük** kes, anlamı bulanıklaştırırsın: gömü yine o ortalamaya bulanmış lekeye döner, getirme kesinliğini kaybeder ve bağlam bütçesini dolguya harcarsın. Hedef iki uç da değil. **Anlamsal olarak tutarlı birimler** boyunca kesmek: her biri, iyi bir paragrafın yaptığı gibi, tek bir tam ve kendi başına ayakta duran fikri tutan parçalar. Aşağıdaki figür üç durumu yan yana koyuyor; ödünleşimi kaçırmak imkânsız.
+
+<Diagram number={1} caption="Aynı pasaj üç şekilde kesilmiş: bağlamdan koptuğunda muğlaklaşan çok küçük bir parça, gömüsü birkaç konunun bulanık ortalaması olan çok büyük bir parça ve keskin eşleşen, kendi başına ayakta duran tek bir fikri tutan tam kararında bir parça.">
+  <img src="/essays/documents-and-chunking/part5-too-small-too-large.svg" alt="Aynı iade politikası pasajı üzerinde yan yana üç panel. İlki, çok küçük etiketiyle, 30 gün içinde fragmanını tek başına gösterir ve bağlam dışında muğlak olduğunu not eder. İkincisi, çok büyük etiketiyle, iadeleri, kargoyu ve son-satış kurallarını kapsayan uzun bir blok gösterir ve gömüsünün birçok konunun bulanık ortalaması olduğunu not eder. Üçüncüsü, tam kararında etiketiyle, 30 günlük iade süresi hakkında tek bir tutarlı cümle gösterir ve keskin eşleştiğini not eder." class="w-full rounded-lg" />
+</Diagram>
+
+## Bölme stratejileri
+
+Parçalamanın tek bir doğru yolu yok; her biri bir öncekinden daha akıllı ve biraz daha pahalı bir strateji merdiveni var. İşte gerçekten karşılaşacağın dört tanesi, artı ufuktaki bir tane.
+
+**Sabit boyutlu parçalama (fixed-size chunking)**, metni her `N` token'da ya da karakterde böler, nokta. En basit, en hızlı ve en öngörülebilir yaklaşımdır ve kördür: bir cümlenin, bir kelimenin ya da bir fikrin ortasından seve seve keser, çünkü sabit bir uzunluk sayar (varsayılan olarak karakter, bir tokenizer bağlarsan token) ve başka hiçbir şeye bakmaz. Hızlı bir taban çizgisi (baseline) için iyi, anlama karşı hoyrat.
+
+**Özyinelemeli karakter parçalama (recursive character chunking)** bu körlüğün çoğunu düzeltir. Bir ayırıcı hiyerarşisini sırayla dener; önce paragraflar, sonra cümleler, sonra kelimeler; parçaları boyut sınırının altında tutan en kaba sınırdan böler. Etkisi şu: elinden geldiğince doğal sınırlara saygı gösterir ve ancak bir parça hâlâ çok büyükse daha ince kesimlere başvurur. Çoğu düzyazı için makul varsayılan budur ve çoğu insanın önce uzanması gereken şey de bu.
+
+**Belge yapısına duyarlı parçalama (document-structure-aware chunking)** bir adım öteye gider ve genel noktalama yerine belgenin *kendi* yapısı boyunca böler: Markdown başlıkları, HTML bölümleri, bir kaynak dosyadaki fonksiyonlar, bir destedeki slaytlar. Yazarın gerçekten kastettiği sınırlara saygı gösterir; bunlar da çoğu zaman tutarlı birimlere birebir oturur.
+
+**Anlamsal parçalama (semantic chunking)** en akıllısı ve en yavaşı. Konunun nerede değiştiğini tespit etmek için gömüleri kullanır: metinde yürürken komşu cümleleri anlamca benzer kaldıkları sürece bir arada tutar ve tam o benzerliğin düştüğü yerden keser. Sınırlar gerçek konu değişimlerine denk gelir, ama bunun bedelini hesaplamayla ve öngörülemezlikle ödersin (parça boyutları değişkendir ve sırf nasıl parçalayacağına karar vermek için gömü hesaplıyorsundur).
+
+| Strateji | Nasıl böler | Ne zaman uzan |
+|---|---|---|
+| Sabit boyutlu | Her `N` token ya da karakterde, körlemesine | Hızlı, öngörülebilir bir taban çizgisi istiyorsan ve içerik tekdüzeyse |
+| Özyinelemeli karakter | Boyut sınırı altında paragraflar, sonra cümleler, sonra kelimeler | Çoğu düzyazı için makul varsayılan |
+| Yapıya duyarlı | Belgenin kendi yapısı boyunca (başlıklar, bölümler, fonksiyonlar, slaytlar) | Kaynağın izlenecek net, anlamlı bir yapısı varsa |
+| Anlamsal | Komşu parçalar arasındaki gömü benzerliğinin düştüğü yerde | Sınırlar çok önemliyse ve fazladan hesaplamayı göze alabiliyorsan |
+
+Ufukta **LLM tabanlı** (ya da agent tabanlı) **parçalama** var: metni bir modele verip sınırlara doğrudan onun karar vermesini sağlamak. İleri bir sınır bu; umut verici ama pahalı, ve burada kazıp inmek yerine bir işaret olarak bırakacağız.
+
+## İki düğme: parça boyutu ve örtüşme
+
+Bir strateji seç, elinde ayarlanacak iki düğme daha kalır ve ikisi de muazzam önemlidir. İlki **parça boyutu (chunk size)**: her parçanın, token ya da karakter cinsinden, kabaca ne kadar büyük olduğu. Küçük parçalar kesindir ama bağlamı kaybetme riski taşır; büyük parçalar daha çok bağlam tutar ama bulanıklaşır ve daha pahalıya gelir. Bu yine o merkezi gerilim; şimdi senin seçtiğin bir sayı olarak ifade edilmiş hâli.
+
+İkinci düğme **parça örtüşmesi (chunk overlap)** ve ilkinin en kötü başarısızlığının çaresidir. Bir belgeyi bitişik parçalara kestiğinde, tesadüfen bir sınırın üstüne denk gelen bir fikir ikiye bölünür ve iki parça da onu bütün olarak tutmaz. Örtüşme bunu **kayan pencereyle (sliding window)** çözer: ardışık parçalar dikişlerinde bilerek biraz metin paylaşır; böylece bir sınırın üstünde oturan cümle en az bir parçada bütün olarak hayatta kalır. Az bir örtüşme, bir cevabı ikiye kesmeye karşı ucuz bir sigortadır.
+
+<Diagram number={2} caption="Kayan pencere olarak parça örtüşmesi: ardışık parçalar dikişlerinde metin paylaşır; böylece bir sınıra denk gelen fikir, ikiye bölünmek yerine en az bir parça tarafından bütün olarak yakalanır.">
+  <img src="/essays/documents-and-chunking/part5-overlap-window.svg" alt="Tek bir metin satırı ve altında yuvarlatılmış dikdörtgenler olarak çizilmiş üç parça penceresi. Bitişik pencereler dikişlerinde örtüşür ve örtüşen bölgeler gölgelidir. Birinci ve ikinci parça arasındaki sınıra oturan anahtar bir ifade, örtüşme onu yakaladığı için ikinci parçanın içinde bütün olarak gösterilir; bir not, örtüşme olmadığında ortaya çıkan bölünmüş sonuçla karşılaştırma yapar." class="w-full rounded-lg" />
+</Diagram>
+
+İşte zor kısım ve gerçekten önemli olan tek kural: **doğru değerler senin içeriğine ve gömü modeline bağlıdır; o yüzden ölç, tahmin etme.** Yoğun hukuki metin az kelimeye çok anlam sıkıştırır ve daha küçük, özenli parçalar ister; laflı destek dokümanları daha büyüklerini kaldırır; kaynak kodu karakter sayısıyla değil, fonksiyonlar boyunca bölünmek ister. Yaygın pratik kurallar (birkaç yüz token'lık parçalar, boyutun kabaca yüzde on ila yirmisi kadar örtüşme) başlangıç noktasıdır, cevap değil. Birkaç ayarı dene, ürettikleri parçalara bak ve getirmeyi gerçek sorular üzerinde değerlendir.
+
+Düğmeleri çevirmeden önce bir birim uyarısı: gömü girdi sınırları **token** cinsinden sayılır, ama buradaki kod ve oyun alanı dahil en basit bölücüler **karakter** sayar. İngilizcede bir token kabaca dört karakterdir, yani 512 token'lık bir sınır yaklaşık 2.000 karakter eder; iki birimi karıştırmak parçalarını sessizce yanlış boyutlandırır. Fark önemli olduğunda, parçaları ham karakter sayısı yerine token'dan haberdar bir uzunluk fonksiyonuyla (`tiktoken` ya da bir Hugging Face tokenizer) boyutlandır.
+
+Aşağıdaki oyun alanı, stratejinin ve iki düğmenin örnek bir belgedeki sınırları nasıl yeniden şekillendirdiğini tam olarak hissetmeni sağlıyor; kaydırıcıları sürükle ve parçaların yeniden çizilişini izle.
+
+<Diagram number={3} caption="Stratejiyi değiştir ve iki düğmeyi sürükle. Örnek belge canlı olarak yeniden bölünür: her parça kendi rengini alır, gölgeli dikişler örtüşmeyi gösterir ve gösterge kaç parça aldığını ve ne kadar büyük olduklarını raporlar.">
+  <IframeFigure
+    src="/essays/documents-and-chunking/part5-chunking-playground.html"
+    title="İnteraktif parçalama oyun alanı: sabit boyutlu ile özyinelemeli stratejiler arasında geçiş yapıp bir parça boyutu kaydırıcısı ile bir örtüşme kaydırıcısını sürükledikçe örnek bir belge canlı olarak yeniden bölünür; her parça renk kodlu, örtüşme bölgeleri gölgeli ve parça sayısı ile boyutlarının bir göstergesiyle"
+    height={680}
+  />
+</Diagram>
+
+{/* From experience callout: drop in a real first-person anecdote here (e.g. the time a too-large or mis-set chunk size silently tanked retrieval quality and you burned days blaming the embedding model or reranker before tracing it back to chunking), then wrap it as: > 💡 **From experience** ...story... */}
+
+## Her parçaya metadata ver, biraz da bağlam
+
+Bir parça metninden ibaret değildir. Onu saklarken **metadata** iliştir: kaynak belge, geldiği bölüm ya da başlık, sayfa numarası, tarih, yazar. Bu, kendi başına defter tutma merakı değil. 4. bölümdeki **metadata filtrelemesine** ("yalnızca `2024` etiketli belgelerde ara") güç veren tam olarak bu ve sonrasında temiz kaynak göstermeni sağlayan da bu ("bu, `refund-policy.md`'den, Returns bölümünden geldi"). Parçaları bölme anında metadata ile zenginleştirmek, sıkça **metadata zenginleştirme (metadata enrichment)** denen adım, tüm sistemi akışın aşağısında güvenilir ve hata ayıklanabilir yapan şeydir.
+
+Bilmeye değer daha hafif bir numara da var. Yalıtılmış bir parça neyle ilgili olduğunun ipini kaybedebilir; başına biraz bağlam eklemek, belge başlığını ya da bölüm başlığını, onu kendi kendini açıklar hâlde tutar. Cümlesinden önce *"Refund Policy, Returns:"* diye başlayan bir parçayı doğru getirmek, çıplak cümleyi tek başına getirmekten çok daha kolaydır. Bu, sonraki bölümlerin keşfettiği "bağlamsal" tekniklerin tohumudur; şimdilik şunu hatırla: bir parça, kendi başına ayakta duracak kadar kökenini yanında taşımalı.
+
+## Sınırların kayışını kodda gör
+
+Farkı somutlaştırmak için, işte aynı kısa belge iki şekilde bölünmüş. Bu yalnızca gösterim amaçlı, kurulacak bir hat değil (o 6. bölüm), ama sınırların nasıl hareket ettiğini gösteriyor.
+
+```python
+text = open("refund-policy.md").read()
+
+# Fixed-size: blind cuts every 200 characters
+fixed = [text[i:i + 200] for i in range(0, len(text), 200)]
+
+# Recursive: prefer paragraph, then sentence, then word boundaries
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=200,
+    chunk_overlap=20,
+    separators=["\n\n", "\n", ". ", " ", ""],
+)
+recursive = splitter.split_text(text)
+
+for c in recursive:
+    print(repr(c), "\n")
+```
+
+`fixed` listesi cümle ortasında, hatta kelime ortasında duran parçalar içerecek. `recursive` listesi, aynı boyut bütçesiyle, bunun yerine paragraf ve cümle sınırlarında kırılacak; böylece her parça tutarlı bir düşünce gibi okunur ve küçük bir örtüşme sayesinde dikişe denk gelen hiçbir şey kaybolmaz. Aynı belge, aynı boyut sınırı, bambaşka parçalar.
+
+## Sırada ne var: her şeyi birleştirmek
+
+Bir adım geri çekil ve elimizde ne olduğuna bak. Temiz metin çıkarabiliyoruz, onu doğru strateji ve doğru düğmelerle tutarlı parçalara bölebiliyoruz ve her parçayı metadata ile zenginleştirebiliyoruz. Önceki bölümlerle birleşince bu, bir getirme sisteminin her malzemesini tamamlıyor: gömüler (2. bölüm), benzerlik puanlama (3. bölüm), ölçekte hızlı getirme (4. bölüm) ve şimdi iyi biçimlenmiş, iyi betimlenmiş parçalar (bu bölüm). İyi parçalar, RAG'in geri kalanının üstünde durduğu temeldir; üstündeki her şeyin tavanını belirleyen o sessiz karar. Tüm parçalar nihayet elimizdeyken, 6. bölüm onları uçtan uca eksiksiz, çalışan bir RAG uygulamasında birleştiriyor.
+
+## Kendin dene
+
+Yukarıdaki oyun alanı biraz kurcalamayı ödüllendiriyor. İki deney, düğmeleri yerine oturtuyor.
+
+Önce **örtüşmeyi** **parça boyutuna** doğru it ve parçaların kopyalanmasını izle. 200 parça boyutu ve 20 örtüşmeyle komşular ince bir dikiş paylaşır; örtüşmeyi tavanı olan 80'e çıkar ve her parça artık bir öncekinin yüzde kırkını tekrarlar; şimdi parça boyutunu, örtüşme yine 80'de sabitken 100'e düşür, ardışık parçalar neredeyse birbirinin kopyası olur, pencere zar zor ilerler. Parça sayısının tırmandığını, parça başına düşen yeni bilginin ise çöktüğünü göreceksin. Boşa harcanan depolama ve boşa harcanan hesaplamanın resmi bu: aynı cümleleri tekrar tekrar gömüp saklıyorsun ve karşılığında, yüzde yirmideyken zaten sahip olduğun korumanın neredeyse hiç ötesine geçmiyorsun.
+
+İkinci olarak, belgeyi sabit tut ve üzerinde **stratejileri** değiştir. Aynı boyut sınırında sabit boyutludan özyinelemeliye geç ve sınırların kelime ortası kesiklerinden sıçrayıp paragraf ve cümle kırılmalarına oturmasını izle; bölücü tam uzunluğu tutarlı kenarlarla takas ettikçe parça boyutları hafifçe düzensizleşir. Aynı metin, aynı bütçe, gözle görülür daha iyi dikişler. O yan yana görüntü, bu bölümün tüm argümanının tek harekette hâli: strateji kesiklerin *nereye* düşeceğine karar verir, düğmeler parçaların *ne kadar büyük* olacağına; ve ikisi de senin yaptığın seçimlerdir, devraldığın varsayılanlar değil.
+
+> ⚠️ **Sık düşülen tuzaklar**
+>
+> - **Parça boyutu kadar (ya da ondan büyük) örtüşme.** Örtüşme ucuz bir sigortadır, bedava öğle yemeği değil. Parça boyutuna yaklaştığında ardışık parçalar neredeyse birbirinin kopyası olur: parça sayını katlarsın, aynı metni tekrar tekrar gömüp saklamanın bedelini ödersin ve getirmeyi gereksiz, neredeyse özdeş isabetlerle tıkarsın. Örtüşmeyi boyutun bir kesri olarak tut (yüzde on-yirmi pratik kuralı aşılacak bir taban değil, makul bir tavandır).
+> - **Token sınırına karşı karakterle parçalamak.** Yukarıda anlatıldığı gibi, gömü sınırları token cinsindendir ama basit bölücüler karakter sayar ve İngilizcede bir token kabaca dört karakterdir. Token bütçesine karşı karakterle boyutlandırırsan her parçayı sessizce fazla ya da eksik doldurursun. Çapraz referans: fark önemli olduğunda token'dan haberdar bir uzunluk fonksiyonu kullan (`tiktoken` ya da bir Hugging Face tokenizer).
+> - **Ham işaretlemeyi ve dolguyu içerikmiş gibi gömmek.** HTML etiketleri, navigasyon menüleri, çerez bantları, tekrarlanan alt bilgiler, Markdown sözdizimi gürültüsü: hiçbiri kullanıcının sorduğu şey değil, ama gömersen hepsi vektöre iner. Parçanın anlamını sulandırır ve getirme anında çöpü yüzeye çıkarır. Gömmeden önce ayıkla.
+> - **Üst ve alt bilgileri ayıklamadan parçalamak.** Sıra önemli. Önce böler sonra temizlersen, tekrarlanan bir üst bilgi ya da sayfa alt bilgisi her parçanın dikişine gömülür ve temizce çıkarmak çok daha zorlaşır. *Önce* belge yükleme ve temizliği yap (üst bilgileri, alt bilgileri, dolguyu at), sonra temiz metni parçala.
+
+## Özet çıkarımlar
+
+- **Parçalama (chunking)**, RAG'deki en yüksek kaldıraçlı ve en az takdir edilen adımlardan biridir: yığının en dibinde oturur, bu yüzden hataları her yere yayılır. Çöp parça girer, çöp getirme çıkar; cevabı hiç tutmamış bir parçayı ne bir re-ranker ne de daha büyük bir model kurtarır.
+- Parçalama **belge yüklemeyle** başlar: dağınık formatlardan temiz metin çıkarmak (PDF sütunları ve tabloları, HTML dolgusu, taramalarda OCR). Çıkarım kalitesi, akışın aşağısındaki her şey için sert bir tavandır.
+- Üç sebeple parçalıyoruz: gömü **girdi sınırları**, getirme **kesinliği** (küçük parçalar, bulanık bir tüm-belge ortalamasını yener) ve üretim anı **ekonomisi** (ilgili parçalar bağlam bütçesini iyi harcar).
+- Merkezi gerilim: çok küçük bağlamı kaybeder ve muğlaklaşır; çok büyük gömüyü bulanıklaştırır ve bütçeyi israf eder. **Anlamsal olarak tutarlı birimleri** hedefle.
+- Stratejiler bir merdiven tırmanır: **sabit boyutlu** (hızlı, kör), **özyinelemeli karakter** (makul varsayılan), **yapıya duyarlı** (belgenin kendi sınırlarını izler) ve **anlamsal** (anlama göre keser, daha yavaş). LLM tabanlı parçalama yükselen bir sınır.
+- İki düğme **parça boyutu** ve **parça örtüşmesidir** (sınıra denk gelen fikirleri koruyan bir kayan pencere). Doğru değerler içeriğine ve gömü modeline bağlıdır; o yüzden ölç, tahmin etme ve her parçaya **metadata** iliştir.
+
+## Referanslar
+
+- LangChain, [Text splitter integrations](https://docs.langchain.com/oss/python/integrations/splitters): `RecursiveCharacterTextSplitter` ve özyinelemeli-karakter yaklaşımı için önerilen başlangıç noktası (paragrafları bütün tut, cümlelere, sonra kelimelere geri düş, bir boyut sınırı altında), artı yukarıdaki kodda kullanılan `chunk_size`, `chunk_overlap` ve `separators` parametreleri.
+- LlamaIndex, [Node Parser Modules](https://developers.llamaindex.ai/python/framework/module_guides/loading/node_parsers/modules/): eşdeğer metin bölücü kataloğu; cümlelere saygılı `SentenceSplitter` (varsayılan node parser) ve anlamın değiştiği yerlerde kırılma noktalarını uyarlanır biçimde seçen, gömü güdümlü `SemanticSplitterNodeParser` dahil; yukarıdaki merdivendeki yapıya duyarlı ve anlamsal stratejiler.
+
+## Sözlük
+
+- **Belge yükleme (document loading / parsing)**: bir kaynağın kendi formatından (PDF, HTML, Word, sunum, taranmış görüntü) temiz, okunabilir metin çıkarmak; parçalamadan önceki ilk adım ve getirme kalitesi için sert bir tavan.
+- **OCR (optik karakter tanıma)**: bir görüntüden ya da taranmış sayfadan metni geri kazanmak; böylece yüklenip parçalanabilir.
+- **Parça (chunk)**: bir belgenin, tek vektör olarak gömülüp saklanan tek bir dilimi; getirmenin döndürdüğü birim.
+- **Parçalama (chunking)**: yüklenmiş bir belgeyi parçalara bölme süreci; bir RAG sistemindeki en yüksek kaldıraçlı kararlardan biri.
+- **Sabit boyutlu parçalama (fixed-size chunking)**: içerikten bağımsız olarak her `N` token'da ya da karakterde bölmek; basit, hızlı ve öngörülebilir, ama cümle ve fikir sınırlarına kör.
+- **Özyinelemeli karakter parçalama (recursive character chunking)**: bir boyut sınırı altında doğal sınırlara saygı göstermek için bir ayırıcı hiyerarşisinde (paragraflar, sonra cümleler, sonra kelimeler) bölmek; düzyazı için makul varsayılan.
+- **Belge yapısına duyarlı parçalama (document-structure-aware chunking)**: yazarın koyduğu sınırları onurlandırmak için belgenin kendi yapısı boyunca (Markdown başlıkları, HTML bölümleri, kod fonksiyonları, slaytlar) bölmek.
+- **Anlamsal parçalama (semantic chunking)**: konu değişimlerini tespit etmek için gömüleri kullanmak ve komşu parçalar arasındaki benzerliğin düştüğü yerden kesmek; isabetli ama daha yavaş ve daha az öngörülebilir.
+- **LLM tabanlı (agent tabanlı) parçalama**: parça sınırlarına doğrudan bir dil modelinin karar vermesine izin vermek; yükselen ve pahalı bir sınır; burada varsayılan değil, bir işaret olarak not edildi.
+- **Parça boyutu (chunk size)**: her parçanın, token ya da karakter cinsinden, kabaca ne kadar büyük olduğu; küçük kesindir ama bağlamı zayıftır, büyük bağlam tutar ama bulanıklaşır ve daha pahalıya gelir.
+- **Parça örtüşmesi (chunk overlap)**: ardışık parçalar arasında paylaşılan metin; böylece bir sınıra denk gelen fikir en az birinde bütün olarak hayatta kalır.
+- **Kayan pencere (sliding window)**: parça örtüşmesini üreten örtüşmeli düzen; parça boyutundan daha az ilerleyerek komşuların dikişlerini paylaşmasını sağlar.
+- **Metadata zenginleştirme (metadata enrichment)**: her parçaya yapılandırılmış alanlar (kaynak, bölüm, sayfa, tarih, yazar) iliştirmek; metadata filtrelemesine ve temiz kaynak göstermeye güç verir.
+
+---
+
+**Sırada, 6. Bölüm: İlk RAG'ini Kur.** Nihayet her parça elimizde: temiz parçalar, gömüler, benzerlik ve hızlı getirme. Sırada anlatmayı bırakıp kurmaya başlıyoruz: uçtan uca, eksiksiz, çalışan bir RAG uygulamasını birleştiriyoruz.

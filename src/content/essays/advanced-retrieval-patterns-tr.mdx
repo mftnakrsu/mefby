@@ -1,0 +1,267 @@
+---
+title: "Gelişmiş Retrieval Desenleri"
+description: "Sekiz bölümün sonunda pipeline'ın gayet iyi getiriyor. Ama hâlâ tek bir metin biriminin üç işi birden gördüğünü varsayıyor: embed ettiğin şey, aradığın şey ve modele uzattığın şey. Retrieval-Augmented Generation üzerine sıfırdan bir serinin 9. bölümü bu varsayımı kırıyor. Büyük fikir ayrıştırma (decoupling): arama için en iyi birim (küçük, keskin) ile üretim için en iyi birim (büyük, zengin) nadiren aynıdır. Dört desen bunu işe koşuyor — parent-document, sentence-window, self-querying ve contextual compression — çalışan uygulamaya odaklı tek bir kod eklemesiyle."
+date: 2026-06-15
+tags: ["RAG", "Retrieval", "Chunking", "Vector Search", "LLM", "Python", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-09-advanced-retrieval-patterns"
+ogImage: "/og/advanced-retrieval-patterns.png"
+summary: "Aradığın birimi, üretimde kullandığın birimden ayır. 9. bölüm: parent-document, sentence-window, self-querying ve contextual compression, elle inşa edilmiş."
+lang: "tr"
+translationSlug: "advanced-retrieval-patterns"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+Sekiz bölümdür retrieval'ı her açıdan keskinleştiriyoruz. Pipeline'ı elle kurduk (6. bölüm), sparse ve hybrid aramayı ekledik (7. bölüm), sonra üstüne metadata filtreleme, query dönüşümleri ve reranking'i koyduk (8. bölüm). Query'yi iyileştirdik, aday kümesini iyileştirdik, sıralamayı iyileştirdik. Ama her bölümün sessizce varsaydığı tek şeyi hiç sorgulamadık: tek bir metin parçasının üç işi birden görmesini — embed ettiğimiz şey, aradığımız şey ve modele uzattığımız şey olarak. Bu bölüm o varsayıma isim koyuyor ve onu kırıyor. Bölümün tamamı tek bir fikre dayanıyor, **arama yaptığın birimi üretim yaptığın birimden ayırmak (decoupling)**, ve bunu işe koşan dört **desen (pattern)**. Sonunda, başarısız bir cevaba bakıp "retrieval gayet iyi, yanlış olan *birim*" diyebilecek ve hangi desenin bunu düzelttiğini bileceksin.
+
+## Ön koşullar
+
+1'den 8'e kadar olan bölümler; özellikle de ikisi. [Belgeler ve Parçalama](/essays/documents-and-chunking-tr) (5. bölüm), çünkü bu bölümün tamamı, orada ortaya konan chunk boyutu ikileminin çözümü. Ve [İlk RAG'ini Kur](/essays/build-your-first-rag-tr) (6. bölüm), çünkü sonda onun küçük Python uygulamasını genişletiyoruz. 7. bölüm ([Retrieval'a Derin Dalış](/essays/retrieval-deep-dive-tr)) ve 8. bölüm de işini kolaylaştırır, çünkü bu desenler hybrid arama, filtreleme ve reranking'in yanında gayet rahat otururlar. Temel Python bildiğin varsayılıyor; kod, baştan bir inşa değil, odaklı tek bir ekleme.
+
+## Hiç sorgulamadığımız varsayım
+
+Şimdiye kadar kurduğumuz her pipeline'ın şekli şu. Bir belge alıyoruz, chunk'lara bölüyoruz, her chunk'ı bir vektöre embed edip saklıyoruz. Bir query geliyor, onu da embed ediyoruz, en yakın chunk'ları buluyoruz ve tam olarak o chunk'ları prompt'a yapıştırıyoruz. Dikkat et: tek bir nesne, *chunk*, hiç şikâyet etmeden üç rolü birden oynuyor:
+
+1. **Embed ediliyor**: anlamını temsil eden vektöre dönüştürülüyor.
+2. **Aranıyor**: query ile karşılaştırılan şey o vektör.
+3. **Üretimde kullanılıyor**: modelin cevap vermek için okuduğu metin, onun metni.
+
+Sekiz bölümü bu nesneyi nasıl *kullandığımızı* iyileştirmekle geçirdik ve aynı nesnenin üç rolü birden oynaması gerekip gerekmediğini bir kez olsun sormadık. Gerekmiyor. Ve nedenini gördüğün an, 5. bölümden beri içimizi kemiren bir sorun kendiliğinden çözülüyor.
+
+Chunk boyutu ikilemini hatırla. Küçük chunk'lar (bir cümle, bir satır) **isabetli** getirir: vektör tek bir fikirle ilgilidir, bu yüzden keskin eşleşir ve aynı chunk'ta oturan alakasız metinle nadiren sulanır. Ama tek bir cümle cılızdır: modele ver, elinde akıl yürütecek çevre bağlamı yoktur; dar ya da yanlış cevap verir. Büyük chunk'lar (bir bölüm, bir sayfa) bunun ayna görüntüsüdür: modele tam bir cevap üretecek kadar bol bağlam verirler, ama **bulanık** getirirler; çünkü tek bir vektör artık beş farklı fikrin ortalamasını almak zorundadır ve o bulanık ortalama her şeyle zayıf, hiçbir şeyle keskin eşleşir. 5. bölümde bunu ayarlanacak bir düğme gibi ele almıştık: iki iş için de en az kötü uzlaşma olan chunk boyutunu seç.
+
+Bu bölümün içgörüsü şu: o hiçbir zaman tek bir düğme değildi. Tek maske takmış iki ayrı işti. Çare daha iyi bir uzlaşma değil; uzlaşmayı bırakmak:
+
+> **Arama yaptığın birimi, döndürdüğün birimden ayır.** Aramayı küçük ve keskin bir şey üzerinde yap. Modele büyük ve zengin bir şey uzat. İkisinin aynı metin olması gerekmiyor.
+
+Aşağıdaki her desen, "aramak için küçük, üretmek için büyük — peki tam olarak nasıl?" sorusuna farklı bir cevap. İşte ele alacağımız dördün haritası.
+
+<Diagram number={1} caption="Dört desen yan yana. Her biri küçük, keskin bir birim üzerinde arar ve modele daha büyük ya da daha temiz bir birim sunar. Bölümün geri kalanı için tek bakışlık bir referans olarak elinin altında tut.">
+  <img src="/essays/advanced-retrieval-patterns/part9-four-patterns.svg" alt="Dört retrieval deseninden oluşan iki-iki'lik bir ızgara. Küçükten büyüğe etiketli parent-document, küçük bir child kutusundan daha büyük bir parent kutusuna giden bir ok gösterir; alt yazısı child'ları indeksle, parent'ları sun. Sentence-window, ortadaki isabet olarak vurgulanmış bir cümle kutusu sırası ve isabet artı eksi N komşuyu işaretleyen bir ayraç gösterir. Self-querying, doğal dilde bir query'nin margins yazan bir semantik query çipine ve year eşittir 2023 type eşittir report yazan bir metadata filtre çipine ayrıldığını gösterir. Contextual compression, beş satırlık ve ikisi yeşil olan getirilmiş bir chunk'ın, yalnızca iki yeşil satırı içeren daha küçük bir kutuya sıkıştığını gösterir; alt yazısı yalnızca query'ye cevap veren kısım." class="w-full rounded-lg" />
+</Diagram>
+
+## Desen 1: Parent-document retrieval (küçükten büyüğe)
+
+Bu, ayrıştırmanın en saf hali; o yüzden buradan başlıyoruz.
+
+Sorun: küçük chunk'ların harika eşleşiyor, ama biri kazandığında tek başına bir cümle, modelin eksiksiz bir cevap vermesine yetmiyor. Sistem belgede doğru yeri buldu, sonra modele oraya bir kapı deliğinden baktırdı.
+
+Desen: her belgeyi iki kez böl. Önce büyük **ebeveyn chunk'lara (parent chunk)** kes (bir paragraf, bir bölüm, bazen belgenin tamamı) — modelin okumasını *istediğin* birim. Sonra her parent'ı küçük **çocuk chunk'lara (child chunk)** kes (bir-iki cümle) — keskin getiren birim. Yalnızca child'ları embed edip ararsın. Bir child kazandığında onu döndürmezsin. Geldiği parent'a bakar ve modele *onu* döndürürsün. Child'ları indeksle, parent'ları sun.
+
+> **Parent chunk:** modele iyi cevap verecek kadar bağlam veren daha büyük bir metin birimi (paragraf, bölüm, belge).
+> **Child chunk:** bir parent'tan oyulmuş, keskin eşleşme için embed edilip aranan küçük bir birim (bir-iki cümle). Bir child hiçbir zaman tek başına modele gönderilmez; parent'ına işaret eden bir göstericidir.
+
+Mekanik, düpedüz defter tutmak. Child vektörlerinin yanında, her child'dan parent'ına geri giden bir harita tutarsın. Bir child vektör aramasını kazanır; haritayı takip edersin; parent'ı sunarsın. Desenin tamamı bu ve bunu yapan on bir satırı bu bölümün ilerisinde yazacağız.
+
+Ne zaman uzanmalı: başarısızlık biçimi gözden kaçmaz. Retrieval, belgelerinin doğru bölgesini açıkça buluyor (ilgililik metriklerin iyi görünüyor, eşleşen chunk konuyla ilgili) ama cevaplar cılız, uyarıları kaçırıyor ya da asıl cevabın bir adım gerisinde duruyor. "Doğru yeri buldu" ile "oradan cevap veremedi" arasındaki o boşluk, parent-document'ın ta kendi imzasıdır.
+
+## Desen 2: Sentence-window retrieval
+
+Yakın kuzen. Aynı hedef, biraz farklı bir mekanizma; ve aralarındaki karşıtlığı aklında tutmaya değer.
+
+Sentence-window, aramak-için-küçük fikrini sınırına götürür: **tek bir cümle** düzeyinde, yani mümkün olan en keskin birimde embed edip getirirsin. Ama bir isabette, önceden tanımlı bir parent döndürmek yerine, eşleşen cümleyi artı N komşusundan oluşan bir **pencere (window)** döndürürsün: orijinal belgede hemen öncesindeki ve sonrasındaki cümleler. Model, isabeti doğal çevresi içinde alır.
+
+Parent-document'tan farkı ince ama gerçek. Parent-document **sabit, önceden tanımlı bir birim** döndürür: child hangi bölümden ya da paragraftan oyulduysa onu, sınırlarına indeksleme anında senin karar verdiğin haliyle. Sentence-window ise **isabete ortalanmış dinamik bir pencere** döndürür; query anında hesaplanır ve senin bölüm sınırlarını umursamaz: isabet bir bölümün son cümlesiyse, pencere hiç çekinmeden bir sonrakine uzanır. Parent-document belgenin yapısına saygı duyar; sentence-window eşleşmeye yakınlığa. İlgili bağlam "bu cümlenin ait olduğu bölüm" değil de "bu cümleye fiziksel olarak yakın olan her ne ise" olduğunda sentence-window'a uzan; örneğin akan düzyazıda, transkriptlerde ya da fikirlerin senin seçtiğin sınırların ötesine taştığı makalelerde. Belgelerin anlamlı bir yapıya sahipse (politika bölümleri, API metotları, sözleşme maddeleri) ve doğru bağlam yapısal birimin tamamıysa parent-document'a uzan.
+
+Aşağıdaki interaktif, ayrımı somutlaştırıyor. Bir query'nin küçük bir child ile eşleşmesini izle, sonra iki desen arasında geçiş yapıp modelin gerçekte ne aldığını gör: parent bölümün tamamı mı, yoksa sınırdan taşan bir pencere mi.
+
+<Diagram number={2} caption="Küçük ara, büyük döndür. Bir query keskin bir skorla tek bir cümleyle eşleşiyor, sonra genişliyor. Parent-document modunda tüm Refunds bölümüne büyüyor; sentence-window moduna geç, bu sefer bölüm sınırını Exchanges'e aşan bir komşu penceresine büyüyor. Camgöbeği (cyan) birim aradığımız şey; çivit (indigo) birim modelin aldığı şey.">
+  <IframeFigure
+    src="/essays/advanced-retrieval-patterns/part9-retrieve-small-return-big.html"
+    title="İnteraktif animasyon. Kısa bir politika belgesi, bir sütun halinde gösterilen cümle düzeyinde küçük child chunk'lara bölünür. Bir query bir child ile eşleşir: Refunds bölümünün son cümlesi, keskin bir skor rozetiyle camgöbeği renkte vurgulanır. Bir anahtar iki genişleme modu arasında geçiş yapar: parent-document modunda tüm Refunds bölümü, modele gönderilen birim olarak çivit renkte vurgulanır; sentence-window modunda ise eşleşen cümle artı her iki yanından birer komşu vurgulanır ve sınırı Exchanges bölümüne aşar. Oynat, geri, ileri ve baştan başlat kontrollü adımlı bir oynatıcı bölme, sorgulama, eşleşme ve genişleme adımlarında gezdirir."
+    height={620}
+  />
+</Diagram>
+
+## Desen 3: Self-querying retrieval
+
+İlk iki desen, bir isabetin *hangi metne* genişlediğini değiştiriyor. Sıradaki ise kullanıcının sözlerinden *aramanın kendisinin nasıl şekillendiğini* değiştiriyor.
+
+Sorun: gerçek sorular iki farklı istek türünü karıştırır. Şunu al: "**2023** **kazanç raporlarımız** **marjlar** hakkında ne diyordu?" "Marjlar" (margins) kelimesi *semantik* bir istek: marjlar *hakkında* olan chunk'lar istiyorsun ve bunu yalnızca bir embedding değerlendirebilir. Ama "2023" ve "kazanç raporları" hiç semantik değil. Bunlar *katı kısıtlar (hard constraints)*: metadata üzerinde birebir filtreler. Saf vektör araması cümlenin tamamını tek bir anlam yumağı olarak görür ve kısıtları sessizce yok sayar: yılın pazarlık konusu olmadığını ona kimse söylemediği için, tesadüfen marjlardan bahseden 2021 tarihli bir tahmini keyifle döndürür. 8. bölümde bunu metadata filtrelemeyle düzeltmiştik ama filtreyi elle yazmıştık. Kullanıcılar filtre yazmaz. Cümle yazar.
+
+Desen, **self-querying**: retrieval'ın önüne, tek işi doğal dildeki soruyu iki çıktıya ayrıştırmak olan küçük bir LLM çağrısı koy: (a) temiz bir **semantik arama dizesi** ve (b) yapılandırılmış bir **metadata filtresi**. Sonra filtreli bir vektör araması çalıştır — tam olarak 8. bölümün mekanizması, tek farkla: filtre senin yazmanla değil, cümleden otomatik olarak çıkarıldı.
+
+> **Self-querying:** bir LLM'e doğal dildeki soruyu okutup hem semantik bir query hem de yapılandırılmış bir metadata filtresi ürettirmek; böylece sistem, kullanıcının düz sözlerle ifade ettiği katı kısıtları uygular.
+
+<Diagram number={3} caption="Self-querying tek resimde. Bir LLM düz cümleyi okur ve anlamca arayabileceğin kısmı (vektör araması için margins) birebir eşleşmesi gereken kısımlardan (metadata filtresi için year eşittir 2023, type eşittir earnings_report) ayırır. İkisi birlikte tek bir filtreli vektör aramasını besler.">
+  <img src="/essays/advanced-retrieval-patterns/part9-self-querying.svg" alt="Bir akış diyagramı. En üstte, 2023 kazanç raporlarımız marjlar hakkında ne diyordu diye okunan bir kullanıcı sorusu; 2023, kazanç raporları ve marjlar farklı renklerle vurgulanmış. Bir ok aşağıya, LLM query ayrıştırıcı kutusuna iner. Oradan iki ok ayrılır: biri, anlamla embed et ve eşleştir etiketli, yalnızca margins kelimesini içeren semantik query kutusuna; diğeri, birebir eşleşme etiketli, year eşittir 2023 ve type eşittir earnings_report içeren metadata filtre kutusuna. İki kutu da oklarla en alttaki tek bir filtreli vektör araması kutusunda birleşir." class="w-full rounded-lg" />
+</Diagram>
+
+Bedeli, sürekli karşılaştığımız bedel: bu, her aramanın önüne bir LLM çağrısı ekler — gecikmesiyle, maliyetiyle ve küçük bir bozuk filtre ihtimaliyle. O yüzden ona yalnızca corpus'unda gerçekten filtrelemeye değer yapılandırılmış metadata varsa (tarihler, belge türleri, yazarlar, kategoriler) *ve* kullanıcıların bu kısıtları doğal dille ifade ediyorsa uzan. İşe yarar metadata'sı olmayan bir corpus için çıkarılacak bir şey yoktur ve self-querying saf ek yüktür.
+
+## Desen 4: Contextual compression
+
+İlk üç desen, modele *hangi* metnin ulaşacağına karar veriyor. Sonuncusu ise metin seçildikten sonra *metnin kendisini* temizliyor.
+
+Sorun: kusursuz bir retrieval bile çoğu dolgu olan chunk'lar döndürür. Cevabı gerçekten içeren bir chunk, bu soruyla hiçbir ilgisi olmayan dört cümleyi de içerir. O gürültü zararsız değildir. Parasını ödediğin bağlam bütçesini yakar ve daha kötüsü, sinyali sulandırır: 7. bölümdeki "lost in the middle"ı hatırla; model, uzun ve gürültülü bir bağlamın ortasına gömülü bilgiyi, uçlarında duran bilgiye göre daha az güvenilir kullanır. İlgisiz cümlelerle dolu ilgili chunk'lar cevabı kötüleştirir.
+
+Desen, **bağlamsal sıkıştırma (contextual compression)**: retrieval'dan sonra ve üretimden önce, her chunk'ı yalnızca query ile ilgili kısımlarına soyan bir adımdan geçir. İki çeşidi var:
+
+- **Seçerek sıkıştırma (extractive compression)**, ilgili cümleleri olduğu gibi çekip alır, gerisini atar. Ucuzdur, hiçbir şey uyduramaz ve ifadeyi asla çarpıtmaz. Tavanı, yalnızca harfiyen orada olanı tutabilmesidir.
+- **Özetleyerek sıkıştırma (abstractive compression)**, chunk'ı kendi cümleleriyle kısa, query odaklı bir özete *damıtmak* için bir LLM kullanır. Daha sert sıkıştırabilir ve cümleler arasında sentez yapabilir; bedeli bir LLM çağrısı daha ve bir şeyi düşürme ya da bükme yönünde küçük bir risk.
+
+> **Contextual compression:** üretimden önce, getirilen her chunk'ın *içindeki içeriği* query ile ilgili kısımlara indirmek.
+> **Extractive vs. abstractive:** extractive, önemli olan orijinal cümleleri tutar; abstractive, onları daha kısa bir özete yeniden yazar.
+
+Bunu 8. bölümün metadata filtrelemesiyle yan yana koymaya değer, çünkü kulağa benzer gelirler ve zıt işler yaparlar. Metadata filtreleme, aramadan *önce*, katı bir kurala göre (yıl yanlışsa at) **chunk'ların tamamını** eler. Contextual compression, aramadan *sonra*, bu query'ye ilgililiğe göre **chunk'ın içindeki içeriği** eler. Biri hangi chunk'ların var olacağına karar verir; öteki hayatta kalan chunk'ları budar. Ödünleşim tanıdık: chunk başına ekstra bir işleme geçişi (maliyet ve gecikme), artı özellikle abstractive'de, sonradan önemli çıkacak bir şeyi sıkıştırıp yok etme riski. Getirilen chunk'ların büyük ve gürültülüyse ve bağlam penceresinin dolguyla dolduğunu görüyorsan uzan; chunk'ların zaten sıkıysa değil.
+
+## Geçerken birkaç akraba
+
+İki desen daha, dışarıda karşılaştığında tanıyabilmen için bir isim hak ediyor. Şu an anladığın şeyin doğal uzantıları ve 10. bölümün daha otonom mimarilerine işaret ediyorlar.
+
+**Auto-merging retrieval**, yeter sayılı (quorum) parent-document'tır. Her zamanki gibi küçük child'ları getirirsin, ama her isabeti otomatik olarak parent'ına terfi ettirmek yerine, child'ları yalnızca o parent'ın *yeterince* child'ı getirildiyse parent'ında birleştirirsin. Tek başına kalmış bir isabet yalnızca kendi küçük chunk'ını döndürür; aynı bölümden üç isabet, bölümün tamamının ilgili olduğuna dair güçlü bir sinyaldir, o yüzden yukarı birleştirirsin. Ne kadar bağlam döndürüleceğine kanıtın *miktarının* karar vermesine izin vermenin bir yolu. Sondaki kodumuz, bunun üzerine kurulduğu tekilleştirme adımını yapıyor.
+
+**Hiyerarşik (ya da özet) indeksleme** iki aşamada getirir. Önce her belgenin kısa bir *özetini* indekslersin ve doğru *belgeyi* bulmak için onlar arasında ararsın; sonra o belgenin *içindeki* chunk'lar arasında getirirsin. Bu bir yönlendirmedir: ucuza doğru kaynağa daral, sonra içinde ara. Çok sayıda ayrı belgen varsa ve corpus'taki chunk'ların çoğu herhangi bir query için ilgisiz gürültüyse işe yarar.
+
+Şimdilik bunları hafif tut. 10. bölüme giden köprü bunlar; orada retrieval tek ve sabit bir adım olmaktan çıkıp döngüye girmeye ve karar vermeye başlıyor.
+
+## Nasıl seçilir, nasıl birleştirilir
+
+İçselleştirilecek en önemli şey şu: bunlar birbirini dışlayan seçenekler **değil** ve içinden tek kalem seçtiğin bir menü de değil. Üst üste binen bağımsız hamleler. Olgun bir pipeline, filtre kurmak için self-query yapabilir, o filtrenin içinde hybrid arama (7. bölüm) çalıştırabilir, küçük child'ları getirip parent'larını sunabilir, parent'ları yeniden sıralayabilir (8. bölüm) ve üretimden önce hayatta kalanları sıkıştırabilir. Bunların her biri farklı, belirli bir sorunu çözüyor.
+
+Tutunulacak disiplin de tam olarak bu. Bunları varsayılan olarak ekleme; **sakın**. Her desen, gecikme, maliyet ya da karmaşıklık pahasına, adı konmuş tek bir başarısızlığa çare satın alır. Birini, başarısızlık analizin onun çözdüğü belirli soruna işaret ettiğinde ekle, daha önce değil.
+
+| Desen | Çözdüğü sorun | Eklediği maliyet | Ne zaman uzanmalı |
+| --- | --- | --- | --- |
+| Parent-document | Keskin eşleşmeler, ama tek başına bir chunk modeli bağlamsız bırakır | İndeks/arama defter tutma işi; daha büyük prompt'lar | Retrieval doğru yeri buluyor ama cevaplar cılız ya da uyarıları kaçırıyor |
+| Sentence-window | Aynısı, ama doğru bağlam yapı değil *yakınlık* | Önemsiz; daha büyük prompt'lar | Akan düzyazı, transkriptler; fikirler chunk sınırlarını aşıyor |
+| Self-querying | Kullanıcılar katı kısıtları (tarihler, türler) doğal dilin içine gizler | Query başına bir LLM çağrısı; gecikme | Corpus'ta gerçek metadata var ve kullanıcılar filtreleri sözle ifade ediyor |
+| Contextual compression | Getirilen chunk'lar query ile ilgisiz gürültüyle dolu | Chunk başına bir işleme geçişi; fazla budama riski | Büyük, gürültülü chunk'lar; bağlam penceresi dolguyla doluyor |
+
+Bir desenin gerçekten işe yarayıp yaramadığını nereden bileceksin? Ölçerek. O da 11. bölüm, değerlendirme: hangi desenin işe yaraması *gerektiği* üzerine akıl yürütmeyi bırakıp hangisinin *gerçekten* yaradığını kanıtlamaya başladığımız yer. Şimdilik kural basit: tek bir şeyi değiştir, sonra cevapların iyileştiğini kontrol et.
+
+> 💡 **Deneyimden**
+>
+> Bu benim için ilk kez netleştiğinde, koca bir günü retrieval'ımın bozuk olduğuna ikna olmuş halde geçirmiştim. Denediğim her query'de en üstteki chunk *tam olarak* doğru cümleydi: ilgililik sayılarım harikaydı, eşleşen metin tam isabetti. Ve cevaplar hâlâ yanlıştı. Politika açıkça "kullanılmamış ve orijinal ambalajında" koşulunu içerirken, model iadelerin koşulsuz olduğunu söyleyip duruyordu. Retrieval hiç de bozuk değildi. Minicik cümle chunk'ları indeksliyordum ve eşleşen chunk ("iadeler 30 gün içinde kabul edilir") koşulun geçtiği cümleden farklı bir cümleydi. Model hep yalnızca kapı deliğini gördü. Çözüm on bir satırdı: arama için küçük chunk'ları tut, ama modele parent paragrafın tamamını döndür. "Bug" hiçbir zaman aramada değildi. Birimdeydi. Chunk boyutu ayarlamayı bırakıp ayrıştırmaya başladığım gün, o gündür.
+
+{/* Author: replace the anecdote above with your own story when you have one, e.g. the support-bot that retrieved perfectly and answered wrong until parent-document. Keep it concrete and first-person. */}
+
+## Uygulamayı genişlet: çalışan kod üzerinde parent-document
+
+En saf deseni 6. bölümün uygulaması üzerinde gerçeğe dönüştürelim. Değişiklik bilerek küçük: retrieval'ı yeniden inşa etmiyoruz, etrafına bir kat defter tutma işi ekliyoruz. Her belgeyi büyük **parent**'lara ve küçük **child**'lara bölüyoruz, child'larda arıyoruz, child'dan parent'a bir harita tutuyoruz ve isabette parent'ı döndürüyoruz.
+
+```python
+# rag_parent_document.py  -  parent-document retrieval on the Part 6 app.
+# The whole idea in one line: INDEX CHILDREN, SERVE PARENTS.
+
+import re
+
+# Each string is a PARENT: a coherent section, the unit generation wants.
+PARENTS = [
+    # parent 0
+    "Refunds. We accept refunds within 30 days of purchase. To qualify, the item "
+    "must be unused and in its original packaging. To start a return, email "
+    "support@example.com with your order number. Once we receive the item, your "
+    "refund is processed back to the original payment method within five business "
+    "days. Shipping fees are not refundable.",
+    # parent 1
+    "Exchanges. If you want a different size or color, request an exchange instead "
+    "of a refund. Exchanges ship free of charge. Items marked final sale cannot be "
+    "returned or exchanged. Gift cards are non-refundable and cannot be exchanged.",
+    # parent 2
+    "Warranty. All electronics include a one-year limited warranty that covers "
+    "manufacturing defects. The warranty does not cover accidental damage or normal "
+    "wear. To make a warranty claim, contact support with a photo of the defect and "
+    "your order number.",
+]
+
+def split_sentences(text):                       # children are single sentences
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+
+# Build the children AND the map back to their parent, side by side.
+children, child_to_parent = [], []
+for p_idx, parent in enumerate(PARENTS):
+    for sentence in split_sentences(parent):
+        children.append(sentence)                # the small unit we SEARCH
+        child_to_parent.append(p_idx)            # remember where it came from
+```
+
+Tek yeni durum `child_to_parent`: `children` kadar uzun bir liste; *i* numaralı girdi, *i* numaralı child'ın oyulduğu parent'ın indeksi. Şimdi retrieval. Gerçek uygulamanda `child_scores`, 6. bölümün embedding'ler üzerindeki cosine araması, ama *child* vektörlerine karşı çalıştırılmış hali; yeni olan, sondaki haritadan bakma:
+
+```python
+def retrieve_small_return_big(query, k_children=3):
+    scores = child_scores(query)                 # Part 6 search, but over CHILDREN
+    top = sorted(range(len(children)),
+                 key=lambda i: scores[i], reverse=True)[:k_children]
+    # Follow each winning child back to its parent, de-duplicated.
+    # (Returning each parent once is the seed of "auto-merging" retrieval.)
+    parent_ids = list(dict.fromkeys(child_to_parent[i] for i in top))
+    return {
+        "matched_child": children[top[0]],       # what we SEARCHED and hit
+        "returned_parents": [PARENTS[p] for p in parent_ids],  # what the LLM GETS
+    }
+```
+
+Bunu, keskin eşleşmesi cılız bir cümle olan, zamanlamayla ilgili bir soruda çalıştır ve modelin gerçekte ne aldığının öncesi/sonrasını izle (aşağıdaki çıktı, dosyanın deterministik anahtar kelime örtüşmesi fallback'i; hiçbir model kurulu olmadan çalışsın diye kullanılıyor):
+
+```text
+Query: 'how long until I get my refund after sending the item back?'
+
+NAIVE  (search small, return small)  ->  the LLM receives:
+  [0.211] Once we receive the item, your refund is processed back to the
+          original payment method within five business days.
+
+PARENT-DOCUMENT  (search small, return big)  ->  the LLM receives:
+  Refunds. We accept refunds within 30 days of purchase. To qualify, the item
+  must be unused and in its original packaging. To start a return, email
+  support@example.com with your order number. Once we receive the item, your
+  refund is processed back to the original payment method within five business
+  days. Shipping fees are not refundable.
+```
+
+Naif yol, zamanlamayla ilgili tek bir doğru cümleyle eşleşti ve modeli aç bıraktı: o cümle, bir iade sorusunun dönebileceği 30 günlük pencereden ya da "kullanılmamış ve orijinal ambalajında" koşulundan hiç bahsetmiyor. Parent-document ise iade bölümünün tamamını teslim ediyor. Aynı keskin eşleşme; cevap verecek çok daha fazla malzeme. Gerçek sentence-transformers modeliyle eşleşme daha da keskin (tam da aynı zamanlama cümlesinde cosine yaklaşık 0.855) ve o cümle yine iade parent'ının içinde yaşıyor; dolayısıyla sunduğun parent birebir aynı. Eşleşen child bir uygulama detayı. Sunduğun parent ise cevabın kendisi. Hiçbir model kurulu olmadan da çalışsın diye şeffaf bir fallback skorlayıcı içeren, çalıştırılabilir dosyanın tamamı: [rag_parent_document.py](/essays/advanced-retrieval-patterns/rag_parent_document.py).
+
+## Kendin dene
+
+[rag_parent_document.py](/essays/advanced-retrieval-patterns/rag_parent_document.py) dosyasının amacı, her seferinde tek bir şeyi değiştirerek ayrıştırmayı görünür kılmak. Kendin çalıştırmaya değer iki deney var.
+
+Birincisi, demo query'sini değiştir ve aynı parent sunulurken hangi child'ın kazandığını izle. Varsayılan query iade zamanlamasıyla ilgili ve "five business days" cümlesiyle eşleşiyor. Onu `"do I have to keep the box my order came in?"` ile değiştir; bu sefer *farklı* bir child kazanıyor ("unused and in its original packaging" cümlesi) ama o da parent 0'ın içinde yaşıyor, yani model birebir aynı iade bölümünü alıyor. Bütün ders tek tuş vuruşunda bu: hangi cümlede arama yaptığın bir uygulama detayı; hangi parent'ı sunduğun ise cevap. Eşleşme yer değiştirdi, sunulan bağlam değişmedi.
+
+İkincisi, `k_children` değerini yükselt ve parent tekilleştirmesinin işini yapmasını izle. `__main__` demosu, öncesi/sonrası net kalsın diye `retrieve_small_return_big(query, k_children=1)` çağırıyor. Bunu `k_children=3` yap; en üstteki üç child çoğu zaman *aynı* parent'a geri işaret edecek (bir iade sorusu, iade bölümündeki birkaç cümleyi birden yakar). `parent_ids = list(dict.fromkeys(child_to_parent[i] for i in top))` satırı, o mükerrer isabetleri tek bir parent'ta toplar; böylece aynı paragrafı prompt'a üç kez yapıştırmazsın. Bölümler arasına yayılan bir query dene, mesela `"what are my options if the size is wrong, refund or exchange?"`; bu sefer iki *ayrı* parent döndüğünü göreceksin. O tekilleştirme, tam olarak auto-merging retrieval'ın tohumu: bir parent'ın kaç child'ının isabet aldığını zaten sayıyor; o sayının birleştirmeye karar vermesine izin vermekten yalnızca bir kısa adım uzakta.
+
+> ⚠️ **Sık düşülen tuzaklar**
+>
+> - **Self-querying yapan bir LLM, deponda var olmayan bir filtre alanını gözünü kırpmadan uydurur.** Metadata'nda yalnızca `year` ve `type` varken ondan "departmana göre" filtrelemesini iste; hiçbir şeyin altında indekslenmediği bir alana karşı `{"department": "finance"}` üretebilir. Depoya bağlı olarak bu ya hata fırlatır ya da sessizce hiçbir şeyle eşleşmez ve kullanıcı yalnızca boş bir cevap görür. Ayrıştırılan filtreyi, vektör deposuna dokunmadan önce mutlaka *bilinen bir şemaya karşı doğrula* (alanların ve ideal olarak türlerinin bir izin listesi) ve bir uyuşmazlıkta, filtreyi körlemesine geçirmek yerine bozuk ifadeyi at ya da filtresiz aramaya geri düş.
+> - **Parent'lar devasa olduğunda parent-document ve auto-merging bağlam bütçeni patlatabilir.** Desen tam da daha büyük parent'lar modele daha çok malzeme verdiği için baştan çıkarıcı; ama parent olarak "belgenin tamamı", keskin tek bir child isabetinin prompt'a on binlerce token boca edebilmesi demek ve üç büyük parent'a düşen üç isabet pencereyi düpedüz taşırabilir (ya da 7. bölümdeki "lost in the middle"ı sessizce tetikleyebilir). Parent'larını bilinçli boyutlandır (bir paragraf ya da bir bölüm, bir kitap değil), kaç parent sunduğunu sınırla ve parent'ların gerçekten büyükse deseni contextual compression ile eşleştir; böylece modele ulaşan şey yalnızca büyük değil, büyük *ve* temiz olur.
+
+## Özet ve sırada ne var
+
+Bir adım geri çekil ve neyin değiştiğine bak. Sekiz bölüm boyunca retrieval'ı *query'yi*, *aday kümesini* ve *sıralamayı* iyileştirerek iyileştirdik. Bu bölüm onu *birimi* değiştirerek iyileştirdi: küçük ve keskin bir şeyde ara, büyük ve temiz bir şeyden üret ve ikisinin aynı metin olmak zorundaymış gibi davranmayı bırak. O tek hamle, ayrıştırma, chunk boyutu ikilemini eritiyor ve onu uygulamak için sana dört somut araç veriyor.
+
+Ama kurduğumuz pipeline'a bak. Bütün inceliğine rağmen hâlâ **statik ve doğrusal**: query'den cevaba tek bir sabit yol, soru ne olursa olsun her seferinde aynı adım dizisi. Hiçbir zaman "o retrieval gerçekten işe yaradı mı?" diye sormuyor. Hiçbir zaman yeniden denemiyor. 10. bölüm bunu kırıp açıyor. Pipeline'lardan, **akıl yürüten, karar veren, döngü kuran ve kendini düzelten** mimarilere geçiyoruz: agentic RAG, Corrective RAG (CRAG), Self-RAG, GraphRAG ve çok modlu RAG. Sistem bir konveyör bandı olmaktan çıkıp bir problem çözücü olmaya başlıyor.
+
+## Özet çıkarımlar
+
+- **Temel hamle ayrıştırma.** *Arama* için en uygun birim (küçük, odaklı, keskin) ile *üretim* için en uygun birim (büyük, bağlam zengini) nadiren aynıdır. Aynı metin olmak zorunda değiller ve onları ayırdığın anda 5. bölümün chunk boyutu ikilemi ortadan kalkar.
+- **Parent-document ve sentence-window'un ikisi de küçük arar, büyük döndürür**; fark "büyük"ün ne anlama geldiğinde: sabit, önceden tanımlı bir parent birimi mi, yoksa yapısal sınırları aşabilen dinamik bir komşu penceresi mi.
+- **Self-querying doğal dili bir arama artı bir filtreye çevirir**; 8. bölümde elle yaptığın metadata filtrelemeyi otomatikleştirir, böylece kullanıcılar katı kısıtları düz sözlerle ifade edebilir.
+- **Contextual compression, retrieval'dan sonra chunk'ın içindeki içeriği budar**; metadata filtreleme ise ondan önce chunk'ların tamamını eler. İyi chunk'lar gürültüyle şişmiş geliyorsa ona uzan.
+- **Bu desenler üst üste biner ve bedava değildir.** Hybrid arama, filtreleme ve reranking ile bir arada yaşarlar. Birini, başarısızlık analizi onun çözdüğü belirli soruna işaret ettiğinde ekle, asla varsayılan olarak değil; ve işe yaradığını ölçerek doğrula (11. bölüm).
+
+## Referanslar
+
+Bunlar, dört deseni çalışan koda çeviren framework dokümanları; yukarıdaki elle yazılmış sürüm yerine bakımı yapılan bir implementasyon istediğinde işine yarar.
+
+- LangChain, ["ParentDocumentRetriever."](https://reference.langchain.com/python/langchain-classic/retrievers/parent_document_retriever/ParentDocumentRetriever) Parent-document deseni için API referansı: küçük child chunk'ları getir, sonra ait oldukları daha büyük parent belgeleri döndür.
+- LangChain, ["ContextualCompressionRetriever."](https://reference.langchain.com/python/langchain-classic/retrievers/contextual_compression/ContextualCompressionRetriever) Contextual-compression fikri için API referansı: bir temel retriever'ı saran ve sonuçları sıkıştıran bir retriever; `LLMChainExtractor` (LLM destekli birebir çıkarım) ve `EmbeddingsFilter` (benzerlik eşiğine dayalı filtreleme) gibi belge sıkıştırıcılarla.
+- LlamaIndex, ["Auto Merging Retriever."](https://developers.llamaindex.ai/python/examples/retrievers/auto_merging_retriever/) Parent ve child düğümlerinden oluşan bir hiyerarşi üzerinde auto-merging retrieval'ı adım adım gezen örnek; bir parent'ın yeterince child'ı getirildiğinde child'ları o parent'ta birleştiriyor.
+
+## Sözlük
+
+- **Retrieval birimini üretim biriminden ayırmak (decoupling):** bu bölümün merkezî fikri; embed edip aradığın metin, modele uzattığın metinden farklı olabilir ve genellikle olmalıdır.
+- **Parent-document retrieval:** küçük child chunk'ları embed edip ara, ama isabette ait oldukları daha büyük parent chunk'ı döndür. "Child'ları indeksle, parent'ları sun."
+- **Parent chunk:** bağlam için modele döndürülen daha büyük birim (paragraf, bölüm, belge).
+- **Child chunk:** embed edilip aranan küçük birim (bir-iki cümle); parent'ına işaret eden bir gösterici, asla tek başına modele gönderilmez.
+- **Sentence-window retrieval:** tek tek cümleleri embed edip getir, ama isabette eşleşen cümleyi artı N komşu cümleden oluşan bir pencereyi döndür.
+- **Self-querying retrieval:** doğal dildeki bir soruyu semantik bir arama dizesi artı yapılandırılmış bir metadata filtresine ayrıştırmak için bir LLM kullan, sonra filtreli bir vektör araması çalıştır.
+- **Contextual compression:** retrieval'dan sonra, üretimden önce her chunk'ı yalnızca query ile ilgili içeriğe indir.
+- **Extractive vs. abstractive sıkıştırma:** extractive, ilgili cümleleri olduğu gibi çekip alır; abstractive, onları bir LLM ile daha kısa, query odaklı bir özete yeniden yazar.
+- **Auto-merging retrieval:** parent-document'ın, child'ları yalnızca o parent'ın yeterince child'ı getirildiğinde parent'a terfi ettiren bir çeşidi; ne kadar bağlam döndürüleceğine kanıt miktarının karar vermesine izin verir.
+- **Hiyerarşik (özet) indeksleme:** bir query'yi önce doğru belgeye yönlendirmek için kısa belge özetlerini indeksle, sonra o belgenin chunk'ları arasında getir.
+
+Sırada: **10. Bölüm, Gelişmiş RAG Mimarileri**; pipeline'ın düz bir çizgi olmaktan çıkıp akıl yürütmeyi, döngü kurmayı ve kendini düzeltmeyi öğrendiği yer.

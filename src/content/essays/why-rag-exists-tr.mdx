@@ -18,6 +18,8 @@ import IframeFigure from '../../components/essay/IframeFigure.astro';
 
 Bu bölümün sonunda, sade bir dille şunu anlamış olacaksın: ne kadar etkileyici olursa olsun bir büyük dil modeli, neden senin kendi belgelerin ve yakın zamanda olan herhangi bir şey hakkında kendinden emin biçimde yanlış cevap verir; ve **RAG** (Retrieval-Augmented Generation, yani "getirmeyle zenginleştirilmiş üretim") bunu, cevabı verdiği anda modele doğru bilgiyi tutuşturarak nasıl çözer. Burada kavramsal kalacağız: kod yok, sadece RAG'in çözdüğü dört sorun, kalıcı bir zihinsel model (açık kitap sınavı) ve serinin geri kalanında inşa edeceğin tüm hattın kuşbakışı bir haritası.
 
+Kapsam üzerine bir söz: bu seri RAG'i uçtan uca kapsıyor, gömme ve parçalamadan getirmeye, yeniden sıralamaya (re-ranking) ve değerlendirmeye kadar; ama genel bir LLM kursu *değil*, bu yüzden sana bir temel modeli eğitmeyi ya da ince ayar yapmayı öğretmeyeceğiz ve prompt mühendisliğini yalnızca getirmenin ihtiyaç duyduğu kadarla sınırlı tutacağız. Bir sohbet botunun web'de arama yapıp bulduğu şeyden cevap verdiğini hiç izlediysen, RAG'in bir türünü zaten kullanmışsındır: araç kullanımı, ajanlar ve web araması yanında duran, belirli bir örüntüdür (kendi verin üzerinde önce getir, sonra üret), ve web-aramasıyla-zenginleştirilmiş sohbet, zaten kullandığın getirmenin, senin belgelerin yerine açık internete yönlendirilmiş halidir.
+
 ## Ön koşullar
 
 Yok. Bu 1. bölüm. Bir satır Python okuyabiliyorsan bugünlük fazlasıyla yeterli; kod sonraki bölümlerde başlıyor.
@@ -84,7 +86,7 @@ Senin iç wiki'ni hiç görmedi. Slack'ini, tasarım dokümanlarını, müşteri
 
 Yani "her şeyi" yapıştırmak somut sebeplerle başarısız olur:
 
-- **Sığmaz.** Mütevazı bir bilgi tabanı milyonlarca token'dır; bir bağlam penceresi en fazla birkaç yüz bin tutar. Verinin çoğu fiziksel olarak aynı anda prompt'ta olamaz.
+- **Sığmaz, sığdığında bile bu göründüğü kadar bir kazanç değildir.** Bağlam pencereleri hızla büyüdü: pek çok öncü model artık yüz binlerce token tutuyor, birkaçı (Gemini, GPT-4.1, Claude) yaklaşık bir milyona ulaşıyor. Bunu perspektife oturtmak gerekirse, ~200 sayfalık tek bir kılavuz kabaca 150 bin token'dır (yaklaşık bir rakam, çünkü token sayısı metne göre değişir), yani tek büyük bir belge bile büyük bir pencerenin önemli bir kısmını tek başına yiyip bitirebilir. Ama gerçek bir bilgi tabanı, her wiki sayfası, her talep kaydı, sözleşme ve PDF, kolaylıkla on milyonlarca token ya da daha fazlasıdır; yani verinin çoğu hâlâ fiziksel olarak tek bir prompt'ta olamaz. Can sıkıcı olan şu ki, sığan dilim için bile aşağıdaki iki sorun ortadan kalkmıyor; bu yüzden "sadece daha büyük bir pencere kullan" cevap değildir.
 - **İsraftır.** Bir şey sığsa bile, gönderdiğin her token her istekte para ve zamana mal olur. Tek bir iade sorusunu cevaplamak için tüm el kitabını göndermek, her cümleden önce klasörün tamamını sesli okumak gibidir.
 - **Kaliteyi düşürür.** İlgili tek bir satırı yüz bin ilgisiz satırın arasına göm, modeller onu bulup kullanmakta ölçülebilir biçimde kötüleşir; sinyal boğulur. Daha çok bağlam, daha çok *ilgili* bağlam ile aynı şey değildir.
 
@@ -173,6 +175,19 @@ RAG tek araç değil ve ona refleksle uzanmak başlı başına bir hata. İnsanl
 
 Kararı tek cümlede: *başarısızlık, modelin senin güncel ve özgül bilgini bilmemesiyse, çözüm RAG'dir; ve "yapay zekâ işimiz hakkında bir şey uydurdu" sorunlarının neredeyse hepsi kılık değiştirmiş bu başarısızlıktır.*
 
+Şimdiden işaret edip ilerde tekrar döneceğimiz dördüncü bir seçenek var: bazen RAG'e hiç ihtiyacın olmayabilir, çünkü bilgi zaten yüklü tutulacak kadar küçük ve durağan olabilir. [Part 16](/essays/rag-vs-long-context-tr) bunu ciddiye alıp RAG'i uzun bağlamlı prompt'lama ve önbelleğe alınmış üretimle (cache-augmented generation, CAG) karşılaştırıyor; bu yaklaşımda tüm kaynağı bir kez önceden yüklersin ve modelin önbelleğe alınmış durumunu sorular arasında yeniden kullanırsın.
+
+## Kendin dene
+
+Sorunun tamamını (ve çözümün tamamını) hissetmek için koda ihtiyacın yok, yaklaşık iki dakika yeter. Herhangi bir genel sohbet botunu aç ve ona kuruma özel bir olgu sor: el kitabında, wiki'nde ya da işe alım dokümanında yaşayan ve açık internette hiçbir yerde bulunmayan bir şey. "İade süremiz ne kadar?" "5.000 doların üzerindeki masraf raporlarını kim onaylıyor?" "Standart destek sözleşmemizdeki SLA nedir?" Gelen cevaba bak. Genelde akıcı, spesifik, kendinden emin bir cevap alacaksın ve bu uydurma olacak, çünkü model gerçek cevabı barındıran belgeyi hiç görmedi. O kendinden emin ama dayanaksız cevap, tam da bu bölümü açtığımız o uydurmanın ta kendisidir.
+
+Şimdi getirmeyi elle yap. Gerçek belgedeki asıl paragrafı bul, sohbete yapıştır ve aynı soruyu tekrar sor, bu sefer "yalnızca yukarıdaki metni kullanarak cevap ver" diyerek. Cevap, sayfanın söylediğine oturmalı. Az önce tek seferlik bir RAG hattını elle çalıştırdın: ilgili pasajı getirdin, prompt'u onunla zenginleştirdin ve modelin ondan üretmesine izin verdin. Bu serideki her şey, bu üç hamleyi binlerce belge üzerinde otomatikleştirmekle ilgili; böylece doğru sayfayı kendin bulup yapıştırmak zorunda kalmazsın.
+
+> ⚠️ **Sık yapılan hatalar**
+>
+> - **RAG bir halüsinasyon çözümü değildir.** Modelin cevabını "hafızadan örülmüş"ten "getirdiğin her neyse ona dayanan"a taşır, ki bu gerçek bir iyileşmedir; ama sadece gerçeğin nereden geleceğini kaydırır. *Yanlış* sayfayı getir, model onu sadakatle okur ve sana kendinden emin, iyi kaynak gösterilmiş, yanlış bir cevap verir. Çöp girer, akıcı çöp çıkar. Bu yüzden serinin çoğunu ayarlayacağın kısım LLM değil, getirme kalitesidir.
+> - **Daha çok getirilen bağlam her zaman daha iyi değildir.** En üstteki 20 parçayı "ne olur ne olmaz" diye prompt'a tıkıştırmak cazip gelir, ama fazladan bağlam para ve gecikmeye mal olur, hatta aktif olarak zarar verebilir: ilgili pasaj sulanır ve modeller uzun bir bağlamın ortasını uçlarından daha az güvenilir okur ("lost in the middle" etkisi). Hedef *en çok* sayfa değil, *doğru* sayfadır.
+
 ## Özet çıkarımlar
 
 - Sade bir LLM olası metni tahmin eder; **gerçeklik kavramı, saati ve özel verine erişimi yoktur**, bu yüzden halüsinasyon görür, bir bilgi kesim tarihi vardır, kuruma ait bilgiyi göremez ve bağlam penceresi sınırları yüzünden ona kolayca "her şey" verilemez.
@@ -181,6 +196,11 @@ Kararı tek cümlede: *başarısızlık, modelin senin güncel ve özgül bilgin
 - Hat, akılda tutulacak tek bir yaydır: **belge → parça → gömme → saklama → getirme → zenginleştirme → üretim**; bir kez yapılan *indeksleme* ve her soruda yapılan *sorgulama* aşamalarına ayrılır.
 - **Getirme kalitesi her şeyi belirler.** RAG yalnızca gerçekten getirdiğin şeye dayanarak cevap verebilir; yanlış sayfayı aç, bu sefer o sayfa hakkında kendinden emin biçimde yanılır.
 - Bilinçli seç: küçük ve bilinen kaynaklar için **daha büyük prompt**, büyük/değişken/özel bilgi için **RAG**, olguları değil üslubu ve davranışı değiştirmek için **ince ayar**.
+
+## Referanslar
+
+- Lewis et al. (2020), *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*. RAG'i tanıtan ve bu seriye adını veren makale. [arXiv:2005.11401](https://arxiv.org/abs/2005.11401)
+- Liu et al. (2023), *Lost in the Middle: How Language Models Use Long Contexts*. "Daha çok bağlam, daha çok ilgili bağlam değildir" düşüncesinin arkasındaki ölçülmüş U-şeklindeki etki. [arXiv:2307.03172](https://arxiv.org/abs/2307.03172)
 
 ## Sözlük
 

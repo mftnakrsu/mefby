@@ -1,0 +1,216 @@
+---
+title: "Late-Interaction Retrieval"
+description: "Tek vektörlü embedding'ler token düzeyindeki sinyali çöpe atar. Late interaction, token başına bir vektör tutar ve MaxSim ile skorlar; böylece bi-encoder'ın sunum maliyetiyle cross-encoder kalitesinde eşleşme elde edilir. Retrieval-Augmented Generation üzerine sıfırdan bir serinin 13. bölümü, Frontier Track'i açıyor: ColBERT ve ColBERTv2, numpy'de elle MaxSim, depolama ödünleşimi ve ColPali'nin late interaction'ı OCR ya da chunking olmadan belge sayfa görüntülerine nasıl genişlettiği."
+date: 2026-06-19
+tags: ["RAG", "Retrieval", "ColBERT", "ColPali", "Late Interaction", "Embeddings", "LLM", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-13-late-interaction"
+ogImage: "/og/late-interaction-retrieval.png"
+lang: "tr"
+translationSlug: "late-interaction-retrieval"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+Çekirdek seri 12. bölümde bitti. On iki bölüm bizi "RAG diye bir şey neden var ki" sorusundan alıp production'da çalıştırmaya kadar götürdü ve o yay artık tamamlandı. Bu bölüm isteğe bağlı bir şey başlatıyor: çekirdek sağlamlaştıktan sonra uzandığın, 2026'nın kısa bir **Frontier Track**'i; her biri kendinden önceki bölüme değil, doğrudan zaten bildiğin şeyin üzerine kuruluyor.
+
+Late interaction ile açılıyoruz. 7. bölümde koca bir pasajı tek bir dense vektöre sıkıştırıp kosinüs benzerliğiyle sıralamayı öğrenmiştik. 8. bölümde, query ile belgeyi birlikte okuyan bir cross-encoder'ın çok daha isabetli sıraladığını ama koca bir korpus üzerinde çalıştırmak için fazla yavaş olduğunu öğrenmiştik. Late interaction, ikisinin arasında duran paradigma. Her token için ayrı bir vektör tutar, bir query'yi bir belgeye karşı **MaxSim** denen bir işlemle skorlar ve belge tarafını sıradan bir embedding gibi çevrimdışı önceden hesaplanabilir tutarken cross-encoder kalitesinde terim eşleşmesi elde eder. Sonunda bir pasajı tek bir vektöre havuzlamanın neden bilgi kaybettirdiğini açıklayabilecek, MaxSim'i birkaç satır numpy'de elle hesaplayabilecek, bu isabeti satın alan depolama maliyeti ve sıkıştırmanın onu nasıl geri düşürdüğü üzerine akıl yürütebilecek ve ColPali'nin aynı numarayı belge sayfa görüntülerine nasıl taşıyıp OCR ile chunking'i tamamen atladığını, bir mekanizma olarak, anlıyor olacaksın.
+
+## Ön koşullar
+
+Burada ağırlığın çoğunu iki bölüm taşıyor: [Retrieval'a Derin Dalış](/essays/retrieval-deep-dive-tr) (7. bölüm), tek-vektörlü dense retrieval'ı kurduğumuz ve bu bölümün düzelttiği tam o başarısızlık biçimini, semantik aramanın ortalayarak yok ettiği nadir ve birebir token'ı gördüğümüz yer; ve [Getirmeyi Akıllandırmak](/essays/making-retrieval-smarter-tr) (8. bölüm), cross-encoder reranker'ın isabetli, token'a duyarlı skorlamanın neye benzediğini ve nelere mal olduğunu gösterdiği yer. Ayrıca [Benzerliği Ölçmek](/essays/measuring-similarity-tr)'ten (3. bölüm) kosinüs benzerliğini hatırlıyor olman gerekiyor, çünkü MaxSim tamamen kosinüslerden inşa ediliyor. Bunun ötesinde yeni matematik yok. Serinin ikinci yarısındaki destek bilgi tabanını, iade politikası satırını ve `E-4042` hata kodunu kullanmaya devam ediyoruz; böylece bu bölüm öncekilerin devamı gibi hissettiriyor.
+
+## Kaldığımız yer ve 7. bölüm ile 8. bölüm arasındaki boşluk
+
+İşte elimizde zaten olan iki retrieval aracının şekli ve aralarındaki boşluk.
+
+7. bölüm bize **bi-encoder**'ı verdi: query'yi ve her belgeyi *ayrı ayrı* birer vektöre gömen bir model; böylece her belge vektörü çevrimdışı, bir kez hesaplanıp bir vektör indeksinde saklanabilir. Sorgu anında yalnızca query'yi gömer ve saklı vektörlerle tek bir kosinüs üzerinden karşılaştırırsın. Ucuz ve ölçeklenebilir; vektör aramasının milyonlarca belge üzerinde çalışmasının sebebi bu. Bedeli, bir pasajın bütün nüansının, query hiç görülmeden, uzayda tek bir noktaya sıkıştırılması.
+
+8. bölüm bize **cross-encoder**'ı verdi: query'yi ve bir belgeyi tek bir forward pass'te *birlikte* okuyup bir alakalılık skoru üreten bir model. İkisini aynı anda gördüğü için, query'deki belirli bir kelimenin belgedeki belirli bir kelimeyle eşleştiğini fark edebilir; tek bir havuzlanmış vektörün koruyamayacağı ince taneli sinyal bu. Bedeli aynanın öteki yüzü: hiçbir şey önceden hesaplanamaz, çünkü her skor, sorgu anında taze bir query-belge çiftinde modeli çalıştırmayı gerektirir. 8. bölümde onu yalnızca daha ucuz bir retriever'ın çoktan çıkardığı birkaç düzine aday üzerinde bir reranker olarak göze alabilmemizin sebebi de bu.
+
+Yani bir tarafta ucuz-ve-kaba, öteki tarafta isabetli-ve-pahalı var; aralarında da gerçek bir boşluk. İstediğimiz şey, terim düzeyindeki eşleşmeleri bir cross-encoder gibi gören ama belge tarafı bir bi-encoder'ınki gibi önceden hesaplanıp saklanabilen bir skorlayıcı. **Late interaction**'ın çözmek için inşa edildiği problem tam olarak bu; **ColBERT** olarak tanıtıldı (Khattab ve Zaharia, SIGIR 2020, arXiv 2004.12832).
+
+## Havuzlama sorunu
+
+Pasaj başına tek vektörün neden bilgi kaybettirdiğini görmek için, havuzlamanın gerçekte ne yaptığına bak. Bir bi-encoder "Refund requests are processed within five business days" cümlesini tek bir vektöre çevirirken, her token'ı transformer'dan geçirir ve sonra token başına çıktıları tek bir noktaya ortalar. O ortalama, pasajın *ne hakkında* olduğunun makul bir özeti. Ama ortalama, tanımı gereği yıkıcıdır: nadir ve belirleyici bir token, bir düzine sıradan token'la harmanlanır ve sinyali ortalamaya doğru sulanır.
+
+Bu, 7. bölümdeki uygulamamızın hep başarısız olduğu tam o query için en çok önem taşıyor: birebir bir kod, bir sipariş numarası, bir parça numarası. Kırk alakasız kelimelik bir batch-reconciliation raporunun içine gömülü, `E-4042`'den bir kez bahseden uzun bir pasaj hayal et. `E-4042` için token vektörü orada, ama otuz dokuz başkasıyla ortalandığında sonuç zar zor onun yönüne meyleder. Şimdi kısa, jenerik bir cümle hayal et: "A general error occurred while loading the page." Konuyla ilgili tek kelimeyi, "error"ı paylaşıyor ve neredeyse başka hiçbir şeyi paylaşmıyor; ama kısa olduğu için o tek kelime, havuzlanmış vektörüne hâkim oluyor. İkisini de havuzla, her birini "E-4042 error" query'siyle tek bir kosinüsle karşılaştır; kısa jenerik cümle, kodu birebir içeren pasajın *üstüne* rahatlıkla çıkabilir. Belirleyici token uzun pasajda ortalanarak yok oldu, kısa olanda ise büyütüldü. Bu tam başarısızlıkla 7. bölümde karşılaşmış ve onu keyword aramayla düzeltmiştik; late interaction onu farklı düzeltiyor: en baştan hiç havuzlamayarak.
+
+<Diagram number={1} caption="Havuzlama sorunu tek resimde. Solda, 7. bölüm: pasajın tamamı encoder'dan geçer ve tek bir havuzlanmış vektöre ortalanır; böylece nadir ve belirleyici bir token ortalamaya karışır ve sinyali kaybolur. Sağda, late interaction: encoder'ın token başına çıktıları, token başına bir vektörden oluşan bir torba olarak tutulur, hiçbir şey ortalanıp yok edilmez; böylece nadir bir token, eşleşme için kendi başına bir nokta olarak hayatta kalır. Kod, okunabilirlik için tek bir token hücresi olarak çizildi, gerçekte ise tokenizer E-4042'yi e ve 4042 olarak ikiye böler.">
+  <img src="/essays/late-interaction-retrieval/part13-pooled-vs-multivector.svg" alt="Solda, kelime token'larından oluşan bir pasaj, token başına çıktıları bir ortalama düğümüyle tek bir mor havuzlanmış vektörde birleştirilen bir encoder'a girer; vektör 'pasaj başına bir vektör' olarak etiketlenmiştir; bir açıklama notu, nadir token E-4042'nin ortalama tarafından silikleştirildiğini belirtir. Sağda, aynı pasaj aynı encoder'a girer ama token başına çıktılar, 'token başına bir vektör' olarak etiketlenmiş, birbirinden ayrı mor vektörlerden oluşan bir satır olarak tutulur; E-4042 token'ı sağlam kaldığı vurgulanarak öne çıkarılmıştır." class="w-full rounded-lg" />
+</Diagram>
+
+## Token düzeyinde çoklu vektörler (multi-vector)
+
+Çözüm neredeyse utanç verici derecede dolaysız: havuzlamayı bırak. Bir late-interaction modeli, pasajı bir bi-encoder'ın kullandığı aynı transformer encoder'dan geçirir, ama token başına çıktıları tek bir vektöre ortalamak yerine *hepsini tutar*. Sekiz token'lık bir pasaj sekiz vektör olur; kırk token'lık bir pasaj kırk vektör olur. Buna, 7. bölümün tek havuzlanmış vektörünün aksine, bir **çoklu vektör (multi-vector)** temsili diyoruz ve bunu query için de yapıyoruz: "E-4042 error" tek bir vektör yerine token başına küçük bir vektör torbası oluyor.
+
+Eşlik eden kodda bunları üreten fonksiyon `token_embed(text)`; sıradan bir embedding'in `(dimensions,)` şekli yerine `(number_of_tokens, dimensions)` şeklinde bir dizi döndürüyor. Gerçek model yolunda, transformer'ın token başına gizli durumlarını havuzlama adımından önce çekip çıkarıyor. Çevrimdışıyken, ne model ne ağ varken, şeffaf, deterministik bir hashing embedder'a düşüyor: her token, sabit ve yeniden üretilebilir bir birim vektöre eşleniyor; böylece aynı token'lar, query'nin `4042`'si ve belgenin `4042`'si, *aynı* vektöre eşlenir ve birebir bir eşleşme yaklaşık 1.0 skorlar. Bu fallback kendi sınırları konusunda dürüst: bir hash, eğitilmiş bir modelin bildiği gibi "refund" ile "reimbursement"ın kuzen olduğunu bilmez, ama yalnızca late interaction'ın *şeklinin* her makinede çalıştırılabilir ve incelenebilir olması için var. Bir banner hangi yolun aktif olduğunu belirtiyor ve aşağıdaki her şey ikisinde de aynı davranıyor.
+
+Her token vektörü L2-normalize ediliyor, yani birim uzunluğa ölçekleniyor; 3. bölümden hatırlayacağın, düz bir nokta çarpımının doğrudan kosinüs benzerliği olarak okunmasını sağlayan o küçük numara. Skorlama fonksiyonunu tek satıra indiren de bu.
+
+## MaxSim, elle
+
+Şimdi, query-token vektörlerinden oluşan bir torbanın, belge-token vektörlerinden oluşan bir torbayla ne kadar iyi eşleştiğini skorlayan tek bir sayıya ihtiyacımız var. Late interaction'ın kullandığı işlem **MaxSim**; kural tek cümlede söylenebilecek kadar kısa: her query token'ı için, onunla en iyi eşleşen tek belge token'ını bul, sonra bu en iyi eşleşmeleri tüm query token'ları üzerinden topla.
+
+numpy'de cümleden bile pek uzun değil. İşte bu bölümün çalıştırılabilir eşlik eden kodu [late_interaction.py](/essays/late-interaction-retrieval/late_interaction.py)'de gönderildiği haliyle tam olarak fonksiyon:
+
+```python
+import numpy as np
+
+def maxsim(query_vecs: np.ndarray, doc_vecs: np.ndarray) -> float:
+    """Late-interaction score: for each query token take the max cosine
+    similarity over all doc tokens, then sum. Inputs are L2-normalized
+    (n_q, d) and (n_d, d), so the dot product IS cosine similarity."""
+    sims = query_vecs @ doc_vecs.T          # (n_q, n_d) pairwise cosine
+    return float(sims.max(axis=1).sum())    # max over doc tokens, sum over query tokens
+```
+
+Yavaşça adım adım git. İlk satır, `query_vecs @ doc_vecs.T`, her query-token vektörünü her belge-token vektörüyle çarpıp bir grid üretiyor: satırlar query token'ları, sütunlar belge token'ları, her hücre bir query token'ı ile bir belge token'ı arasındaki kosinüs. İkinci satır gerçek MaxSim'i yapıyor. `sims.max(axis=1)`, her query-token satırı için o satırdaki maksimum hücreyi alıyor, yani o token'ın belgede herhangi bir yerdeki tek en iyi eşleşmesini; `.sum()` sonra bu satır maksimumlarını tek bir skorda topluyor. Algoritmanın tamamı bu.
+
+İki tasarım tercihi, late interaction'ın neden böyle davrandığını açıklıyor. **max** isabet veriyor: bir query token'ı belgenin uzun, kısa ya da çoğunlukla konu dışı olup olmadığını umursamaz, yalnızca "buradaki en iyi eşleşmem güçlü mü?" diye sorar. Gömülü bir `E-4042` yine de birebir bir eşleşmedir ve max onu, etrafındaki kelimelere bakmaksızın bulur. **sum** query boyunca topluyor: birçok query token'ıyla iyi eşleşen bir belge, yalnızca birkaçıyla eşleşenden daha yüksek skor alır. Hiçbir yerde ortalama yok, havuzlamanın yok ettiği sinyalin burada hayatta kalmasının tam sebebi de bu.
+
+<Diagram number={2} caption="MaxSim bir grid işlemi olarak. Her query token'ı (satırlar), bir kosinüs benzerliği grid'ini doldurmak üzere her belge token'ıyla (sütunlar) karşılaştırılır. Her query-token satırı için tek en büyük hücre seçilir (o token'ın belgede herhangi bir yerdeki en iyi eşleşmesi). Bu satır maksimumları sonra tek bir late-interaction skorunda toplanır. max terim düzeyinde isabet verir; sum query boyunca toplar.">
+  <img src="/essays/late-interaction-retrieval/part13-maxsim.svg" alt="Satırları query token'larının, sütunları belge token'larının etiketlediği bir grid; her hücre kosinüs benzerliğine göre gölgelendirilmiştir. Her satırda en parlak tek hücre, o query token'ının maksimumu olarak camgöbeği renginde çerçevelenmiştir. Her satırın çerçevelenmiş maksimum hücresinden oklar, sağdaki, nihai MaxSim skorunu üreten tek bir indigo toplama düğümüne uzanır; bu, belge token'ları üzerinden max'ın ardından query üzerinden sum'ı gösterir." class="w-full rounded-lg" />
+</Diagram>
+
+Şimdi işlenmiş örnek, kodun kullandığı aynı dört-belgelik destek korpusu üzerinde. Query `E-4042 error`. Korpusta, `E-4042`'yi bir batch-reconciliation raporunun içine gömen uzun pasaj (birebir-terim belgesi), kısa jenerik "A general error occurred while loading the page" (dikkat dağıtıcı distractor), bir kargo satırı ve iade satırı var. Önce dördünü, 7. bölümün yolu olan havuzlanmış kosinüse göre, belge başına bir vektörle sıralıyoruz:
+
+```text
+Ranking by POOLED cosine (one vector per doc, Part 7):
+  rank 1  cos=+0.503  A general error occurred while loading the page.... [DISTRACTOR]
+  rank 2  cos=+0.441  Our internal billing log emits the diagnostic identifie... [exact term]
+  rank 3  cos=+0.022  Standard shipping takes three to five business days to ...
+  rank 4  cos=-0.161  Refunds are accepted within 30 days of purchase if the ...
+```
+
+`E-4042`'yi birebir içeren belge, sadece 2. sırayı yakalıyor: kısa jenerik "error" distractor'ı onu açık ara geçiyor. Bu, havuzlama sorununun sayılarla hali: nadir kod uzun pasajda ortalanarak yok oldu, kısa jenerik cümle ise yalnızca ortak "error" kelimesi sayesinde daha yüksek havuzlandı. (İade satırındaki küçük negatif kosinüsü fazla ciddiye alma: bu, eğitilmiş bir modelin değil, bu demonun hafif yer tutucu embedding'lerinin bir artefaktı. Gerçek normalize edilmiş metin embedding'leriyle, 3. bölümün belirttiği gibi, alakasız pasajlar ters yönlere işaret etmek yerine dar bir pozitif bantta kümelenir; sıralama ve havuzlama dersi her iki durumda da değişmiyor.)
+
+Şimdi aynı dördünü MaxSim'e göre sırala:
+
+```text
+Ranking by MaxSim (token-level late interaction):
+  rank 1  maxsim=2.269  Our internal billing log emits the diagnostic identifie... [exact term]
+  rank 2  maxsim=1.766  A general error occurred while loading the page.... [DISTRACTOR]
+  rank 3  maxsim=1.133  Standard shipping takes three to five business days to ...
+  rank 4  maxsim=0.573  Refunds are accepted within 30 days of purchase if the ...
+```
+
+Sıralamalar *en tepede anlaşmıyor* ve bu anlaşmazlık dersin tamamı. MaxSim, birebir-terim belgesini birinci sıraya koyuyor: query token'ı `4042`, belgenin token'ları arasında birebir eşleşmesini buldu ve max, etrafını ne kadar alakasız metin sarmış olursa olsun o tek güçlü isabeti ödüllendirdi. Distractor yine de iyi skorluyor çünkü gerçekten "error" ile eşleşiyor, ama içermediği `4042` için bir eşleşme uyduramıyor, dolayısıyla ikinci sıraya düşüyor. Late interaction, havuzlanmış kosinüsün gömdüğü belgeyi yüzeye çıkardı. (O birebir ondalıklar çevrimdışı fallback embedder'dan geliyor; gerçek modele karşı çalıştır, büyüklükler kayar ama sonuç değişmez.)
+
+Aşağıdaki interaktif figür bunu doğrudan hissetmeni sağlıyor. Birebir-terim belgesi ile distractor arasında geçiş yap, query-token'a-karşı-belge-token'ı grid'inin dolduğunu izle, her query satırının hangi hücreyi maksimumu olarak seçtiğini gör ve skor haline gelen çalışan toplamı oku.
+
+<Diagram number={3} caption='İnteraktif MaxSim oyun alanı. "E-4042 error" query&apos;si için birebir-terim belgesi ile kısa jenerik distractor arasında geçiş yap. Grid her query token&apos;ını belge token&apos;ı kosinüsüne göre gölgelendirir; her query satırının seçtiği maksimum hücre çerçevelenir ve bu maksimumların çalışan toplamı late-interaction skorudur. Belge değiştirmek rank tersine dönüşünü gösterir: havuzlanmış kosinüs, jenerik distractor&apos;ı birebir-terim belgesinin üstüne koyar; MaxSim ise bunu tersine çevirip gömülü birebir eşleşmenin kazanmasını sağlar.'>
+  <IframeFigure
+    src="/essays/late-interaction-retrieval/part13-maxsim-playground.html"
+    title='İnteraktif late-interaction skorlayıcı: "E-4042 error" query&apos;sinin token&apos;ları (satırlar) ile seçilen bir belgenin token&apos;ları (sütunlar) arasındaki kosinüs benzerliklerinden oluşan bir grid; her query satırının maksimum hücresi vurgulanır ve satır maksimumlarının çalışan toplamı MaxSim skoru olarak gösterilir; buna ek olarak kodu içeren birebir-terim belgesi ile kısa jenerik error distractor&apos;ı arasında bir geçiş anahtarı vardır; bu, havuzlanmış kosinüsün distractor&apos;ı birebir-terim belgesinin üstüne sıraladığı, MaxSim&apos;in ise bunu tersine çevirip birebir-terim belgesinin kazanmasını sağladığı rank tersine dönüşünü gösterir'
+    height={760}
+  />
+</Diagram>
+
+## Neden hâlâ sunması ucuz
+
+Bu noktada makul bir endişe, cross-encoder'ı yeniden icat etmiş olmamız. Yine token düzeyinde eşleşme yapıyoruz, yani sorgu anında her query-belge çiftinde pahalı bir modeli çalıştırmaya geri mi döndük? Hayır; sebebi, bu bölümdeki en önemli pratik gerçek: belge token vektörleri **önceden hesaplanmış**.
+
+Tam olarak bir bi-encoder'ın tek vektörü gibi, her belge encoder'dan çevrimdışı, indeksleme anında bir kez geçirilir ve token başına vektörlerden oluşan torbası saklanır. Sorgu anında model yalnızca query üzerinde çalışır. Ondan sonraki her şey, yani tüm MaxSim, indeksinde çoktan duran sayılar üzerinde yalnızca nokta çarpımları, bir max ve bir sum. Sorgu-zamanı skorlama döngüsünde hiçbir sinir ağı yok. Cross-encoder'la karşılaştır: query ve belgeyi *birlikte* okur, yani skoru query'yi görene kadar var olmaz; bu da hiçbir şeyi önceden hesaplayamayacağı ve sorgu anında aday başına tam bir forward pass çalıştırması gerektiği anlamına gelir. Late interaction, bir cross-encoder'ın değerli kıldığı terim düzeyindeki isabeti elde ediyor ama ağır model işini, ait olduğu yere, indeksleme zamanına taşıyor. Slogan, ve doğru bir slogan: "cross-encoder kalitesi, bi-encoder sunum maliyeti"; açtığımız boşluktaki gerçek üçüncü seçenek.
+
+## Adaylar ölçekte nasıl bulunur (PLAID)
+
+Son bölümde üzerinde durmaya değer bir el çabukluğu var. "Sorgu anında yalnızca MaxSim çalışır" ifadesi, *hangi* belgeyi skorladığını zaten biliyorsan tam olarak doğru. Sessizce hafife aldığı, daha zor problem şu: milyonlarca belge arasından, skorlamaya değer o bir avuç belgeyi nasıl bulursun? MaxSim'i her query için indeksteki her belgeye karşı çalıştıramazsın; bu korpusla doğru orantılıdır ve amacı boşa çıkarır.
+
+Alışıldık numaraya yaslanamamanın sebebi, **MaxSim'in düzgün bir metrik olmaması**. Sıradan tek-vektörlü arama hızlıdır çünkü tek bir vektör üzerinde kosinüs, HNSW gibi bir approximate-nearest-neighbor (ANN) yapısıyla indeksleyebileceğin temiz bir mesafedir; vektör aramasını sublinear yapan da ANN'dir. MaxSim'in bir token vektörü torbasının tamamı üzerindeki max-sonra-sum'ı, iki nokta arasındaki tek bir mesafe değildir; dolayısıyla onu doğrudan bir ANN indeksine verip en yakın belgeleri isteyemezsin.
+
+Çözüm, ColBERTv2'de ve onun sunum motoru **PLAID**'de (Santhanam ve ark., arXiv 2205.09707) çözülmüş; 8. bölümdeki reranking kalıbından tanıdık gelmesi gereken iki aşamalı bir şekil. Önce ucuz bir **aday üretme** aşaması: her belgenin *tek tek* token vektörlerini bir ANN yapısında indeksle, query'yi kendi token vektörlerine göm ve her query token'ı için düz kosinüsle kendi en yakın belge-token vektörlerini getir. O komşuların ait olduğu belgeler senin aday kümen olur, birkaç bin, tüm korpus değil. Sonra **tam MaxSim rerank**: max-sonra-sum'ın tamamını yalnızca o aday kümesi üzerinde çalıştır ve sırala. PLAID bir budama adımı daha ekler: belgeleri önce, token vektörlerinin kuantize edildiği cluster centroid'lerine göre skorlar (ColBERTv2'nin residual compression'ının zaten ihtiyaç duyduğu aynı centroid'ler); böylece hiçbir residual açılmadan önce adayların çoğu elenir. Çıkarım şu: token başına ANN adayları bulur, tam MaxSim onları sıralar; "sorgu başına yalnızca max-sonra-sum çalışır" sloganı bilinen bir çiftin skorlanmasını anlatır, gerçek sistemler ise başta hangi çiftlerin skorlanacağına karar vermek için onu bir yaklaşık retrieval aşamasına sarar.
+
+Pratikte bunu neredeyse hiç kendin bir araya getirmezsin. Referans uygulama, orijinal yazarların `colbert-ai` kütüphanesi; ColBERTv2 indeksleme ile PLAID aramayı bir arada sunuyor. [RAGatouille](https://github.com/AnswerDotAI/RAGatouille) onu bir RAG pipeline'ı içinde kullanmak üzere birkaç satıra sarıyor; ve multi-vector makinesi artık birkaç motorda birinci sınıf vatandaş: **Vespa** bir süredir ColBERT tarzı late interaction'ı destekliyor, **Qdrant** MaxSim karşılaştırıcılı native multivector saklamayı ekledi ve **Jina-ColBERT**, daha uzun bağlamlı ColBERT tarzı checkpoint'ler sunuyor. Bunları 2026 anlık görüntüsü olarak ele al ve üzerine bir şey inşa etmeden önce güncel dokümantasyonu kontrol et. Aşağıdaki sayfa-görüntüsü durumu için bir maliyet notu: ColPali sayfa başına yaklaşık bin patch vektörü üretir, dolayısıyla bir ColPali indeksi aynı sayıda belge üzerinde bir metin ColBERT indeksinden çok daha büyük ve inşası çok daha yavaştır; centroid budaması ile residual compression'ın orada daha da önemli olmasının sebebi de tam olarak bu.
+
+## Depolama ödünleşimi
+
+Hiçbir şey bedava değil ve late interaction'ın faturası depolamada ödeniyor. Bir bi-encoder belge başına bir vektör saklar. Bir late-interaction modeli *token* başına bir vektör saklar; yani kırk token'lık bir pasaj, havuzlanmış özetinin yaklaşık kırk katı yer kaplar. Oyuncak dört-belgelik korpusta aritmetik küçük ve tam:
+
+```text
+Toy corpus: 4 docs, ~12 tokens/doc, 384 dims, float32 (4 bytes/dim).
+  pooled (1 vec/doc)      :        6,144 bytes  (   0.01 MB)
+  multi-vector (1 vec/tok):       73,728 bytes  (   0.07 MB)  -> 12.0x more
+  multi-vector, 2-bit     :        4,608 bytes  (   0.00 MB)  -> ColBERTv2 residual compression
+```
+
+Sadece havuzlamayı reddetmekten on iki kat fazla ve bu çarpan, belgelerinin uzunluğuyla ölçekleniyor. Ele alınmazsa, late interaction'ı korpus ölçeğinde kullanışsız kılan şey tam olarak bu. Cevap sıkıştırma, **ColBERTv2**'nin (Santhanam ve ark., NAACL 2022, arXiv 2112.01488) başlıca katkısı. ColBERTv2, her token vektörünü boyut başına tam 32-bitlik bir float olarak değil, yakındaki bir cluster centroid'ine karşı, boyut başına bir ya da iki bite kuantize edilmiş küçük bir *residual* olarak saklıyor. Standart MS MARCO passage benchmark'ında makale, sıradan multi-vector indeksin yaklaşık 154 GiB olduğunu ve 1-bit residual'larla yaklaşık 16 GiB'a, 2-bit ile yaklaşık 25 GiB'a küçüldüğünü, yani aynı korpus üzerindeki tek-vektörlü bir indeksle aynı komşuluğa getiren 6 ila 10 kat bir azalma olduğunu bildiriyor. Yukarıdaki oyuncak "2-bit" satırı bu fikrin minyatür hali: boyut başına dört bayttan çeyrek bayta düş ve multi-vector maliyeti havuzlanmış taban çizgisinin bile altına iner. Token başına vektörler anlamlı ölçüde daha fazla yer tutar, o yer terim düzeyindeki isabetin bedelidir ve sıkıştırma, bu bedeli ödemeyi yasaklayıcı değil pratik kılan şeydir.
+
+## ColPali: aynı numara sayfa görüntüleri üzerinde
+
+Şimdiye kadar her token bir kelimeydi. Bu bölümün son fikri MaxSim'i tam olarak olduğu gibi bırakıyor ve belge token'larının *ne* olduğunu değiştiriyor. Bu **ColPali** (Faysse ve ark., ICLR 2025, arXiv 2407.01449); ne yaptığı konusunda kesin olmakta fayda var, çünkü fazla iddialı konuşmak kolay.
+
+Gerçek bir belge nadiren temiz metindir. İki sütunlu bir düzeni, bir tablosu, bir grafiği, damgalı bir şekli olan bir PDF sayfasıdır. 5. bölümün bizi uyardığı geleneksel pipeline, metni çıkarmak için OCR çalıştırır ve sonra onu chunk'lara böler; her iki adım da düzeni bozar ve genelde anlamı taşıyan görsel yapıyı kaybeder. ColPali bunların hepsini atlar. Belge **sayfa görüntüsünü** doğrudan gömmek için bir **görü-dil modeli (vision-language model)**, yani bir görüntü alıp embedding üreten bir model, kullanır. Bir vision transformer, sayfayı küçük **yama (patch)**'lerden oluşan bir grid'e keser, sayfa başına kabaca bin tane, ve tıpkı bir metin encoder'ının token başına bir vektör üretmesi gibi, patch başına bir vektör üretir. O patch vektörleri belgenin multi-vector temsilidir. Query sıradan metin olarak kalır, kendi token başına vektörlerine gömülür ve query token'larını sayfa patch'lerine karşı, zaten inşa ettiğin *aynı MaxSim* ile skorlarsın. OCR yok, chunking yok: "refund" gibi bir query token'ı, o kelimenin basılı olduğu sayfanın patch'inde, tablosuyla birlikte doğrudan yanabilir.
+
+Burada ne gösterebileceğimizin sınırı konusunda net olmak istiyorum. Çevrimdışı eşlik eden kodda gerçek bir vision-language model çalışmıyor; ağı olmayan bir makinede VLM ağırlıklarını indirip gerçek bir sayfayı gömemezsin. O yüzden kod, *mekanizmayı* bilinçli bir yer tutucuyla öğretiyor: bir sayfanın patch embedding'lerinin rolünü oynayan, deterministik olarak hash'lenmiş on altı vektörden oluşan dört-çarpı-dört bir grid; aynı `maxsim` çağrısından geçiriliyor.
+
+```text
+  toy page: 16 patch vectors x 384 dims (standing in for an image's patches)
+  query "refund window policy" (3 tokens) vs the page patches:
+    maxsim(query tokens, page patches) = 0.253
+```
+
+O `0.253`, ColPali'nin gerçek dünyadaki isabeti hakkında bir iddia değil. Skorlamanın mekanik olarak özdeş olduğunun bir gösterimi: her query token'ı patch vektörleri üzerinden maksimumunu alır, sonra topluyoruz. ColPali'nin katkısı yeni bir skorlama kuralı değil; bir sayfa görüntüsü için patch vektörleri üretebiliyorsan, late interaction'ın MaxSim'inin bunlar üzerinde değişmeden çalıştığını fark etmek. Ve bu, görsel açıdan zengin belgeleri, onları önce hataya açık metne düzleştirmeden getirebilmen anlamına geliyor. (ColQwen aynı fikrin farklı bir vision-language omurgası üzerine kurulmuş hali; mekanizma aynı.) Adı geçen modelleri 2026 anlık görüntüsü olarak ele al ve üzerine bir şey inşa etmeden önce güncel durumlarını doğrula.
+
+## Deneyimden
+
+> 💡 **Deneyimden**
+>
+> Late interaction'ın benim için ilk kez karşılığını verdiği zaman, ekipman kılavuzlarından oluşan bir korpus için devraldığım bir arama sistemiydi ve şikayetler hep aynı şeye çıkıyordu: teknisyenler bir etiketten doğrudan bir parça numarasını ya da arıza kodunu yapıştırıyor, geri dönüşte doğru makineyle belli belirsiz ilgili ama o birebir kodu listeleyen sayfayı asla vermeyen sonuçlar alıyorlardı. 7. bölümdeki nadir token dersini okumuştum, bu yüzden alışıldık hybrid-search düzeltmesine uzandım ve en temiz vakalarda işe yaradı. Ama o kodların çoğu yoğun tanı tablolarının içinde yaşıyordu ve bir tablo chunk'landığında kod ile ona referans veren prosedür farklı chunk'lara düşmeye devam ediyordu; bu yüzden keyword arama bile kodu yüzeye çıkarıp cevabı kaybediyordu. O korpusu ColBERT tarzı bir indekse geçirmek gerçekten işi çözen şey oldu. Token başına bir vektör tutmak, bir sayfa ne kadar çevresel dolgu taşırsa taşısın bir arıza kodunun keskin, bulunabilir bir nokta olarak kalması demekti ve MaxSim, kodu gerçekten içeren sayfayı ödüllendirdi. Bedel gerçekti, sıkıştırmayı açmadan önce indeks çok büyüdü; ama tüm değerin bir sayfada bir birebir satırı bulmak olduğu bir korpus için doğru takas buydu. Çıkardığım ders şuydu: başarısızlıkların uzun, dağınık pasajların içine gömülü birebir terimlerle ilgiliyse, çözüm daha iyi bir tek vektör olmayabilir; tek bir vektöre hiç çökmemeyi reddetmek olabilir.
+
+{/* author: swap the equipment-manuals / fault-code story above for your own real late-interaction or ColBERT/ColPali anecdote (the corpus where exact-term recall on long passages was the whole game); keep it first-person and concrete, and keep the blockquote format. */}
+
+## Kendin dene
+
+MaxSim'in neden böyle davrandığını hissetmenin en hızlı yolu, [late_interaction.py](/essays/late-interaction-retrieval/late_interaction.py)'deki işlenmiş örneği bozup skorun nasıl hareket ettiğini izlemek.
+
+- **Bir query token'ını değiştir ve MaxSim'in düştüğünü izle.** `QUERY`'yi `"E-4042 error"`'dan `"E-9999 error"`'a değiştir. `4042` token'ının artık birebir-terim belgesinin hiçbir yerinde birebir eşleşmesi yok, dolayısıyla satır maksimumu yaklaşık 1.0'dan, hashing yer tutucusunun alakasız bir token'a verdiği zayıf kosinüse çöküyor ve birebir-terim belgesinin MaxSim'i yaklaşık tam bir puan düşüyor. O tek eksik eşleşme, doğru sayfayı yüzeye çıkarmakla onu gömmek arasındaki fark: late interaction, query'nin belgeyle gerçekten paylaştığı token'lar kadar iyidir.
+- **Skorun query uzunluğuyla büyüdüğünü izle.** Query'ye bir kelime ekle, mesela `"E-4042 error log"`, ve mutlak MaxSim sayılarının genelde *yükseldiğini* fark et; çünkü artık üç yerine dört satır-maksimumu topluyorsun. Sıralama hâlâ anlamlı ama ham skorlar üç-token'lı query'ninkilerle kıyaslanabilir değil. Bu, aşağıdaki ikinci tuzağın somut hali.
+- **Hash embedder'ı gerçek bir modelle değiştir.** En üstte (`pip install sentence-transformers`'tan sonra) `USE_REAL_MODEL = True` yap ve yeniden çalıştır. Artık `token_embed`, gerçek `all-MiniLM-L6-v2` vektörlerini çekiyor; bu yüzden "refund" ve "reimbursement" gibi yakın eş anlamlılar eşleşmeye başlıyor, deterministik hash'in asla yapamayacağı bir şey. Kesin büyüklükler kayıyor ama rank tersine dönüşü (MaxSim birebir-terim belgesini yüzeye çıkarır, havuzlanmış kosinüs onu jenerik distractor'ın altına gömer) korunuyor; asıl mesele de bu.
+
+> ⚠️ **Sık düşülen tuzaklar**
+>
+> - **Token vektörlerini L2-normalize etmeyi unutmak.** MaxSim bir nokta çarpımını yalnızca her vektör birim uzunlukta olduğunda kosinüs olarak okur. Normalizasyonu atla; büyük ham normlu birkaç token her max'a hâkim olur ve skorların artık hiçbir şekilde "benzerlik" anlamına gelmez. Eşlik eden kod `token_embed` içinde normalize ediyor; kendi encoder'ını bağlıyorsan skorlamadan önce aynısını yap.
+> - **Farklı uzunluktaki query'lerin ham MaxSim skorlarını karşılaştırmak.** MaxSim, query token'ı başına bir maksimumu *toplar*, yani beş-token'lı bir query, yalnızca toplanacak daha çok terim olduğu için iki-token'lı bir query'den daha yüksek bir tavana sahiptir. 2.3'lük bir skor, farklı ve daha kısa bir query'den gelen 1.8'lik bir skordan "daha alakalı" değildir. MaxSim'i query'ler arasında alakalılığı eşiklemek için değil, *bir query içinde belgeleri sıralamak* için kullan; çapraz-query bir sayıya ihtiyacın varsa query token sayısına böl.
+> - **Late interaction'ın kötü bir chunk'ı kurtarmasını beklemek.** Token başına bir vektör tutmak *havuzlama* başarısızlığını, bir pasajın içinde ortalanarak yok edilen nadir terimi düzeltir. Bir *chunking* başarısızlığı için hiçbir şey yapmaz: cevabı veren cümle ingestion sırasında farklı bir chunk'a bölündüyse, o cevap basitçe hiçbir belgenin token torbasında değildir ve hiçbir miktarda MaxSim isabeti, hiç indekslenmemiş bir token'ı eşleştiremez. Late interaction, bir chunk içindeki recall'u keskinleştirir; indekslemeden önce kestiğin sinyali geri getiremez. (14. bölüm tam olarak bu sınırla ilgili.)
+
+## Özet çıkarımlar
+
+- Bir **bi-encoder** (7. bölüm), query'yi ve belgeyi ayrı ayrı birer **havuzlanmış** vektöre gömer; sunması ucuzdur ama nadir, belirleyici token'ları **ortalayarak yok eder**. Bir **cross-encoder** (8. bölüm), terim düzeyinde isabet için onları birlikte okur ama hiçbir şeyi önceden hesaplayamaz, dolayısıyla yalnızca birkaç aday üzerinde bir reranker olarak çalışır. **Late interaction**, aralarındaki boşluğu dolduruyor.
+- Late interaction, hem query hem de belge için token başına bir vektör olan bir **multi-vector** temsili tutar ve hiç havuzlamaz. Havuzlamanın yok ettiği belirleyici token sağlam kalır.
+- **MaxSim**, her query token'ı için tüm belge token'ları üzerindeki maksimum kosinüsünü alıp bu maksimumları toplayarak bir çifti skorlar. **max** terim düzeyinde isabet verir; **sum** query boyunca toplar. L2-normalize edilmiş vektörler üzerinde yaklaşık üç satır numpy.
+- İşlenmiş `E-4042 error` örneğinde sıralamalar **en tepede anlaşmıyor**: havuzlanmış kosinüs kısa jenerik "error" distractor'ını birinci sıraya koyup birebir-terim pasajını gömerken, MaxSim birebir-terim pasajını yüzeye çıkarıyor. Bu anlaşmazlık meselenin tamamı.
+- Belge token vektörleri **çevrimdışı önceden hesaplanır**, dolayısıyla sorgu anında yalnızca MaxSim (nokta çarpımları, bir max, bir sum) çalışır. Bu, **ColBERT** tarafından tanıtılan ve **ColBERTv2** tarafından depolama açısından pratik hale getirilen gerçek üçüncü seçenek: "cross-encoder kalitesi, bi-encoder sunum maliyeti."
+- Bedel **depolama**: token başına vektörler, tek bir havuzlanmış vektörden kabaca bir büyüklük mertebesi daha fazla yer tutar (oyuncak korpusta 12 kat). **Kalıntı sıkıştırma (residual compression)**, yani ColBERTv2'nin boyut başına 1 ila 2 bitlik tekniği, MS MARCO indeksini yaklaşık 154 GiB'tan kabaca 16 ila 25 GiB'a küçültür; 6 ila 10 kat bir azalma.
+- **ColPali**, MaxSim'i değiştirmeden bırakır ve belge token'larını bir **vision-language model**'den gelen **sayfa-görüntüsü patch'leri** yapar; OCR ya da chunking olmadan görsel açıdan zengin belgeleri getirir. Burada kesinlikle bir mekanizma olarak öğretiliyor: çevrimdışı gerçek bir VLM çalışmıyor ve oyuncak patch grid'i yalnızca skorlamanın özdeş olduğunu gösteriyor. Bu alan hızlı ilerliyor ve benim bir bilgi kesim tarihim var, bu yüzden adı geçen modelleri bir anlık görüntü olarak ele al ve güncel durumlarını doğrula.
+
+## Referanslar
+
+- Omar Khattab ve Matei Zaharia. "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT." SIGIR 2020. [arXiv:2004.12832](https://arxiv.org/abs/2004.12832): late interaction'ı ve MaxSim işlemini tanıtır.
+- Keshav Santhanam, Omar Khattab, Jon Saad-Falcon, Christopher Potts ve Matei Zaharia. "ColBERTv2: Effective and Efficient Retrieval via Lightweight Late Interaction." NAACL 2022. [arXiv:2112.01488](https://arxiv.org/abs/2112.01488): multi-vector indeksini 6 ila 10 kat küçülten residual compression.
+- Keshav Santhanam, Omar Khattab, Christopher Potts ve Matei Zaharia. "PLAID: An Efficient Engine for Late Interaction Retrieval." CIKM 2022. [arXiv:2205.09707](https://arxiv.org/abs/2205.09707): ColBERTv2'yi ölçekte hızlı kılan, centroid ile budanmış iki aşamalı sunum motoru.
+- Manuel Faysse, Hugues Sibille, Tony Wu, Bilel Omrani, Gautier Viaud, Céline Hudelot ve Pierre Colombo. "ColPali: Efficient Document Retrieval with Vision Language Models." ICLR 2025. [arXiv:2407.01449](https://arxiv.org/abs/2407.01449): ViDoRe benchmark'ıyla birlikte, sayfa-görüntüsü patch'leri üzerinde late interaction.
+
+## Sözlük
+
+- **Bi-encoder**: query'yi ve her belgeyi ayrı ayrı birer vektöre gömen bir model; böylece belge vektörleri önceden hesaplanıp saklanabilir. 7. bölümün tek-vektörlü dense retriever'ı.
+- **Cross-encoder**: query ile bir belgeyi tek bir geçişte birlikte okuyup isabetli bir alakalılık skoru üreten bir model; önceden hesaplanamaz, bu yüzden yalnızca birkaç adayı yeniden sıralamak (rerank) için kullanılır (8. bölüm).
+- **Havuzlama (pooling)**: bir pasajın token başına encoder çıktılarını tek bir vektöre ortalamak; bütünü özetler ama herhangi bir nadir, belirleyici token'ı sulandırır.
+- **Çoklu vektör (multi-vector) temsili**: tek bir vektöre havuzlamak yerine (hem query hem belge için) token başına bir vektör tutmak; böylece token düzeyindeki sinyal korunur.
+- **Late interaction**: multi-vector temsilleri tutan ve query-belge karşılaştırmasını sorgu anındaki token başına bir skorlama adımına erteleyen retrieval paradigması; ColBERT olarak tanıtıldı.
+- **MaxSim**: late-interaction skoru; her query token'ı için tüm belge token'ları üzerindeki maksimum kosinüs benzerliğini al, sonra bu maksimumları topla.
+- **ColBERT**: token başına vektör tutan ve MaxSim ile skorlayan, orijinal late-interaction retriever'ı (SIGIR 2020).
+- **ColBERTv2**: residual compression'ı token vektörlerini boyut başına 1 ila 2 bite kuantize eden ve indeksi 6 ila 10 kat küçülten devam çalışması (NAACL 2022).
+- **Kalıntı sıkıştırma (residual compression)**: her token vektörünü tam bir float vektör olarak değil, yakındaki bir cluster centroid'ine karşı küçük, düşük bitli bir residual olarak saklamak; multi-vector saklamayı pratik kılan numara.
+- **PLAID**: adayları token başına approximate-nearest-neighbor arama ve centroid budamasıyla bulan, sonra tam MaxSim'i yalnızca hayatta kalanlar üzerinde çalıştıran, late interaction'ı korpus ölçeğinde sublinear tutan ColBERTv2 sunum motoru.
+- **Görü-dil modeli (VLM, vision-language model)**: bir görüntü alıp embedding üreten model; ColPali tarafından bir belge sayfa görüntüsünü doğrudan gömmek için kullanılır.
+- **Yama (patch)**: bir sayfa görüntüsünün küçük bir karesi; bir vision transformer, patch başına bir vektör üretir, sayfa başına kabaca bin tane, metinde token vektörlerinin oynadığı rolü oynayarak.
+- **ColPali**: bir VLM aracılığıyla belge sayfa görüntülerini patch vektörleri olarak gömen ve query token'larını sayfa patch'lerine karşı aynı MaxSim ile skorlayan, OCR ile chunking'i atlayan bir late-interaction retriever'ı (ICLR 2025).
+
+---
+
+**Sırada, 14. Bölüm: Bağlama Duyarlı Chunking.** Late interaction token düzeyindeki sinyali korur, ama bir token'ın içinde yaşadığı chunk, belgesinden ayrıldığı anda yine de yorumlanamaz hale gelebilir: "she" öncülünü kaybeder, "the policy" yılını kaybeder. Sırada, bir chunk'ın bağlamını korumanın eğitim gerektirmeyen iki yolu var: late chunking ve Anthropic'in Contextual Retrieval'ı; elle inşa edilip karşılaştırılıyor.
