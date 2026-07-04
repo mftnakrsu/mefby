@@ -1,14 +1,18 @@
-import { defineCollection, z } from 'astro:content';
+import { defineCollection } from 'astro:content';
+import { glob } from 'astro/loaders';
+import { z } from 'astro/zod';
 
 const essays = defineCollection({
-  type: 'content',
+  // Astro 6 Content Layer: entries are loaded explicitly; each file's `id` is its
+  // filename without the extension, matching the old `slug` used in routes/links.
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/essays' }),
   schema: z.object({
     title: z.string(),
     description: z.string(),
     date: z.coerce.date(),
     tags: z.array(z.string()).default([]),
     // Optional link to the essay's companion code + notebook (a folder in the rag-by-hand repo).
-    codeUrl: z.string().url().optional(),
+    codeUrl: z.url().optional(),
     // Optional social-card image (site-relative path, e.g. /og/rag-by-hand.png).
     ogImage: z.string().optional(),
     // Optional ~155-char summary used for the <meta description> / og:description.

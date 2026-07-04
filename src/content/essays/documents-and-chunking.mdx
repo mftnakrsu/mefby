@@ -7,6 +7,7 @@ codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-05-chunking"
 ogImage: "/og/documents-and-chunking.png"
 seriesOrder: 5
 lang: "en"
+translationSlug: "documents-and-chunking-tr"
 ---
 
 import Diagram from '../../components/essay/Diagram.astro';
@@ -142,7 +143,7 @@ Step back and look at what we now hold. We can extract clean text, split it into
 
 The playground above rewards a little poking. Two experiments make the dials click into place.
 
-First, push **overlap** up toward the **chunk size** and watch the chunks duplicate. With a chunk size of 200 and an overlap of 20, neighbors share a thin seam; bump the overlap to 100 and each chunk now repeats half of the one before it; push it to the chunk size itself and consecutive chunks become near-copies, the window barely advancing. You will see the chunk count climb while the new information per chunk collapses. That is the picture of wasted storage and wasted compute: you embed and store the same sentences over and over for almost no protection you did not already have at twenty percent.
+First, push **overlap** up toward the **chunk size** and watch the chunks duplicate. With a chunk size of 200 and an overlap of 20, neighbors share a thin seam; bump the overlap to its ceiling of 80 and each chunk now repeats forty percent of the one before it; now drop the chunk size to 100 with the overlap still at 80 and consecutive chunks become near-copies, the window barely advancing. You will see the chunk count climb while the new information per chunk collapses. That is the picture of wasted storage and wasted compute: you embed and store the same sentences over and over for almost no protection you did not already have at twenty percent.
 
 Second, hold the document fixed and switch **strategies** on it. Toggle from fixed-size to recursive at the same size cap and watch the boundaries jump off the mid-word cuts and onto paragraph and sentence breaks, the chunk sizes growing slightly uneven as the splitter trades exact length for coherent edges. Same text, same budget, visibly better seams. That side-by-side is the whole argument of this part in one gesture: the strategy decides *where* the cuts land, and the dials decide *how big* the pieces are, and both are choices you make, not defaults you inherit.
 

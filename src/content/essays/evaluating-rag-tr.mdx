@@ -1,0 +1,282 @@
+---
+title: "RAG'i Değerlendirmek"
+description: "Hisle değerlendirmeyi (vibes) sayıya nasıl çevirirsin. Retrieval-Augmented Generation (RAG) üzerine sıfırdan bir serinin 11. bölümü: bir RAG sisteminin iki başarısızlık yüzeyi, her birini yoklayan temel metrikler (context precision ve recall, faithfulness, answer relevance), LLM-as-a-judge ve önyargıları, bunu otomatikleştiren framework'ler, bir evaluation set nasıl kurulur ve tahmin etmeyi mühendisliğe çeviren disiplinli döngü."
+date: 2026-06-17
+tags: ["RAG", "Evaluation", "RAGAS", "LLM-as-a-judge", "Faithfulness", "LLM", "AI", "Retrieval", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-11-evaluating-rag"
+ogImage: "/og/evaluating-rag.png"
+lang: "tr"
+translationSlug: "evaluating-rag"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+On bölüm boyunca bir RAG sistemi kurduk, sonra onu akıllandırdık: daha iyi chunking, hybrid search, re-ranking, gelişmiş retrieval kalıpları ve sonunda karar verebilen, yeniden deneyebilen, muhakeme edebilen mimariler. Bu değişikliklerin her biri aynı sessiz soruyu gündeme getirdi ve biz onu hep erteledik: gerçekten işe yaradığını nereden biliyorsun? Bu bölüm bu soruyu cevaplıyor. Bir RAG sistemini izlenimler yerine sayılarla ölçmeyi, yanlış bir cevabı geldiği iki yerden birine ayırmayı (retrieval mi, generation mı) ve hangisinin bozulduğunu bulup doğru şeyi düzeltmeyi öğreneceksin. Sonunda "bu sürüm ötekinden daha iyi" diyebilecek ve bunu kanıtlayabileceksin.
+
+## Ön koşullar
+
+1. ile 10. bölümler arası. En çok üçü önemli: [RAG Neden Var?](/essays/why-rag-exists-tr) (1. Bölüm), çünkü faithfulness orada verdiğimiz halüsinasyon karşıtı sözün sadece bir sayıya dökülmüş hali; [Retrieval'a Derin Dalış](/essays/retrieval-deep-dive-tr) (7. Bölüm) ve [Retrieval'ı Daha Akıllı Hale Getirmek](/essays/making-retrieval-smarter-tr) (8. Bölüm), çünkü aşağıdaki retrieval metrikleri top-k, hybrid search ve re-ranking'in gerçekten işe yarayıp yaramadığını anlamanın yolu. [İlk RAG'ini İnşa Et](/essays/build-your-first-rag-tr) (6. Bölüm)'deki elle kurduğun uygulamayı aklında tut; tam da o pipeline'ı ölçeceğiz. Yeni matematik yok, Python'da kısa bir eval-loop taslağı var.
+
+## Anti-pattern: hisle değerlendirme
+
+Hemen hemen her RAG sistemi, hayatının ilk haftalarında şöyle değerlendirilir: onu kurarsın, aklına gelen birkaç soru yazarsın, cevapları okursun, başını sallarsın, "iyi görünüyor" dersin ve yayına alırsın. İşte bu **hisle değerlendirme (vibes-based evaluation)**: kaliteyi bir avuç sorguyu gözden geçirip içgüdüne güvenerek değerlendirmek. Sorumlu davranmış gibi hissettirir, çünkü çıktıya gerçekten baktın. Ama değil.
+
+Vibes üç somut sebepten çöker. **Gerilemeleri gizler**: chunk boyutunu "belli ki" işleri iyileştirsin diye değiştirirsin, üç test sorun hâlâ iyi görünür ve farklı bir soru sınıfının sessizce kötüleştiğini hiç fark etmezsin. **Karşılaştırma imkânı vermez**: A sürümü de B sürümü de "iyi görünüyorsa" ikisi arasında seçim yapmak için elinde zevkten başka bir şey yoktur ve zevk bir meslektaşınla anlaşmazlığa düştüğünde ayakta kalmaz. Ve **karmaşıklığı haklı çıkaramaz**: bu serinin tüm disiplini "karmaşıklık eklemeden önce ölç, bir kolu ancak hata analizi zorunlu kılıyorsa ekle" olmuştur. Ölçüm olmadan bu cümle boştur. Kaydırdığı sayıyı gösteremiyorsan bir re-ranker eklemeyi, ya da 10. bölümdeki tam bir agent'ı eklemeyi hak etmiş sayılmazsın.
+
+Değerlendirme, baş sallamayı bir skorla, skoru da bir delta'yla değiştirir. Bu bölümün sonunda "iyi mi?" sorusunu bir sayıyla, daha faydalı olan "nerede bozuk?" sorusunu ise tam olarak hangi aşamanın çalışılması gerektiğine işaret ederek cevaplayabileceksin.
+
+## RAG'i değerlendirmek neden özellikle zor?
+
+Değerlendirme kolay olsaydı zaten yapıyor olurduk. Bir RAG sisteminin ölçülmeye neden direndiği konusunda dürüst olmakta fayda var, çünkü her zorluk çözümü şekillendiriyor.
+
+**Tek bir ground truth yoktur.** Çoğu gerçek soru için, birçok geçerli biçimde ifade edilmiş birçok doğru cevap vardır. "İadeyi 30 gün içinde yapabilirsiniz" ile "İadeler satın alımdan bir ay içinde kabul edilir" ikisi de doğrudur. Yani akla gelen ilk fikir, cevabı bir referans diziyle karşılaştırıp eşleşip eşleşmediğine bakmak, işe yaramaz: **exact match** (çıktı referansla kelimesi kelimesine aynıysa 1 veren bir metrik) mükemmel bir parafraza 0 verir. Skorlamamız gereken şey yüzeysel metin değil, anlamdır.
+
+**İki başarısızlık yüzeyi vardır.** Bu, tüm bölümün merkezi fikri, sıkı tutun. Bir RAG cevabı yanlış olduğunda, hata tam olarak iki yerden birinde yaşar. Ya retrieval başarısız olmuştur (sistem cevabı barındıran context'i hiç getirmemiştir), ya da generation başarısız olmuştur (doğru context prompt'ta duruyordu ve model yine de yanlış cevap verdi). Bunlar farklı düzeltmeleri olan farklı hatalardır ve tek bir "cevap kötüydü" hükmü ikisini birbirinden ayıramaz.
+
+**"İyi" özneldir ve çok boyutludur.** İyi bir cevap doğrudur, ama aynı zamanda eksiksiz, ilgili ve uygun biçimde ifade edilmiştir de. Bir cevap belgelere mükemmelen faithful olup yine de işe yaramaz olabilir, çünkü istediğin tek gerçeği gömmüştür. Kalite bir karışımdır ve hangi ipliklerini ölçtüğüne sen karar vermelisin.
+
+**Bir pipeline'dır, dolayısıyla hatalar birikir.** Retrieval, generation'ı besler ve tek bir uçtan uca "kalite" skoru ikisini birbirine bulaştırır. Tek sayın 10 üzerinden 6 ise, eyleme geçirilebilir neredeyse hiçbir şey öğrenmemişsindir: retriever'a mı yoksa prompt'a mı dokunman gerektiğini bilemezsin.
+
+Son iki zorluk doğrudan çözüme işaret ediyor. Başarısızlık retrieval'da ya da generation'da olabileceğinden ve karışık bir skor hangisi olduğunu gizlediğinden, **bileşen bileşen** değerlendirirsin: retrieval'ı kendi metrikleriyle, generation'ı kendi metrikleriyle ve sistemi uçtan uca. İki yarıyı ayrı ayrı ölç, başarısızlık yüzeyi kendini ele versin.
+
+## Temel metrikler
+
+Neredeyse her modern RAG metriği, özünde, şu üç şeyden ikisi arasındaki bir karşılaştırmadır: kullanıcının sorduğu **soru (question)**, retrieval'ın getirdiği **context** ve modelin ürettiği **cevap (answer)**. Bu üçünü bir üçgen olarak diz, her metrik bir kenar olsun.
+
+<Diagram number={1} caption="Bir RAG metriğinin karşılaştırabileceği üç şey ve her metriğin hangi kenarda yaşadığı. Context precision ve context recall retrieval kenarında oturur ve context'i puanlar (recall, bir referans cevaba ya da golden chunk'lara karşı değerlendirilir). Faithfulness cevabı context'e karşı kontrol eder, answer relevance ise cevabı soruya karşı kontrol eder; ikisi de generation kenarıdır. Answer correctness, bir referansın varsa, cevabı bilinen-iyi bir cevapla karşılaştırır.">
+  <img src="/essays/evaluating-rag/part11-metrics-map.svg" alt="Üç etiketli düğümü olan bir üçgen: üstte QUESTION, sol altta CONTEXT ve sağ altta ANSWER. Question ile context arasındaki kenar retrieval kenarı olarak etiketlenmiş ve iki metrik taşıyor: Context Precision (ilgili chunk'lar en üste mi sıralanmış) ve Context Recall (ihtiyacımız olan tüm bilgiyi getirdik mi). Context ile answer arasındaki kenar, Faithfulness (cevaptaki her iddia context tarafından destekleniyor mu) etiketli bir generation kenarı. Question ile answer arasındaki kenar, Answer Relevance (cevap sürüklenmeden soruyu ele alıyor mu) etiketli bir generation kenarı. Cevabın altında kesikli çizgili opsiyonel bir düğüm, cevabı bir referans cevapla karşılaştıran Answer Correctness'ı gösteriyor." class="w-full rounded-lg" />
+</Diagram>
+
+### Retrieval metrikleri
+
+Bu ikisi retrieval kenarında yaşar ve generation hiç çalışmadan önce context'i değerlendirir.
+
+**Context precision**, getirdiğin şeyin sinyal-gürültü oranıdır: geri çektiğin chunk'ların kaçı gerçekten ilgili ve ilgili olanlar en üste yakın mı sıralanmış? Bir mükemmel chunk ile dört ilgisiz chunk döndüren bir retriever'ın precision'ı zayıftır ve cevabı dikkat dağıtıcı şeylerin arasına gömerek generation'ın işini zorlaştırır (7. bölümden "lost in the middle"ı hatırla). Pratikte sıralamayı hesaba katan bir biçimde hesaplanır, ilgili chunk'ları erken göründükleri için ödüllendirir; her chunk'ın ilgisi bir insan, bir etiket ya da giderek artan biçimde bir LLM tarafından değerlendirilir.
+
+**Context recall** tam tersini sorar ve teşhis için ikisinin arasında daha önemli olanıdır: soruyu cevaplamak için gereken bilginin ne kadarını gerçekten getirdik? Temel bir şeyi kaçırdık mı? Recall, eli boş dönen bir retrieval'ı yakalayan metriktir; bu, hiçbir prompt mühendisliğinin onaramayacağı bir başarısızlıktır. 7. ve 8. bölümlerin kollarıyla doğrudan bağlantılıdır: çok küçük bir top-k, ya da semantik bir sorguda saf lexical arama, ya da re-ranking'in yokluğu, ve recall düşer, çünkü cevabı barındıran chunk hiç elemeyi geçemez. Recall'ı hesaplamak, cevabın neyi gerektirdiğine dair bir fikir gerektirir; bu yüzden genelde bir referans cevaba ya da bilinen ilgili "golden" chunk'lardan oluşan bir kümeye karşı ölçülür.
+
+### Generation metrikleri
+
+Bunlar, context verilmişken cevabı değerlendirir. Yalnızca retrieval işini yaptıktan sonra anlam kazanırlar; eksik bir context üzerine kurulu bir cevap generator'ın suçu değildir.
+
+**Faithfulness**, diğer adıyla **groundedness**, halüsinasyon karşıtı metriktir ve 1. bölümde verdiğimiz sözün doğrudan devamıdır. Şunu sorar: cevaptaki her iddia, getirilen context tarafından gerçekten destekleniyor mu? Bir cevap, öne sürdüğü her şeyi prompt'ta bulunan bir chunk'a kadar geriye izleyebiliyorsan faithful'dır. Alışılmış tarif, cevabı atomik iddialara bölüp her birini context'e karşı kontrol etmektir (bazen **NLI**, natural language inference, denen küçük bir entailment testi: context bu iddiayı gerektiriyor mu, yani entail ediyor mu?), sonra ayakta kalan kesri skorlamaktır. Belgelerin hiç bahsetmediği bir gerçeği uyduran özgüvenli bir cevap burada düşük skor alır, tam da olması gerektiği gibi.
+
+**Answer relevance**, cevabın gerçekten soruyu ele alıp almadığını sorar; sürüklenmeden ya da istemediğin şeylerle kendini şişirmeden. Dikkat et, correctness'ı değil relevance'ı ölçer: bir cevap context'e mükemmelen grounded olup yine de burada düşük skor alabilir, çünkü sen iadeleri sorarken o kargodan bahsetmiştir. Referans olmadan tahmin etmenin akıllıca bir yolu, bir modele cevaptan sorular ürettirip bunların orijinal soruya ne kadar yakın düştüğünü ölçmektir; gerçek soruyu ele alan bir cevap, ona benzeyen sorular üretir.
+
+**Answer correctness**, referans gerektiren tek metriktir. Karşılaştıracağın bilinen-iyi bir cevabın varsa, correctness üretilen cevabın özde ona ne kadar uyduğunu ölçer; genelde gerçeklerin örtüşmesini bir semantik-benzerlik kontrolüyle harmanlar, böylece parafrazlar da sayılır. Tek bir "doğru cevabı buldu mu" notuna en yakın şeydir ve onu ancak doğru cevabı yazma işini yapmışsan hesaplayabilirsin.
+
+### Metriklerden teşhise
+
+İşte tam burada iki başarısızlık yüzeyi, metrikleri bir karne olmaktan çıkarıp bir araca dönüştürür. Onları pipeline sırasıyla oku, hatayı yerelleştirsinler:
+
+- **Düşük context recall, bir retrieval sorunu demektir.** Cevap modele hiç ulaşmamıştır. Hiçbir prompt değişikliği bunu düzeltemez; gidip retriever üzerinde çalış (chunking, embedding, top-k, hybrid search, re-ranking).
+- **Yüksek recall ama düşük faithfulness, bir generation sorunu demektir.** Doğru context oradaydı ve model yine de bir şey uydurdu. Retriever'a dokunma; prompt'u düzelt, temperature'ı düşür ya da daha güçlü bir model kullan.
+- **Yüksek recall, faithful ama düşük answer relevance, generation'ın sürüklendiği anlamına gelir.** Grounded kaldı ama soruyu hiç cevaplamadı. Yine bir generation düzeltmesi: modele doğrudan cevap vermesini söyle.
+
+Bu teşhis döngüsü, bu bölümdeki tek en değerli şey. Aşağıdaki widget, tek bir cevaplanmış soruyu, aynı mağaza-politikası örneğini, dört senaryodan geçiriyor: aralarında geçiş yap ve hangi metriğin yandığını, pipeline'ın hangi yarısını suçladığını izle.
+
+<Diagram number={2} caption="Cevaplanmış tek bir sorgu, gidebileceği dört yol. Senaryolar arasında geçiş yap: bir retrieval kaçırması context recall'ı çökertir ve generation metriklerini griye boyar (eksik context üzerine kurulu bir cevabı değerlendiremezsin); bir halüsinasyon recall'ı yüksek tutar ama faithfulness'ı çökertir; sürüklenen bir cevap faithful kalır ama answer relevance'da başarısız olur; ve temiz bir geçiş her şeyi yeşile boyar. Başarısız olan metrik, düzeltilecek pipeline yarısının adını verir.">
+  <IframeFigure
+    src="/essays/evaluating-rag/part11-diagnose-failure.html"
+    title="İnteraktif RAG başarısızlık teşhis aracı: tek bir soru, onun getirilen context'i ve üretilen cevap, dört temel metriğin (context precision, context recall, faithfulness, answer relevance) yanında gösteriliyor. Bir senaryo anahtarı; bir retrieval kaçırması (düşük context recall, generation metrikleri bloklu, hüküm: retrieval'ı düzelt), halüsinasyonlu bir cevap (yüksek recall, düşük faithfulness, hüküm: generation'ı düzelt), sürüklenen bir cevap (faithful ama düşük answer relevance, hüküm: generation'ı düzelt) ve temiz bir geçiş (tüm metrikler yeşil, hüküm: yayına al) arasında geçiş yapıyor. Başarısız metrik vurgulanıyor ve bir pipeline şeridi düzeltilecek aşamayı adlandırıyor."
+    height={900}
+  />
+</Diagram>
+
+İşte değerlendirmenin motoru bu: bir not değil, değiştirilecek şeye işaret eden bir gösterge.
+
+## Ölçekte ölçmek: LLM-as-a-judge
+
+Yukarıdaki metrikler sürekli "bir insan tarafından, ya da bir model tarafından değerlendirilir" diyor. Bir insan, her commit'te binlerce test case'e ölçeklenmez, ve exact-string karşılaştırması çok-geçerli-ifade sorununu çözemez. Alanın yerleştiği pragmatik cevap **LLM-as-a-judge**'dır: yetenekli bir dil modelini değerlendirici olarak kullanmak. Ona bir soru, context ve cevabı verirsin, bir rubrik verirsin ("cevaptaki her iddia context tarafından destekleniyor mu? 0'dan 1'e puanla ve açıkla"), ve yapılandırılmış bir hüküm geri okursun.
+
+Kullanılır çünkü ucuza ölçeklenir ve kelime-örtüşmesi metriklerinin aksine anlamı anlar, dolayısıyla doğru bir parafraz geçer, akıcı ama yanlış bir cevap geçmez. Özenle kurulmuş judge'lar insan değerlendiricilerle makul ölçüde iyi korele eder, ki onları kullanılabilir bir proxy yapan da bu. Bir sonraki bölümdeki neredeyse her framework, kaputun altında bir LLM judge çalıştırır.
+
+Ama bir judge bir modeldir ve modellerin önyargıları vardır. Skorlarına, kalibre etmediğin herhangi bir ölçüm aletine göstereceğin aynı şüpheyle yaklaş. İyi belgelenmiş başarısızlık biçimleri şunları içerir:
+
+- **Verbosity bias (uzunluk önyargısı)**: judge'lar, fazladan kelimeler hiçbir şey katmasa bile daha uzun, daha ayrıntılı cevapları tercih etme eğilimindedir.
+- **Position bias (konum önyargısı)**: iki cevabı karşılaştırırken, judge çoğu zaman önce gördüğünü kayırır. Çaresi her iki sıralamayı da çalıştırıp yalnızca yer değiştirmeden sağ çıkan bir galibiyeti saymaktır.
+- **Self-preference bias (kendini kayırma önyargısı)**: bir judge, kendi üslubuna benzeyen metni daha yüksek puanlama eğilimindedir. Bunu dikkatle çerçevelemek gerek: kanıtlar, gerçek bir kendini-tanıma değil, tanıdık görünen metne bir tercihe işaret ediyor, ama pratik uyarı geçerliliğini koruyor: bir modelin, kendi ailesinin çıktısının tek hakemi olmasına izin verme.
+
+Önyargıların üstüne, judge'lar mükemmelen tutarlı da değildir: aynı girdi, temperature sıfırda bile, çalıştırmalar arasında hafifçe farklı skorlayabilir, dolayısıyla tek bir judge skorunda gürültü vardır. Ve bu liste temsili, kapsayıcı değil; yeni önyargılar ve çareler aktif bir araştırma alanı. Tüm bunları dürüst tutan disiplin, **judge'ı insanlara karşı doğrulamaktır**: bir örneklem case'i elle etiketle, sonra judge'ın seninle ne kadar uyuştuğunu ölç (burada şansa göre düzeltilmiş bir uyum skoru ham yüzdeden daha iyidir). İnsan etiketlerine karşı kontrol etmediğin bir judge, hak etmediğin bir sayıdır. Judge modelini her değiştirdiğinde yeniden kontrol et.
+
+Eski lexical metriklerin burada neden cevap olmadığını söylemekte fayda var. **BLEU** (makine çevirisi için kurulmuş, bir referansa karşı n-gram precision ölçer) ve **ROUGE** (özetleme için kurulmuş, n-gram recall ölçer), bir referans diziyle yüzeysel kelime örtüşmesini skorlar. Bu, anlam ya da grounding ile aynı şey değildir: referansın kelimelerini yeniden kullanan yanlış bir cevap iyi skor alabilir, farklı ifade edilmiş doğru bir cevap kötü skor alır ve en kritiği, ikisi de cevabın getirilen context tarafından desteklenip desteklenmediğine hiç bakmaz. Grounding'in bütün oyun olduğu RAG için, yüzeysel örtüşme yanlış şeyi ölçer.
+
+## Değerlendirme framework'leri
+
+Bunların hepsini elle bağlamak zorunda değilsin. Küçük bir araç ekosistemi metrikleri paketler, judge'ları çalıştırır ve sana dashboard'lar ile çalıştırmadan-çalıştırmaya karşılaştırmalar sunar. Yazıldığı an itibarıyla manzaranın bir görüntüsü:
+
+- **RAGAS**, özellikle RAG metrikleriyle en çok özdeşleşmiş açık kaynak Python kütüphanesi: context precision ve recall, faithfulness, answer (response) relevance ve sentetik test seti üretimi, altta çoğunlukla LLM-as-judge.
+- **TruLens**, "RAG triad" üzerine odaklanır; bu, context relevance, groundedness ve answer relevance için kendi isimlendirmesidir, her adımı incelemek için tracing ile birlikte.
+- **DeepEval**, eval assertion'larını unit test gibi yazabilmen için büyük, Pytest tarzı bir metrik kütüphanesi sunar.
+- **Arize Phoenix** ve **LangSmith**, observability'ye yaslanır: canlı çalıştırmaları trace etmek, gerçek trafikten veri seti kurmak ve onlara evaluator eklemek. Büyük bulut platformlarının da kendi RAG-değerlendirme ürünleri var.
+
+Sert bir tazelik uyarısı, çünkü önemli: bu alan çok hızlı hareket ediyor ve benim bir bilgi kesim tarihim var. Araç isimleri, metrik isimleri, lisanslar ve API'ler sürümler arasında sürekli değişiyor (RAGAS tek başına metriklerini birden fazla kez yeniden adlandırdı). İki özel tuzak var. Birincisi, kelime dağarcıkları birbirinin yerine geçmez: TruLens "groundedness"i RAGAS'ın "faithfulness"ıdır, ama "context relevance" tam olarak "context precision" değildir, dolayısıyla bir framework'ten bir skor, benzer sesli başka bir framework'ün skoruyla karşılaştırılabilir değildir. İkincisi, bunlardan herhangi birinin üzerine bir şey inşa etmeden önce bir sürüm sabitle ve güncel metrik tanımlarını bu paragrafa güvenmek yerine canlı dokümanlara karşı doğrula. Listeyi bir spesifikasyon değil, arazinin bir haritası olarak ele al.
+
+## Bir veri setine ihtiyacın var: evaluation set
+
+Şimdiye kadarki her metrik, sessizce karşısında ölçülecek bir şey varsaydı. O şey bir **evaluation set**tir (test set de denir): temsili soruların derlenmiş bir koleksiyonu, idealde her biri bir referans cevap ve **golden chunk**larla eşleştirilmiştir; golden chunk'lar, corpus'unun onu gerçekten cevaplayan spesifik parçalarıdır. Referans cevap senin **ground truth**'un, bilinen-doğru hedefindir. Bu etiketlerle recall'ı (golden chunk'ları getirdik mi?), correctness'ı (referansla eşleşti mi?) ve gerisini hesaplayabilirsin.
+
+Değerlendirmen, ancak bu set kadar güvenilirdir. Temsili olmayan bir set, kendinden emin ama yanıltıcı skorlar verir: kolay sorulara karşı optimize et, hiç test edilmemiş zor sorularda dağılan bir sistemi mutlulukla yayına alırsın. O yüzden seti bilinçli kur:
+
+- **Gerçek dağılımı kapsa.** Kolay tek-gerçek aramalarını, zor çok-parçalı soruları ve birkaç chunk'ın birlikte dikilmesini gerektiren multi-hop soruları dahil et. Kritik olarak, **reddedilmesi gereken kapsam-dışı sorular**ı dahil et; sadece politikayı içeren bir corpus'a karşı sorulan pil ömrü sorusu gibi. Her zaman cevap veren bir sistem iyi değildir; pervasızdır, ve bunu ancak cevaplanamaz case'leri olan bir eval set yakalar.
+- **Gerçeklikten elle derle.** En iyi sorular, gerçek kullanıcıların gerçekten sorduğu sorulardır. Destek kuyruğunu, loglarını, kendi "geçen hafta yanlış yaptığı şeyler" listeni kazı. Elli gerçek, acı verici case'lik küçük bir set, bin sentetik case'i yener.
+- **Sentetik üretimle bootstrap'la, sonra gözden geçir.** Bir seti **sentetik veri üretimi (synthetic data generation)** ile daha hızlı büyütebilirsin: bir LLM'i kendi dokümanlarının bir chunk'ına yönelt ve o chunk'ın cevapladığı bir soru artı referans cevabı yazmasını iste; bu sana golden chunk'ı bedavaya verir. RAGAS ve diğerleri bunun daha zengin bir sürümünü otomatikleştirir. Ama vazgeçilmez adım insan gözden geçirmesidir: başıboş bırakılan bir LLM, kullanıcıların değil dokümantasyonun sesine benzeyen sorular yazar, bu yüzden bir insan iyileri tutar, gerisini atar. Ölçek için üret, güven için gözden geçir.
+
+## Human-in-the-loop ve online değerlendirme
+
+Şimdiye kadarki her şey **offline değerlendirme**: sistemini yayına almadan önce, CI'da, tekrarlanabilir biçimde, sabit ve etiketli bir sete karşı çalıştırmak. Offline, birebir karşılaştırmalar yaptığın ve gerilemeleri yakaladığın yerdir. Ama sabit bir set, ne kadar iyi olursa olsun, gerçek kullanıcıların yazacağı dağınık, yeni, biraz da düşmanca şeyleri öngöremez. Bu, **online değerlendirme**nin işidir: canlı prodüksiyon trafiğinde kaliteyi ölçmek.
+
+İkisi birbirini tamamlar. Online değerlendirme, referans-gerektirmeyen metriklere yaslanır (yepyeni bir soru için ground truth'un yoktur, ama yine de faithfulness ve relevance'ı skorlayabilirsin) ve daha güçlü biçimde, kullanıcı sinyallerine. Bazıları açıktır: beğen/beğenme, yıldız puanları, yüksek sinyalli ama seyrek. Çoğu örtüktür ve toplu olarak okunmalıdır: aynı soruyu hemen yeniden ifade eden ya da oturumu terk eden bir kullanıcı, cevabın ıskaladığını söylüyordur; cevabı kopyalayan bir kullanıcı ise muhtemelen ihtiyacı olanı almıştır. Bunların hiçbiri tek başına güvenilir değildir; birlikte, ölçekte, canlı bir kalite göstergesidirler.
+
+İnsanlar bu döngüde de kalır, üç rolde: prodüksiyon cevaplarını gözden geçirmek, zor case'lerde uzman annotation yapmak ve yukarıdaki gibi, otomatik judge'ını doğrulayan etiketleri sağlamak. Ve bir değişikliğin sadece test setini değil gerçek kullanıcıları da gerçekten iyileştirip iyileştirmediğini bilmek istediğinde, onu **A/B test** edersin: yeni sürümü trafiğin bir kesimine gönder ve ikisini canlı metriklerinde karşılaştır.
+
+Tüm bunlar, tek bir disiplinli döngüyü beslemek için var; tüm serinin işaret ettiği şey. Mühendislik ile tahmin etmek arasındaki fark bu.
+
+<Diagram number={3} caption="İyileştirme döngüsü. Sağlam bir eval set kur, bir baseline ölç, tam olarak bir şeyi değiştir, aynı sette yeniden ölç ve değişikliği yalnızca baseline'ı geçtiyse tut, geçmediyse geri al. Offline değerlendirme (sabit bir set, CI'da) ölçümleri besler; online değerlendirme (canlı trafik, kullanıcı sinyalleri, A/B testleri) tutulan değişiklikleri doğrular ve yeni başarısızlıkları sete geri besler.">
+  <img src="/essays/evaluating-rag/part11-improvement-loop.svg" alt="Bir döngünün akış diyagramı. Soldan sağa dört kart: Eval set'i kur, Bir baseline ölç, TEK bir şeyi değiştir (vurgulanmış), Aynı sette yeniden ölç; bunlar bir karar eşkenar dörtgenine bağlanır: Baseline'ı geçti mi? Evet dalı yukarı, bir KEEP: yeni baseline kutusuna gider; hayır dalı ve kehribar renkli bir dönüş yayı, ikisi de TEK bir şeyi değiştir'e geri döner, sonra bir sonraki tek şeyi değiştir etiketiyle. Altta, iki panel: yayına almadan önce OFFLINE (sabit golden artı sentetik set, tekrarlanabilir, CI'da çalışır, birebir A/B) ve prodüksiyonda ONLINE (canlı trafik, referans-gerektirmeyen metrikler, beğen/beğenme artı örtük sinyaller, A/B testleri, yeni başarısızlıkları sete geri katla), kesikli oklar döngüyü besliyor." class="w-full rounded-lg" />
+</Diagram>
+
+Döngüyü söylemesi kolay, ona sadık kalmak zordur: **bir eval set kur, bir baseline ölç, bir şeyi değiştir, yeniden ölç, iyileştiriyorsa tut, iyileştirmiyorsa geri al.** Bu cümlenin iki parçası tüm işi yapar. "Bir şeyi değiştir", sonucu atfetmeni sağlayan şeydir; aynı anda üç şeyi değiştir, hangisinin yardım ettiğini asla bilemezsin. Ve "iyileştiriyorsa tut", önemli olan tek sayının son bilinen-iyi baseline'ına karşı delta olduğu anlamına gelir. Tek başına 0.82'lik bir faithfulness anlamsızdır. Bir re-ranker eklediğin için, aynı sette, 0.82'den 0.88'e çıkan bir faithfulness, savunabileceğin bir karardır.
+
+{/* author: swap the story below for your own real one */}
+
+> 💡 **Deneyimden.** Bir eval set'in benim için gerçekten hakkını verdiği ilk zaman, bunu beni utandırarak yaptı. Kesinlikle emin olduğum bir değişikliğim vardı: "belli ki" cevapları iyileştiren daha zengin bir prompt, ve beş favori test sorumda bunu açıkça yapıyordu. Onu neredeyse anında yayına alacaktım. Önce, çoğunlukla alışkanlıktan, tam sete karşı çalıştırdım; faithfulness birkaç puan düştü: daha samimi prompt, sessizce modele süsleme izni vermişti ve model artık belgelerin hiç içermediği yardımsever görünen ayrıntılar ekliyordu. "Belli ki" iyileşmem, o ürün için en önemli metrikte bir gerilemeydi. Geri aldım ve sadece sevdiğim sorularda test edilmiş değişikliklere güvenmeyi bıraktım.
+
+## Küçük bir eval döngüsü
+
+Bunu somutlaştırmak için, işte 6. bölümdeki uygulama üzerinde bir offline eval döngüsünün şekli. Bilerek ufacık tutulmuş, bir framework değil: her biri kendi golden chunk'ı ve referans cevabıyla bir avuç case, iki metrikte skorlanmış: context recall (retrieval) ve bir faithfulness kontrolü (generation). Çalıştırılabilir tam dosya [`rag_eval.py`](/essays/evaluating-rag/rag_eval.py); yalnızca standard library kullanır, dolayısıyla API anahtarı olmadan çalışır, LLM judge'ın yerine geçen şeffaf bir fallback ile.
+
+```python
+# input: a few labelled cases, each with the "golden" chunk that answers it
+EVAL_SET = [
+    {"q": "How many days do I have to return an item for a refund?",
+     "golden": ["doc_0"],
+     "answer": "You have 30 days from purchase to return an item..."},      # faithful
+    {"q": "How do I start a return?",
+     "golden": ["doc_1"],
+     "answer": "Call our hotline at 1-800-RETURNS for an instant refund."},  # invented
+    # ... plus a retrieval-miss case and an out-of-scope case
+]
+
+# code: score each case on the two failure surfaces, then diagnose
+for case in EVAL_SET:
+    retrieved = retrieve(case["q"], k=3)                  # your Part 6 retriever
+    context   = "\n".join(d["text"] for d in retrieved)  # the chunks, as one string
+    recall = context_recall(case["golden"], retrieved)   # RETRIEVAL: got the golden chunk?
+    faith  = judge_faithfulness(case["q"], context, case["answer"])   # GENERATION: grounded?
+    refused      = "don't know" in case["answer"].lower()
+    out_of_scope = not case["golden"]
+    print(case["q"], recall, faith, diagnose(recall, faith, refused, out_of_scope))
+```
+
+Dosyanın tamamını çalıştırmak küçük bir skor tablosu basar, ve asıl mesele tek bir sayı değil, o tablodur:
+
+```text
+# expected output (deterministic)
+question                                        recall   faith   verdict
+How many days do I have to return an item for     1.00    1.00   pass
+How do I start a return?                          1.00    0.00   FIX generation (faithfulness)
+Will you repair my earbuds if they stop workin    0.00    1.00   FIX retrieval
+What is the battery life of the X1 wireless ea    n/a     1.00   correct refusal
+```
+
+Son iki satıra bak. İkisi de aynı cevabı üretir, "Bilmiyorum", ve bir vibes kontrolünde ayırt edilemezler. Ama context recall onları birbirinden ayırır: pil ömrü sorusu doğru bir refuse'dur, çünkü corpus'ta onu cevaplayacak hiçbir şey yoktur; kulaklık-tamiri sorusu ise bir retrieval kaçırmasıdır, çünkü onu gerçekten cevaplayan garanti chunk'ı corpus'ta vardı ve lexical arama onu bulmakta başarısız oldu (tam olarak 7. bölümdeki dense-versus-sparse boşluğu). Göze görünmeyen bu ayrım, retriever'a dokunup dokunmayacağına ya da onu bırakıp bırakmayacağına karar verir. Ölçmenin bütün sebebi budur. (Gerçek bir harness answer relevance ve correctness ekler; şekli göstermeye iki metrik yeter, ve judge API'lerinin ve kütüphanelerinin hızla değiştiğini unutma.)
+
+## Delta gerçek mi?
+
+Döngü sana bir değişikliği yalnızca baseline'ı geçtiyse tutmanı söyler, ama bu, şimdiye kadar üstünkörü geçtiğimiz istatistiksel bir soruyu gizler: delta gerçek mi, yoksa gürültü mü? 0.82'den 0.88'e çıkan bir faithfulness ilerleme gibi görünür. Bunu beş case üzerinde ölçtüysen, neredeyse kesinlikle hiçbir şey değildir. Beş case, her birinin 0.20 değerinde olduğu anlamına gelir, dolayısıyla tüm "iyileşme", tek bir case'in başarısızdan başarılıya dönmesidir ve o tek case, mükemmelen tutarlı olmayan bir judge'da yarın tıpış tıpış geri dönebilir (temperature sıfırda bile bir judge'ın aynı girdiyi hafif bir jitter'la yeniden skorladığını hatırla). Bir iyileşme ölçmedin; enstrümanının varyansını ölçtün.
+
+Üç alışkanlık burada seni dürüst tutar. Birincisi, **yeterince case kullan.** Sihirli bir sayı yok, ama bir avuç case harness'ı smoke-test etmek içindir, bir delta'ya güvenmek için değil; tek bir case'in dönmesinin başlık metriğini bir kırıntıdan fazla oynatamayacağı kadar çok istiyorsun. İkincisi, **seed'leri sabitle ve değiştir.** Rastgele olan her şey için (sampling, shuffling, elinden geldiğince judge'ın temperature'ı) seed'i sabitle, böylece bir yeniden çalıştırma tekrarlanabilir olsun, sonra sadece seed değiştiğinde skorun ne kadar sallandığını görmek için bilerek birkaç seed'de çalıştır. O sallanma senin noise floor'un ve ondan küçük her delta bir delta değildir. Üçüncüsü, **bir güven aralığını bootstrap'la.** Case-başına skorlarını yerine koyarak birkaç bin kez yeniden örnekle, her seferinde ortalamayı yeniden hesapla ve 2.5. ile 97.5. yüzdelikleri oku: bu, metriğin üzerinde bir %95 aralık. Baseline'ın aralığı ile aday'ın aralığı ağır biçimde çakışıyorsa, değişiklik henüz "daha iyi" kelimesini hak etmemiştir. Bir bootstrap bir düzine satır numpy'dir ve "0.82'den 0.88'e"yi bir vibe'dan savunabileceğin ya da geri çekebileceğin bir iddiaya çevirir.
+
+Bu disiplin, onu otomatikleştirdiğinde en çok kazandırır. Eval döngüsü **bir kalite kapısı olarak CI/CD**'ye aittir: her değişiklikte offline eval set'ini çalıştır ve bir başlık metriği noise floor'unu aşarak gerilerse deploy'u blokla, tıpkı başarısız bir unit test'in bir merge'ü bloklaması gibi. Gerçek bir sette üç puanlık bir faithfulness düşüşü, kimse eval'ı yeniden çalıştırmadığı için fark edilmeden sızmak yerine, build'i kırmızıya çevirmelidir. Ve sistem canlıya alındığında, kapının bir online karşılığı vardır: **golden bir sete karşı retrieval-relevance drift'ini izle.** Bir zamanlamayla golden soruların sabit bir dilimini yeniden skorla ve context recall ya da relevance kendi belirlenmiş bandının altına sarktığında uyar. Drift genelde sessizdir, büyümüş bir corpus, değiştirdiğin bir embedding modeli, kaymış bir sorgu dağılımı, ve kullanıcılardan önce fark etmenin tek yolu, sayıyı güvendiğin bir baseline'a karşı izlemektir.
+
+## Kamuya açık benchmark'lar vs kendi eval set'in
+
+Bir eval set kurma işini atlayıp bunun yerine kamuya açık bir benchmark'a yaslanmak cazip gelir, ve kamuya açık olanlar gerçekten faydalıdır: [BEIR](https://arxiv.org/abs/2104.08663) birçok alanda zero-shot retrieval'ı ölçer (başlık sayısı **NDCG@10**'dur, ilgili belgeleri üste koymayı ödüllendiren bir sıralama-kalitesi metriği), [MTEB](https://arxiv.org/abs/2210.07316) embedding modellerini düzinelerce görevde sıralar, ve [ViDoRe](https://arxiv.org/abs/2407.01449) aynısını görsel doküman retrieval'ı için yapar; burada "belgeler" çıkarılmış metin değil sayfa görselleridir. Dar bir iş için doğru araçlardır: başlangıç bir embedding modeli seçmek, ya da bir retriever'ın genel bir biçimde bozuk olmadığını sağlama bağlamak. Ama yüksek bir leaderboard sırası, *senin* corpus'un hakkında bir söz değildir. Web metninde MTEB'de zirvede olan bir model, senin yoğun, jargon dolu sözleşmelerinde daha mütevazı bir modelin gerisinde kalabilir, çünkü senin dağılımın benchmark'ta hiçbir yerde yoktur. O yüzden kamuya açık benchmark'ları makul bir varsayılan seçmenin bir yolu olarak ele al, sonra **bir domain eval set kur ve leaderboard'ı geçersiz kılmasına izin ver.** Kendi destek kuyruğundan gelen elli acı verici soru, herhangi bir sıralamadan daha fazlasını söyler sana neyi yayına alman gerektiği hakkında.
+
+## Kendin dene
+
+İki kısa alıştırma, her biri metnin yalnızca tarif ettiği bir boşluğu kapatıyor.
+
+**Üç kapsam-dışı soru yaz ve refuse'ları doğrula.** Corpus'unun gerçekten cevaplayamayacağı üç soru seç ([`rag_eval.py`](/essays/evaluating-rag/rag_eval.py)'daki mağaza-politikası corpus'u için: "What is the CEO's salary?", "Do you ship to Antarctica?", "What is the battery life of the X1 earbuds?"), her birini boş bir `golden` listesiyle bir case olarak ekle ve eval'ı çalıştır. Doğru bir sistem üçünü de reddeder ve harness onları cevap olarak skorlamak yerine `correct refusal` olarak etiketlemelidir. Bir tanesi bile kendinden emin, uydurulmuş bir cevapla dönerse, her şeye cevap veren bir sistemin gizlediği pervasızlığı tam da yakalamışsındır; cevaplanmış case'lerdeki hiçbir miktarda faithfulness'ın açığa çıkaramayacağı tam da o başarısızlığı.
+
+**On case'i elle etiketle ve judge'a karşı Cohen's kappa hesapla.** Otomatik judge'a güvenme hakkını böyle kazanırsın. On cevaplanmış case al, her birini kendin faithful olup olmadığına göre etiketle (ikili bir karar), sonra LLM judge'a aynı on tanesini etikettir ve bölümün sürekli işaret ettiği şansa göre düzeltilmiş uyum skoru olan **Cohen's kappa**'yı hesapla. Ham uyum seni pohpohlar: 10 case'in 9'u faithful ise, körü körüne her seferinde "faithful" diyen bir judge %90 skorlar ve hiçbir şey öğrenmemiştir. Kappa, şans eseri beklediğin uyumu çıkarır, dolayısıyla yüksek bir kappa, judge'ın sadece kolay çağrıları değil senin zor çağrılarını da takip ettiği anlamına gelir. Kaba bir okuma: yaklaşık 0.6'nın üstü makul bir uyum, altı ise bu görevde judge'a henüz güvenme demektir, onu yeniden prompt'la ya da daha fazla insan etiketine geri dön. Aritmetik, [`rag_eval.py`](/essays/evaluating-rag/rag_eval.py)'daki eval döngüsünün hemen yanına eklenecek bir avuç satırdan ibarettir ve elde ettiğin sayı, kalibre ettiğin bir judge ile sadece doğru olmasını umduğun bir judge arasındaki farktır.
+
+> ⚠️ **Sık düşülen tuzaklar**
+>
+> - **Faithfulness, correctness değildir.** Bu, herkesi ilk yakalayan tuzaktır. Faithfulness yalnızca cevabın getirilen context tarafından desteklenip desteklenmediğini sorar, dolayısıyla *yanlış* getirilmiş bir chunk'ı sadakatle tekrarlayan bir cevap, düpedüz yanlış olmasına rağmen mükemmel bir 1.0 alır. Güncelliğini yitirmiş iade politikasını getir, model cevabını onun üzerine güzelce grounded edecektir ve faithfulness metriğin alkışlayacaktır. Faithfulness, modelin bir şeyler uydurmasına karşı korur; grounded olduğu belgelerin doğru olup olmadığı hakkında hiçbir şey söylemez. Yanlış-ama-grounded cevapları yakalamak, faithfulness değil bir referansa karşı correctness gerektirir.
+> - **Gürültüyü bir sonuçla karıştırmak.** Beş case üzerinde 0.82'den 0.88'e bir hareket bir iyileşme değildir, bir sonucun kılığına girmiş harness'ının varyansıdır. Bir delta'ya inanmadan önce, tek bir case'in dönmesinin başlık sayısını fazla oynatamayacağı kadar çok case çalıştır, noise floor'unu bulmak için seed'i değiştir ve bir güven aralığını bootstrap'la; baseline ve aday aralıkları çakışıyorsa, henüz hiçbir şey göstermemişsindir. Ölçülmemiş bir delta üzerine yayına almak, ondalık noktalı bir vibes'tan başka bir şey değildir.
+
+## Özet ve sırada ne var
+
+Artık tüm serinin sessizce dayandığı şeyi yapabiliyorsun. Kaliteye bir sayı koyabiliyorsun, bir başarısızlığı retrieval veya generation'a bölüp bozulan yarıya işaret edebiliyorsun, ve bir sistemi hisle değil, seferde bir ölçülmüş değişiklikle, yöntemli biçimde iyileştirebiliyorsun. Vibes gitti; delta'lar geldi.
+
+Geriye bir sınır kaldı. Sistemi akıllı yaptık (6. ile 10. bölümler) ve ölçülebilir yaptık (bu bölüm). Kalan şey, onun gerçek dünyayla temasa hayatta kalmasını sağlamak: yük altında latency ve maliyet, index'i ölçeklendirmek, prodüksiyonda kaliteyi izlemek ve bir retrieval sistemini kullanıcıların önüne koymanın getirdiği güvenlik soruları. Bitireceğimiz yer orası.
+
+## Uzun-context modeller vs RAG, kafa kafaya
+
+Bu seri başladığından beri bağlam pencereleri muazzam biçimde büyüdü ve onlarla birlikte tekrar eden bir iddia geldi: artık tüm corpus'unu prompt'a tıkıştırıp modelin halletmesine izin verebileceğin, dolayısıyla retrieval'ın modasının geçtiği. "RAG öldü." Bu iddiayla göğüs göğüse karşılaşmakta fayda var, çünkü dürüst cevap hype'ın her iki tarafından da daha ilginç, ve çünkü değerlendirme tam da bunu çözecek araç.
+
+İlk sorun karşılaştırmayı adil biçimde nasıl ölçeceğin. Uzun-context bir modele, cevabını zaten pretraining sırasında özümsediği bir soru sorarsan, ona verdiğin tek bir kelimeyi bile okumadan doğru cevap verir ve retrieval hakkında hiçbir şey öğrenmemiş olursun. U-NIAH benchmark'ının (arXiv 2503.00353, 2025) kullandığı çare, bir **sentetik kurgusal corpus** kurmak ve içine uydurulmuş gerçekleri, **needle**'ları (iğneleri) gizlemektir. Kurgusal Starlight Academy'nin müdürü "Zephyrine Quorvax" ise ve gizli şifre "quorvex-lumens-7" ise, hiçbir miktarda pretraining bu cevapları sızdıramaz. Doğru bir cevap ancak modelin önündeki metinden gelmiş olabilir, ki karşılaştırmanın anlam ifade ettiği tek koşul budur.
+
+Sızıntısız bir corpus'la iki stratejiyi yan yana çalıştırabilirsin. **LLM-alone**, tüm corpus'u context window'a tıkıştırır ve soruyu sorar. **RAG**, top-k chunk'ları getirir ve soruyu yalnızca onların üzerinde sorar. İkisini de üç eksende skorla: accuracy (needle'ı buldu mu), cost (modelin okumak zorunda kaldığı token sayısı) ve latency (aynı şeyin bir proxy'si). Eşlik eden [`long_context_vs_rag.py`](/essays/evaluating-rag/long_context_vs_rag.py) dosyası, tam da bu deneyi saf numpy'de kurar; kurgusal bir Starlight Academy corpus'u ve yerleştirilmiş needle'larla, böylece corpus büyüdükçe sayıların nasıl hareket ettiğini izleyebilirsin.
+
+<Diagram number={4} caption="Corpus büyüdükçe, sızıntısız kurgusal bir corpus üzerinde uzun-context LLM'e karşı RAG. Eşlik eden oyuncak, bir substring oracle kullanır, dolayısıyla temiz bir needle'da iki strateji de aynı accuracy'ye ulaşır ve hikâye tamamen maliyettir: LLM-alone stratejisi her sorguda tüm corpus'u okur ve token maliyeti corpus boyutuyla dik biçimde tırmanır, top-k RAG ise neredeyse sabit bir avuç chunk okur ve düz kalır. Uzun-context çizgisinde çizilen accuracy düşüşü, oyuncak substring oracle'ın bilerek modellemediği gerçek-model etkisidir (lost in the middle), burada izlenecek gerçek-dünya riski olarak dahil edilmiştir. Self-Route, bir router'ın kolay sorguları daha ucuz yola, zor olanları ise daha dolu-context yoluna gönderdiği yeri işaretler.">
+  <img src="/essays/evaluating-rag/part11-longcontext-vs-rag.svg" alt="Yatay eksende corpus boyutu, dikey eksende cost (okunan token) olan bir grafik. LLM-alone etiketli yükselen bir çizgi, corpus büyüdükçe dik biçimde tırmanır, çünkü her sorguda her şeyi okur; çok uzun context'lerin ortasında accuracy'nin düşebileceğine dair bir not var. RAG (top-k) etiketli neredeyse düz bir çizgi düşük kalır, çünkü corpus boyutundan bağımsız olarak yalnızca birkaç getirilmiş chunk okur. Self-Route etiketli bir işaretçi, iki stratejinin birleştiği yerde oturur: bir router kolay sorguları retrieval ile cevaplar ve zor olanları daha dolu context'e yükseltir." class="w-full rounded-lg" />
+</Diagram>
+
+Kanıtın gerçekte gösterdiği şey ne tarafın da nakavt kazanmadığı. Temiz bir needle'da iki strateji de yüksek accuracy'ye ulaşma eğilimindedir, dolayısıyla ilginç farklar başka yerdedir. LLM-alone maliyeti corpus'la birlikte tırmanır, çünkü her sorguda her şeyi okumanın bedelini öder, RAG ise kabaca düz kalır, çünkü yalnızca getirdiğini okur. Uzun context'lerin kendine has bir kalite kırışıklığı da vardır, 7. bölümdeki "lost in the middle" etkisi; çok uzun bir prompt'un merkezine gömülü bir gerçek, kısa ve odaklı bir prompt'taki aynı gerçekten kaçırılması daha kolaydır. Ama uzun context, retrieval'ın kırılgan olduğu yerlerde gerçekten kazanır: gereken kanıt birçok pasaja dağılmışsa, ya da chunking sorunun dayandığı tam bağlantıyı koparmışsa, tüm belgeyi gören bir model, bir top-k retriever'ın parçaladığı şeyleri birbirine bağlayabilir.
+
+Yani cevap ne "RAG öldü" ne de "uzun context her zaman kazanır." Cevap **duruma göre değişir**: corpus boyutuna, sorgu tipine ve bütçene göre, ve LaRA benchmark'ı (Li ve ark., ICML 2025, arXiv 2502.09977) bunu alt başlığına koyuyor: long-context-versus-RAG yönlendirmesi için sihirli bir mermi yok. Pragmatik sentez, küresel olarak seçmeyi bırakıp sorgu başına seçmektir. **Self-Route** (Li ve ark., EMNLP 2024 endüstri track'i, arXiv 2407.16833) tam olarak bunu yapar: önce modelin cevabı ucuza retrieval'la denemesine izin verir ve yalnızca zor case'leri tam uzun-context yoluna yükseltir, maliyetin bir kesriyle kalitenin çoğunu yakalar. Bu, serideki her şeyle aynı içgüdü: ölç, sonra karmaşıklığı yalnızca kanıt gerektirdiği yere harca, sorunun en yeni sürümüne uygulanmış.
+
+### Bir sınır notu: yetenek-seviyesinde değerlendirme
+
+Kapanış için bir işaret, açıkça yeni ve orta-güven olarak bayraklanmış: bu tek-kaynaklı bir sınır sinyali, yerleşmiş bir kanon değil, o yüzden hafif tut. Yukarıdaki her şey bir RAG sistemini nihai cevabı üzerinden skorlar. Ama RAG sistemleri daha agentic hale geldikçe (10. bölüm), uçtan uca bir skor, birinin *neden* başarısız olduğu hakkında giderek daha az şey söyler. RAGCap-Bench (arXiv 2510.13910, 2025), agentic bir RAG pipeline'ının dayandığı **ara yetenekleri** değerlendirmeyi önerir; planlama, kanıt çıkarma, getirilen malzeme üzerinde grounded muhakeme ve gürültülü ya da dikkat dağıtıcı context'e karşı sağlamlık gibi şeyleri, yalnızca sondaki cevabı değil. Bulgusu, yine erken aşamada, bu ara yeteneklerdeki daha güçlü performansın daha iyi uçtan uca sonuçları öngördüğü; bu da yetenek-seviyesinde skorları, zaten bildiğin iki başarısızlık yüzeyinin üzerine katmanlanacak faydalı bir teşhis aracı yapardı. Bunu bugün benimsenecek bir metrik değil, izlenecek bir yön olarak ele al.
+
+## Özet çıkarımlar
+
+- **Vibes ölçeklenmez.** Birkaç sorguyu gözden geçirmek gerilemeleri gizler, iki sürümü karşılaştıramaz ve eklenen karmaşıklığı haklı çıkaramaz. Onu sayılarla, sonra bir baseline'a karşı delta'larla değiştir.
+- **Yanlış bir cevabın tam olarak iki kaynağı vardır: retrieval ya da generation.** Değerlendirmenin bütün amacı hangisinin olduğunu söylemek, böylece doğru şeyi düzeltirsin. İki yarıyı ayrı ayrı ölç, sadece uçtan uca değil.
+- **Temel metrikler bu ayrıma denk düşer.** Context precision ve recall retrieval'ı değerlendirir; faithfulness ve answer relevance generation'ı değerlendirir; answer correctness bir referans gerektirir. Düşük recall retriever'a işaret eder; düşük faithfulness'la yüksek recall prompt'a ya da modele işaret eder.
+- **LLM-as-a-judge, ölçekte ölçmenin yolu, ama önyargılıdır** (verbosity, position, self-preference) ve tutarsızdır, dolayısıyla ona güvenmeden önce insan etiketlerine karşı doğrula. BLEU ve ROUGE gibi lexical metrikler anlamı ve grounding'i tamamen kaçırır.
+- **Değerlendirmen ancak evaluation set'in kadar iyidir.** Reddedilmesi gereken kapsam-dışı sorular dahil, gerçek dağılımı kapsa; sentetik üretimle bootstrap'la ama her zaman elle gözden geçir.
+- **Teslim edilen şey döngüdür:** bir eval set kur, bir baseline ölç, bir şeyi değiştir, yeniden ölç, tut ya da geri al. Bu alan hızla değişiyor, o yüzden buradaki her isimlendirilmiş aracı ve metriği bir enstantane olarak ele al ve güncel durumu doğrula.
+
+## Referanslar
+
+- Shahul Es, Jithin James, Luis Espinosa-Anke ve Steven Schockaert. "RAGAS: Automated Evaluation of Retrieval Augmented Generation." EACL 2024 (sistem gösterimleri); ilk olarak 2023'te yayımlandı. [arXiv:2309.15217](https://arxiv.org/abs/2309.15217). Bu bölümün yaslandığı context-precision, recall, faithfulness ve answer-relevance metriklerinin arkasındaki framework, ve onları skorlamak için referans-gerektirmeyen, LLM-as-judge yaklaşımı.
+- Nandan Thakur, Nils Reimers, Andreas Rücklé, Abhishek Srivastava ve Iryna Gurevych. "BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models." NeurIPS 2021 Datasets and Benchmarks. [arXiv:2104.08663](https://arxiv.org/abs/2104.08663). Başlık sayısı NDCG@10'un birçok alanda retriever'ları sıraladığı zero-shot IR benchmark'ı.
+- Niklas Muennighoff, Nouamane Tazi, Loïc Magne ve Nils Reimers. "MTEB: Massive Text Embedding Benchmark." EACL 2023. [arXiv:2210.07316](https://arxiv.org/abs/2210.07316). Embedding modellerini görevler arasında karşılaştırmak için en çok kullanılan benchmark ve leaderboard.
+- Manuel Faysse, Hugues Sibille, Tony Wu, Bilel Omrani, Gautier Viaud, Céline Hudelot ve Pierre Colombo. "ColPali: Efficient Document Retrieval with Vision Language Models." 2024. [arXiv:2407.01449](https://arxiv.org/abs/2407.01449). Sayfa görselleri üzerinde görsel doküman retrieval'ı için ViDoRe benchmark'ını tanıtıyor.
+- Yunfan Gao, Yun Xiong, Wenlong Wu, Zijing Huang, Bohan Li ve Haofen Wang. "U-NIAH: Unified RAG and LLM Evaluation for Long Context Needle-In-A-Haystack." 2025. [arXiv:2503.00353](https://arxiv.org/abs/2503.00353). Long-context-versus-RAG karşılaştırmasının arkasındaki sızıntısız kurgusal-corpus yöntemi (Starlight Academy veri seti).
+- Kuan Li, Liwen Zhang, Yong Jiang, Pengjun Xie, Fei Huang, Shuai Wang ve Minhao Cheng. "LaRA: Benchmarking Retrieval-Augmented Generation and Long-Context LLMs - No Silver Bullet for LC or RAG Routing." ICML 2025. [arXiv:2502.09977](https://arxiv.org/abs/2502.09977). Alt başlığı bu bölümün benimsediği "duruma göre değişir" cevabını çerçeveleyen benchmark.
+- Zhuowan Li ve ark. "Retrieval Augmented Generation or Long-Context LLMs? A Comprehensive Study and Hybrid Approach." EMNLP 2024 (endüstri track'i). [arXiv:2407.16833](https://arxiv.org/abs/2407.16833). Kolay sorguları ucuz retrieval'a yönlendiren ve zor olanları uzun context'e yükselten Self-Route yöntemi.
+- "RAGCap-Bench: Benchmarking Capabilities of LLMs in Agentic Retrieval-Augmented Generation Systems." 2025. [arXiv:2510.13910](https://arxiv.org/abs/2510.13910). Sınır notundaki yetenek-seviyesinde değerlendirme önerisi; bulgularını erken aşamada olarak ele al.
+
+## Sözlük
+
+- **Evaluation set (test set)**: bir sistemi ölçmek için kullanılan, temsili soruların derlenmiş koleksiyonu; idealde her biri için referans cevaplar ve ilgili golden chunk'larla birlikte.
+- **Ground truth**: bir test sorusu için bilinen-doğru cevap (ya da bilinen-ilgili chunk'lar); karşısında ölçtüğün hedef.
+- **Golden chunk'lar**: verilen bir soruyu gerçekten cevaplayan corpus parçaları; retrieval'ın ihtiyaç duyduğunu getirip getirmediğini ölçmek için kullanılır.
+- **Context precision**: bir retrieval metriği; getirilen setin sinyal-gürültü oranı, en üste yakın sıralanan ilgili chunk'ları ödüllendirir.
+- **Context recall**: bir retrieval metriği; cevaplamak için gereken bilginin ne kadarının gerçekten getirildiği; cevabı kaçıran bir retriever'ı yakalayan metrik.
+- **Faithfulness (groundedness)**: bir generation metriği; cevaptaki her iddianın getirilen context tarafından desteklenip desteklenmediği; halüsinasyon karşıtı ölçüt.
+- **Answer relevance**: bir generation metriği; cevabın sürüklenmeden ya da şişirilmeden gerçekten soruyu ele alıp almadığı; correctness'ı değil relevance'ı ölçer.
+- **Answer correctness**: cevabın özde bir referans cevaba ne kadar uyduğu; ground truth gerektiren tek temel metrik.
+- **LLM-as-a-judge**: yetenekli bir dil modelini, cevapları ya da context'i bir rubriğe karşı değerlendiren otomatik bir hakem olarak kullanmak; çoğu eval framework'ünün arkasındaki ölçeklenebilir skorlama motoru.
+- **Judge bias**: bir LLM judge'ının sistematik hataları; daha uzun cevapları tercih etmek (verbosity), önce gördüğü adayı kayırmak (position) ve kendi üslubuna benzeyen metni daha yüksek puanlamak (self-preference) dahil.
+- **NLI (natural language inference)**: bir metnin diğerini entail edip etmediğini (gerektirip gerektirmediğini) kontrol etmek; faithfulness'ta context'in bir iddiayı destekleyip desteklemediğini test etmek için kullanılır.
+- **BLEU / ROUGE**: bir referansla n-gram örtüşmesini skorlayan eski lexical metrikler (BLEU precision, çeviri için; ROUGE recall, özetleme için); RAG için zayıftır, çünkü yüzeysel örtüşme anlam ya da grounding değildir.
+- **RAGAS**: RAG'e özgü değerlendirme metriklerinin (context precision ve recall, faithfulness, answer relevance) artı sentetik test-set üretiminin açık kaynak Python kütüphanesi.
+- **Synthetic data generation (sentetik veri üretimi)**: bir evaluation set'i bootstrap'lamak için bir LLM'i kullanarak kendi dokümanlarından soru-cevap çiftleri taslaklamak, ardından insan gözden geçirmesi.
+- **Offline vs online değerlendirme**: offline, yayına almadan önce sabit, etiketli bir sete karşı çalışır (tekrarlanabilir, CI'da kullanılır); online, referans-gerektirmeyen metrikler ve kullanıcı sinyalleriyle canlı prodüksiyon trafiğinde kaliteyi ölçer.
+- **A/B testing**: bir değişikliği trafiğin bir kesimine göndermek ve iki sürümü canlı metriklerde karşılaştırarak bir iyileşmenin gerçek kullanıcılarla geçerli olduğunu doğrulamak.
+
+---
+
+**Sırada, 12. Bölüm: RAG Prodüksiyonda.** Sistem akıllı ve şimdi ölçülebilir de. Son adım, onu gerçek yük altında hayatta tutmak: latency, maliyet, ölçeklendirme, izleme ve güvenlik. Tüm seriyi birbirine bağlıyoruz.

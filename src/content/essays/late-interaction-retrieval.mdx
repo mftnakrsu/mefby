@@ -7,6 +7,7 @@ codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-13-late-intera
 ogImage: "/og/late-interaction-retrieval.png"
 seriesOrder: 13
 lang: "en"
+translationSlug: "late-interaction-retrieval-tr"
 ---
 
 import Diagram from '../../components/essay/Diagram.astro';
@@ -37,7 +38,7 @@ So we have cheap-and-blunt on one side and precise-and-expensive on the other, w
 
 To see why one vector per passage is lossy, watch what pooling actually does. When a bi-encoder turns "Refund requests are processed within five business days" into a single vector, it runs every token through the transformer and then averages the per-token outputs into one point. That average is a reasonable summary of what the passage is *about*. But averaging is destructive by definition: a rare, decisive token gets blended in with a dozen ordinary ones and its signal is diluted toward the mean.
 
-This matters most for the exact query our Part 7 app kept failing on: a literal code, an order ID, a part number. Imagine a long passage that mentions `E-4042` once, buried among forty unrelated words about batch reconciliation. The token vector for `E-4042` is in there, but averaged with thirty-nine others the result barely leans in its direction. Now imagine a short, generic sentence, "A general error occurred while loading the page." It shares the topical word "error" and almost nothing else, but because it is short, that one word dominates its pooled vector. Pool both, compare each to the query "E-4042 error" by a single cosine, and the short generic sentence can easily rank *above* the passage that literally contains the code. The decisive token was averaged into oblivion in the long passage and amplified in the short one. We met this exact failure in Part 7 and fixed it with keyword search; late interaction fixes it differently, by never pooling in the first place.
+This matters most for the exact query our Part 7 app kept failing on: a literal code, an order ID, a part number. Imagine a long passage that mentions `E-4042` once, buried in a forty-word passage about batch reconciliation. The token vector for `E-4042` is in there, but averaged with thirty-nine others the result barely leans in its direction. Now imagine a short, generic sentence, "A general error occurred while loading the page." It shares the topical word "error" and almost nothing else, but because it is short, that one word dominates its pooled vector. Pool both, compare each to the query "E-4042 error" by a single cosine, and the short generic sentence can easily rank *above* the passage that literally contains the code. The decisive token was averaged into oblivion in the long passage and amplified in the short one. We met this exact failure in Part 7 and fixed it with keyword search; late interaction fixes it differently, by never pooling in the first place.
 
 <Diagram number={1} caption="The pooling problem in one picture. On the left, Part 7: the whole passage runs through the encoder and is averaged into a single pooled vector, so a rare decisive token is blended into the mean and its signal is lost. On the right, late interaction: the encoder's per-token outputs are kept as a bag of one vector per token, nothing averaged away, so a rare token survives as its own point for matching. The code is drawn as a single token cell for legibility, though the tokenizer actually splits E-4042 into e and 4042.">
   <img src="/essays/late-interaction-retrieval/part13-pooled-vs-multivector.svg" alt="On the left, a passage of word tokens feeds an encoder whose per-token outputs are merged by an averaging node into one violet pooled vector labelled one vector per passage; a callout notes the rare token E-4042 is washed out by the average. On the right, the same passage feeds the same encoder but the per-token outputs are kept as a row of separate violet vectors, one per token, labelled a vector per token, with the E-4042 token highlighted as surviving intact." class="w-full rounded-lg" />
@@ -81,12 +82,12 @@ Now the worked example, on the same four-document support corpus the code uses. 
 ```text
 Ranking by POOLED cosine (one vector per doc, Part 7):
   rank 1  cos=+0.503  A general error occurred while loading the page.... [DISTRACTOR]
-  rank 2  cos=+0.151  Standard shipping takes three to five business days to ...
-  rank 3  cos=+0.123  Our internal billing log emits the diagnostic identifie... [exact term]
-  rank 4  cos=-0.104  Refunds are accepted within 30 days of purchase if the ...
+  rank 2  cos=+0.441  Our internal billing log emits the diagnostic identifie... [exact term]
+  rank 3  cos=+0.022  Standard shipping takes three to five business days to ...
+  rank 4  cos=-0.161  Refunds are accepted within 30 days of purchase if the ...
 ```
 
-The exact-term document, the one that literally contains `E-4042`, lands at rank 3, *below* a shipping line that has nothing to do with the query, and the short generic "error" distractor wins outright. This is the pooling problem in numbers: the rare code was averaged into oblivion in the long passage, and the short generic sentence pooled higher on the shared word "error" alone. (Read the small negative cosine on the refund line lightly: it is an artifact of this demo's lightweight stand-in embeddings, not a trained model. With real normalized text embeddings, unrelated passages cluster in a narrow positive band rather than pointing oppositely, as Part 3 noted; the ranking and the pooling lesson are unchanged either way.)
+The exact-term document, the one that literally contains `E-4042`, only makes rank 2: the short generic "error" distractor beats it outright. This is the pooling problem in numbers: the rare code was averaged into oblivion in the long passage, and the short generic sentence pooled higher on the shared word "error" alone. (Read the small negative cosine on the refund line lightly: it is an artifact of this demo's lightweight stand-in embeddings, not a trained model. With real normalized text embeddings, unrelated passages cluster in a narrow positive band rather than pointing oppositely, as Part 3 noted; the ranking and the pooling lesson are unchanged either way.)
 
 Now rank the same four by MaxSim:
 
@@ -94,8 +95,8 @@ Now rank the same four by MaxSim:
 Ranking by MaxSim (token-level late interaction):
   rank 1  maxsim=2.269  Our internal billing log emits the diagnostic identifie... [exact term]
   rank 2  maxsim=1.766  A general error occurred while loading the page.... [DISTRACTOR]
-  rank 3  maxsim=0.947  Standard shipping takes three to five business days to ...
-  rank 4  maxsim=0.660  Refunds are accepted within 30 days of purchase if the ...
+  rank 3  maxsim=1.133  Standard shipping takes three to five business days to ...
+  rank 4  maxsim=0.573  Refunds are accepted within 30 days of purchase if the ...
 ```
 
 The rankings *disagree at the top*, and that disagreement is the whole lesson. MaxSim puts the exact-term document first: the query token `4042` found its exact match among the document's tokens, and the max rewarded that one strong hit no matter how much unrelated text surrounded it. The distractor still scores well because it does match "error", but it cannot manufacture a match for `4042` it does not contain, so it drops to second. Late interaction surfaced the document pooled cosine had buried. (Those exact decimals come from the offline fallback embedder; run it against the real model and the magnitudes shift, but the conclusion holds.)
@@ -150,10 +151,10 @@ I want to be clear about the boundary of what we can demonstrate here. No real v
 ```text
   toy page: 16 patch vectors x 384 dims (standing in for an image's patches)
   query "refund window policy" (3 tokens) vs the page patches:
-    maxsim(query tokens, page patches) = 1.062
+    maxsim(query tokens, page patches) = 0.253
 ```
 
-That `1.062` is not a claim about ColPali's real-world accuracy. It is a demonstration that the scoring is mechanically identical: each query token takes its max over the patch vectors, then we sum. ColPali's contribution is not a new scoring rule, it is realizing that if you can produce patch vectors for a page image, late interaction's MaxSim works on them unchanged, and you get to retrieve visually rich documents without ever flattening them into error-prone text first. (ColQwen is the same idea built on a different vision-language backbone; the mechanism is the same.) Treat the named models as a 2026 snapshot and verify their current state before you build on them.
+That `0.253` is not a claim about ColPali's real-world accuracy. It is a demonstration that the scoring is mechanically identical: each query token takes its max over the patch vectors, then we sum. ColPali's contribution is not a new scoring rule, it is realizing that if you can produce patch vectors for a page image, late interaction's MaxSim works on them unchanged, and you get to retrieve visually rich documents without ever flattening them into error-prone text first. (ColQwen is the same idea built on a different vision-language backbone; the mechanism is the same.) Treat the named models as a 2026 snapshot and verify their current state before you build on them.
 
 ## From experience
 

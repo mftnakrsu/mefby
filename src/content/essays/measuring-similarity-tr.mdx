@@ -1,0 +1,217 @@
+---
+title: "Benzerliği Ölçmek"
+description: "İlgili olmak, gömme uzayında yakın olmaktan başka bir şey değil; peki 'yakın'ı, sıralama yapabileceğin tek bir sayıya nasıl çevirirsin? Retrieval-Augmented Generation üzerine sıfırdan bir serinin 3. bölümü: Öklid mesafesi, nokta çarpımı ve yönü ölçüp uzunluğu görmezden gelen kosinüs benzerliğinin neden RAG'de chunk'ları skorlamanın varsayılan yöntemi olduğu."
+date: 2026-06-09
+tags: ["RAG", "Embeddings", "Vector Search", "Cosine Similarity", "NLP", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-03-measuring-similarity"
+ogImage: "/og/measuring-similarity.png"
+lang: "tr"
+translationSlug: "measuring-similarity"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+2. Bölüm bir vaatle ve bir borçla bitti. Vaat şuydu: bir metin bir **gömüye (embedding)** dönüştüğünde, yani benzer anlamların yan yana durduğu bir vektöre, "ilgili parçayı bul" işi "en yakın noktayı bul" işine dönüşür. Borç ise şuydu: sürekli "yakın" ve "en yakın" dedim ama bir bilgisayarın iki vektör arasındaki yakınlığı gerçekte nasıl ölçtüğünü hiç söylemedim. Bu bölüm o borcu ödüyor. Sonunda insanların bunu ölçmek için kullandığı üç yolu bileceksin: **Öklid mesafesi (Euclidean distance)**, **nokta çarpımı (dot product)** ve **kosinüs benzerliği (cosine similarity)**; her birinin gerçekte neyi "gördüğünü", kosinüsün metin için neden varsayılan olduğunu ve üçünün aslında farklı kılıklara bürünmüş aynı hesap olduğunu. Kavramsal kalıp sezgiyle ilerleyeceğiz, ama bu matematik bölümü, o yüzden bir örneği de elle, kağıt üzerinde, kendi kendine kontrol edebileceğin sayılarla çözeceğiz.
+
+## Ön koşullar
+
+1. ve 2. Bölümler: [RAG Neden Var?](/essays/why-rag-exists-tr) ve [Gömüleri Gerçekten Anlamak](/essays/embeddings-tr). Bir metin parçasının bir **vektöre** (sıralı bir sayı listesi; uzayda bir nokta ya da ok olarak da düşünülebilir) dönüştüğü ve anlamın o uzayda *yön ve mesafe* olarak ortaya çıktığı fikriyle rahat olmalısın. Tek bir küçük kod parçası için temel Python işine yarar, ama bu bölümün özü bir hesap makinesinin de yapabileceği aritmetik.
+
+## 2. Bölümden kalan borç: "yakın"ı bir sayıya çevirmek
+
+İşte ele almamız gereken tam an. Bir kullanıcı serinin boyunca kullandığımız soruyu soruyor: "İade süremiz ne kadar?" ve biz bunu bir sorgu vektörüne gömüyoruz. **Vektör deposumuzda (vector store)** `refund-policy.md`'nin her parçasının gömüsü oturuyor; bunların arasında "İadeler satın alımdan sonra 30 gün içinde kabul edilir." yazan parça da var. Getirme, en iyi parçayı seçmek zorunda. Seçmek için *sıralaması* gerekiyor. Sıralamak için de her parça için tek bir sayıya ihtiyacı var: **bu parçanın vektörü, sorgunun vektörüne ne kadar benziyor?**
+
+O sayıya **skor** denir, onu üreten fonksiyona da **benzerlik metriği (similarity metric)**. Bu bölümün tamamı o fonksiyonu doğru seçmekle ilgili; çünkü skoru kazanan parça, modelin okuyacağı parçadır ve 1. Bölüm bizi zaten uyarmıştı: yanlış sayfayı aç, model *o* sayfa hakkında kendinden emin biçimde yanılır. Skor, sayfayı çevirendir.
+
+## Benzerlik ile mesafe: aynı fikir, ters yön
+
+Herhangi bir formüle geçmeden önce neredeyse herkesin takıldığı bir karışıklığı çözelim; çünkü bu iki kelime ters yönleri işaret ediyor.
+
+- Bir **benzerlik (similarity)** skoru, iki vektör birbirine benzedikçe *yükselir*. Yüksek olan iyidir; kusursuz eşleşme maksimum değerdir.
+- Bir **mesafe (distance)**, iki vektör birbirine benzedikçe *düşer*. Düşük olan iyidir; kusursuz eşleşme sıfırdır.
+
+İkisi de aslında aynı şeyi ölçer ve genelde birini diğerine çevirebilirsin, ama "iyi"nin yönü tersine döner. Yani biri "benzerliğe göre sıralıyoruz" dediğinde en *büyük* skorları tutar, "mesafeye göre sıralıyoruz" dediğinde ise en *küçük* olanları tutar. Bunu net tutarsan bu alandaki karışıklığın yarısı kendiliğinden çözülür. Bunu netleştirdiğimize göre, işte üç metrik: en sezgiselden en kullanışlıya doğru.
+
+## Öklid mesafesi: düz çizgi farkı
+
+"Ne kadar uzak" sorusunun en sezgisel ölçüsü, fiziksel dünyada zaten kullandığın ölçüdür: iki nokta arasındaki düz çizgi mesafesi. Buna **Öklid mesafesi (Euclidean distance)** denir ve tam olarak okulda gördüğün Pisagor teoremidir; sadece gömünün kaç boyutu varsa o kadar boyutta çalışmasına izin verilmiştir.
+
+Sözle anlatırsak: iki vektörün farkını bileşen bileşen al, her farkın karesini al, topla ve karekökünü al. `A` ve `B` vektörleri için:
+
+`euclidean(A, B) = √((A₁ − B₁)² + (A₂ − B₂)² + … + (Aₙ − Bₙ)²)`
+
+Bu bir *mesafedir*, yani küçük olan daha benzer demektir ve özdeş vektörler 0 skor alır. Fazlasıyla somuttur: iki ok ucu arasına çizeceğin çizginin uzunluğudur.
+
+Peki neden yazı burada bitmiyor? Çünkü metin için Öklid mesafesinin can sıkıcı bir hassasiyeti var: yalnızca yönü değil, vektörlerin **büyüklüğünü (magnitude)**, yani *uzunluğunu* da önemsiyor. Ve büyüklük, çoğu zaman sıralama yaparken istemediğimiz bir bilgi. Ham, normalize edilmemiş birçok gömüde bir vektörün uzunluğu, konusundan çok, bir pasajın ne kadar uzun ya da vurgulu olduğu gibi tesadüfi şeyleri kısmen yansıtır; bu yüzden tam olarak aynı konudaki iki not, orijinden farklı uzaklıklarda durabilir ve o uzunluğu skoruna katan Öklid, bundan kolayca şaşabilir. Aslında karşılaştırmak istediğimiz şey vektörün işaret ettiği *yön*, çünkü model anlamı oraya koyar. Uzunluk tarafından daha az kandırılan bir metriğe ihtiyacımız var. (Az sonra göreceğimiz gibi, vektörler normalize edildiğinde bu fark tamamen kapanır; buradaki uyarı asıl olarak onları normalize etmeden bırakmakla ilgili.)
+
+## Nokta çarpımı: örtüşme, uzunlukla harmanlanmış
+
+Sıradaki araç **nokta çarpımı (dot product)** (bazen "iç çarpım (inner product)" da denir). Tarifi Öklid mesafesinden bile basit: iki vektörü bileşen bileşen çarp, sonra sonuçları topla.
+
+`A · B = A₁B₁ + A₂B₂ + … + AₙBₙ`
+
+Nokta çarpımı bir *benzerliktir*, yani büyük olan daha hizalı demektir. Sevimli bir özelliği var: sessizce iki farklı şeyi aynı anda harmanlar: *vektörlerin ne kadar aynı yöne baktığı* (açıları) ve *ne kadar uzun oldukları* (büyüklükleri). Aynı yöne bakan iki vektör büyük ve pozitif bir nokta çarpımı verir; dik açıdaysalar 0 verir; ters yönlere bakıyorlarsa negatif bir sayı verir.
+
+En büyük pratik gücü hızı. Nokta çarpımı yalnızca çarpma ve toplamadan ibaret; donanımın en çok optimize edildiği işlem tam da bu, bu yüzden bir vektör deposu bir sorguyu milyonlarca parçaya karşı skorlarken kaputun altında gerçekte çalışan şey budur. 4. Bölümde buna yaslanacağız.
+
+Ama tam ters yönde bir zayıflığı var: **normalize edilmemiş** olması. Büyüklüğü skora kattığı için, daha uzun bir vektör *yönden bağımsız olarak* daha yüksek skor alır. Gömüsü tesadüfen "daha gürültülü" (büyüklüğü daha fazla) olan bir parça, sorguya aslında daha doğru işaret eden bir parçayı yenebilir; yalnızca boyu sayesinde kazanır. Anlam söz konusu olduğunda bunu nadiren isteriz. Yalnızca *yönü* dinleyen ve ses düğmesini tamamen kapatan bir metriğe ihtiyacımız var.
+
+## Kosinüs benzerliği: yalnızca yön
+
+İşte o metrik **kosinüs benzerliği (cosine similarity)**; bu bölümün yıldızı. Fikir, uzunluğu tamamen bir kenara atıp yalnızca iki vektör arasındaki **açıyı** ölçmek: kosinüs benzerliği, o açının kosinüsüdür.
+
+`cosine(A, B) = (A · B) / (‖A‖ × ‖B‖)`
+
+`‖A‖` gösterimi, `A`'nın **büyüklüğü (magnitude)** ya da **normu (norm)** anlamına gelir; yani uzunluğu, tam olarak orijinden Öklid mesafesi gibi hesaplanır: `‖A‖ = √(A₁² + A₂² + … + Aₙ²)`. Yani kosinüs benzerliği, tam olarak nokta çarpımının *iki uzunluğa da bölünmüş* hali; büyüklüğü iptal eden adım tam olarak bu bölmedir. Bölmeden sağ çıkan şey saf yöndür.
+
+Aklında tutman gereken sezgi şu: kosinüs "bu iki ok aynı yöne mi bakıyor?" diye sorar ve "aynı boyda mılar?" diye sormayı bilerek reddeder. Değeri `-1`'den (tam ters yöne bakmak) `0`'a (dik açı, ilgisiz) ve `1`'e (tam olarak aynı yöne bakmak) kadar uzanır; getirmenin aradığı şey `1`'e yakın bir değerdir. Pratik bir uyarı: eğitilmiş metin gömüleri, ilgisiz metinler için bile sıfıra yakın kosinüs değerleri nadiren üretir, çünkü vektörleri dar bir koninin içine toplanır; bu yüzden *kullanışlı* yayılım, temiz bir `0`-`1` aralığı yerine sıkışmış pozitif bir bant olur (genelde `0.3` ile `0.9` arası gibi). Bu bant modelden modele kaydığından, ham kosinüs değerleri modeller arasında karşılaştırılamaz; bu yüzden getirme eşikleri `0.5` gibi yuvarlak bir sayıda sabitlenmek yerine model başına ayarlanır (11. Bölümde tam olarak bunu yapıyoruz).
+
+Metin için neden "yalnızca yön" tam olarak doğru olan yaklaşım? Çünkü gömme modelleri anlamı tam da oraya koyar. Aynı fikir üzerine iki pasaj, biri bir cümle diğeri bir paragraf olsa ve büyüklükleri farklı olsa bile *aynı yöne* bakacak şekilde eğitilir. Açıyı skorlayıp uzunluğu göz ardı ederek kosinüs benzerliği, modelin anlamı gerçekten kodladığı kısmı okur ve bu amaç için çoğunlukla gürültü olan kısmı (uzunluğu) atar. **Kosinüs benzerliğinin RAG'de varsayılan metrik olmasının** tüm sebebi bu. Aşağıda bunu doğrudan hissedebilirsin: aynı yöne bakan iki vektör, uzunlukları ne kadar farklı olursa olsun neredeyse kusursuz bir eşleşme olarak değerlendirilir.
+
+<Diagram number={1} caption="Aynı yöne bakan ama çok farklı uzunluklarda iki vektör: kosinüs benzerliği yaklaşık 1 (anlamca neredeyse özdeş sayılır), oysa uç noktaları arasındaki düz çizgi farkı büyüktür.">
+  <img src="/essays/measuring-similarity/part3-cosine-vs-magnitude.svg" alt="Orijinden çıkan, aynı ışın üzerinde duran iki ok içeren 2 boyutlu bir düzlem: biri (3,4) yakınında biten kısa bir ok, diğeri (6,8) yakınında biten uzun bir ok. Aralarındaki açı sıfır, 'cosine = 1.00 (same direction)' etiketli. Kesikli bir çizgi iki ucu birbirine bağlıyor, 'Euclidean distance = 5 (large)' etiketli; bu da uzunluk eşleşmese de yönün eşleştiğini gösteriyor." class="w-full rounded-lg" />
+</Diagram>
+
+## 'Aha' anı: üçü de aynı hesap
+
+İşte bu bölümü bir araya bağlayan içgörü, ve gerçekten tatmin edici.
+
+Kosinüs formülüne tekrar bak: nokta çarpımının, iki büyüklüğe bölünmüş hali. Şimdi diyelim ki önce her vektörü, yönünü koruyarak ama boyutunu standartlaştırarak, uzunluğu tam olarak 1 olacak şekilde yeniden ölçeklendiriyoruz. Bir vektörü uzunluğu 1 olacak şekilde yeniden ölçeklendirmeye **normalizasyon (normalization)** denir ve sonucuna `Â = A / ‖A‖` şeklinde yazılan bir **birim vektör (unit vector)** denir. İki vektör de birim uzunlukta olduğunda büyüklükleri ikisi de 1'dir, yani onlara bölmek hiçbir şey yapmaz ve kosinüs formülü şuna çöker:
+
+`cosine(A, B) = Â · B̂`   (normalize edilmiş vektörlerin nokta çarpımı)
+
+Sözle anlatırsak: **kosinüs benzerliği, normalize edilmiş vektörlerin nokta çarpımından başka bir şey değildir.** Önce normalize et, nokta çarpımı *kosinüs olur*. Bu bir tesadüf değil; aynı hesap, büyüklük ister sonunda bölünerek çıksın (kosinüs) ister baştan soyulup atılsın (önce normalize et, sonra nokta çarpımı al).
+
+Öklid mesafesi de normalize ettiğin anda aynı aileye katılır. İki birim vektör için biraz cebir yaparsan `euclidean(Â, B̂)² = 2 − 2·cos(Â, B̂)` elde edersin: düz çizgi farkı, sadece açının bir fonksiyonudur. Yani çoğu vektör deposunun sakladığı tam olarak bu, yani normalize edilmiş gömüler üzerinde, Öklid ve kosinüs sonuçları **birebir aynı sırayla** sıralar; birine göre sıralamak, diğerine göre sıralamakla aynı şeydir. Kosinüs varsayılan kalır, çünkü Öklid normalize vektörlerde "yanlış" olduğu için değil; modellerin eğitilme biçimiyle örtüştüğü ve bir kez normalize edildiğinde hızlı nokta çarpımına indirgendiği için. Öklid, kosinüsten yalnızca vektörler normalize edilmeden bırakıldığında ve farklı uzunlukları sayılmaya başladığında ayrılır; bu da tam olarak daha önce işaret ettiğimiz durum.
+
+Bu eşdeğerlik, gerçek sistemlerde sessizce taşıyıcı bir rol oynar. Nokta çarpımının hızlı olan olduğunu hatırla. Bu yüzden birçok vektör veritabanı tam olarak şunu yapar: **her gömüyü, saklandığı anda bir kez normalize eder** ve sonra sorgu anında ucuz nokta çarpımını çalıştırır; böylece kosinüs benzerliğinin anlam odaklı, uzunluğa kör davranışını, nokta çarpımının hızında elde eder. İkisinin de en iyisi. Bir veritabanının "normalize edilmiş vektörler üzerinde iç çarpım kullandığını" okuduğunda, artık bu cümle sana kesin bir şey söylüyor: kosinüs benzerliğini, verimli yoldan hesaplıyor demektir.
+
+<Diagram number={2} caption="Aynı vektör çifti üç farklı biçimde görülüyor: Öklid, uçlar arasındaki fark; nokta çarpımı, bir vektörün diğeri üzerine izdüşümünün uzunlukla ölçeklenmiş hali; kosinüs ise aralarındaki açı.">
+  <img src="/essays/measuring-similarity/part3-three-metrics.svg" alt="Orijinden çıkan aynı iki oku gösteren, yan yana duran üç küçük panel. Birinci panel, Öklid mesafesini iki ok ucunu birleştiren kesikli bir çizgi olarak vurguluyor. İkinci panel, nokta çarpımını bir vektörün diğerinin üzerine, uzunlukla ölçeklenmiş izdüşümü olarak vurguluyor. Üçüncü panel, kosinüs benzerliğini iki ok arasındaki açı yayı olarak vurguluyor." class="w-full rounded-lg" />
+</Diagram>
+
+{/* From experience callout: add a real first-person anecdote here (e.g. a time the wrong distance metric quietly hurt retrieval quality), then wrap it as: > 💡 **From experience** */}
+
+## Hangisini ne zaman kullanmalı
+
+Artık elinde üç metrik var. İşte aralarında nasıl karar verdiğim ve çoğu durumu anında çözen bir kural.
+
+| Metrik | Neyi ölçer | Aralık | Büyüklüğü görür mü? | Ne zaman uzanmalı |
+|---|---|---|---|---|
+| Öklid mesafesi | Uçlar arasındaki düz çizgi farkı | 0 (özdeş) ve üzeri | Evet | Uzamsal ya da koordinat verisi, ya da bir vektörün uzunluğunun gerçekten anlam taşıdığı durumlar |
+| Nokta çarpımı | Örtüşme: açı ile iki uzunluğun harmanı | sınırsız, negatif olabilir | Evet | Ölçekte ham hıza ihtiyacın varsa ve vektörlerin ya normalize edilmiş ya da uzunluğun kendisi işe yarar bir sinyalse |
+| Kosinüs benzerliği | Yönler arasındaki açı | yaklaşık `-1` ile `1` arası (pratikte sıkışmış bir bant, metin için genelde ~`0.3`–`0.9`) | Hayır | Metin gömüleri için varsayılan; yalnızca anlamın, uzunluğun değil, önemli olduğu durumlar |
+
+Tabloyu geçersiz kılan pratik kural şu: **metriği, gömme modelinin eğitildiği metriğe uydur.** Model üreticileri, tasarlanan benzerlik ölçüsünü belgeler (modern metin gömme modellerinin çoğu kosinüs için ayarlanmıştır ve birçoğu zaten normalize edilmiş vektörler üretir). Onların önerdiğini kullan. Modelin eğitilmediği bir metriği seçmek, iyi gömülerin kötü skorlar almasının sessiz bir yoludur.
+
+## Elle çözülmüş örnek
+
+Bu bölümün amacı sezgi, ama hesaplayamadığın bir metriğe gerçekten güvenmezsin; o yüzden bir örneği baştan sona çözelim. Aritmetik kağıt üzerinde kalsın diye iki küçük, 2 boyutlu vektör kullanacağız. Gerçek gömülerde yüzlerce boyut var, ama işlem *birebir aynı*, sadece toplanacak daha çok terim var.
+
+`A = [3, 4]` ve `B = [4, 3]` alalım.
+
+**Nokta çarpımı** (eşleşen bileşenleri çarp, topla):
+
+`A · B = (3 × 4) + (4 × 3) = 12 + 12 = 24`
+
+**Büyüklükler** (bileşenlerin karesini al, topla, karekök al):
+
+`‖A‖ = √(3² + 4²) = √(9 + 16) = √25 = 5`
+`‖B‖ = √(4² + 3²) = √(16 + 9) = √25 = 5`
+
+**Kosinüs benzerliği** (nokta çarpımı, büyüklüklerin çarpımına bölünmüş):
+
+`cosine(A, B) = 24 / (5 × 5) = 24 / 25 = 0.96`
+
+`0.96` skoru `1`'e çok yakın, yani `A` ve `B` neredeyse aynı yöne bakıyor: gömme açısından neredeyse aynı anlam.
+
+**Öklid mesafesi** (farklar, karesi alınmış, toplanmış, karekökü alınmış):
+
+`euclidean(A, B) = √((3 − 4)² + (4 − 3)²) = √(1 + 1) = √2 ≈ 1.41`
+
+Şimdi kosinüsün hakkını verdiği kısma geldik. `B`'yi, `A`'nın iki katı olan, yani tam olarak aynı yönde ama iki kat uzun `C = [6, 8]` ile değiştirelim:
+
+`cosine(A, C) = (3×6 + 4×8) / (5 × 10) = (18 + 32) / 50 = 50 / 50 = 1.00`
+`euclidean(A, C) = √((3−6)² + (4−8)²) = √(9 + 16) = √25 = 5`
+
+Kosinüs `1.00` diyor: özdeş yön, kusursuz bir anlam eşleşmesi. Öklid `5` diyor: uzak. Nokta çarpımı ise `50`'ye fırlıyor, `C`'yi salt uzun olduğu için ödüllendiriyor. Aynı üç vektör, üç çok farklı hüküm; ve her birinin *neden* öyle oy verdiğini tam olarak görebiliyorsun.
+
+Son olarak, 'aha' bölümündeki eşdeğerliği somutlaştıralım. `A` ve `C`'yi normalize edelim:
+
+`Â = [3, 4] / 5 = [0.6, 0.8]`
+`Ĉ = [6, 8] / 10 = [0.6, 0.8]`
+
+İkisi de *aynı birim vektöre* dönüşüyor. Nokta çarpımları `(0.6 × 0.6) + (0.8 × 0.8) = 0.36 + 0.64 = 1.00`, yani tam olarak kosinüs. Önce normalize et, sonra nokta çarpımını al; kosinüs benzerliğini hesaplamış oldun.
+
+Kağıt yerine kodda görmeyi tercih edersen, iki satır (yalnızca gösterim amaçlı, kurulacak bir pipeline değil):
+
+```python
+import numpy as np
+
+a, b = np.array([3, 4]), np.array([4, 3])
+cosine = a @ b / (np.linalg.norm(a) * np.linalg.norm(b))
+print(round(cosine, 2))   # 0.96
+```
+
+Şimdi okumayı bırak ve *oyna*. Aşağıdaki figür, orijinden çıkan iki vektör çiziyor; uçlardan birini sürükle ve açının, kosinüs benzerliğinin, nokta çarpımının ve Öklid mesafesinin canlı olarak nasıl değiştiğini izle. İki vektörü de birim uzunluğa oturtmak için **normalize** anahtarını çevir ve nokta çarpımıyla kosinüsün nasıl uzlaştığını izle; 'aha' anı elle tutulur hale gelsin.
+
+<Diagram number={3} caption="Vektörlerden birinin ucunu sürükle, dört sayı da canlı olarak güncellensin. İkisini de birim uzunluğa oturtmak için 'normalize'ı aç/kapat ve nokta çarpımıyla kosinüs benzerliğinin nasıl eşitlendiğini izle.">
+  <IframeFigure
+    src="/essays/measuring-similarity/part3-similarity-playground.html"
+    title="İnteraktif benzerlik oyun alanı: orijinden çıkan iki 2 boyutlu vektörü sürükle, açının, kosinüs benzerliğinin, nokta çarpımının ve Öklid mesafesinin canlı olarak nasıl değiştiğini gör; iki vektörü de birim uzunluğa oturtarak nokta çarpımı ve kosinüsün yakınsamasını sağlayan bir normalize anahtarıyla birlikte"
+    height={720}
+  />
+</Diagram>
+
+## RAG'e dönüş: sıralama fonksiyonu bu
+
+Vektör deposuna geri dönelim. Kullanıcının sorusunu bir sorgu vektörüne gömüyoruz ve saklanan her parça vektörü için ona karşı bir benzerlik skoru hesaplıyoruz; neredeyse her zaman kosinüs benzerliği. O skor, parçaların sıralandığı tüm temeldir. Parçaları skora göre, en iyisi önde olacak şekilde sırala ve kazananları modele ver.
+
+"Kazananlar" bir sayıya ihtiyaç duyar, o sayı da **k**'dır. **Top-k getirme (top-k retrieval)** şu demektir: sorguya en yüksek benzerliğe sahip `k` parçayı döndür; `k`, seçtiğin küçük bir sayıdır, genelde 3 ile 10 arası gibi. `k` 4 ise, model bağlam olarak en benzer dört parçayı alır ve onlardan cevap verir. Küçük `k`, prompt'u sıkı ve odaklı tutar (1. Bölümdeki bağlam penceresi duvarını hatırla); büyük `k` daha geniş bir ağ atar, ama karşılığında daha çok gürültü ve token gelir. `k`'yı ayarlamak, bir RAG sisteminde en basit ve en yüksek etkili kollardan biridir.
+
+Yani 1. Bölümden kalan resim artık tamamen renklendi: gömüyoruz (2. Bölüm), her parçayı sorguya karşı kosinüs benzerliğiyle skorluyoruz (bu bölüm) ve en iyi `k` taneyi tutuyoruz. Bu da 2. Bölümün ima ettiği bir sonraki sorunu ortaya çıkarıyor. *Her* saklı vektöre karşı bir skor hesaplamak, yani kaba kuvvet ya da kesin arama (brute-force / exact search), yüzlerce ya da birkaç bin parça için gayet iyi çalışır. Ama bunu milyonlara karşı, her tek sorguda çalıştır; maliyet acımasızlaşır: her soru için milyonlarca çarp-ve-topla geçişi yapıyorsun demektir. Üretim sistemleri her seferinde her şeyle karşılaştırma yapmayı göze alamaz. Çözüm, hepsini kontrol etmeden en yakın vektörleri bulan daha akıllı bir veri yapısıdır; onu inşa etmek de tam olarak 4. Bölümün konusu.
+
+> ⚠️ **Sık düşülen tuzaklar**
+>
+> - **Farklı modeller arasında mutlak kosinüs skorlarını karşılaştırmak.** Bir gömme modelinden gelen `0.82` ile başka bir modelden gelen `0.82`, aynı "miktarda" benzerlik değildir. Her model vektörlerini farklı şekilli bir koniye toplar, yani kullanışlı bant farklı bir yerde durur. Kosinüs, model-içi bir sıralama sinyalidir, modeller-arası bir anlam birimi değil; bir modelin sayıları daha yüksek çıkıyor diye onu "daha kendinden emin" sanma.
+> - **Sabit bir eşiğin modeller arasında taşınabileceğini varsaymak.** Bant kaydığı için, bir modelde "yeterince ilgili" için ayarladığın eşik (diyelim ki `0.75` üzerindeki her şeyi tut) bir sonrakinde çok katı ya da çok gevşek kalabilir. Gömme modelini değiştirdiğinde eşiği yeniden ayarlaman gerekir, devralman değil. `0.5`'i, ya da herhangi bir yuvarlak sayıyı, evrensel bir "ilgili" sınırı olarak ele almak, aynı hatanın daha temiz bir gömlek giymiş hali.
+> - **İndeks oluşturma ile sorgu anı arasında metrik karıştırmak.** Vektörleri normalize edip iç çarpım araması için sakladıysan, sorguyu da iç çarpımla yapmalısın. Bir metrikle inşa edip başka biriyle sorgulamak (yazma anında kosinüs, okuma anında ham nokta çarpımı, ya da tam tersi) sıralamaları hiçbir hata fırlatmadan sessizce bozar. Tek bir benzerlik ölçüsü seç ve baştan sona onu kullan.
+
+## Kendin dene
+
+Yukarıdaki interaktif oyun alanını (Şekil 3) yeniden aç ve bilinçli bir deney yap; çünkü bunu hissetmek, okumaktan daha iyi öğretir. İki vektörü de **aynı yönde ama farklı uzunluklarda** olacak şekilde ayarla: bir ucu kabaca `(3, 4)`'e, diğerini aynı ışın boyunca yaklaşık `(6, 8)`'e, yani iki katı uzunluğa sürükle. Dört sayının ne yaptığını izle. Aralarındaki açı sıfır olduğu için kosinüs benzerliği `1.00`'e yakın sabit kalır, Öklid mesafesi ise kalın bir `5` okur ve nokta çarpımı şişer. Aynı yön, çılgınca farklı hükümler: bu, az önceki elle çözülmüş örnek, şimdi kendi ellerinin altında.
+
+Sonra **normalize** anahtarını çevir. İki ok da birim uzunluğa oturur, aynı noktaya iner ve nokta çarpımıyla kosinüs uzlaşır; ikisi de `1.00` okur. Bu, 'aha' anının fiziksel hali: uzunluk gittiğinde, nokta çarpımı *kosinüs olur* ve Öklid artık ayrışmaz. Bir ucu ortak ışından hafifçe kaydır ve dört sayının da birlikte ama farklı hızlarda hareket ettiğini izle; böylece hangi metriğin açıya duyarlı, hangisinin hâlâ uzunluğu dinlediğini hissedebilirsin. Beş dakikalık sürükleme, bir sayfa formülün gözlerine anlattığını parmaklarına öğretecek.
+
+## Özet çıkarımlar
+
+- Getirme sıralama yapmak zorundadır ve sıralama, parça başına tek bir **benzerlik** skoruna ihtiyaç duyar. Bir **benzerlik**, vektörler birbirine benzedikçe yükselir; bir **mesafe** düşer. Aynı fikir, ters yön.
+- **Öklid mesafesi**, sezgisel düz çizgi farkıdır, ama **büyüklüğe** karşı hassastır. Normalize edilmiş vektörlerde bu önemini yitirir (`euclidean² = 2 − 2·cos`, yani kosinüsle birebir aynı sırayla sıralar); büyüklük hassasiyeti yalnızca vektörler normalize edilmeden bırakıldığında ısırır.
+- **Nokta çarpımı** hızlıdır (yalnızca çarpma ve toplama) ve ölçekte çalışan odur, ama **normalize edilmemiştir**: daha uzun vektörler, yönden bağımsız olarak daha yüksek skor alır.
+- **Kosinüs benzerliği** yalnızca *açıyı* ölçer ve uzunluğu göz ardı eder; bu da metin için tam olarak doğrudur, çünkü gömme modelleri anlamı yöne koyar. RAG'de varsayılan metrik budur.
+- Üçü birbirine bağlanır: **kosinüs benzerliği, normalize edilmiş (birim uzunlukta) vektörlerin nokta çarpımıdır.** Saklama anında bir kez normalize et, sonra ucuz nokta çarpımını kullan; kosinüsün davranışını, nokta çarpımının hızında elde edersin.
+- RAG'de bu skor, sıralama fonksiyonudur: **top-k getirme**, en yüksek skorlu `k` parçayı döndürür. Metriği, modelin eğitildiği şeye uydur.
+
+## Referanslar
+
+- Reimers, N., & Gurevych, I. (2019). *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.* arXiv:1908.10084. [https://arxiv.org/abs/1908.10084](https://arxiv.org/abs/1908.10084): vektörler arasındaki kosinüs benzerliğinin anlamsal benzerliği takip edecek şekilde eğitilmiş cümle gömülerini tanıtır; bu bölümün kosinüsü metin için varsayılan metrik olarak adlandırırken yaslandığı özellik tam olarak budur.
+
+## Sözlük
+
+- **Benzerlik (similarity)**: iki vektör birbirine benzedikçe artan bir skor; yüksek olması daha benzer demektir, kusursuz eşleşme maksimum değerdedir.
+- **Mesafe (distance)**: iki vektör birbirine benzedikçe azalan bir ölçü; düşük olması daha benzer demektir, kusursuz eşleşme 0'dadır.
+- **Öklid mesafesi (Euclidean distance)**: iki vektörün uçları arasındaki düz çizgi (Pisagor) farkı; bileşen farkları, karesi alınır, toplanır, karekökü alınır. Bir mesafedir.
+- **Nokta çarpımı (dot product)**: eşleşen bileşenlerin çarpılıp toplanması; hem açıyı hem vektörlerin büyüklüklerini harmanlayan bir benzerlik. Hesaplaması hızlıdır.
+- **Kosinüs benzerliği (cosine similarity)**: iki vektör arasındaki açının kosinüsü; nokta çarpımının iki büyüklüğe bölünmesine eşittir. Yalnızca yönü ölçer, uzunluğu göz ardı eder. `-1` ile `1` arasında değişir.
+- **Büyüklük (norm)**: bir vektörün uzunluğu, `‖A‖ = √(A₁² + … + Aₙ²)`; orijinden ucuna kadar olan mesafe.
+- **Normalizasyon (birim vektör)**: bir vektörü, yönünü koruyarak uzunluğu 1 olacak şekilde yeniden ölçeklendirmek (`Â = A / ‖A‖`); sonuç bir birim vektördür. Kosinüs benzerliği, normalize edilmiş vektörlerin nokta çarpımına eşittir.
+- **Top-k getirme (top-k retrieval)**: vektörleri sorguya karşı en yüksek skoru alan `k` parçayı döndürmek; `k`, seçilen küçük bir sayıdır. Bu parçalar modelin bağlamı olur.
+
+---
+
+**Sırada, 4. Bölüm: Vektör Veritabanları ve İndeksleme.** Artık bir parçayı sorguya karşı skorlayabiliyoruz ve bunu *her* parça için yapmamız gerektiğini biliyoruz. Sırada bunu ölçekte hızlandırıyoruz: bir vektör veritabanı milyonlarca gömüyü nasıl saklar ve hepsiyle karşılaştırmadan en yakınları bulmak için yaklaşık en-yakın-komşu (approximate nearest-neighbor) aramasını nasıl kullanır?

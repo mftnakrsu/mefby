@@ -12,7 +12,7 @@ import Diagram from '../../components/essay/Diagram.astro';
 
 ## Manşet, asıl hikaye değil
 
-OpenAI'nin açık ağırlıklı `gpt-oss-20b` modelinin üzerine, İHA muharebe doktrini soru-cevabı için bir LoRA adaptörü ince ayarladım. 1.873 sorudan oluşan katmanlı (stratified) bir test kümesinde, ikili karşılaştırma yapan bir GPT‑5.4 hakem, adaptörü ("v4") uyarlanmamış temel modele karşı **vakaların %82,6'sında** seçti (%95 güven aralığı 80,9-84,4). Manşetlik bir sayı. Hikaye burada biter.
+OpenAI'nin açık ağırlıklı `gpt-oss-20b` modelinin üzerine, İHA muharebe doktrini soru-cevabı için bir LoRA adaptörü ince ayarladım. 1.875 sorudan oluşan katmanlı (stratified) bir test kümesinde (1.873 geçerli hakem kararı), ikili karşılaştırma yapan bir GPT‑5.4 hakem, adaptörü ("v4") uyarlanmamış temel modele karşı **vakaların %82,6'sında** seçti (%95 güven aralığı 80,9-84,4). Manşetlik bir sayı. Hikaye burada biter.
 
 Şu detay dışında: **temel modelin çıktılarının %91,8'i boştu.**
 
@@ -155,7 +155,7 @@ Bu denemede daha önceki ablasyon tablosunun sessizce gösterdiği sonuç şu: *
 - Model-uyum oranı: **%94,7** (300 örneğin 284'ünde orijinal ve takas, hangi modelin kazandığında hemfikirdi)
 - Yanlılık-düzeltilmiş v4 kazanma oranı: **%80,7** (%95 güven aralığı 76,3-85,0)
 
-%48,5, %50'den ayırt edilemez. Sohbet-arena literatürü, serbest-biçimli tercih hakemliğinde A'ya doğru ≈5-10 yüzde puanı bildiriyor; bu değerlendirme ölçütü (1-5 puanlanan üç eksen artı katı bir kazanan alanı) büyük ölçüde konum-simetrik görünüyor. Kazanma oranındaki yeniden üretilebilirlik deltası (82,6 → 80,7, yani -1,9 yüzde puanı) da orijinal güven aralığının içinde. **Konum yanlılığı, katı değerlendirme ölçütü hakemliğinin değil, serbest-biçimli tercih hakemliğinin bir özelliği olabilir.** Bunun gibi bir değerlendirme ölçütü üzerinde hakemlik yapıyorsanız, her koşu için simetri-ile-rastgeleleştirme maliyetini ödemeye değmeyebilir.
+%48,5, %50'den ayırt edilemez. Sohbet-arena literatürü, serbest-biçimli tercih hakemliğinde A'ya doğru ≈5-10 yüzde puanı bildiriyor; bu değerlendirme ölçütü (1-5 puanlanan üç eksen artı katı bir kazanan alanı) büyük ölçüde konum-simetrik görünüyor. Kazanma oranındaki yeniden üretilebilirlik deltası (82,6 → 80,7, yani -1,9 yüzde puanı) da küçük; %80,7, orijinal güven aralığının alt sınırının (%80,9) hemen altında. **Konum yanlılığı, katı değerlendirme ölçütü hakemliğinin değil, serbest-biçimli tercih hakemliğinin bir özelliği olabilir.** Bunun gibi bir değerlendirme ölçütü üzerinde hakemlik yapıyorsanız, her koşu için simetri-ile-rastgeleleştirme maliyetini ödemeye değmeyebilir.
 
 ## Dürüst sınırlamalar
 

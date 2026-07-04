@@ -7,6 +7,7 @@ codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-02-embeddings"
 ogImage: "/og/embeddings.png"
 seriesOrder: 2
 lang: "en"
+translationSlug: "embeddings-tr"
 ---
 
 import Diagram from '../../components/essay/Diagram.astro';
@@ -198,7 +199,7 @@ It's tempting to treat an embedding model as a universal meaning-meter. It isn't
 > ⚠️ **Common pitfalls**
 >
 > - **Embed your queries and your documents with the *same* model.** The two vectors only live in a shared space, and "closest point" only means anything, if the same function produced both. Index your chunks with one model and query with another and you're comparing points in two unrelated spaces; retrieval silently turns to noise. This includes versions: if you upgrade the model, you must re-embed the entire corpus, not just new queries.
-> - **Mind asymmetric query/passage prefixes.** Several strong models expect you to *tell them* which side is which. The E5 and BGE families want you to prepend `query:` to questions and `passage:` to documents; Nomic models use task prefixes like `search_query:` and `search_document:`. Skip the prefix, or use the wrong one, and you lose a chunk of the model's quality for free. Read the model card before you embed a single thing; the defaults are not universal.
+> - **Mind asymmetric query/passage prefixes.** Several strong models expect you to *tell them* which side is which. The E5 family wants you to prepend `query:` to questions and `passage:` to documents; older BGE models instead want an instruction like "Represent this sentence for searching relevant passages: " prepended to queries only; Nomic models use task prefixes like `search_query:` and `search_document:`. Skip the prefix, or use the wrong one, and you lose a chunk of the model's quality for free. Read the model card before you embed a single thing; the defaults are not universal.
 > - **Don't compare scores across MTEB versions or across different models' raw distances.** A leaderboard number is only meaningful next to others computed the same way.
 
 ## Try it yourself
@@ -256,7 +257,7 @@ You should see the question score clearly higher against the refund chunk than a
 - **Semantic similarity**: how close two pieces of text are *in meaning*, which in embedding-space shows up as how close their vectors are.
 - **MTEB / BEIR**: public benchmarks for ranking embedding models. MTEB (Massive Text Embedding Benchmark) spans many tasks and languages; BEIR focuses on zero-shot retrieval. MTEB scores are not comparable across benchmark versions.
 - **Matryoshka embedding (MRL)**: an embedding trained so the most important information sits in its earliest dimensions, letting you truncate one vector to smaller sizes (e.g. 1,024 → 256) to trade a little accuracy for less storage and faster search, with no re-embedding.
-- **Query/passage prefix**: a short tag (like `query:` / `passage:` for E5 and BGE, or `search_query:` / `search_document:` for Nomic) some models require you to prepend so they know which side of a search a text is; using the wrong one or none degrades quality.
+- **Query/passage prefix**: a short tag (like `query:` / `passage:` for E5, `search_query:` / `search_document:` for Nomic, or a query-side instruction string for older BGE models) some models require you to prepend so they know which side of a search a text is; using the wrong one or none degrades quality.
 
 ---
 

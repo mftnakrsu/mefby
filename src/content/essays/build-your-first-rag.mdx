@@ -7,6 +7,7 @@ codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-06-build-your-
 ogImage: "/og/build-your-first-rag.png"
 seriesOrder: 6
 lang: "en"
+translationSlug: "build-your-first-rag-tr"
 ---
 
 import Diagram from '../../components/essay/Diagram.astro';
@@ -355,7 +356,7 @@ Start from the complete base app, [`rag_app.py`](/essays/build-your-first-rag/ra
 
 A few concrete numbers, because "free and local" and "fast" are easy to say and worth pinning down.
 
-- **Embedding.** `all-MiniLM-L6-v2` produces **384-dimensional** vectors and is tiny (about 22 MB on disk). On a plain CPU it embeds on the order of a few thousand short sentences per second, fast enough that our five-document corpus, or a few thousand, is effectively instant; on a GPU it is faster still. The point: for a personal corpus, embedding is not your bottleneck. (See the [model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) for the exact spec.)
+- **Embedding.** `all-MiniLM-L6-v2` produces **384-dimensional** vectors and is small by model standards (roughly 90 MB of fp32 weights, ~23M parameters). On a plain CPU it embeds on the order of a few thousand short sentences per second, fast enough that our five-document corpus, or a few thousand, is effectively instant; on a GPU it is faster still. The point: for a personal corpus, embedding is not your bottleneck. (See the [model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) for the exact spec.)
 - **Generation latency.** This is where the wall-clock time goes. A hosted LLM call typically returns a short grounded answer in roughly one to a few seconds, network round-trip included, and it costs money per token and enforces rate limits. A local model under [Ollama](https://ollama.com) costs nothing and keeps your data on your machine, but on CPU-only hardware a comparable answer often takes several seconds to tens of seconds; a GPU narrows that gap a lot. The trade-off is the usual one: hosted buys you speed and quality for money and a dependency; local buys you privacy and zero marginal cost for latency and a weaker model. Measure both on *your* hardware before you commit; the numbers above are order-of-magnitude, not promises.
 
 ## Recap, and the road ahead

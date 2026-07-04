@@ -19,7 +19,7 @@ Part 3 plan'ı first-class bir artefakta dönüştürdü: bütün DAG'ı bir ker
 
 ## Ön koşullar
 
-Temel Python yeterli: fonksiyonlar, sözlükler (dictionary), küçük bir döngü ve bir liste okuyabilmek. Hepsi bu. [Part 2](/essays/robust-tool-execution) ve [Part 3](/essays/planning-and-the-tool-dag)'ü bitirmek yardımcı olur, çünkü Part 3'ün `TaskNode`'unu, dependency DAG'ını ve topological execution'ını yeniden kullanıyoruz, ve Part 2'nin failure taksonomisine yaslanıyoruz (üretimden kalkmış bir SKU bir permanent error'dur). Ama bu parça kendi içinde bütünlüklü: daha önceki bir fikre dayandığı yerde, onu tek bir cümleyle yeniden ifade ediyor. Eşlik eden kod, [replanning_critic.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-04-replanning-and-critic), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz. Deterministik bir kural planner'ı ve critic varsayılan olarak source of truth'tur, gerçek LLM yolu (`generate()`) tek bir ortam bayrağı uzaklıkta, tam olarak Part 1'den 3'e kadarki gibi.
+Temel Python yeterli: fonksiyonlar, sözlükler (dictionary), küçük bir döngü ve bir liste okuyabilmek. Hepsi bu. [Part 2](/essays/robust-tool-execution-tr) ve [Part 3](/essays/planning-and-the-tool-dag-tr)'ü bitirmek yardımcı olur, çünkü Part 3'ün `TaskNode`'unu, dependency DAG'ını ve topological execution'ını yeniden kullanıyoruz, ve Part 2'nin failure taksonomisine yaslanıyoruz (üretimden kalkmış bir SKU bir permanent error'dur). Ama bu parça kendi içinde bütünlüklü: daha önceki bir fikre dayandığı yerde, onu tek bir cümleyle yeniden ifade ediyor. Eşlik eden kod, [replanning_critic.py](https://github.com/mftnakrsu/agents-by-hand/tree/main/part-04-replanning-and-critic), API anahtarı, ağ ve bağımlılık olmadan offline çalışır; böylece her satırı okuyup bu yazıdaki her trace'i kendiniz yeniden üretebilirsiniz. Deterministik bir kural planner'ı ve critic varsayılan olarak source of truth'tur, gerçek LLM yolu (`generate()`) tek bir ortam bayrağı uzaklıkta, tam olarak Part 1'den 3'e kadarki gibi.
 
 ## Part 3'ten bu yana yeni olan ne
 
@@ -120,7 +120,7 @@ Replanning yalnızca bounded ise güvenlidir. Sürekli kırılan bir plan, her y
 - **Partial replanning (kalan subgraph)**: yalnızca, başarısız olan input'a başvuran henüz-çalışmamış adımları (topological order'ın tail'i) yeniden yazmak, zaten tamamlanmış ve etkilenmemiş adımları kendi haline bırakmak.
 - **Step memoization**: tamamlanmış adımların sonuçlarını saklamak, böylece bir replan boyunca asla yeniden çalıştırılmazlar, ki bu yeniden yazımın geçersiz kılmadığı pahalı ya da yan-etkili işin tekrarlanmasını önler.
 - **Replan budget**: agent'ın bir koşuda kaç kere replan edebileceğine dair dürüst bir sınır (burada max 2), böylece sürekli kırılan bir plan sonsuza dek dönmek yerine devre dışı kalır; Part 2'nin bounded retry'ının plan seviyesine yükseltilmiş hali, tam circuit breaker Part 8'de.
-- **Permanent error** ([Part 2](/essays/robust-tool-execution)'den): aynı call'ı retry etmenin düzeltemeyeceği bir failure (burada üretimden kalkmış bir SKU); Part 2 onu bir observation olarak geri besler, ve bu parça onun etrafından replan eder.
+- **Permanent error** ([Part 2](/essays/robust-tool-execution-tr)'den): aynı call'ı retry etmenin düzeltemeyeceği bir failure (burada üretimden kalkmış bir SKU); Part 2 onu bir observation olarak geri besler, ve bu parça onun etrafından replan eder.
 
 ---
 

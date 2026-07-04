@@ -1,0 +1,212 @@
+---
+title: "Konuşmalı RAG"
+description: "Retrieval-Augmented Generation üzerine sıfırdan bir serinin 20. bölümü: tek atışlık agent'a bir hafıza ver. Çok turlu RAG'i elle inşa et: sorgu yoğunlaştırma (query condensation), bağlama bağımlı bir devam sorusunu retrieval'dan önce bağımsız bir soruya yeniden yazar; böylece 'what about damaged items?' sonunda doğru chunk'ı bulur."
+date: 2026-06-26
+tags: ["RAG", "Conversational RAG", "Multi-turn", "Query Rewriting", "Memory", "Agents", "Retrieval", "LLM", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-20-conversational-rag"
+ogImage: "/og/rag-by-hand.png"
+lang: "tr"
+translationSlug: "conversational-rag"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+19. bölüm bir itirafla bitmişti. Gerçek bir agent inşa etmiştik: kendi retrieval'larını zincirleyen, çalışma anında kendi yolunu seçen bir reason/act/observe döngüsü; sonra tek bir soruyu cevapladı ve durdu. Daha önce söylenmiş hiçbir şeyi hatırlamıyordu. Bir arama kutusu için bu sorun değil; ama kimse bir asistanla gerçekte böyle konuşmuyor. Gerçek konuşmalar, tek başına hiçbir şey ifade etmeyen parçalarla doludur. "İade süremiz ne kadar?" ("what's our refund window?") diye soruyorsun, cevabını alıyorsun, sonra "peki hasarlı ürünler?" ("what about damaged items?") diyorsun. İkinci soru, ilkini hatırlamadığın sürece aslında bir soru bile değil. Retriever'a tam yazıldığı haliyle gönderilen "what about damaged items?" iadelerden hiç bahsetmez; dolayısıyla iade maddesini bulması mümkün değildir. Bu bölümde bunu elle düzeltiyoruz. Pipeline'a, o ana kadarki konuşmanın bir **hafızasını (memory)** veriyoruz ve o hafızayı işe yarar retrieval'a çeviren tek mekanizmayı inşa ediyoruz: **sorgu yoğunlaştırma (query condensation)**; bağlama bağımlı bir **devam sorusunu (follow-up)**, index'e daha dokunmadan önce kendi başına yeterli, bağımsız bir soruya yeniden yazar. Tek bir konuşmanın üç turunu adım adım yürüyeceğiz, her devam sorusunun yoğunlaştırılışını izleyeceğiz ve ikinci turu yoğunlaştırmalı ve yoğunlaştırmasız yan yana koyacağız ki hafızanın önlediği hatayı tam olarak göresin. Ham parça index'e asla dokunmaz. Dokunan, bağımsız sorgudur.
+
+## Ön koşullar
+
+Bu bölüm, çekirdek serinin retrieval makinesinin üzerine oturuyor; o parçaların kafanda olması işini kolaylaştırır. [İlk RAG'ini Kur](/essays/build-your-first-rag-tr) (6. bölüm) lazım, çünkü burada bir konuşmanın içine sardığımız getir-sonra-cevapla döngüsü tam olarak oradaki döngü. [Getirmeyi Akıllandırmak](/essays/making-retrieval-smarter-tr) (8. bölüm) lazım, ama baştan çizmek istediğim keskin bir ayrımla, çünkü bu ikisi kolayca birbirine karışıyor. 8. bölümün **sorgu dönüştürmesi (query transformation)**, zaten kendi başına ayakta duran bir sorguyu alıp iyileştirir: kısa ve kuru bir sorguyu genişletir, belirsiz olanı netleştirir, bileşik olanı böler; hepsi daha iyi retrieval için. Yoğunlaştırma ise başka bir iş. Kendi başına ayakta durmayan bir sorguyu, "what about damaged items?" gibi bağlama bağımlı bir parçayı alır ve konuşma geçmişini içine katlayarak onu bağımsız hale getirir. 8. bölüm iyi bir sorguyu daha iyi yapar. Yoğunlaştırma, kırık bir sorguyu bütünler. Bir de [Bir RAG Agent'ı İnşa Etmek](/essays/rag-agent-tr) (19. bölüm) lazım, çünkü orada kurduğumuz agent, şimdi hafıza verdiğimiz şeyin ta kendisi. Burada yeni matematik yok. Metin, geçmiş ve satır satır okuyabileceğin bir yeniden yazma adımı var; artı birkaç düzine satır deterministik Python.
+
+## Sorun: tek atışlık RAG devam sorularında kırılır
+
+Şimdiye kadar inşa ettiğimiz her retrieval sistemi, her sorguyu taze ve eksiksiz bir düşünce olarak ele aldı. Bu varsayım, gerçek bir sohbetteki ikinci mesaja kadar ayakta kalır. Bir destek asistanı hayal et. Kullanıcı "iade süremiz ne kadar?" diye soruyor ve sistem işini yapıyor: sorguyu embed ediyor, depoda arıyor, iadelerin otuz gün içinde kabul edildiğini söyleyen chunk'ı buluyor ve cevaplıyor. Buraya kadar her şey yolunda. Sonra kullanıcı dünyanın en doğal devam sorusunu yazıyor: "peki hasarlı ürünler?"
+
+O parçayı retriever'ın okumak zorunda olduğu gibi oku: hafızasız. İçinde "damaged" ve "items" kelimeleri var. "Refund" kelimesi yok. "Policy" yok, "return" yok, onu az önce üzerinde olduğun konuya bağlayan hiçbir şey yok. Bilgi tabanında hasarlı gelen ürünlerin tam iadeye hak kazandığını söyleyen bir madde varsa, kullanıcının istediği tam olarak o madde; ama parça onu bulamaz, çünkü parça hiçbir yerde "refund" demiyor. Daha kötüsü: tabanda bir de kullanıcının yanlış kullanımından kaynaklanan hasarların kapsam dışı olduğunu söyleyen bir madde varsa, çıplak parça en çok ona eşleşir. "Damaged" kelimesini paylaşıyor, kısa ve yanlış. Kullanıcı, bağlam içinde, hasarlı ürünlerin iadesini sordu; hafızasız sistem ise kendinden emin bir şekilde iade-yok politikasını uzatıyor. Bu küçük bir sıralama kaçırması değil. Tam tersi cevap.
+
+Çözüm daha büyük bir index ya da daha iyi bir embedder değil. Doğru chunk zaten depoda oturuyor. Sorun, depoya gönderdiğimiz sorguda, konuşmanın çoktan yerleştirdiği o tek kelimenin eksik olması. O halde çözüm, getirmeden önce konuşmayı okumak ve o kelimeyi geri koymak.
+
+## Sorgu yoğunlaştırma: çekirdek mekanizma
+
+Mekanizmanın adı **sorgu yoğunlaştırma (query condensation)**; geçmişe duyarlı sorgu yeniden yazma (history-aware query rewriting) ya da bağımsız-soru yeniden yazma (standalone-question rewriting) olarak da anılır. Retrieval'dan önce, kullanıcının son turunu o ana kadarki konuşmayı kullanarak kendi başına yeterli bir sorguya yeniden yazarız; sonra retriever'a ham turu değil, yeniden yazılmış sorguyu göndeririz. İadelerle ilgili bir konuşmada "what about damaged items?", "refund policy for damaged items" olarak yoğunlaşır. Bu bağımsız sorgu iadelerden bahsettiği için hasarlı ürün iade maddesini bulur. Index'e çarpan şey asla ham parça değildir.
+
+Bu desenin nereden geldiği konusunda dürüst olmakta fayda var, çünkü tek bir makaleye ait değil. En doğrusu onu yerleşik pratik olarak görmek. Duyacağın isimler (query condensation, condense-question, history-aware retrieval, standalone-question rewriting) konuşmalı retrieval zincirleri tarafından üretimde popülerleştirilmiş pratisyen ve framework sözlüğü; en görünür örneği LangChain'in ConversationalRetrievalChain'i ve onun condense-question adımı, sonradan bir create-history-aware-retriever yardımcısına dönüştürüldü. Akılda kalıcı isimlerin altında, conversational query rewriting diye bilinen akademik bir damar yatıyor: bağlama bağımlı bir devam sorusu, retrieval'dan önce kendi başına yeterli bir sorguya yeniden yazılır. Tek bir hafif referans istersen, CANARD (Elgohary ve arkadaşları, EMNLP 2019) bağlama bağımlı bir soruyu bağımsız bir soruya çeviren question-in-context rewriting'i tanıttı. Yeniden-yaz-sonra-getir mekanizması bütün bu akılda kalıcı isimlerden eski; o yüzden isim babalığını herhangi bir makaleye yakıştırmayacağım.
+
+Bu artifact'ta yoğunlaştırıcı deterministik ve kural tabanlı. Bu bilinçli bir öğretim tercihi; 15. bölümde `classify_complexity` için ve 19. bölümde controller için yaptığımız tercihin tıpkısı: burada şeffaf bir kural bloğu, üretimde eğitilmiş bir model. Kural sürümünün değeri, her devam sorusunun nasıl bağımsız bir sorguya dönüştüğünü, bir modelin içinde hiçbir şey saklı kalmadan tam olarak görebilmen. Bir API anahtarı ayarlıysa, eşlik eden kodun `generate()` ve `build_condense_prompt()` fonksiyonları gerçek LLM yoğunlaştırma prompt'unu gösterir; ama dosya offline çalışabilsin diye her zaman deterministik yeniden yazıcıya düşer ve `generate()`, repo geleneğine uygun olarak OpenAI'ı aktif tutar; yanında Ollama ve yorum satırına alınmış bir claude-opus-4-8 varyantı vardır. İşte işin kalbi, kural yeniden yazıcı, çalıştırılabilir artifact'tan birebir: [conversational_rag.py](/essays/conversational-rag/conversational_rag.py):
+
+```python
+def condense(conversation, follow_up):
+    """Rewrite a follow-up into a standalone query using the history.
+
+    Returns (standalone_query, note). `note` is a short, human-readable reason
+    that the trace prints so you can SEE why the query came out the way it did.
+    """
+    raw = follow_up.strip()
+    low = raw.lower()
+
+    # --- Turn 1 / no history: nothing to condense against. -------------------
+    if conversation.is_empty():
+        return raw, "already standalone -- no rewrite"
+
+    # We condense a follow-up when it is CONTEXT-DEPENDENT: an ellipsis
+    # ("what about ...?") or a dangling pronoun ("that"/"it"). We test those
+    # signals BEFORE the standalone check, because a question can mention the
+    # topic word and STILL dangle -- "how long does that refund take?" says
+    # "refund" yet "that" still needs resolving.
+    is_ellipsis = bool(_WHAT_ABOUT_RE.match(raw))
+    has_pronoun = bool(_PRONOUN_RE.search(raw))
+
+    # --- Already standalone: carries its own topic AND has no dangling
+    #     pronoun/ellipsis. Leave it alone -- splicing a stale topic into a
+    #     fresh question would pollute the retrieval (the "don't condense a
+    #     fresh question" caveat, enforced). ---------------------------------
+    if not is_ellipsis and not has_pronoun and any(t in low for t in _STANDALONE_MARKERS):
+        return raw, "already standalone -- no rewrite"
+
+    topic = _topic_from_history(conversation)
+    if not topic:
+        # Under-rewrite guard: with no recoverable topic we cannot safely fill
+        # the blank, so we pass the raw fragment through rather than invent one.
+        return raw, "no topic in history -- left as-is (would need clarification)"
+
+    # --- Ellipsis: "what about <X>?" -> "<topic> policy for <X>". ------------
+    if is_ellipsis:
+        tail = _WHAT_ABOUT_RE.match(raw).group(1).strip().rstrip("?")
+        standalone = f"{topic} policy for {tail}"
+        return standalone, f"spliced topic '{topic}' from history"
+
+    # --- Coreference: a pronoun ("that"/"it") -> the history topic. ----------
+    if has_pronoun:
+        pron = _PRONOUN_RE.search(raw).group(0)
+        # Replace the FIRST pronoun with the topic noun, then tidy: drop a
+        # leading "and", a trailing "?", and any doubled topic word the user
+        # already supplied ("that refund" -> "<topic> refund" -> "the refund").
+        resolved = _PRONOUN_RE.sub(topic, raw, count=1)
+        resolved = re.sub(r"^\s*and\s+", "", resolved, flags=re.IGNORECASE)
+        resolved = re.sub(rf"\b{topic}\s+{topic}\b", f"the {topic}", resolved,
+                          flags=re.IGNORECASE)
+        resolved = resolved.strip().rstrip("?")
+        return resolved, f"resolved '{pron}' -> {topic}"
+
+    # --- Fallback: prepend the topic so retrieval at least sees it. ----------
+    return f"{topic} {raw.rstrip('?')}", f"prepended topic '{topic}'"
+```
+
+Yapı, kısa bir koruma (guard) merdiveni; her basamak insan tarafından okunabilir bir not döndürüyor, böylece trace sana yalnızca yeniden yazılmış sorguyu değil, nedenini de söylüyor. Geçmişi olmayan ilk tura dokunulmuyor. Sonra yeniden yazıcı, bağlam bağımlılığının iki sinyalini kontrol ediyor: eksiltili bir "what about ...?" kalıbı ve "that" ya da "it" gibi boşta sallanan bir zamir. İkisi de yoksa ve sorgu zaten kendi konusunu söylüyorsa, o taze, bağımsız bir sorudur ve rahat bırakılır; çünkü içine bayat bir konu zorlamak retrieval'ı yalnızca kirletir. Aksi halde yeniden yazıcı konuyu geçmişten geri kazanır; bulamazsa, bir konu uydurmak yerine parçayı olduğu gibi geçirir. Konu eldeyken: eksiltide konu, artakalan öbeğin önüne geri eklenir; zamir, konu ismine çözülür; geri kalan her şeyin başına ise konu, hafif bir ipucu olarak iliştirilir. İçselleştirmen gereken koruma, bağımsızlık koruması; ona geri döneceğim: kendi başına ayakta duran bir soru bilerek rahat bırakılır, çünkü içine bayat bir konu zorlamak onu bozar.
+
+<Diagram number={1} caption="Geçmişe duyarlı pipeline ve neden önemli olduğu. Konuşma geçmişi (mor), birinci turdan 'refund' konusunu taşıyor. Ham devam sorusu 'what about damaged items?' (kehribar) CONDENSE kutusuna giriyor; kutu o konuyu geri ekleyerek bağımsız sorgu 'refund policy for damaged items'ı (camgöbeği) üretiyor. Ders, karşıtlıkta. Naif dal ham parçayı doğrudan Retrieve'e gönderiyor ve yanlış, iade-yok chunk'ına düşüyor (gül rengi), çünkü 'damaged items' tek başına iadelerden hiç bahsetmiyor. Yoğunlaştırılmış dal bağımsız sorguyu gönderiyor ve hasarlı ürün iade maddesine düşüyor (zümrüt). Aynı index, aynı retriever; tek fark sorgunun önce yoğunlaştırılıp yoğunlaştırılmadığı.">
+  <img src="/essays/conversational-rag/part20-condensation.svg" alt="Bir pipeline diyagramı. Solda, conversation history etiketli mor bir kutu önceki turdan gelen refund konusunu tutuyor; kehribar rengi bir kutu ise ham devam sorusu what about damaged items'ı tutuyor. İkisi de ortadaki CONDENSE etiketli kutuya akıyor; kutunun çıkışında standalone query: refund policy for damaged items etiketli camgöbeği bir kutu var. Diyagram sonra her biri bir Retrieve kutusuna ulaşan iki dala ayrılıyor. Üstteki naif dal ham kehribar parçayı doğrudan Retrieve'e taşıyor ve damaged goods caused by customer misuse are not covered yazan, MISS, wrong chunk etiketli gül rengi bir chunk kartında bitiyor. Alttaki yoğunlaştırılmış dal camgöbeği bağımsız sorguyu Retrieve'e taşıyor ve merchandise that arrives damaged qualifies for a full refund yazan, HIT etiketli zümrüt bir chunk kartında bitiyor. Alt yazı şöyle: aynı index, aynı retriever; tek fark sorgunun önce yoğunlaştırılıp yoğunlaştırılmadığı." class="w-full rounded-lg" />
+</Diagram>
+
+## Konuşma hafızası: akan transkript
+
+Yoğunlaştırmanın okuyacağı bir şey lazım ve o şey **konuşma hafızası (conversation memory)**: o ana kadarki turların akan bir transkripti; her tur, bir rol (user ya da assistant) ile o rolün söylediği metnin bir çifti. Bu bir vektör deposu değil ve üzerinde retrieval yapılmıyor. Sadece diyaloğun sırayla tutulan kaydı; yoğunlaştırıcı, son turun örtük bıraktığı konuyu geri kazanmak için onu tarıyor. Kullanıcı "what about damaged items?" dediğinde, yoğunlaştırıcı bu transkripte geri bakıyor, hemen önceki alışverişin iade süresi hakkında olduğunu görüyor ve içeri eklenecek canlı konunun "refund" olduğu sonucuna varıyor.
+
+Artifact'ta bu küçük bir yardımcı: `_topic_from_history(conversation)`, yakın turları en yeniden başlayarak bilinen bir konu ismi için tarıyor; devam sorusunun ucundan tutunduğu konu bu. Bilerek basit: iadeler hakkında dönen bir konuşmada "refund" döndürüyor, hiçbir şey bulamazsa boş bir string döndürüyor ki yeniden yazıcı tahmin etmemesi gerektiğini bilsin. Üretimdeki bir yoğunlaştırıcı tek bir anahtar kelime çekmezdi; bütün transkripti bir dil modeline verir ve öncülün ne olduğuna modelin karar vermesine izin verirdi. Ama şekil iki durumda da aynı. Ortada konuşmanın bir hafızası var ve yeniden yazma adımı onu okuyor. İkinci ve üçüncü turu mümkün kılan şey hafızanın ta kendisi; onsuz her tur bir ada olurdu, ki bu da tam olarak kaçmaya çalıştığımız tek atışlık davranış.
+
+Şimdiden işaretlemek istediğim bir şey var, çünkü ileride bir uyarıya dönüşecek: bu transkript her turla büyüyor. Uzun bir konuşma uzun bir geçmiş demek ve hepsini naifçe okuyan bir yoğunlaştırıcı, yirmi tur öncesinin şu anki soruyla hiçbir ilgisi olmayan konularını içeri çekmeye başlar. Üretim sistemleri pencereyi son birkaç tura kırpar ya da eski turları kompakt, akan bir özete indirger; böylece yoğunlaştırıcının okuduğu geçmiş hem ilgili hem sınırlı kalır. Buna geri döneceğiz.
+
+## Eşgönderim ve eksilti: devam sorularının konuyu gizlediği iki yol
+
+Devam soruları konularını başlıca iki şekilde gizler ve yoğunlaştırıcının her biri için bir kuralı var. Birincisi **eksilti (ellipsis)**: kullanıcı konuyu düpedüz atlar, senin taşıyacağına güvenir. "What about damaged items?" eksiltilidir; düşüncenin tamamı "what about the refund policy for damaged items?"dır ve kullanıcı yeni kısım dışında her şeyi düşürmüştür. Yoğunlaştırıcının `_WHAT_ABOUT_RE` dalı "what about ...?" kalıbını yakalar, artakalan isim öbeğini ("damaged items") alır ve konuyu önüne geri ekleyerek "refund policy for damaged items"ı yeniden kurar. Düşürülen konu hafızadan geri getirilir.
+
+İkincisi **eşgönderim (coreference)**: kullanıcı konuyu söyler, ama bir zamirle. Konuşmamızın üçüncü turu "and how long does that refund take to process?" Buradaki "that", konuşmakta olduğumuz iadeye geri işaret eden bir zamir. Bir retriever zamir çözmez; "that", onun eşleştirebileceği hiçbir içerik taşımaz. Bu yüzden yoğunlaştırıcının zamir dalı göndergeyi öncülüne, geçmişteki konu ismine çözer ve turu "how long does the refund take to process"e çevirir. Artık retrieval'ın üstüne konabileceği gerçek bir içerik kelimesi var, "refund"; ve iadenin beş iş günü içinde işleme alınmasıyla ilgili chunk'ı buluyor.
+
+Aşağıdaki figür konuşmanın tamamını önüne seriyor ki hangi parçaların geçmişe bağımlı, hangilerinin bağımsız olduğunu göresin. Birinci tur kendi başına ayakta duruyor ve dokunulmuyor. İkinci ve üçüncü turların her biri geçmişten sarkıyor: biri eksiltiyle, biri eşgönderimle; ve her biri, ham turun yalnızca ima ettiği konuyu adıyla söyleyen bağımsız bir sorguya çözülüyor.
+
+<Diagram number={2} caption="Üç turluk bir sohbet ve her devam sorusunun yoğunlaştığı bağımsız sorgu. Solda, tek bir konuşmanın sırayla akan kullanıcı ve asistan baloncukları; bağlama bağımlı parçalar vurgulu: ikinci turun eksiltili 'what about ___ items?' kalıbı ve üçüncü turun 'how long does that refund take' içindeki zamiri. Sağda, her turun çözülmüş bağımsız sorgusu; oklar her zamirden ya da eksiltiden, çözüldüğü geçmiş turuna geri gidiyor. Birinci tur zaten bağımsız, yeniden yazılmıyor. İkinci tur düşürdüğü konuyu eksiltiyle geri kazanıyor; üçüncü tur 'that'i eşgönderimle çözüyor. Desen şu: bir devam sorusu, eksik kelimesini geri işaret ettiği turdan ödünç alıyor.">
+  <img src="/essays/conversational-rag/part20-coreference.svg" alt="İki sütunlu bir diyagram. Sol sütun, sırayla akan baloncuklardan oluşan bir sohbet transkripti. Birinci tur, kullanıcı: what's our refund window, vurgusuz, already standalone olarak işaretli. Asistan: refunds within 30 days. İkinci tur, kullanıcı: what about damaged items; what about ___ items kehribar rengiyle vurgulu ve ellipsis olarak işaretli. Asistan: damaged items qualify for a full refund. Üçüncü tur, kullanıcı: and how long does that refund take to process; that kelimesi kehribar rengiyle vurgulu ve coreference olarak işaretli. Sağ sütun her turun çözülmüş bağımsız sorgusunu listeliyor: birinci tur, what's our refund window (değişmemiş); ikinci tur, refund policy for damaged items; üçüncü tur, how long does the refund take to process. Oklar, ikinci ve üçüncü turlardaki vurgulu parçalardan, birinci turun alışverişinde kurulan refund konusuna geri gidiyor ve her devam sorusunun eksik kelimesini nereden ödünç aldığını gösteriyor." class="w-full rounded-lg" />
+</Diagram>
+
+## Üç tur, uçtan uca
+
+İşte konuşmanın tamamı, artifact'ın bastığı haliyle: tek bir akış, üç tur; her biri ham sorguyu, yoğunlaştırılmış bağımsız sorguyu, getirilen chunk'ı ve dayanaklı cevabı gösteriyor. Bilgi tabanı, 6. bölümden 12. bölüme kadar taşıdığımız destek corpus'u; ikinci turun gerçek bir hedefi olsun diye bir hasarlı ürün iade maddesi, karşıtlığın gerçekten can yakması için de bilinçli bir iade-yok çeldiricisi (distractor) eklendi.
+
+```text
+TURN 1
+  user (raw):   What's our refund window?
+  condensed:    What's our refund window?   [already standalone -- no rewrite]
+  retrieved (score=0.41): Our refund window is 30 days from purchase, as long as the product is unused and in its original packaging.
+  assistant:    Our refund window is 30 days from purchase, as long as the product is unused and in its original packaging.
+
+TURN 2
+  user (raw):   What about damaged items?
+  condensed:    refund policy for damaged items   [spliced topic 'refund' from history]
+  retrieved (score=0.26): Merchandise that arrives damaged qualifies for a full refund even outside the usual window; email a photo to support@example.com.
+  assistant:    Merchandise that arrives damaged qualifies for a full refund even outside the usual window; email a photo to support@example.com.
+
+TURN 3
+  user (raw):   And how long does that refund take to process?
+  condensed:    how long does the refund take to process   [resolved 'that' -> refund]
+  retrieved (score=0.41): We process a refund back to your original card within five business days of receiving the return.
+  assistant:    We process a refund back to your original card within five business days of receiving the return.
+```
+
+Birinci tur zaten bağımsız; yoğunlaştırıcı ona dokunmuyor ve retrieval iade-süresi chunk'ına düşüyor. İkinci tur eksilti vakası: ham parça "refund policy for damaged items"a yoğunlaştırılıyor; sorgu artık iadelerden bahsediyor ve hasarlı ürün maddesine düşüyor. Üçüncü tur eşgönderim vakası: "that", "refund"a çözülüyor ve yoğunlaştırılmış sorgu işlem-süresi chunk'ını buluyor. Üç devam sorusu; her biri kendi tarzında eksik belirtilmiş, her biri önce geçmiş okunarak bütünlenmiş.
+
+Şimdi asıl ders olan karşıtlık: ikinci tur, iki şekilde de çalıştırılmış haliyle:
+
+```text
+THE CONTRAST: turn 2 WITHOUT vs WITH condensation
+Follow-up: "What about damaged items?"  (history topic: refund)
+
+  WITHOUT condensation (retrieve the RAW follow-up):
+    retrieved (score=0.19): Damaged goods caused by customer misuse are not covered and must be replaced at full price.
+    -> MISS: 'damaged items' alone never mentions refunds, so the index returns the wrong chunk.
+
+  WITH condensation (retrieve "refund policy for damaged items"):
+    retrieved (score=0.26): Merchandise that arrives damaged qualifies for a full refund even outside the usual window; email a photo to support@example.com.
+    -> HIT: the spliced 'refund' topic lands the query on the damaged-items clause.
+```
+
+Bütün argüman bu sekiz satırda. Yoğunlaştırma olmadan ham parça, corpus'la yalnızca "damaged" kelimesini paylaşıyor ve en güçlü paylaştığı chunk, iade-yok yanlış-kullanım maddesi. Sistem, hasarlı ürünlerin kapsam dışı olduğunu söylüyor; bağlam içindeki gerçeğin tam tersi. Yoğunlaştırmayla, bağımsız sorgu konuşmanın çoktan kurduğu "refund" kelimesini taşıyor ve hasarlı ürünlerin tam iadeye hak kazandığını söyleyen maddeye düşüyor. Aynı retriever, aynı index, aynı kullanıcı niyeti. Tek fark, getirmeden önce konuşmayı okuyup okumadığımız.
+
+İnteraktif figür bunu kendin yürümene izin veriyor. Üç turu adım adım ilerlet, sohbet akışının birikmesini izle; sonra yoğunlaştırma anahtarını çevirip ikinci turu iki şekilde de yeniden çalıştır ve kaçırmanın isabete dönüşmesini gör.
+
+<Diagram number={3} caption="Konuşmayı tur tur adımla. Her basış ham kullanıcı sorgusunu, yoğunlaştırılmış bağımsız sorguyu, getirilen chunk'ı ve dayanaklı cevabı ortaya çıkarıyor; hepsi gerçek bir oturumdaki gibi bir sohbet akışında birikiyor. Yoğunlaştırma anahtarı ikinci turu iki şekilde de yeniden çalıştırıyor: kapalıyken ham 'what about damaged items?' iade-yok yanlış-kullanım maddesini getiriyor ve gözle görülür biçimde kaçırıyor (gül rengi); açıkken yoğunlaştırılmış 'refund policy for damaged items' hasarlı ürün iade maddesine düşüyor (zümrüt). Veri, kanonik kodun gerçek trace'i; yani adımladığın şey, artifact'ın bastığının ta kendisi.">
+  <IframeFigure
+    src="/essays/conversational-rag/part20-conversation.html"
+    title="İnteraktif konuşmalı RAG oynatıcısı. Adımlı bir oynatıcı, üç turluk bir destek konuşmasını yürütüyor. Birinci turda kullanıcı what's our refund window diye soruyor; soru zaten bağımsız, 30 günlük iade-süresi chunk'ını getiriyor ve cevaplıyor. İkinci turda kullanıcı what about damaged items diye soruyor; oynatıcı bunun refund policy for damaged items'a yoğunlaşmasını ve hasarlı ürün tam-iade maddesinin getirilmesini gösteriyor. Üçüncü turda kullanıcı how long does that refund take to process diye soruyor; oynatıcı that'i refund'a çözüyor, yoğunlaştırıyor ve beş iş günlük işlem chunk'ını getiriyor. Yoğunlaştırma aç/kapa anahtarı ikinci turu yeniden çalıştırıyor: yoğunlaştırma kapalıyken ham what about damaged items iade-yok yanlış-kullanım maddesini getiriyor ve gül rengiyle kaçırma olarak işaretleniyor; açıkken yoğunlaştırılmış sorgu tam-iade maddesini getiriyor ve zümrütle isabet olarak işaretleniyor. Her adım ham sorguyu, yoğunlaştırılmış sorguyu, getirilen chunk'ı ve cevabı ortaya çıkarıyor ve hepsi akan bir sohbet dizisinde birikiyor."
+    height={760}
+  />
+</Diagram>
+
+## Ne zaman yoğunlaştırmamalı ve dürüst uyarılar
+
+Yoğunlaştırma, kritik yol üzerinde bir yeniden yazma adımı ve 19. bölümdeki agent döngüsü gibi gerçek bir takas; bedava bir yükseltme değil. Aşağıda uydurulmuş sayı yok, çünkü bu hata kipleri doğrudan mekanizmadan çıkıyor ve sayıya ihtiyaçları yok.
+
+En önemli kuralla başla; `condense`'in ilk dalının kodladığı kural: sahiden taze, bağımsız bir soruyu yoğunlaştırma. Kullanıcı iadelerden bahsediyorken birden "how do I track my order?" diye sorarsa, bu yeni, kendi başına yeterli bir sorudur. İçine "refund" eklemek "refund how do I track my order" üretir; orijinalinden kötüdür, çünkü retrieval artık kullanıcının az önce terk ettiği bir konuya doğru çekiliyordur. Bu **konu değişimi (topic switching)** problemi ve geçmişe koşullanmanın bazen aktif olarak zararlı olmasının sebebi. Yeniden yazıcı, bir turun kendi başına ayakta durduğunu tanımak ve onu rahat bırakmak zorunda. Bizim kural sürümü bunu, daha konuya bakmadan önce, sorgunun zaten kendi konusunu taşıyıp taşımadığını (`_STANDALONE_MARKERS` testi) ve boşta zamir ya da eksilti olup olmadığını kontrol ederek yapıyor; öyleyse sorguyu dokunmadan geri döndürüyor. Model tabanlı bir yeniden yazıcı da aynı itidali öğrenmek zorunda; öğrenemediğinde, konuşmanın bayat konusunu, çoktan başka yere geçmiş bir sorunun içine sürüklüyor.
+
+Sonra yeniden yazmanın kendisi var; iki zıt yönde bozulabilir. **Aşırı yeniden yazabilir (over-rewrite)**: kullanıcının hiç dile getirmediği bir kısıt uydurur ve retrieval'ı kullanıcının sormadığı bir şeye daraltır. Ya da **eksik yeniden yazabilir (under-rewrite)**: sorguyu hâlâ bağlama bağımlı bırakır; boşta bir zamir ya da çözülmemiş bir eksilti kalır, retrieval yalnızca jenerik terimlere eşleşir ve kaçırır. Ve yeniden yazma, kendisi de bir model çağrısı; sorguyu düpedüz bozabilir. İkisinin de altında **zamir ve eşgönderim belirsizliği** yatıyor: bir tur "it" dediğinde, "it"in işaret edebileceği birden fazla şey olabilir ve yanlış bir öncül, retrieval'ı sessizce yanlış varlığın peşine gönderir. Hiçbir şey hata vermez. Sadece yanlış şey hakkında kendinden emin bir cevap alırsın; en pahalı bug türü budur, çünkü fark etmesi en zor olanıdır.
+
+**Geçmiş penceresi (history window)** diğer kalıcı gerilim. İçeri çok fazla eski bağlam katarsan retrieval'ı bayat, konu dışı turlarla sulandırırsın; çok az katarsan mevcut turun bağımlı olduğu öncülü düşürürsün. Transkript sınırsız büyüdüğü için üretim sistemleri onu yakın bir pencereye kırpar ya da eski turları özetler; o çizgiyi nereye çekecekleri gerçek bir ayar kararıdır, detay değil. Son olarak unutma: yoğunlaştırma kritik yola gecikme ve yeni bir hata noktası ekler. Yanlış bir yeniden yazma, akış aşağısındaki her şeyi zehirler ve hatalar artık iki değil üç aşama boyunca birikir: yeniden yaz, sonra getir, sonra oku. Kazanç büyük, tek atışlık bir retriever gerçek bir konuşmaya dönüşüyor; ama bedeli, doğru kurman gereken fazladan bir hareketli parça.
+
+> 💡 **Deneyimden.** Sevk ettiğim ilk konuşmalı asistan fazla hevesle yoğunlaştırıyordu ve nedenini görmem utanç verici uzunlukta bir öğleden sonramı aldı. Bir kullanıcı birkaç turdur faturalama akışımızın derinliklerindeydi, sonra tamamen vites değiştirip "and is there a mobile app?" gibi bir şey sordu. Hafızasıyla gurur duyan yeniden yazıcım, bunu yardımseverce faturalama kokan bir sorguya yoğunlaştırdı, fatura dışa aktarmayla ilgili bir chunk getirdi ve mobil uygulama sorusuna fatura indirme hakkında bir paragrafla cevap verdi. Kullanıcı, gayet haklı olarak, botun bozuk olduğunu düşündü. İşi çileden çıkarıcı yapan şuydu: aynı yeniden yazıcı, gerçekten devam sorusu olan her devam sorusunda kahramandı; bozduğu yalnızca konu değişimleriydi. Çözüm daha sert yoğunlaştırmak değildi; ona yoğunlaştırmamayı öğretmekti: kendi başına yeterli bir soruyu tanıyıp dokunmadan geçirmeyi. O günden beri kurduğum her yoğunlaştırıcıda "rahat bırak"a birinci sınıf bir dal olarak güveniyorum. En çok hasarı veren yeniden yazma, ona hiç ihtiyacı olmayan bir soruya uygulanandır.
+
+{/* author: swap the above for your own real first-person conversational-RAG story if you have a better one, e.g. a chatbot that answered a follow-up against the wrong history topic, or a condenser that over-rewrote a fresh question, or a dangling pronoun that retrieved the wrong entity; keep the concrete failure and the lesson that not condensing is a real branch, and keep it em-dash-free. */}
+
+## Özet çıkarımlar
+
+- **Tek atışlık RAG devam sorularında kırılır.** Retriever'a yazıldığı gibi gönderilen "what about damaged items?" iadelerden hiç bahsetmez; dolayısıyla iade maddesini bulamaz ve tam tersiyle, bir iade-yok çeldiricisiyle eşleşebilir. Doğru chunk depoda; sorguda ise konuşmanın çoktan kurduğu kelime eksik.
+- **Sorgu yoğunlaştırma (query condensation)** çözümün adı: getirmeden önce, bağlama bağımlı devam sorusunu geçmişi kullanarak kendi başına yeterli, bağımsız bir sorguya yeniden yaz ve index'e onu gönder. "What about damaged items?", "refund policy for damaged items" olur. Ham parça index'e asla dokunmaz.
+- **Konuşma hafızası**, yoğunlaştırıcının bir devam sorusunun örtük bıraktığı konuyu geri kazanmak için okuduğu, (user, assistant) turlarından oluşan akan transkript. Her turun bir ada olması ile diyaloğun bağlamı ileri taşıması arasındaki fark budur.
+- Devam soruları konularını **eksiltiyle** (konu düşürülür, "what about ...?" gibi) ve **eşgönderimle** (konu bir zamirle anılır, "how long does that take?" gibi) gizler. Yoğunlaştırıcı düşürülen konuyu geri ekler ya da zamiri geçmişteki öncülüne çözer.
+- **Taze, bağımsız bir soruyu yoğunlaştırma.** Konu değişiminde eski konuyu içeri katmak, çoktan başka yere geçmiş bir sorguyu kirletir. Bir turu ne zaman rahat bırakacağını tanımak birinci sınıf bir daldır, sonradan akla gelmiş bir şey değil.
+- Dürüst takas: yoğunlaştırma aşırı yeniden yazabilir (kısıt uydurur) ya da eksik yeniden yazabilir (zamiri boşta bırakır); zamirler belirsiz olabilir; geçmiş penceresi sınırsız büyür ve kırpılmalı ya da özetlenmelidir; ve yeniden yazma gecikmeyle birlikte yeni bir hata noktası ekler; hatalar yeniden yazma, getirme ve okuma boyunca birikir.
+
+## Sözlük
+
+- **Konuşmalı RAG (Conversational RAG)**: çok turlu bir diyaloğun içinde çalışan, bağlamı turlar arasında taşıyan retrieval-augmented generation; her sorguyu izole, eksiksiz bir düşünce gibi ele almak yerine, ancak geçmişle anlam kazanan devam sorularının doğru cevaplanmasını sağlar.
+- **Sorgu yoğunlaştırma (query condensation)**: geçmişe duyarlı sorgu yeniden yazma ya da bağımsız-soru yeniden yazma olarak da anılan adım; bağlama bağımlı bir devam sorusunu, retrieval'dan önce konuşma geçmişini kullanarak kendi başına yeterli, bağımsız bir sorguya yeniden yazar; index'e çarpan, bu yeniden yazılmış sorgudur.
+- **Konuşma hafızası (conversation memory)**: sırayla tutulan (user, assistant) turlarının akan transkripti; yoğunlaştırıcı, bir devam sorusunun örtük bıraktığı konuyu geri kazanmak için onu okur; bir vektör deposu değildir ve üzerinde retrieval yapılmaz, sadece diyaloğun akan kaydıdır.
+- **Eşgönderim (coreference)**: bir devam sorusunun konusunu, konuşmada daha önce kurulmuş bir öncülün yerine geçen bir zamirle ("that", "it", "this") anması; yoğunlaştırıcı zamiri konu ismine çözer ki retrieval'ın eşleşecek bir içerik kelimesi olsun.
+- **Eksilti (ellipsis)**: konusunu tamamen atlayan, dinleyicinin taşıyacağına güvenen bir devam sorusu ("what about the refund policy for damaged items?" yerine "what about damaged items?"); yoğunlaştırıcı düşürülen konuyu geçmişten geri ekler.
+- **Geçmiş penceresi (history window)**: yoğunlaştırıcının okumasına izin verilen önceki tur dilimi; çok geniş olursa retrieval bayat, konu dışı bağlamla sulanır; çok dar olursa mevcut turun ihtiyaç duyduğu öncül düşer; bu yüzden üretim sistemleri onu ilgili ve sınırlı tutmak için yakın turlara kırpar ya da eski turları özetler.
+
+---
+
+Bu, önceki bölümün açık bıraktığı döngüyü kapatıyor. 19. bölüm akıl yürütüp eyleme geçebilen ama her soruyu cevapladığı anda unutan bir agent kurmuştu. Burada pipeline'a bir hafıza verdik ve hafızayı retrieval'a çeviren tek mekanizmayı: her devam sorusunu bağımsız bir soruya yoğunlaştır; index'i okumadan önce konuşmayı oku. Birinci tur kendi başına ayaktaydı, ikinci tur "refund"ı geçmişten eksiltiyle ödünç aldı, üçüncü tur "that"i eşgönderimle çözdü; ve üçü boyunca ham parça depoya hiç dokunmadı. Dokunan, bağımsız sorguydu. Bütün hamle bu; küçük ama yük taşıyan. Bir arama kutusunu, gerçekten konuşabileceğin bir şeyden ayıran da bu. Buraya nasıl geldiğimizin herhangi bir ipliğini, ilk embedding'den bu konuşmaya kadar yeniden ziyaret etmek istersen, serinin tamamı [RAG from First Principles hub'ında](/essays/rag) toplu halde. Konuşmayı da yanında getir. Artık hatırlıyor.

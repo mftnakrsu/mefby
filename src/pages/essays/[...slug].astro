@@ -1,5 +1,5 @@
 ---
-import { getCollection, type CollectionEntry } from 'astro:content';
+import { getCollection, render, type CollectionEntry } from 'astro:content';
 import EssayLayout from '../../layouts/EssayLayout.astro';
 
 export async function getStaticPaths() {
@@ -20,14 +20,14 @@ export async function getStaticPaths() {
   }
 
   const lite = (e: CollectionEntry<'essays'> | undefined | null) =>
-    e ? { slug: e.slug, title: e.data.title, seriesOrder: e.data.seriesOrder } : null;
+    e ? { slug: e.id, title: e.data.title, seriesOrder: e.data.seriesOrder } : null;
 
   return essays.map((essay) => {
     const group = essay.data.seriesOrder != null ? (seriesByKey.get(essay.data.series) ?? []) : [];
-    const i = group.findIndex((e) => e.slug === essay.slug);
+    const i = group.findIndex((e) => e.id === essay.id);
     const inSeries = i !== -1;
     return {
-      params: { slug: essay.slug },
+      params: { slug: essay.id },
       props: {
         essay,
         prevEssay: inSeries && i > 0 ? lite(group[i - 1]) : null,
@@ -50,7 +50,7 @@ interface Props {
   seriesTotal: number | null;
 }
 const { essay, prevEssay, nextEssay, seriesTotal } = Astro.props;
-const { Content } = await essay.render();
+const { Content } = await render(essay);
 ---
 
 <EssayLayout
@@ -59,7 +59,7 @@ const { Content } = await essay.render();
   date={essay.data.date}
   tags={essay.data.tags}
   lang={essay.data.lang}
-  slug={essay.slug}
+  slug={essay.id}
   summary={essay.data.summary}
   translationSlug={essay.data.translationSlug}
   codeUrl={essay.data.codeUrl}

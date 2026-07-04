@@ -28,7 +28,7 @@ You need basic Python (a list of dictionaries, a function passed as an argument,
 
 Let me name the pieces on the concrete data before wiring them, because the whole design is that each piece knows nothing about the others.
 
-**Piece one is the dataset.** For the QA runs it is ten capital-city questions, a nod to the RAG answer-quality eval of RAG Part 8. Each row holds a question, a gold short answer, and the system's candidate answer:
+**Piece one is the dataset.** For the QA runs it is ten capital-city questions, a nod to the RAG answer-quality eval of RAG Part 11. Each row holds a question, a gold short answer, and the system's candidate answer:
 
 ```python
 QA = [
@@ -39,7 +39,7 @@ QA = [
 ]
 ```
 
-Row six is the interesting one. The candidate `Washington, D.C.` is a correct answer for the capital of the USA, but it is not the literal string `Washington`. Hold on to that row; it is where the two scorers will disagree.
+The USA row is the interesting one. The candidate `Washington, D.C.` is a correct answer for the capital of the USA, but it is not the literal string `Washington`. Hold on to that row; it is where the two scorers will disagree.
 
 **Piece two is the scorer**, a function from one record to a number in the range zero to one. The strict version is exact match: normalize both strings by lowercasing and stripping whitespace, then return `1.0` only if they are identical.
 
@@ -59,7 +59,7 @@ def mock_judge(rec):
     return 1.0 if (g in c or c in g) else 0.0
 ```
 
-Now `washington` is contained in `washington, d.c.`, so the judge awards row six a full point where exact match awarded zero. A real judge would swap in behind a `generate()` call, but the verdict stays a zero or a one, so everything downstream is untouched. The trajectory scorer, for the agent runs, gives partial credit per step, exactly the step-level scoring of Part 14: count the positions where the gold and predicted tool call agree, then divide by the longer of the two sequences so an extra or missing step is penalized.
+Now `washington` is contained in `washington, d.c.`, so the judge awards the USA row a full point where exact match awarded zero. A real judge would swap in behind a `generate()` call, but the verdict stays a zero or a one, so everything downstream is untouched. The trajectory scorer, for the agent runs, gives partial credit per step, exactly the step-level scoring of Part 14: count the positions where the gold and predicted tool call agree, then divide by the longer of the two sequences so an extra or missing step is penalized.
 
 ```python
 def trajectory_match(rec):
@@ -85,7 +85,7 @@ def gate(ci_lo, bar):
 
 ## Run one: strict exact match holds
 
-Feed the ten QA rows through the harness with the exact-match scorer and a release bar of 0.35. Seven of the ten candidates match their gold after normalization; three do not. Sydney is not Canberra, Rio de Janeiro is not Brasilia, and Milan is not Rome, so those three score zero. Row six, `Washington, D.C.`, also scores zero, because strict matching cannot see that it is right. That gives six ones and four zeros:
+Feed the ten QA rows through the harness with the exact-match scorer and a release bar of 0.35. Seven of the ten candidates are correct answers; three are not. Sydney is not Canberra, Rio de Janeiro is not Brasilia, and Milan is not Rome, so those three score zero. The USA row, `Washington, D.C.`, also scores zero, because strict matching cannot see that it is right. That gives six ones and four zeros:
 
 ```text
   n = 10   mean score = 0.60
@@ -97,7 +97,7 @@ A mean of 0.60 looks like a passing grade, the kind of number you might quote in
 
 ## Run two: the judge ships the same data
 
-Change one argument. Keep the same ten QA rows, keep the same 0.35 bar, keep the same seed, and pass the mock judge instead of exact match. The judge accepts everything exact match accepted, and it additionally accepts row six, because `washington` is contained in `washington, d.c.`. Sydney, Rio, and Milan are still genuinely wrong and still score zero. So one zero flips to a one, seven ones become seven, and the mean climbs:
+Change one argument. Keep the same ten QA rows, keep the same 0.35 bar, keep the same seed, and pass the mock judge instead of exact match. The judge accepts everything exact match accepted, and it additionally accepts the USA row, because `washington` is contained in `washington, d.c.`. Sydney, Rio, and Milan are still genuinely wrong and still score zero. So one zero flips to a one, the six ones stay six, and the mean climbs:
 
 ```text
   n = 10   mean score = 0.70
@@ -119,7 +119,7 @@ Now swap the dataset too, not just the scorer, to show the harness does not care
   schedule a meeting  gold=[calendar,email]               pred=[calendar,email]         -> 1.00
 ```
 
-Walk two of them. The perfect match, `answer from a doc`, agrees at all three positions and both sequences are length three, so it scores three over three, a full 1.00. `compute a total` agrees at positions one and three (`search` and `answer`) but the agent called `weather` where it should have called `calculator`, so two of three positions match and it scores 0.67. `summarize findings` matches the first two steps but the agent stopped short, giving a three-step path where four were needed, so three matches over a max length of four is 0.50. `quick lookup` matches only the first position and pads with an extra `search`, so one over three is 0.33. Average the five per-item scores (1.00, 0.67, 0.50, 0.33, 1.00) and you get:
+Walk two of them. The perfect match, `answer from a doc`, agrees at all three positions and both sequences are length three, so it scores three over three, a full 1.00. `compute a total` agrees at positions one and three (`search` and `answer`) but the agent called `weather` where it should have called `calculator`, so two of three positions match and it scores 0.67. `summarize findings` matches the first two steps but the agent stopped short, giving a three-step path where four were needed, so two matches over a max length of four is 0.50. `quick lookup` matches only the first position and pads with an extra `search`, so one over three is 0.33. Average the five per-item scores (1.00, 0.67, 0.50, 0.33, 1.00) and you get:
 
 ```text
   n = 5   mean score = 0.70
@@ -167,4 +167,4 @@ The interactive figure lets you run the harness yourself. Toggle the scorer betw
 
 ---
 
-That closes the loop the whole series opened. RAG Part 8 handed you a way to score a retrieval answer and Agents Part 17 handed you a way to grade a trajectory, and both now sit inside one harness that also knows how uncertain each score is and whether it clears the bar. Fifteen parts ago a score was a single lonely number said out loud in a meeting; you can now build that number by hand, put an honest interval around it, and gate a release on the interval's floor instead of its middle. Carry that one habit, CI lower bound versus a bar rather than a point estimate versus a hope, into whatever you build next, and you will always be able to tell a real gain from noise.
+That closes the loop the whole series opened. RAG Part 11 handed you a way to score a retrieval answer and Agents Part 17 handed you a way to grade a trajectory, and both now sit inside one harness that also knows how uncertain each score is and whether it clears the bar. Fifteen parts ago a score was a single lonely number said out loud in a meeting; you can now build that number by hand, put an honest interval around it, and gate a release on the interval's floor instead of its middle. Carry that one habit, CI lower bound versus a bar rather than a point estimate versus a hope, into whatever you build next, and you will always be able to tell a real gain from noise.

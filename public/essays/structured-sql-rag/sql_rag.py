@@ -196,7 +196,7 @@ def generate_sql(question, retrieved):
         return "SELECT COUNT(*) FROM orders WHERE status = 'refunded';"
 
     # "how many <tier> customers" -> COUNT over customers, filtered by tier.
-    if "how many" in q and "customers" in tables:
+    if "how many" in q and "customer" in q and "customers" in tables:
         for tier in ("enterprise", "pro", "free"):
             if tier in q:
                 return f"SELECT COUNT(*) FROM customers WHERE tier = '{tier}';"

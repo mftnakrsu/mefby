@@ -12,8 +12,9 @@ export const fmtMaybe = (s: string): string => {
 
 // ~200 wpm reading time from the raw markdown body, counting prose rather than
 // MDX/JSX syntax (imports, <Diagram> blocks, fenced code, markdown punctuation).
-export const readingTime = (body: string): number => {
-  const words = body
+// `body` is optional because the Content Layer API types it as `string | undefined`.
+export const readingTime = (body: string | undefined): number => {
+  const words = (body ?? '')
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/^import\s.+$/gm, ' ')
     .replace(/<[^>]+>/g, ' ')

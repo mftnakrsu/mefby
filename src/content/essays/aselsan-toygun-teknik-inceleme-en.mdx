@@ -156,7 +156,7 @@ The system sends a short laser pulse, measures the **round-trip time** of the ec
 
 The relation: **d = c · t / 2**, where *c* is the speed of light and *t* is the round-trip time. It is divided by two because the light path goes to the target and comes back. Example: for 35 km, *t* ≈ 233 microseconds. In this duration, a timing error of 233 nanoseconds corresponds to a range error of 35 meters; that is, the timing electronics must be of the nanosecond class.
 
-A few practical subtleties: if the target is behind a cloud, or in rain, the pulse is heavily absorbed and does not return (loss of range measurement); if there are multiple reflective surfaces in the scene (glass, protected buildings), multiple echoes occur, and the system uses "first/last pulse logic" to select the correct one among them. Furthermore, the scattering caused by air molecules is even more pronounced at the eye-safe wavelength.
+A few practical subtleties: if the target is behind a cloud, or in rain, the pulse is heavily absorbed and does not return (loss of range measurement); if there are multiple reflective surfaces in the scene (glass, protected buildings), multiple echoes occur, and the system uses "first/last pulse logic" to select the correct one among them. Furthermore, since molecular (Rayleigh) scattering falls off with the fourth power of wavelength, it is markedly weaker at the longer eye-safe wavelength (1570 nm) than at 1064 nm.
 
 ### Designation: coded pulse and guidance
 
@@ -180,7 +180,7 @@ The trouble is that optical elements do not stay fixed: temperature (the operati
 
 Thus throughout the mission, despite changing conditions, the equality "**the point seen = the point hit**" is preserved.
 
-**Why is this so important?** Geolocation (Section 10) and laser guidance (Section 7) rely on the assumption that the camera and the laser *look in the same direction*. Boresight is the quiet but critical subsystem that keeps this assumption continuously valid; without it, both coordinate generation and designation become unreliable. On platforms like the F-35, the IBS is a subsystem of the same criticality; a significant portion of the Block 4 upgrades is aimed at improving this alignment discipline.
+**Why is this so important?** Geolocation (Section 10) and laser guidance (Section 8) rely on the assumption that the camera and the laser *look in the same direction*. Boresight is the quiet but critical subsystem that keeps this assumption continuously valid; without it, both coordinate generation and designation become unreliable. On platforms like the F-35, the IBS is a subsystem of the same criticality; a significant portion of the Block 4 upgrades is aimed at improving this alignment discipline.
 
 ## Geolocation: turning an angle into a coordinate
 
@@ -217,11 +217,11 @@ The truly important point is **passivity**. The thermal camera emits no signal; 
 
 Let us now line up all the subsystems described so far in the order they occur in a real mission.
 
-<Diagram number="10" caption="A typical end-to-end engagement. Scanning and recognition are entirely passive; only in step 5 does a brief, narrow laser beam go out. In step 6, either the guided munition locks onto the target or the produced coordinate is handed over to another platform.">
+<Diagram number="10" caption="A typical end-to-end engagement. Scanning and recognition are entirely passive; the first active emission is the brief laser ranging pulse in step 4, followed by a narrow designation beam in step 5. In step 6, either the guided munition locks onto the target or the produced coordinate is handed over to another platform.">
   <img src="/essays/aselsan-toygun-teknik-inceleme/10-end-to-end.svg" alt="End-to-end engagement flow: scan → detect → lock → range → designate → strike/handover." class="w-full" />
 </Diagram>
 
-The flow below shows the typical steps from the detection of a target to its strike (or its handover to another unit). The thing to note is that throughout all of these steps the aircraft's **radar can remain off**; the system operates passively from start to finish, and only at the moment of designation does a narrow laser beam go out.
+The flow below shows the typical steps from the detection of a target to its strike (or its handover to another unit). The thing to note is that throughout all of these steps the aircraft's **radar can remain off**; the system operates passively through scanning and recognition; the laser fires only briefly, for ranging (step 4) and designation (step 5).
 
 1. **Scan:** Survey the scene with MWIR (IRST), collect hot signatures.
 2. **Detect & recognize:** ATR finds and classifies the target; the operator evaluates it against the verification threshold.
@@ -230,7 +230,7 @@ The flow below shows the typical steps from the detection of a target to its str
 5. **Designate:** "Paint" the target with the coded laser (brief, in a narrow cone).
 6. **Strike / handover:** The guided munition locks on; or the produced coordinate is handed over to another unit (another aircraft, a battery, etc.).
 
-This sequence also answers the question "when passive, when active": in steps 1–4 the system is silent, there is no emission. The only active moment is the brief laser shot in step 5; and its direction/time window is narrow too. The laser wavelength (1064 nm in combat) is detectable not by typical enemy ESM/RWR sensors but by dedicated laser warning receivers (LWR); that is, the engagement's visible footprint is minimal.
+This sequence also answers the question "when passive, when active": in steps 1–3 the system is silent, there is no emission. The first active moment is the brief laser ranging pulse in step 4, followed by the designation shot in step 5; both have narrow direction/time windows. The laser wavelength (1064 nm in combat) is detectable not by typical enemy ESM/RWR sensors but by dedicated laser warning receivers (LWR); that is, the engagement's visible footprint is minimal.
 
 ## Technical specifications & F-35 EOTS comparison
 

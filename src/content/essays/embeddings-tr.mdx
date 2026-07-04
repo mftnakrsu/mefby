@@ -1,0 +1,264 @@
+---
+title: "Gömüler (Embeddings), Gerçekten Anlaşılmış"
+description: "RAG 'ilgili' bilgiyi getirir, ama bir bilgisayar neyin ilgili sayılacağına nasıl karar verir? Retrieval-Augmented Generation (RAG) üzerine sıfırdan bir serinin 2. bölümü: anlamı sayılara nasıl çeviririz, benzer anlamlar neden yan yana düşer ve anlamla aramayı mümkün kılan sessiz geometrik numara."
+date: 2026-06-09
+tags: ["RAG", "Embeddings", "Vectors", "NLP", "Semantic Search", "AI", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-02-embeddings"
+ogImage: "/og/embeddings.png"
+lang: "tr"
+translationSlug: "embeddings"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+1. Bölüm'de RAG'in *ilgili bilgiyi getirerek* ve modele teslim ederek çalıştığını söylemiştik. O cümle, tüm hattın en zor fikrini sessizce içine gizlemişti: *ilgili* bir bilgisayar için ne anlama gelir, ve yalnızca aritmetik yapan bir makine iki cümlenin *aynı şeyden bahsettiğine* nasıl karar verebilir? Bu bölümün sonunda, sade bir dille, bir metin parçasını **gömü (embedding)** denen bir sayı listesine nasıl çevirdiğimizi, bunun *anlamı* neden *uzayda bir konuma* dönüştürdüğünü (böylece benzer fikirler yan yana oturur) ve bunun bir bilgisayarın anahtar kelime eşleştirmek yerine anlamla arama yapmasını sağlayan numara olduğunu anlamış olacaksın. Çoğunlukla kavramsal kalacağız: bolca sezgi ve görsel, somutlaştırmak için de tek bir minik kod parçacığı. Tam kod inşası serinin ilerisinde geliyor.
+
+## Ön koşullar
+
+1. Bölüm, [RAG Neden Var?](/essays/why-rag-exists-tr). RAG'in *neden* var olduğunu (sade bir model, senin özel ve yakın zamanlı verin hakkında kendinden emin biçimde yanılır) ve yedi duraklı hattı kafanda tutuyor olman gerekiyor: belge, parça, gömme, saklama, getirme, zenginleştirme, üretim. Bugün üçüncü durakta, **gömme (embed)**'de yavaşlıyoruz; çünkü sonrasındaki her şey bunu doğru yapmana bağlı. Temel Python fazlasıyla yeterli; ona zar zor değiniyoruz.
+
+## Tüm hattın altındaki soru
+
+1. Bölüm boyunca kullandığımız örneği geri getireyim. Elinde bir `refund-policy.md` dosyası var ve parçalarından biri şöyle diyor:
+
+> "Satın alımdan sonraki 30 gün içinde iadeler kabul edilir."
+
+Bir kullanıcı bir soru yazıyor:
+
+> "İade süremiz nedir?"
+
+Sen ve ben bu iki satırı okuyup aynı şeyden bahsettiklerini anında görüyoruz. Ama onlara bir bilgisayarın baktığı gibi, ham karakterler olarak bak. Neredeyse hiç ortak kelimeleri yok. Soru hiç "30" demiyor, hiç "gün" demiyor, hatta hiç "kabul" bile demiyor. Parça da hiç "süre" demiyor. Eşleşen kelimeleri arayan naif bir arama, neredeyse ilgisiz iki metin dizisi görür ve yanlış parçayı, ya da hiçbir şeyi geri döndürebilir.
+
+İşte sorun tek cümlede, ve bu bölümün var oluş sebebi tam olarak bu sorunu çözmek: **kullanıcı kendi kelimeleriyle sorar, senin belgelerin başka birinin kelimeleriyle yazılmıştır, ve "ilgili" *anlamca benzer* demek olmak zorundadır, *yazılışça benzer* değil.** Getirme, RAG'deki "R", bunu doğru yapıp yapmamasına göre yaşar ya da ölür. Bir bilgisayar ilgili parçayı bulabilmeden önce, *anlamı ölçmenin* bir yoluna ihtiyacı var. Ve bilgisayarlar yalnızca tek bir tür şeyi ölçer: sayıları.
+
+## Bilgisayarlar matematik yapar, anlam değil
+
+Bir bilgisayar iki anlamı doğrudan karşılaştıramaz. "İade"nin *ne anlama geldiği* hakkında hiçbir fikri yok. Yapabildiği şey, göz açıp kapayana kadar, sayıları karşılaştırmak. Yani tüm oyun şu: **her metin parçasını, anlamı koruyacak biçimde sayılara çevir, sonra modelin kelimeler üzerinde değil, o sayılar üzerinde aritmetik yapmasına izin ver.**
+
+Bariz soru *nasıl* olduğu. İnsanların ilk uzandığı iki fikri birlikte gözden geçirelim, çünkü ikisi de başarısız oluyor ve tam olarak *neden* başarısız olduklarını anlamak, gömülere olabilecek en temiz motivasyonu veriyor.
+
+### Naif fikir 1: one-hot encoding
+
+Sisteminin görebileceği her farklı kelimeyi listeleyerek başla. O liste senin **kelime dağarcığındır (vocabulary)**; ve gerçek metin için devasadır: onlarca bin, çoğu zaman yüzbinlerce kelime.
+
+Şimdi tek bir kelimeyi bir sayı listesi olarak temsil et: kelime dağarcığındaki her kelime için bir yuva, ve her yuva `0` olsun, yalnızca *bu* kelimenin yuvası hariç, o da `1` olsun. İşte **one-hot encoding** bu: bir yuva "sıcak" (1'e ayarlı) ve geri kalan hepsi soğuk. "King" kelimen kelime dağarcığında 5.732 numaralı kelimeyse, "king" diyelim 100.000 sayılık bir listeye dönüşür; bu liste, 5.732. konumdaki tek bir `1` dışında tamamen sıfırdır.
+
+Bir kelimeyi sayılara çevirmenin geçerli bir yolu. Ama anlam için işe yaramaz, tekrar tekrar karşımıza çıkacak iki sebepten ötürü.
+
+Birincisi, listeler devasa ve neredeyse tamamen boş. 100.000 sayı uzunluğunda ama tek bir `1` içeren bir liste, bizim **seyrek vektör (sparse vector)** dediğimiz şeydir: girdileri çoğunlukla sıfır olan bir vektör. (Bizim amaçlarımız için bir **vektör**, sadece sıralı bir sayı listesidir. Bu tanımı birazdan netleştireceğiz.) Seyrek vektörler saklamak için israf, ölçekte çalışmak için yavaştır.
+
+İkincisi, ve asıl öldürücü olan bu: one-hot vektörler *hiçbir benzerlik kavramı* taşımaz. Her kelime kendi özel yuvasında oturur, başka hiçbir şeye değmez. "King" vektörü ile "queen" vektörü, tek `1`'lerini farklı konumlarda taşır; dolayısıyla herhangi bir yakınlık ölçüsüne göre, "king" ile "banana" kadar birbirinden uzaktırlar. Kodlamanın, kralların ve kraliçelerin birbiriyle bir ilgisi olduğunu ifade etmesinin hiçbir yolu yok. Anlam hiç yakalanmadı; yalnızca *kimliği* yakaladık: bu kelimenin şu kelime olmadığı çıplak gerçeğini.
+
+### Naif fikir 2: bag-of-words
+
+Bir adım ötesi **bag-of-words**. Tek bir kelimeyi kodlamak yerine, her kelime dağarcığı kelimesinin pasajda kaç kez geçtiğini sayarak koca bir pasajı kodlarız. Pasaj, kelime dağarcığı üzerinde tek uzun bir vektöre dönüşür; çoğu yuva `0`'dır, birkaçı `1`, `2`, `3` gibi sayımlar tutar. Buna "çuval" diyoruz çünkü tüm kelimeleri bir torbaya atıp sayıyoruz, sıralarına dair hiçbir kayıt tutmuyoruz: "the dog bit the man" ve "the man bit the dog" birebir aynı vektörü üretir.
+
+Bag-of-words bazı görevler için gerçekten kullanışlıdır ve klasik anahtar kelime aramasının atasıdır. Ama *anlam* için aynı duvara çarpar. Vektörler yine devasa ve seyrek. Genelde anlamı taşıyan kelime sırası çöpe atılır. Ve en kötüsü, iki pasaj yalnızca *aynı kelimeleri* tekrar kullanıyorlarsa benzer sayılır. Süregelen örneğimize dönelim. Parça "satın alımdan sonraki 30 gün içinde iadeler kabul edilir" diyor; soru "iade süremiz" hakkında soruyor. Neredeyse hiç ortak kelime yok, bu yüzden bag-of-words onları zar zor ilgili sayar, oysa tam olarak aynı şeyi soruyor ve cevaplıyorlar. Eş anlamlılar, başka sözcüklerle ifade ediş, dilin tüm esnek dokusu: ona görünmez.
+
+İki naif yöntem de aynı kök sebepten başarısız olur. **Metnin yüzey biçimini, harfi harfine karakterleri kodlarlar, asla anlamı değil.** İstediğimiz şey bunun tam tersi: sayıları *anlamın* yönlendirdiği bir temsil; öyle ki "iade süresi" ile "30 gün içinde iadeler" yakın çıksın, "iade süresi" ile "muz ekmeği tarifi" ise uzak çıksın. O temsil bir gömüdür (embedding). Onu düzgünce tanımlamadan önce, işte yan yana kontrast:
+
+<Diagram number={1} caption="Solda: one-hot / bag-of-words vektörleri uzun, çoğunlukla boş ve ilgili kelimeleri ilgisiz yuvalara koyuyor. Sağda: yoğun bir gömü (dense embedding) her kelimeye kısa, anlamlı bir sayı listesi veriyor; böylece king, queen ve prince kümeleniyor, banana ise uzakta duruyor.">
+  <img src="/essays/embeddings/part2-naive-vs-embeddings.svg" alt="Yan yana bir karşılaştırma. Solda, king, queen ve banana için üç uzun seyrek vektör; her biri çoğunlukla sıfırlardan oluşan ve farklı bir konumda tek bir 1 taşıyan uzun bir sütun, ve king'in queen'e olan uzaklığının banana'ya olan uzaklığıyla tam olarak eşit olduğuna dair bir not. Sağda, küçük bir uzayda nokta olarak çizilmiş üç kısa yoğun ondalık sayı vektörü; king, queen ve prince sıkı bir küme oluşturuyor, banana ise kendi bölgesinde uzakta duruyor." class="w-full rounded-lg" />
+</Diagram>
+
+## Bir gömü (embedding) gerçekte nedir
+
+İşte tanım, dobra dobra:
+
+> Bir **gömü (embedding)**, bir metin parçasını, *anlam uzayda konuma dönüşecek* şekilde temsil eden sayılardan oluşan bir **yoğun vektördür (dense vector)**: benzer anlamlı metinler yakın oturan vektörler alır, farklı anlamlı metinler uzak oturan vektörler alır.
+
+O cümledeki her yük taşıyan kelimeyi tek tek açayım, çünkü her biri önemli.
+
+Bir **vektör**, sıralı bir sayı listesidir, bundan daha egzotik bir şey değil. `[0.7, -0.2, 0.9]` bir vektördür. Sıra, verinin bir parçasıdır: ilk sayı ikinciden farklı bir şey ifade eder. Bir vektörü uzayda bir *nokta* ya da bir *ok* olarak da düşünebilirsin. `[0.7, -0.2, 0.9]` vektörü, birinci eksende 0.7, ikinci eksende -0.2, üçüncü eksende 0.9 giderek ulaştığın noktadır. Bu çift doğa, hem "bir sayı listesi" hem "uzayda bir konum" olması, bu işin çalışmasının tüm sebebidir ve buna sürekli yaslanacağız.
+
+Bir **boyut (dimension)**, o sayılardan biri, listedeki bir yuva, uzaydaki bir eksendir. 3 sayılık bir vektör 3 boyutludur ve gerçekten çizebileceğimiz bir uzayda yaşar. Gerçek gömüler yüzlerce ya da binlerce boyuta sahiptir; birazdan oraya geleceğiz.
+
+**Yoğun (dense)**, yukarıdaki seyrek vektörlerin zıttıdır. Bir **yoğun vektörün** girdilerinin *çoğu veya hepsi* gerçek, sıfırdan farklı bir değer taşır, `[0.021, -0.34, 0.88, 0.05, ...]` gibi. One-hot vektör tek bir şeyi söylemek için 100.000 yuvayı israf ederken, yoğun bir gömü yalnızca birkaç yüz yuva kullanabilir; bunların *her biri* anlama azıcık katkı yapar. Hiçbir şey israf edilmez ve daha da önemlisi, sayılar pürüzsüzce değişir: anlamı biraz kıpırdat, sayılar da biraz kıpırdasın. İşte bu pürüzsüzlük, "sayıca yakın"ın "anlamca yakın" yerine geçmesini tam olarak mümkün kılan şeydir.
+
+Yani bir gömü, bir metin parçasını içeri alır ve anlamlı sayılardan oluşan kompakt bir liste dışarı verir. Onu bir makine, bir fonksiyon olarak düşün: bir tarafında metin, diğer tarafında bir vektör.
+
+<Diagram number={2} caption="Bir gömü modeli bir fonksiyondur: içeri metin girer, dışarı sabit uzunlukta bir yoğun vektör çıkar; bunu bir anlam-uzayına bırakılmış tek bir nokta olarak da okuyabiliriz.">
+  <img src="/essays/embeddings/part2-text-to-vector.svg" alt="Bir akış diyagramı. 'Refunds are accepted within 30 days of purchase' cümlesi, etiketli bir 'Embedding model' kutusuna akıyor ve diğer taraftan köşeli parantez içinde sabit uzunlukta bir ondalık sayı listesi çıkıyor; bu da sonra 2 boyutlu bir anlam-uzayına, diğer noktaların yanına yerleştirilmiş, parlayan tek bir nokta olarak gösteriliyor." class="w-full rounded-lg" />
+</Diagram>
+
+## Anlam neden geometriye dönüşür
+
+Bu bölümün kalbi burası, o yüzden sezgiyi yavaşça inşa edeyim.
+
+Her metin parçası aynı uzayda bir nokta olduğunda, *anlamlar arasındaki ilişkiler noktalar arasındaki ilişkilere dönüşür*: yönler ve uzaklıklar. "Yakın olmak" "anlamca benzer olmak" anlamına gelir. "Uzak olmak" "anlamca farklı olmak" demektir. Uzayın koca bölgeleri konulara denk gelmeye başlar: kraliyetle ilgili kelimelerin yaşadığı bir köşe, hayvanlar için bir başkası, yiyecek için bir başkası olabilir.
+
+Klasik gösterim, ve birçok insanı gömülere âşık eden şey, **kelime gömüleri üzerinde vektör aritmetiğidir**. Ünlü örnekte, "king" vektörünü alıp "man" vektörünü çıkarır ve "woman" vektörünü eklersen, ulaştığın nokta "queen" vektörüne dikkat çekici derecede yakın oturur:
+
+`king − man + woman ≈ queen`
+
+Bunu uzayda bir hareket olarak oku. "King"ten başlayarak, "man'i çıkar, woman'ı ekle" adımı, *cinsiyeti değiştir, kraliyeti koru* gibi bir şey ifade eden küçük bir yolculuktur; ve tam olarak bu yolculuğu "king"ten başlayarak yaptığında, "queen"in komşuluğuna varırsın. Aynı "man'i çıkar, woman'ı ekle" adımı "actor"ı "actress"e, "uncle"ı "aunt"a taşır. *Yönün kendisi* bir kavramı yakalamış. Anlam yalnızca konuma dönüşmedi; üzerinde yolculuk edebileceğin yönleriyle *geometriye* dönüştü.
+
+Bu örnek konusunda seninle dürüst olayım, çünkü dürüstlüğün kendisi dersin ta kendisi. O temiz, neredeyse büyülü aritmetik, her kelimeye tek bir sabit vektör veren daha eski **kelime gömülerinden (word embeddings)** geliyor (2010'lardan word2vec ve GloVe gibi teknikler). Modern gömüler, RAG'in gerçekten kullandığı türden olanlar, koca cümleleri ve pasajları gömer ve çok daha zengin, çok daha az derli topludurlar: onlardan tertemiz "cümle eksi cümle" analojileri alamazsın. Ama analojinin canlandırdığı temel sezgi tamamen doğru ve eksiksizce geçerlidir: **anlamca ilişkili şeyler birbirine yakın biter ve uzayın düzeni anlamlıdır.** O imgeyi sakla; sadece her modern gömünün çıkarmayla parti numarası yapmasını bekleme.
+
+Aşağıdaki figür, gerçekten oynamanı en çok istediğim şey. Kelimeleri 2 boyutlu bir anlam-uzayında noktalar olarak çiziyor, tanıyacağın kümelere ayrılmış halde; ve o `king − man + woman ≈ queen` yolculuğunu adım adım canlandırıyor, böylece aritmetiğin nereye vardığını izleyebilirsin. İncelemek için herhangi bir noktanın üzerine gel.
+
+<Diagram number={3} caption="Kelimeler, 2 boyutlu bir anlam-uzayında noktalar olarak. İncelemek için herhangi bir noktanın üzerine gel; king − man + woman'ın uzayda yolculuk edip queen'in yanına inişini izlemek için Play'e bas. Bu 2 boyutlu görünüm, çok daha yüksek boyutlu bir uzayın düzleştirilmiş bir gölgesidir.">
+  <IframeFigure
+    src="/essays/embeddings/part2-embedding-space.html"
+    title="İnteraktif animasyon: kelimeler tanınabilir kümelerle (kraliyet, hayvanlar, ülkeler, yiyecek) 2 boyutlu bir anlamsal uzayda noktalar olarak çizilmiş, üzerine gelince inceleme yapılabiliyor, ve king eksi man artı woman'ın queen'e yakın inişini canlandıran adım adım bir demo"
+    height={820}
+  />
+</Diagram>
+
+## Bir gömü modeli gerçekte ne yapar
+
+Peki bu anlamlı sayılar nereden geliyor? Kimse oturup "refund"a elle 0.021 atamıyor. Sayılar bir **gömü modeli (embedding model)** tarafından *öğreniliyor*: devasa miktarda metin üzerinde, tek bir hedefle eğitilmiş bir sinir ağı: anlamca benzer metni uzayda birbirine yakın, benzemeyeni uzak yerleştirmek. Burada sezgi seviyesinde kalabilirsin; içindeki transformer'ı bilinçli olarak açmıyoruz. Modeli, son figürdeki fonksiyon olarak düşün: içeri metin, dışarı vektör, yerleşim veriden öğrenilmiş halde.
+
+Ama *nasıl* öğreniliyor? İşte burası mümkün olmaması gerekirmiş gibi hissettiren kısım. Dünyada hiç yaşamamış, hiçbir şey satın almamış, hiç iade istememiş bir makine, "refund" ile "reimbursement"ın anlamca yakın olduğunu nasıl çözer? Cevap, dil teknolojisindeki en sessizce derin fikirlerden biri, **dağılımsal hipotez (distributional hypothesis)**; dilbilimci J.R. Firth tarafından 1957'de şöyle özetlenmiş:
+
+> "Bir kelimeyi, eşlik ettiği kelimelerden tanırsın."
+
+İddia şu: bir kelimenin anlamı, içinde göründüğü bağlamlarla açığa çıkar. "Refund," "reimbursement" ve "money back" hep aynı komşularla çevrili görünür: *request*, *purchase*, *within X days*, *return*, *order*. "Banana" ise tamamen farklı arkadaşlıklar kurar: *ripe*, *peel*, *smoothie*, *bunch*. Milyarlarca cümle okuyan bir model bu arkadaşlık örüntülerini fark edebilir ve onlarla akıllıca bir şey yapabilir: benzer arkadaşlıklar kuran kelimelerin (ve pasajların) vektörlerini birbirine *yaklaştırır*, farklı arkadaşlıklar kuranları *uzaklaştırır*. Bunu insan metninin devasa bir kesitinde yap, ve daha önce tarif ettiğimiz geometri *kendiliğinden ortaya çıkar*. Modelin hiçbir sözlüğe ihtiyacı olmadı. Ölçekte arkadaşlığa ihtiyacı vardı. Bunun ham metinden bile öğrenilebilir olmasının sebebi tam olarak bu: anlam bağlamda parmak izi bırakır, model de bir parmak izi okuyucusudur.
+
+RAG için çok önemli olan bir ayrım var. İki tür gömü var:
+
+- **Kelime gömüleri (word embeddings)**, her *kelime* için bir kez hesaplanan ve bir sözlük gibi bakılan tek bir vektör verir. Bu, `king − man + woman` numarasının dünyasıdır. Kullanışlı, ama sınırlı: "bank" kelimesi, nehir kıyısı ile parayla ilgili banka anlamlarını beceriksizce ortalamak zorunda kalan tek bir vektör alır.
+- **Cümle/pasaj gömüleri (sentence/passage embeddings)**, tüm bir *cümle ya da pasaj* için tek bir vektör verir; tüm aralık birlikte okunarak hesaplanır, böylece bağlam sonucu şekillendirir. "Refunds are accepted within 30 days of purchase" parçası, *tüm cümlenin* ne hakkında olduğunu yakalayan tek bir noktaya dönüşür.
+
+RAG cümle/pasaj türünü kullanır. Kullanmak zorunda: izole kelimeleri değil, anlam *parçalarını* getiriyoruz ve "iade süresi nedir?" ile "30 gün içinde iadeler"in, eksiksiz düşünceler olarak birbirine yakın inmesini istiyoruz. Bundan sonra "gömü" dediğimde, aksini söylemedikçe cümle/pasaj türünü hayal et.
+
+{/* author: optionally drop a first-person "From experience" callout here, e.g. the first time an embedding model's results surprised you, formatted as a > 💡 **From experience** blockquote. */}
+
+## Küçük bir pürüz: uzayın yüzlerce boyutu var
+
+Anlam-uzayını iki boyutta çiziyordum, çünkü bir sayfa düz ve dürüstçe çizebileceğim tek şey iki boyut. Gerçek gömüler 2 boyutlu değildir. Genelde *yüzlerce ile binlerce* arasında boyuta sahiptirler: küçük, hızlı bir model metin başına 384 sayı verebilir; yaygın olanlar 768 ya da 1.536 verir; büyükler 3.000'i geçer. Her metin parçası, o kadar çok eksene sahip bir uzayda bir noktadır.
+
+Kimse 768 boyutlu bir uzayı gözünde canlandıramaz, senin de buna ihtiyacın yok. Ama o güzel 2 boyutlu saçılım grafiklerinin gerçekte ne olduğuna dair dürüst bir zihinsel modele ihtiyacın var. **Onlar düzleştirilmiş gölgelerdir.** Gömüleri 2 boyutta çizdiğimizde, onları, yüzlerce boyutu ekrana sığacak şekilde ikiye sıkıştıran bir teknikten geçiririz; tıpkı 3 boyutlu bir nesnenin duvara 2 boyutlu bir gölge düşürmesi gibi. Gölge gerçekten kullanışlıdır (gölgedeki kümeler genelde gerçekten kümedir) ama bilgi kaybeder, ve düzleştirilmiş resimde yakın görünen noktalar gerçek uzayda daha uzak olabilir.
+
+Neden bu kadar çok boyut? Çünkü anlamın *aynı anda birçok bağımsız yönü* vardır, ve her boyut modele değiştirebileceği bir eksen daha verir. Tek bir pasaj, aynı anda, para hakkında, bir politika hakkında, üslubu resmî, İngilizce yazılmış, zamana duyarlı ve müşteriye dönük olabilir. İki boyut, tüm bunları, ilgisiz yönlerin çarpıştığı düz bir levhaya sıkışmaya zorlar; yüzlerce boyut ise modele bu tonları ayrı eksenlerde tutacak alan verir, böylece "iade politikası"nı "geri gönderme politikası"na yakın, yine de "gizlilik politikası"ndan ayrı yerleştirebilir. Bizim 2 boyutlu çizimlerimiz karikatür; gerçek uzay görebildiğimizden çok daha ferah ve incedir.
+
+Boyut sayısı bir merak konusu değil, gerçek bir mühendislik düğmesidir. `all-MiniLM-L6-v2` gibi küçük bir model, metin başına **384** sayı yayar ve CPU'da rahatça çalışır; OpenAI'nin `text-embedding-3-small`'ı **1.536**, `text-embedding-3-large`'ı **3.072** yayar. Daha fazla boyut genelde biraz daha fazla doğruluk satın alır, ama her birinin bedelini, sonsuza dek, saklamada ve her aramanın maliyetinde ödersin. İşte somutlaştıran zarf arkası hesap. Her sayı genelde 4 baytlık bir float'tır, yani 768 boyutlu tek bir vektör `768 × 4 ≈ 3 KB`. Bir milyon parçayı indeksle, ve bu, herhangi bir indeks yükü öncesinde, tek başına `1.000.000 × 768 × 4 bayt ≈ 3 GB` vektör eder. 1.536 boyutlu bir modele geç, aynı derlem `6 GB` olur; 3.072'ye sıçra, `12 GB` olur. Aşağıdaki Matryoshka numarasının ve liderlik tablosundaki boyut sayısının görmezden gelinecek değil de tartılacak şeyler olmasının tam sebebi bu.
+
+## Somutlaştıralım (yeterince)
+
+Yukarıdakilerin hepsi sezgi, bu bölümün amacı da bu zaten. Ama "içeri metin, dışarı sayılar"ın gerçekte ne kadar harfiyen doğru olduğunu bir kere görmeye değer. İşte fikrin tamamı, bir avuç satırda. Bu *örnekleyici*: sana bu şeyin *şeklini* göstermek için, kurulacak bir hat olarak değil (o serinin ilerisinde geliyor):
+
+```python
+# Illustrative only: text in, a fixed-length vector out.
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+vector = model.encode("Refunds are accepted within 30 days of purchase.")
+
+print(len(vector))   # 384  -> this model returns 384 numbers, every time
+print(vector[:4])    # [0.021, -0.34, 0.088, 0.12]  (illustrative values)
+```
+
+Hepsi bu. Bir cümle girdi; 384 sayılık bir liste çıktı. Kullanıcının sorusunu aynı şekilde göm, *başka* bir 384 sayılık liste alırsın. İki liste artık doğrudan karşılaştırılabilir, çünkü aynı 384 boyutlu uzayda yaşıyorlar, ve "bu iki metin aynı şey hakkında mı?" sessizce "bu iki nokta birbirine yakın mı?"ya dönüştü. Kesin sayılar bir insan için anlamsız, onlara gözümü kısmam; önemli olan *şekil* (sabit uzunlukta bir yoğun vektör) ve *vaat* (benzer anlamlar yakın vektörler üretir).
+
+## RAG'e dönüş: artık getirme mantıklı geliyor
+
+Bir adım geri çekil ve birden yapabildiğimiz şeye bak. 1. Bölüm'de hatta, senden inanmanı istediğim **gömme (embed)** adında bir durak vardı. Artık inanç değil. İşte o durakların gerçekte yaptığı şey:
+
+- **İndeksleme anında** (bir kez, sorulardan önce yapılır): belgelerinin her parçasını alıyoruz, her birini gömü modelinden geçiriyoruz ve parça başına bir yoğun vektör elde ediyoruz. O vektörlerin hepsini, 1. Bölüm'deki **vektör deposunda (vector store)** kaydediyoruz. Bilgi tabanın artık anlam-uzayında bir nokta bulutu; parça başına bir nokta.
+- **Sorgu anında** (her soruda yapılır): *kullanıcının sorusunu* *aynı* gömü modelinden geçiriyoruz, tam olarak aynı uzayda bir nokta daha elde ediyoruz. O zaman "ilgili parçaları bul", güzelce somutlaşır: **saklanan noktalar arasından, sorunun noktasına en yakın olanları bul.** Uzayda en yakın olmak, anlamca en yakın olmaktır; bu da en ilgili olandır.
+
+Süregelen örneğimizin sonunda çalışmasının sebebi bu. "İade süremiz nedir?" ile "Satın alımdan sonraki 30 gün içinde iadeler kabul edilir" neredeyse hiç kelime paylaşmaz, bu yüzden anahtar kelime araması zorlanır. Ama iyi bir cümle gömüsü ikisini de anlam-uzayının aynı bölgesine yerleştirir, çünkü aynı arkadaşlıkları kurarlar; böylece sorunun noktası tam olarak iade parçasının noktasının yanına iner, ve getirme tam olarak doğru sayfayı geri çeker. *İşte bu* "anlamla arama"dır, ve hattın geri kalanının üzerine inşa edildiği yetenek budur.
+
+Bu da dürüst bir boşluk bırakıyor. Sürekli "yakın" ve "en yakın" dedim, sanki 768 boyutlu bir uzayda iki nokta arasındaki mesafeyi ölçmek bariz bir şeymiş gibi. Pek değil, ve orada yaptığın seçimin gerçek sonuçları var. O ölçüm, 3. Bölüm'ün tüm konusu.
+
+## Bir gömü modeli seçmek
+
+Kendi gömü modelini eğitmezsin; hazırdan birini seçersin. İyi haber, ücretsiz ve ücretli mükemmel olanları var. Tuzak, sezgiyle ya da en son okuduğun blog yazısının övdüğüyle seçmek; o yüzden sana alanı dürüstçe okuyabilecek okuryazarlığı vereyim.
+
+Çoğu insanın başladığı harita, **MTEB** liderlik tablosudur (Massive Text Embedding Benchmark, yani Devasa Metin Gömü Kıyaslaması): birçok görev (getirme, kümeleme, sınıflandırma, anlamsal benzerlik) ve birçok dilde gömü modellerinin herkese açık bir sıralaması. Kuzeni **BEIR**, özellikle *sıfır-atış getirmeye (zero-shot retrieval)* odaklanır; bir modelin hiç ayarlanmadığı veri kümelerinde ne kadar iyi getirme yaptığını puanlar. RAG için ağırlık vereceğin skorlar getirme lezzetli olanlar (MTEB'in getirme dilimi ve BEIR); *sınıflandırma* ortalamasında zirvede olan bir model, doğru parçayı bulmakta yine de vasat olabilir.
+
+Bu tabloları okurken seni beladan uzak tutacak üç alışkanlık var. Birincisi, **MTEB'in sürümleri var, ve skorlar sürümler arasında karşılaştırılabilir değil.** Kıyaslama baştan yapılandırıldı (v2 liderlik tabloları, ortalamaya giren görevleri ve veri kümelerini, değerlendirme protokolünü değiştirdi), yani yeni tablodaki bir 70 ile eski tablodaki bir 70 farklı sayılar; onları asla yan yana koyma. İkincisi, **yalnızca sıralamasına değil, modelin çıktı boyutuna ve bağlam uzunluğuna bak.** Yarım puan daha yüksek skor alan ama parça başına iki kat sayı yayan bir model, saklama alanını sessizce ikiye katlayabilir ve her aramayı yavaşlatabilir. Üçüncüsü, **liderlik tablosu bir başlangıç noktasıdır, hüküm değil.** Herkese açık veri kümelerinde ortalama performansı ölçer, ve senin iade politikaların, savunma spesifikasyonların, Türkçe destek biletlerin o veri kümelerinde yok. Gerçekten önemli olan tek skor, *senin* belgelerinde ve *senin* sorularında ölçtüğün skordur.
+
+Yazıldığı sırada, insanların uzandığı bir avuç model var. Açık ağırlık tarafında, **Qwen3-Embedding** (0.6B, 4B ve 8B boyutlarında yayınlanmış, kabaca 119 dilde çok dilli, talimat-farkında) çok dilli MTEB tablosunun zirvesinde oturuyor; **BGE-M3**, tek bir modelden yoğun, seyrek ve çok-vektörlü çıktılar üreten popüler bir çok dilli iş atı. Ücretli API tarafında, **Voyage-3.5** (ve daha ucuz **voyage-3.5-lite**) getirme için maliyet/kalite sınırını hedefliyor, **Cohere Embed v4** 128 bin token bağlamla çok dilli ve çok modlu, ve OpenAI'nin **text-embedding-3** ailesi birçok ekibin zaten anahtarı olan varsayılan. İsimler ve sıralamalar birkaç ayda bir değişiyor, o yüzden bu paragrafı incil değil, bir anlık görüntü olarak ele al: seçim yaparken canlı tabloyu kontrol et.
+
+Bu da en çok sorulan soruyu getiriyor: **kendi verim üzerinde bir gömü modeline ince ayar (fine-tuning) yapmalı mıyım?** Dürüst kural şu: *güçlü bir hazır modelle başla, ve yalnızca darboğazın bu olduğuna dair kanıtın varsa ince ayar yap.* İnce ayar, etiketli çiftlere (doğru pasajlarla eşleştirilmiş sorgular), gerçek bir değerlendirme kümesine, ve belgelerin değiştikçe süregelen bakıma ihtiyaç duyar; ve iyi bir genel model, çoğu zaman aceleyle ince ayarlanmış bir modelden zaten daha iyidir. İnce ayara, alan kelime dağarcığın genel metne gerçekten yabancıysa (özel jargon, dahili parça numaraları, düşük kaynaklı bir dil) *ve* başarısız olanın getirme olduğunu doğruladıysan uzan. Çoğu ekip için, çoğu zaman, doğru hazır modeli seçmek ve iyi parçalamak, ince ayarı geçer.
+
+## Matryoshka gömüleri
+
+Bilinmeye değer bir özellik burada, çünkü maliyet matematiğini değiştiriyor. Bazı modern modeller, iç içe geçmiş Rus bebeklerinden adını alan **Matryoshka Representation Learning** (MRL) ile eğitiliyor. Numara şu: eğitim sırasında model, *en önemli* bilgiyi vektörün *en erken* boyutlarına paketlemeye zorlanıyor; öyle ki ilk 256 sayı tek başına kullanılabilir bir gömü, ilk 512'si daha iyisi, ve tam 1.024'ü en iyisi oluyor. Tek bir ileri geçiş, sonradan yeniden gömmeye gerek kalmadan bu iç içe boyutlardan herhangi birine *kırpabileceğin (truncate)* (kuyruğu kesip atabileceğin) bir vektör üretiyor.
+
+Neden umursayasın? Çünkü boyutlar para tutar. 1.024 boyutlu bir vektör, 256 boyutlu birinin dört katı saklama alanı ve karşılaştırma başına kabaca dört katı iş tutar. Bir MRL modeliyle tam vektörü saklayabilir, sonra milyonlarca parçayı birkaç yüz adaya indirmek için kırpılmış 256 boyutlu önekler üzerinde hızlı bir ilk-geçiş araması çalıştırabilir, ve ancak o zaman o birkaç aday üzerinde tam uzunluklu vektörlerle yeniden sıralama (re-rank) yapabilirsin. Biraz doğruluğu, çok fazla hız ve saklama alanıyla takas edersin, ve o eğrinin neresinde oturacağını *hiçbir şeyi yeniden eğitmeden* seçersin. OpenAI'nin text-embedding-3 modelleri bunu bir `dimensions` parametresiyle açığa çıkarır, ve Voyage ile Cohere'in son modelleri de iç içe boyutları destekler. Bir modelin "256 / 512 / 1.024" gibi boyutlar reklamını yaptığını gördüğünde, konuşan MRL'dir.
+
+## Gömüler ne zaman başarısız olur: dil ve alan uyumsuzluğu
+
+Bir gömü modelini evrensel bir anlam-ölçer gibi görmek cazip. Değil. Bir model yalnızca *üzerinde eğitildiği* metnin geometrisini öğrendi, ve o dağılımın dışında uzay güvenilmez hale gelir. Pratikte en çok üç uyumsuzluk ısırır.
+
+**Dil.** Çoğunlukla İngilizce üzerinde eğitilmiş bir model, İngilizce şekilli bir uzay inşa eder. Ona Türkçe ver, yine bir vektör yayar, kendinden emin bir şekilde, ama yerleşim zayıftır: eş anlamlılar birbirine yakın inmez, ve bir Türkçe soru, kendi Türkçe cevabından çok, ilgisiz bir İngilizce parçaya daha yakın oturabilir. Çözüm akıllı bir numara değil; derlemin ya da kullanıcıların tamamı İngilizce değilse, gerçekten **çok dilli (multilingual)** bir model (BGE-M3, multilingual-E5, Qwen3-Embedding, Cohere) kullanmak.
+
+**Kod ve yapılandırılmış metin.** Kaynak kodu, log satırları, yapılandırma dosyaları ve tablolar düzyazı gibi okunmaz, ve düzyazı üzerinde eğitilmiş bir model onları beceriksizce yerleştirir. Bir fonksiyon hakkındaki sorgu ile fonksiyonun gövdesi, aynı şey "hakkında" oldukları hâlde birbirinden uzak inebilir. Kod üzerinde getirme önemliyse, karışımında kod olan bir model kullan, yoksa ıskalamaya devam edersin.
+
+**Uzmanlaşmış alanlar.** Savunma, tıp ve hukuk, genel web metninde nadir olan ya da farklı ağırlıklandırılan terimlerle dolu. "TOYGUN," belirli bir mühimmat tanımlaması, dahili bir parça numarası: genel bir model bunları neredeyse hiç görmemiştir ve onlara belirsiz, zayıf ayrışmış vektörler verir, bu yüzden iki ayrı sistemi birbirinden ayırt edemez. İşte tam olarak burası, *kendi* soruların üzerinde ölçüm yapmanın (ve boşluk gerçekse, alana uyarlanmış ya da ince ayarlanmış bir modelin) hakkını verdiği durum. Başarısızlık sessizdir: vektörler alırsın, sonuçlar alırsın, sadece hafifçe yanlıştırlar; bu yüzden varsaymak değil, *test etmek* zorundasın.
+
+> ⚠️ **Sık düşülen tuzaklar**
+>
+> - **Sorgularını ve belgelerini *aynı* modelle göm.** İki vektör ancak aynı fonksiyon ikisini de ürettiyse aynı uzayda yaşar, ve "en yakın nokta" ancak o zaman bir anlam taşır. Parçalarını bir modelle indeksle, başka bir modelle sorgula; iki ilgisiz uzaydaki noktaları karşılaştırıyorsun demektir, ve getirme sessizce gürültüye dönüşür. Bu sürümleri de kapsar: modeli yükseltirsen, yalnızca yeni sorguları değil, tüm derlemi yeniden gömmen gerekir.
+> - **Asimetrik sorgu/parça öneklerine dikkat et.** Birçok güçlü model, hangi tarafın hangisi olduğunu *senin ona söylemeni* bekler. E5 ailesi, sorulara `query:` ve belgelere `passage:` eklemeni ister; eski BGE modelleri bunun yerine yalnızca sorgulara eklenen "Represent this sentence for searching relevant passages: " gibi bir talimat cümlesi bekler; Nomic modelleri `search_query:` ve `search_document:` gibi görev önekleri kullanır. Öneki atla, ya da yanlışını kullan, ve modelin kalitesinin bir kısmını bedavaya kaybedersin. Bir şeyi gömmeden önce model kartını oku; varsayılanlar evrensel değildir.
+> - **Skorları MTEB sürümleri arasında ya da farklı modellerin ham mesafeleri arasında karşılaştırma.** Bir liderlik tablosu sayısı, yalnızca aynı şekilde hesaplanmış diğerlerinin yanında anlamlıdır.
+
+## Kendin dene
+
+Bu bölümün tüm iddiası birkaç satırda test edilebilir, ve bunun kendi makinende olduğunu görmek her diyagramı geçer. Üç kısa metni göm: kullanıcının sorusu, ona gerçekten cevap veren parça, ve ilgisiz bir parça. Sonra sorunun doğru parçaya en yakın indiğini kontrol et.
+
+```python
+# Needs: pip install sentence-transformers
+from sentence_transformers import SentenceTransformer, util
+
+model = SentenceTransformer("all-MiniLM-L6-v2")   # small, 384-d, runs on CPU
+
+query    = "What is our refund window?"
+refund   = "Refunds are accepted within 30 days of purchase."
+unrelated = "Our office is open Monday to Friday, 9am to 5pm."
+
+q, r, u = model.encode([query, refund, unrelated])
+
+print("query vs refund   :", round(float(util.cos_sim(q, r)), 3))
+print("query vs unrelated:", round(float(util.cos_sim(q, u)), 3))
+```
+
+Sorunun skorunun iade parçasına karşı, ofis-saatleri parçasına karşı olduğundan belirgin biçimde daha yüksek çıktığını görmelisin; oysa soru ile iade parçası neredeyse hiç kelime paylaşmıyor. O fark, iki sayıya indirgenmiş "anlamla arama"nın *ta kendisi*. Şimdi dürtükle: ilgisiz parçayı *iadeler* ya da *iptaller* hakkında bir şeye çevir ve skorunun süründüğünü izle (ilişkili anlamlar gerçekten daha yakın oturur); İngilizce parçalara karşı İngilizce olmayan bir soruya geç ve farkın çöktüğünü izle (yukarıdaki bölümün dil uyumsuzluğu, canlı). Hiçbir şey kurmak istemiyorsan, aynı deney herhangi bir barındırılan not defterinde de çalışır.
+
+## Özet çıkarımlar
+
+- Bilgisayarlar *anlamları* değil *sayıları* karşılaştırır, bu yüzden anlamla arama, önce metni anlamı koruyacak şekilde sayılara çevirmeyi gerektirir.
+- Naif kodlamalar öğretici biçimde başarısız olur: **one-hot** ve **bag-of-words**, yazılışı yakalayan, anlamı değil, devasa ve çoğunlukla boş **seyrek** vektörler üretir; bu yüzden "king", "queen"e "banana"dan daha yakın değildir.
+- Bir **gömü**, metni *anlam konuma dönüşecek* şekilde temsil eden kompakt bir **yoğun vektördür**: benzer anlamlar yakın iner, farklı anlamlar uzak iner. Anlamlar arasındaki ilişkiler, ölçebileceğin yönlere ve uzaklıklara dönüşür.
+- Bir **gömü modeli**, bu düzeni ham metinden **dağılımsal hipotez** aracılığıyla öğrenen bir sinir ağıdır: "bir kelimeyi, eşlik ettiği kelimelerden tanırsın." RAG, tek kelimelik değil, **cümle/pasaj** gömülerini kullanır.
+- Gerçek gömüler yüzlerce ya da binlerce **boyutta** yaşar; çizdiğimiz 2 boyutlu resimler düzleştirilmiş gölgelerdir, ve fazladan boyutlar, modelin anlamın ince tonlarını ayırmak için ihtiyaç duyduğu alandır.
+- RAG'in **getirme (retrieve)** adımını çalıştıran şey bu: parçaları göm, soruyu aynı uzaya göm, ve "ilgili", basitçe "en yakın nokta" demektir.
+
+## Referanslar
+
+- Firth, J.R. (1957). *A Synopsis of Linguistic Theory, 1930–1955.* In *Studies in Linguistic Analysis.* Oxford: Blackwell. ("Bir kelimeyi, eşlik ettiği kelimelerden tanırsın" sözünün kaynağı; dağılımsal hipotez.)
+- Mikolov, T., Chen, K., Corrado, G., & Dean, J. (2013). *Efficient Estimation of Word Representations in Vector Space.* arXiv:1301.3781. [arxiv.org/abs/1301.3781](https://arxiv.org/abs/1301.3781) (word2vec; `king − man + woman ≈ queen`'in evi.)
+- Pennington, J., Socher, R., & Manning, C.D. (2014). *GloVe: Global Vectors for Word Representation.* EMNLP 2014, pp. 1532–1543. [aclanthology.org/D14-1162](https://aclanthology.org/D14-1162/)
+- Muennighoff, N., Tazi, N., Magne, L., & Reimers, N. (2022). *MTEB: Massive Text Embedding Benchmark.* arXiv:2210.07316. [arxiv.org/abs/2210.07316](https://arxiv.org/abs/2210.07316)
+
+## Sözlük
+
+- **Vektör (vector)**: sıralı bir sayı listesi; uzayda bir nokta ya da ok olarak da okunabilir. Sıra önemlidir; her konum kendi anlamını taşır.
+- **Boyut (dimension)**: bir vektördeki tek bir sayı, eşdeğer olarak yaşadığı uzayın bir ekseni. 384 sayılık bir vektör 384 boyutludur.
+- **Vektör uzayı (vector space)**: tüm vektörlerinin yaşadığı, her boyut için bir ekseni olan uzay. Metinler onun içinde noktalara dönüşür, ve "anlam" onların düzenlenişi olur.
+- **Seyrek vektör (sparse vector)**: girdileri çoğunlukla sıfır olan (one-hot ya da bag-of-words gibi) bir vektör; genelde çok uzun ve israfçı, benzerlik kavramı yerleşik değil.
+- **Yoğun vektör (dense vector)**: girdileri çoğunlukla sıfırdan farklı ve anlamlı olan bir vektör; genelde bir seyrek vektörden çok daha kısa; gömülerin aldığı biçim.
+- **One-hot encoding**: bir kelimeyi, o kelimenin yuvasındaki tek bir `1` dışında tamamen sıfır olan bir vektör olarak temsil etmek. Kimliği yakalar, anlamı değil.
+- **Bag-of-words**: bir pasajı, sırayı görmezden gelerek her kelime dağarcığı kelimesinin kaç kez göründüğünü sayarak temsil etmek. Kelime örtüşmesini yakalar, anlamı değil.
+- **Gömü (embedding)**: bir metin parçasını, benzer anlamlar yakın vektörler üretecek şekilde temsil eden yoğun bir vektör; bir bilgisayarın anlamla arama yapmasını sağlayan şey. ("Gömü" temsildir; "vektör" onun ham biçimidir.)
+- **Gömü modeli (embedding model)**: metni bir gömüye çeviren, büyük miktarda metinden her metin parçasının nereye oturması gerektiğini öğrenmiş sinir ağı.
+- **Dağılımsal hipotez (distributional hypothesis)**: bir kelimenin anlamının, içinde göründüğü bağlamlarla açığa çıktığı fikri ("bir kelimeyi, eşlik ettiği kelimelerden tanırsın"); gömülerin neden ham metinden öğrenilebildiğinin sebebi.
+- **Kelime gömüsü (word embedding)**: her bir kelime için hesaplanan, bir sözlük gibi bakılan bir gömü; `king − man + woman ≈ queen` numarasının evi.
+- **Cümle/pasaj gömüsü (sentence/passage embedding)**: tüm bir metin aralığı birlikte okunarak hesaplanan, böylece bağlamın sonucu şekillendirdiği bir gömü; RAG'in kullandığı tür.
+- **Anlamsal benzerlik (semantic similarity)**: iki metin parçasının *anlamca* ne kadar yakın olduğu; gömü-uzayında bu, vektörlerinin ne kadar yakın olduğu olarak görünür.
+- **MTEB / BEIR**: gömü modellerini sıralamak için herkese açık kıyaslamalar. MTEB (Massive Text Embedding Benchmark) birçok görev ve dili kapsar; BEIR sıfır-atış getirmeye odaklanır. MTEB skorları kıyaslama sürümleri arasında karşılaştırılabilir değildir.
+- **Matryoshka gömüsü (MRL)**: en önemli bilginin en erken boyutlarında oturacağı şekilde eğitilmiş bir gömü; tek bir vektörü daha küçük boyutlara (örn. 1.024 → 256) kırpmana izin vererek, yeniden gömmeye gerek kalmadan biraz doğruluğu daha az saklama alanı ve daha hızlı aramayla takas etmeni sağlar.
+- **Sorgu/parça öneki (query/passage prefix)**: bazı modellerin, bir metnin aramanın hangi tarafında olduğunu bilmesi için önüne eklemeni istediği kısa bir etiket (E5 ve BGE için `query:` / `passage:`, ya da Nomic için `search_query:` / `search_document:` gibi); yanlışını ya da hiçbirini kullanmak kaliteyi düşürür.
+
+---
+
+**Sırada, 3. Bölüm: Benzerlik Ölçmek.** Artık herhangi bir metni anlam-uzayında bir noktaya çevirebiliyoruz, ve "yakın" ile "en yakın" kelimelerine ağırlıkla yaslandık. Sırada bu kelimeleri kesinleştiriyoruz: iki vektör arasındaki mesafeyi gerçekte nasıl ölçersin, gömüler için kosinüs benzerliği neden alışılagelmiş cevaptır, ve bunu milyonlarca nokta üzerinde yaptığında ne değişir?

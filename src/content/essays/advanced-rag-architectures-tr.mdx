@@ -1,0 +1,243 @@
+---
+title: "Gelişmiş RAG Mimarileri"
+description: "Her seferinde aynı şekilde çalışan sabit bir hattan; getirip getirmemeyi seçebilen, dönen sonucu yargılayan ve tekrar deneyebilen dinamik, karar veren bir döngüye sıçrayış. Retrieval-Augmented Generation üzerine sıfırdan bir serinin 10. bölümü: Agentic RAG, Corrective RAG (CRAG), Self-RAG, GraphRAG ve Multi-Modal RAG'in rehberli bir turu, her birinin hangi kontrol akışını eklediği ve herhangi birine uzanmanın ayık kafayla hesaplanmış maliyeti."
+date: 2026-06-16
+tags: ["RAG", "Agentic RAG", "GraphRAG", "LLM", "AI", "Architecture", "Retrieval", "Türkçe"]
+codeUrl: "https://github.com/mftnakrsu/rag-by-hand/tree/main/part-10-advanced-architectures"
+ogImage: "/og/advanced-rag-architectures.png"
+lang: "tr"
+translationSlug: "advanced-rag-architectures"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+import IframeFigure from '../../components/essay/IframeFigure.astro';
+
+
+## Ne öğreneceksin
+
+Dokuz bölüm boyunca, getirmesi ne kadar akıllı olursa olsun hâlâ tek bir sabit yol olarak çalışan bir hat kurup ayarladık: getir, sonra üret; her sorgu için aynı şekilde. Bu bölüm, o hattın beyin kazandığı yer. Düz çizgiyi dinamik, karar veren bir döngüyle takas ediyoruz: getirip getirmemeye baştan karar verebilen, dönen şeyin işe yarar olup olmadığını yargılayan, işe yaramıyorsa tekrar getiren, adım adım akıl yürüten ve yapılandırılmış bilgide gezinebilen bir sistem. Bu, gelişmiş mimarilerin haritası — Agentic RAG, Corrective RAG, Self-RAG, GraphRAG ve Multi-Modal RAG — ve her birinin neye mal olduğunun dürüst bir dökümü.
+
+## Ön koşullar
+
+1'den 9'a kadar olan bölümler, özellikle de son ikisi: [Getirmeyi Akıllandırmak](/essays/making-retrieval-smarter-tr) (8. bölüm; reranking, sorgu dönüştürme ve sorgu ayrıştırma) ve [İleri Getirme Desenleri](/essays/advanced-retrieval-patterns-tr) (9. bölüm). Ayrıca [İlk RAG'ini Kur](/essays/build-your-first-rag-tr)'daki (6. bölüm) elle yaptığımız uygulama kafanda olmalı; çünkü buradaki her mimari, o aynı getir-zenginleştir-üret döngüsünün bir varyasyonu. Yeni matematik yok. Bu bölüm sezgi ve mimari üzerine; içinde yalnızca kısa, açıklayıcı bir taslak var.
+
+## Hattan döngüye
+
+9. bölümün bizi bıraktığı yer tam olarak şurası. Elimizde iyi ayarlanmış bir getirici var: hybrid search, bir reranker, sorgu ayrıştırma, parent-document retrieval, kitaptaki her numara. Yine de sistemin şekli 6. bölümden beri değişmedi. Bir sorgu gelir, bir kez getiririz, parçaları prompt'a doldururuz, üretiriz. Tek yol. "İade süremiz ne kadar?" için de, korpusumuzun cevaplamasına imkân olmayan bir soru için de aynı yol. Hat kendine hiçbir zaman "getirmeli miyim?" diye sormaz, aldığı parçaların ilgili olup olmadığını hiç kontrol etmez, hiçbir zaman ikinci bir deneme yapmaz. Düz bir çizgidir; her seferinde birebir aynı şekilde koşar.
+
+Bu bölümdeki sıçrama, sisteme **kontrol akışı (control flow)** eklemek: bir programın o ana dek gördüklerine bakarak sıradaki adıma karar vermesini sağlayan dallar, döngüler ve koşullar. Naif bir RAG sisteminde bunlardan hiç yoktur. Gelişmiş bir sistem getirip getirmemeye karar verir, dönen şeyi yargılar, ilk deneme kötüyse farklı bir kaynaktan tekrar getirir, birkaç adım boyunca akıl yürütür ya da tek tek parçalar kapmak yerine yapılandırılmış bir bilgi grafiğinde yürür. O tek fikir — sabit hattın karar veren döngüye dönüşmesi — aşağıdaki her adlı mimarinin ortak şemsiyesi. Bunlar birbirinden bağımsız beş ürün değil. Dördü — Agentic RAG, Corrective RAG, Self-RAG ve GraphRAG — aynı şeyi eklemenin farklı yolları: karar verme yeteneği. Beşincisi, Multi-Modal RAG, ayrı bir eksende durur; sistemin karar verip vermediğini ya da nasıl karar verdiğini değil, *neyin üzerinde* getirme yapabildiğini değiştirir. Önce dört kontrol-akışı şeklini turlayacağız, sonra o dikey ekseni.
+
+Farkı hissetmenin en net yolu, tek bir sorgunun iki şekli de kat edişini izlemek. Mağaza asistanımıza soruluyor: "X1 kablosuz kulaklığın pil ömrü ne kadar?" Korpus, hatırlarsan, yalnızca mağaza politikalarını tutuyor: iade, kargo, garanti; ürün spec'leri değil.
+
+<Diagram number={1} caption="Aynı sorgu, iki şekilden aşağı. Naif hat ne olursa olsun politika index'inden bir kez getirir ve içinde hiçbir pil spec'i olmayan parçalardan cevap vermeye zorlanır. Agentic döngü getirmeye karar verir, parçaları notlar, ilgisiz olduklarını görür, farklı bir kaynağa yönlendirerek düzeltir, tekrar getirir, yeni parçaların ilgili olduğunu doğrular ve dayanaklı bir cevabı ancak ondan sonra üretir.">
+  <IframeFigure
+    src="/essays/advanced-rag-architectures/part10-pipeline-vs-loop.html"
+    title="Naif tek geçişli bir RAG hattı ile agentic karar veren bir döngünün, yalnızca politika içeren bir korpusa karşı aynı ürün-spec sorusunu cevaplayışının interaktif karşılaştırması: naif yol bir kez getirir ve tahmin etmeye zorlanır; agentic yol getirmeye karar verir, getirilen politika parçalarını ilgisiz olarak notlar, düzeltici dala girip farklı bir kaynağa gider, tekrar getirir, ilgililiği doğrular ve dayanaklı bir cevap üretir"
+    height={720}
+  />
+</Diagram>
+
+O kötü-getirme, sonra düzelt, sonra tekrar dene dalı, bu bölümün tüm hikâyesinin minyatürü. Bundan sonraki her şey, o dalı kurmanın bir yolu ya da onun daha zengin bir sürümü.
+
+Omurga elimizde olduğuna göre, işte turlamak üzere olduğumuz dört kontrol-akışı şeklinin haritası; her birinin temel döngüye hangi kontrol akışını cıvataladığını bir bakışta görebilesin diye çizildi.
+
+<Diagram number={2} caption="Gelişmiş mimarilerin haritası. Agentic RAG getirmeyi, bir agent'ın çağırmayı seçtiği bir araç yapar; Corrective RAG parçaları notlayan ve bir yedek yol tetikleyen bir değerlendirici ekler; Self-RAG'de model, getirmeli mi ve dayanaklı mı diye kendi üzerine düşünür; GraphRAG tek tek parçalar yerine bir bilgi grafiği üzerinde getirme yapar. Her biri, aynı getir-üret çekirdeğine kontrol akışı ekler.">
+  <img src="/essays/advanced-rag-architectures/part10-four-architectures.svg" alt="Ortak bir getir-üret çekirdeğinin etrafında dört panel. Birinci panel, Agentic RAG, birkaç araca (bir vektör deposu, bir web-arama simgesi, bir veritabanı) oklar uzanan bir agent düğümü ve bir reason-act-observe döngü oku gösterir. İkinci panel, Corrective RAG, getirmenin, parçaları iyi ya da kötü diye notlayan bir değerlendiriciyi beslediğini, kötü dalının bir web-arama yedeğine geri döndüğünü gösterir. Üçüncü panel, Self-RAG, modelin kendisinin, getirmeyi kapılayan ve dayanaklılığı denetleyen yansıma işaretleri ürettiğini gösterir. Dördüncü panel, GraphRAG, düz bir parça listesi yerine, etiketli kenarlarla birleşmiş varlık düğümlerinden oluşan küçük bir grafiğin kat edildiğini gösterir." class="w-full rounded-lg" />
+</Diagram>
+
+Bu dördünün ortak teması tek: kontrol akışı. Multi-Modal RAG beşinci fikir ve farklı türden; döngüye bir karar eklemek yerine döngünün *okuyabildiği* şeyleri genişletir, bu yüzden bu haritanın dışında durur ve onu en sona bırakıyoruz.
+
+## Agentic RAG
+
+En genel şekille başlayalım; diğer üçü onun özel halleri.
+
+### Agent nedir?
+
+Bu bağlamda bir **agent**, bir görev hakkında akıl yürüten, bir eylem ya da kullanacağı bir araç seçen, sonucu gözlemleyen ve sonra sıradaki adıma karar veren bir dil modelidir; bunu, görevin bittiğine hükmedene kadar bir döngü içinde yapar. Karşıtlık, sabit bir betikle. 6. bölümdeki uygulamamız bir betik: soru ne olursa olsun her zaman `retrieve` çağırır, her zaman `build_prompt` çağırır, her zaman `generate` çağırır, hep bu sırayla. Bir agent'a o sıra verilmez. Ona bir hedef ve bir yetenek kümesi verilir; sıralamayı kendisinin kurması beklenir.
+
+O döngünün her yerde göreceğin bir adı var: **ReAct döngüsü (ReAct loop)**, reason ve act'in kısaltması. Model düşünür (reason), bir araç çağırmak gibi bir eylem yapar (act), eylemin döndürdüğünü okur (observe) ve tekrarlar. Reason, act, observe, tekrar; cevap vermeye yetecek kadarını toplayana dek. Mesele şu: adımların sayısına ve sırasına çalışma anında model karar verir, sen önceden sabitlemezsin.
+
+### RAG'i agentic yapan ne?
+
+**Agentic RAG**, getirmenin zorunlu bir ilk adım olmaktan çıkıp agent'ın çağırmayı seçebileceği bir **araca (tool)** dönüştüğü andaki şey. **Araç kullanımı (tool use)** tam olarak bu: modele, her biri ne yaptığının açıklamasıyla birlikte çağırabileceği adlandırılmış bir yetenek kümesi vermek; böylece model o an için doğru olanı seçebilir. Getirme artık böyle araçlardan biri. Agent, getirip getirmemeye (bir selamlaşma ya da salt aritmetik bir soru belge istemez), neyi getireceğine ve kaç kez getireceğine kendisi karar verir.
+
+Ve getirme nadiren tek araçtır. Gerçekçi bir agent'ın birkaç aracı olur: birden fazla vektör deposu (bir politika index'i, bir ürün-spec index'i), güncel olaylar için bir web-search aracı, sipariş durumu gibi canlı veriler için bir API ya da SQL veritabanı, hatta dil modellerinin meşhur biçimde çuvalladığı aritmetiği elinde yüzünde bulaştırmasın diye bir hesap makinesi. Agent, görevin gerektirdiği araçları, gerektirdiği sırayla çağırır, sonra sonuçları tek bir cevapta sentezler.
+
+### Routing ve multi-hop
+
+Bundan doğal olarak iki desen düşer. Birincisi **sorgu yönlendirme (query routing)**: bir sorgunun hangi kaynağa gitmesi gerektiğine karar vermek. Bir İK sorusu İK index'ine, kod tabanıyla ilgili bir soru kod index'ine, bugünün haberleriyle ilgili bir soru web aramasına gider. Yönlendirme küçük, ucuz bir karardır (çoğu zaman tek bir sınıflandırma çağrısı) ve sistemin, cevabı barındırması imkânsız bir depoda arama yapmasını engeller. Amiral gemisi örneğimiz, gerçekleşmeyi bekleyen bir yönlendirme hatasıydı: naif hat, ürün-spec sorusunu politika index'ine gönderdi çünkü başka seçeneği yoktu; bir agent ise onu spec kaynağına yönlendirir.
+
+İkincisi **multi-hop getirme (multi-hop retrieval)**: bir cevabın bir sonrakini beslediği zincirleme getirmeler. Şunu düşün: "Acme'yi satın alan şirketin ürettiği kulaklığın garantisi nedir?" Bunu tek bir aramayla cevaplayamazsın. Önce Acme'yi kimin satın aldığını öğrenmek için getirirsin, sonra o adı kullanarak garantiyi bulmak için tekrar getirirsin. Bu, 8. bölümdeki sorgu ayrıştırmanın dinamikleşmiş hali: soruyu baştan sabit bir alt-soru kümesine bölmek yerine, agent bir sonraki sekmeyi bir öncekinin sonucundan keşfeder.
+
+Takas, işin dürüst tarafı. Agent'lar güçlü ve esnek; aynı zamanda daha yavaş (bir yerine birkaç model çağrısı), daha pahalı (her akıl yürütme adımı ve araç çağrısı için ödersin), daha az öngörülebilir (aynı soru iki seferde farklı yol izleyebilir) ve hata ayıklaması çok daha zor (yanlış bir cevap, senin tasarlamadığın bir zincirin herhangi bir adımından gelebilir). Bir agent, hiç yakınsamadan dönüp durabilir ya da ilgisiz bir araç çağrısında kaybolabilir. Güç ve öngörülemezlik aynı madalyonun iki yüzü.
+
+## Corrective RAG (CRAG)
+
+Agentic RAG ucu açık döngünün tamamıysa, Corrective RAG onun disiplinli tek bir dilimi; ve çoğu zaman gerçekten ihtiyacın olan tek şey de bu.
+
+**Corrective RAG (CRAG)**, temel hatta tek bir bileşen ekler: hafif bir **getirme değerlendiricisi (retrieval evaluator)**; tek işi getirmenin döndürdüğü parçaları notlamak olan küçük bir model ya da sınıflandırıcı. Not kabadır, tipik olarak relevant, ambiguous ya da irrelevant; ve sistem üretmeden *önce* bu nota göre davranır. Parçalar ilgiliyse normal şekilde devam et. İlgisizse kötü bağlam üzerinde körlemesine üretme; bunun yerine web aramasına düşmek ya da sorguyu yeniden formüle edip tekrar getirmek gibi bir **düzeltici eylem (corrective action)** tetikle. Ambiguous ikisinin arasında durur ve genellikle ikisini birleştirir.
+
+İlke basit ve açıkça söylemeye değer: naif bir hat, getirme eline ne tutuşturursa ondan üretir, çöpten bile. CRAG, getirme ile üretme arasına bir denetim yerleştirir; böylece sistem, kötü bir getirmeyi yakalayıp düzeltebilir, cevabı içermeyen parçalardan kendinden emin biçimde cevap vermek yerine. Amiral gemisi animasyonda izlediğin düzeltici dal tam olarak bu.
+
+İşte kontrol akışının küçük bir taslağı. Kavramsal; çalıştırılabilir bir yapı değil, ama şekli gösteriyor: getir, notla, sonra ya düzelt ve tekrar dene ya da üret.
+
+```python
+def corrective_rag(query, max_tries=2):
+    for attempt in range(max_tries):
+        chunks = retrieve(query)              # search our own index first
+        grade = evaluator.grade(query, chunks)  # relevant / ambiguous / irrelevant
+
+        if grade == "relevant":
+            return generate(query, chunks)    # good context: answer now
+
+        # bad context: do NOT generate on it. take a corrective action.
+        if grade == "irrelevant":
+            query = rewrite_for_web(query)    # reformulate for an outside source
+            chunks = web_search(query)        # fall back to a different source
+            return generate(query, chunks)    # a real CRAG would grade these too
+
+        # ambiguous: tweak the query and loop to try our index again
+        query = reformulate(query)
+
+    # ran out of tries without good context: refuse honestly (Part 6's grounding)
+    return "I don't know based on the available sources."
+```
+
+CRAG, açık alan (open-domain) senaryolarında parlar; kendi index'in cevabı düpedüz barındırmıyor olabilir ve dışarıdan bir yedek kaynak, işe yarar bir yanıt ile kendinden emin bir tahmin arasındaki farktır. Tam bir agent'tan çok daha ucuz ve çok daha öngörülebilirdir: fazladan tek bir değerlendirme adımı, iyi tanımlanmış tek bir dal, ucu açık gezinme yok.
+
+## Self-RAG (öz-yansıtmalı RAG)
+
+CRAG, değerlendiriciyi modelin dışına cıvatalar. Self-RAG, yargıyı modelin kendi içine taşır.
+
+**Self-RAG** (self-reflective RAG'in kısaltması), modeli çalışırken özel **yansıma token'ları (reflection tokens)** üretecek şekilde eğitir: kendi çıktısının içine örülmüş, anında üç şeye karar veren küçük kontrol sinyalleri. Birincisi, cevabın bu kısmı için getirmenin gerekli olup olmadığı (`Retrieve` ile `No-Retrieve` gibi kod olarak yazılan bir token). İkincisi, getirilen her pasajın, o an yapılan noktayla gerçekten ilgili ve onu destekler olup olmadığı (`Relevant` ile `Irrelevant` gibi bir ilgililik yargısı). Üçüncüsü ve en ayırt edici olanı, kendi ifadesinin getirdiği kanıta gerçekten **dayanıp (grounded)** dayanmadığı; az önce yazdığı cümlenin uydurulmuş değil de pasaj tarafından desteklendiğine dair bir öz-denetim (`Supported` ile `No-support` gibi bir destek yargısı).
+
+Yani model, getirmeyi, üretmeyi ve değerlendirmeyi tek geçişte iç içe örer: getirmeye karar verir, pasajları çeker, onları yargılar, bir cümle yazar, cümlenin dayanaklı olduğunu denetler ve devam eder. Eleştiri, sonradan cıvatalanmış değil, içine inşa edilmiştir.
+
+Akılda tutulacak keskin karşıtlık CRAG'le olan. CRAG, modelin dışında duran ve üretimden önce getirmeyi kapılayan *ayrı* bir değerlendirici kullanır. Self-RAG'de ise *modelin kendisi*, üretim boyunca, hem getirmeli mi hem de kendi iddialarının her biri dayanaklı mı diye düşünür. CRAG "bu parçalar iyi mi?" diye bir kez, dışarıdan sorar. Self-RAG "buna bakmama gerçekten gerek var mı ve az önce söylediğim şey gerçekten destekleniyor mu?" diye sürekli, içeriden sorar. İkisi de aynı düşmanla savaşır — boşluktan kendinden emin biçimde üretmekle — ama zıt uçlardan.
+
+## GraphRAG (bilgi grafiği RAG'i)
+
+Şimdiye kadarki her mimari hâlâ hattımızın her zaman getirdiği şeyi getiriyor: benzerliğe göre sıralanmış tek tek parçalar. Cevap tek bir pasajda yaşıyorsa bu harika çalışır. İki tür soruda ise fena bocalar.
+
+Birincisi, cevabı birçok belgeye dağılmış, noktaları birleştirmeli multi-hop sorular: hiçbir tek parça cevabı barındırmaz ve benzerlik araması, tek tek ilgili ama asla bir araya getirilmemiş parçalar döndürüp durur. İkincisi "küresel" soru; "bu korpusun tamamındaki ana temalar neler?" gibi. Cevap *olan* bir parça yoktur; cevap, koleksiyonun tamamının bir özelliğidir ve tasarımı gereği en benzer birkaç parçayı döndüren top-k getirme, ağaçlardan ormanı göremez.
+
+**GraphRAG** buna, üzerinde getirme yaptığın şeyi değiştirerek yaklaşır. Anahtar yapı bir **bilgi grafiğidir (knowledge graph)**: bilginin, **varlıklar (entities)** (düğümler; insanlar, ürünler, şirketler gibi şeyler) ve onları birleştiren **ilişkiler (relationships)** ("üreticisi", "satın aldı", "garanti kapsar" gibi etiketli bağlantılar, yani kenarlar) olarak temsili. Vektör araması sana düz bir parça torbası verirken, bir grafik olgular arasındaki bağlantıları açıkça verir.
+
+Tarif iki fazda koşar. İnşa zamanında, korpusu okuyup varlıkları ve aralarındaki ilişkileri çıkarması için bir dil modeli kullanır, bunları bir grafikte birleştirirsin. İstersen ardından grafiği **topluluklara (communities)** — sıkı bağlanmış varlık gruplarına — kümeler ve her biri için modele bir özet yazdırırsın; **topluluk özetleme (community summarization)** denen bu adım, sana "korpusun bu kısmı ne hakkında?" sorusuna önceden sindirilmiş cevapların bir hiyerarşisini verir. Sorgu zamanında, vektör benzerliği yerine (ya da onun yanında) grafikte gezinirsin: bağlantılı olguları toplamak için kenarları izlersin ya da bütüncül bir soru için ilgili topluluk özetlerini okursun.
+
+<Diagram number={3} caption="GraphRAG, düz bir liste üzerinde değil, yapı üzerinde getirme yapar. Yalnızca vektörlü RAG, birbirine hiç bağlanmayan üç izole parça döndürür. Grafik, varlıkları etiketli ilişkilerle bağlar; böylece multi-hop bir soru, kenarları bir varlıktan diğerine yürüyerek cevaplanabilir ve bir topluluk özeti, hiçbir tek parçanın cevaplayamayacağı küresel bir soruyu cevaplar.">
+  <img src="/essays/advanced-rag-architectures/part10-graphrag.svg" alt="Solda, aralarında hiçbir bağlantı olmayan üç ayrı parça kartı olarak gösterilen yalnızca-vektör getirme. Sağda, üreticisi ve garanti kapsar yazan etiketli kenarlarla birleşmiş varlık düğümlerinden (bir ürün, bir şirket, bir garanti) oluşan bir bilgi grafiği; vurgulanan bir yol, ürün düğümünden şirket düğümüne, oradan garanti düğümüne yürüyerek multi-hop gezinmeyi resmeder. Grafiğin altında, topluluk özeti etiketli kesikli bir kutu birkaç düğümü gruplar ve tek satırlık bir açıklama içerir; küresel sorular için topluluk özetlemeyi resmeder." class="w-full rounded-lg" />
+</Diagram>
+
+GraphRAG, tam da düz getirmenin çuvalladığı yerde parlar: multi-hop akıl yürütme, farklı belgelerde yaşayan olguları birbirine bağlama ve bir metin bütününün tamamı hakkındaki bütüncül ya da özet sorular. Takası ise dik. Grafiği inşa etmek, varlıkları ve ilişkileri çıkarmak için korpusun tamamı üzerinde bir model koşturmak demek; bu yavaş ve pahalıdır, ve belgeler değiştikçe grafiğin bakımı yapılmak zorundadır. Pratikte GraphRAG nadiren tek başına kullanılır; genellikle vektör aramasıyla birleştirilir: bağlantılı ve küresel sorular için grafik, gündelik "bana X hakkındaki pasajı bul" için vektörler.
+
+### Microsoft GraphRAG hattının içinde
+
+Yukarıdaki iki fazlı tarif, fikrin kendisi. "GraphRAG"i RAG dünyasında herkesin bildiği bir isim yapan sürüm Microsoft'unki ve somut olarak izlemeye değer; çünkü hat, maliyetin tam olarak nerede yaşadığını ve karşılığında ne aldığını söylüyor.
+
+İndeksleme, korpus üzerinde zincirleme LLM geçişleri olarak koşar. Önce **varlık çıkarımı (entity extraction)**: belgeleri her zamanki gibi parçalara bölersin, sonra her parça üzerinde bir dil modelini prompt'layarak bahsettiği varlıkları (insanlar, kurumlar, ürünler, yerler) her birinin kısa bir açıklamasıyla birlikte çıkartırsın. İkinci olarak **ilişki haritalama (relationship mapping)**: aynı geçiş, ya da onu izleyen bir geçiş, modelden o varlıklar arasındaki ilişkileri adlandırmasını ister ("satın aldı", "üreticisi", "şuna raporlar"); bunlar etiketli kenarlar olur. Sonuç, her parçadan dikilerek birleştirilmiş tek bir bilgi grafiğidir; aynı varlığın yinelenen geçişleri tek bir düğümde birleştirilir.
+
+Sonra küresel soruları cevaplanabilir yapan adım gelir. Grafik üzerinde **topluluk tespiti (community detection)** koşarsın, özellikle **Leiden algoritmasını**; bu, düğümleri iç içe **topluluklara** böler: geniş temalardan küçük, sıkı fıkı gruplara kadar birkaç ayrıntı düzeyinde, sıkı bağlanmış kümeler. Her topluluk için modele yeniden prompt verip bir **topluluk özeti** yazdırırsın; o varlık ve ilişki kümesinin ne hakkında olduğunun düzyazı bir özeti. Topluluklar hiyerarşik olduğundan, elinde birden çok yakınlaştırma düzeyinde özetler olur: korpusun tamamı için önceden hesaplanmış bir içindekiler tablosu.
+
+Bu yapı sana iki sorgu modu kazandırır. **Yerel arama (local search)**, belirli bir varlıkla ilgili bir soruyu, o varlığın düğümünden başlayıp komşularını, ilişkilerini ve geldikleri ham metin parçalarını toplayarak, sonra o odaklı mahalleden üreterek cevaplar: bu, multi-hop, noktaları-birleştir durumu. **Küresel arama (global search)**, korpus çapındaki bir soruyu ("ana temalar neler?") topluluk özetlerine yelpaze gibi dağıtarak, her birinden kısmi bir cevap üreterek, sonra o kısmileri tek bir nihai cevaba indirgeyerek cevaplar: bu, top-k benzerliğin düpedüz erişemediği bütüncül durum.
+
+Paranın nereye gittiğine dikkat et. O indeksleme geçişlerinin her biri bir LLM çağrısı ve bunları bir sorgunun dokunduğu birkaç parça üzerinde değil, korpusun tamamı üzerinde yapıyorsun. Tek başına varlık çıkarımı, binlerce ya da milyonlarca parça için parça başına bir model çağrısı demek olabilir; topluluk özetleme, düzey başına topluluk başına bir çağrı daha ekler. **Grafik inşası LLM-token açısından pahalıdır**, çoğu zaman aynı korpusu bir kez embed etmekten kat kat, mertebelerce daha pahalı; ve bu maliyet, tek bir kullanıcı sorusu gelmeden önce, peşin ödenir. Yani hesap keskin: GraphRAG, korpus **özel, bağlantılı ve anlatısal** olduğunda karşılığını verir — bir iç wiki, bir araştırma bütünü, bir dava dosyası, birbirine bağlı raporlar kümesi — soruların gerçekten birçok belgeye yayıldığı ya da bütünü sorduğu ve inşayı amorti edecek kadar çok böyle soru soracağın yerlerde. Soruları birer parçada yaşayan, bağımsız, kendi içinde bütün pasajlardan oluşan bir korpus içinse aşırıya kaçmaktır: orada, bir reranker'ın tek sekmede bulacağı cevaplar için grafik-inşası fiyatları ödüyor olursun.
+
+## Multi-Modal RAG
+
+Son şekil, farklı bir varsayımı gevşetir; 2. bölümden beri yaptığımız bir varsayımı: her şeyin metin olduğunu.
+
+**Multi-Modal RAG**, metinden fazlası üzerinde getirme ve üretimdir: görüntüler, tablolar, grafikler, ses, video; 5. bölümün, bozması ne kadar kolay diye bizi uyardığı figür dolu PDF'ler. İki üst düzey yaklaşım var ve gerçek sistemler çoğu zaman ikisini karıştırır.
+
+Birincisi **çok modlu gömüler (multimodal embeddings)**: metni ve görüntüleri (ya da diğer modaliteleri) tek bir **paylaşılan vektör uzayına (shared vector space)** yerleştiren modeller; böylece bir ürünün görüntüsü ile "kablosuz kulaklık" ifadesi birbirine yakın düşer ve modaliteler arasında doğrudan arama yapabilirsin. Kanonik örnek **CLIP**: devasa sayıda görüntü-altyazı çifti üzerinde, bir resim ile onu tarif eden metin yakın noktalara embed olacak şekilde eğitilmiş bir model; CLIP tarzı gömülerle, 3. bölümdeki aynı kosinüs benzerliğiyle, metin sorgusuyla görüntü ya da görüntüyle metin getirebilirsin.
+
+İkincisi **metne çevir (translate-to-text)**: görüntüyü doğrudan embed etmek yerine, onu *tarif etmesi* için bir model kullanırsın — bir görüntüye altyazı yaz, sesi transkribe et, bir grafiği düzyazıya özetle — sonra o metin açıklamalarını, zaten elindeki sıradan hatla embed edip getirirsin. Üretim zamanında, getirilen figürü onu gerçekten "görebilen" çok modlu bir dil modeline verirsin; böylece cevap, yalnızca altyazısına değil, gerçek görüntüye dayanır.
+
+Bunu 5. bölüme bağla. Orada bir figür ya da taranmış bir tablo bir sorundu: onu metin akışına düzleştirdiğinde, getirmeyi kirleten bir saçmalık elde ediyordun. Multi-Modal RAG o yükümlülüğü bir varlığa çevirir. Figürü yok etmek yerine embed edebilir, getirebilir ve üzerinde akıl yürütebiliriz.
+
+## Nasıl seçmeli?
+
+Beş şekil: döngüye karar verme ekleyen dört tanesi ve döngünün üzerinde getirme yapabildiği şeyleri genişleten bir tanesi (Multi-Modal RAG). İşte bir bakışta karşılaştırma.
+
+| Mimari | Ne ekler | Ne zaman uzanmalı | Ana maliyet |
+|---|---|---|---|
+| Agentic RAG | Bir döngü içinde akıl yürüten ve araç/eylem seçen bir LLM agent'ı | Birden çok kaynak, yönlendirme ya da multi-hop akıl yürütme isteyen görevler | Gecikme, maliyet, öngörülemezlik, hata ayıklama zorluğu |
+| Corrective RAG (CRAG) | Üretmeden önce parçaları notlayan ve bir yedek yol tetikleyen bir değerlendirici | Index'inin cevabı barındırmayabileceği açık alan sorguları | Fazladan bir değerlendirme adımı; bakımı yapılacak bir yedek kaynak |
+| Self-RAG | Model, getirme ihtiyacı ve kendi dayanaklılığı üzerine düşünür | Dayanaklılık ve seçici getirme önemliyse ve yansıtmalı bir model kullanabiliyorsan | Eğitilmiş/özelleşmiş bir model gerekir; kurulumu daha zahmetli |
+| GraphRAG | Varlıklar ve ilişkilerden oluşan bir bilgi grafiği üzerinde getirme | Multi-hop, noktaları-birleştir ve bütüncül/özet sorular | İnşası ve bakımı pahalı; genellikle vektörlerle eşlenir |
+| Multi-Modal RAG | Görüntüler, tablolar, ses ve daha fazlası üzerinde getirme ve üretim | Cevabın yalnızca metinde değil, figürlerde yaşadığı korpuslar | Çok modlu modeller ve gömüler; daha zengin bir alım hattı |
+
+Bu tablonun tersini de kafanda tutmak işine yarar; her biri için tek satırlık "ne zaman aşırıya kaçar", çünkü buradaki hata biçimi, ihtiyacın olmayan güce uzanmak:
+
+- **Agentic RAG**, tek bir index'e karşı tek bir getirme soruyu cevaplıyorsa aşırıdır. Araçlar arasında seçim yapabilen bir döngü, seçecek tek aracı olan bir sistemde israftır.
+- **CRAG**, index'in kapalı ve otoriter olduğunda aşırıdır (cevabı ya barındırır ya da cevap yoktur), çünkü düşülecek işe yarar bir dış kaynak yoktur: düz, dayanaklı bir ret doğru davranıştır.
+- **Self-RAG**, yansıma token'ları üretmek üzere eğitilmiş bir model koşturamıyor ya da koşturmayacaksan aşırıdır; dışarıdan bir notlayıcı cıvatalamak (ki bu düpedüz CRAG'dir) daha basittir ve güvenliğin çoğunu sağlar.
+- **GraphRAG**, soruların her biri tek bir pasajda yaşıyorsa aşırıdır; düz getirmenin zaten bulduğu cevaplar için grafik-inşası fiyatları ödersin.
+- **Multi-Modal RAG**, korpusun gerçekten metinse ya da figürler yalnızca çevrelerindeki düzyazıyı tekrar ediyorsa aşırıdır.
+
+Ve maliyet için somut bir his edin, çünkü "daha pahalı" bütçelenemeyecek kadar belirsiz. Bir RAG faturasına hükmeden birim LLM çağrılarıdır ve mimariler onları çok farklı biçimlerde çoğaltır. Tek geçişli RAG, sorgu başına bir üretim çağrısıdır (artı sorgu için ucuz bir embedding). CRAG, sorgu başına kabaca bir küçük değerlendirme çağrısı ekler ve ikinci bir üretim yalnızca yedek yolda gelir; yani yaygın durumda 1 ila 2 kat diyelim. Self-RAG, yargılarını üretimin kendisine katlar, dolayısıyla çağrı sayısı bire yakın kalır; ama bedelini özelleşmiş bir modelle ve daha uzun çıktılarla ödersin. **Agentic** döngü pahalı olanıdır: her reason-act-observe çevrimi bir model çağrısıdır ve multi-hop bir görev, cevap vermeden önce rahatlıkla üç, beş ya da daha fazla çevrim koşabilir; bu yüzden agent'lar genellikle **tek geçişli bir sorgunun LLM çağrılarının 3 ila 10 katına** mal olur ve duvar saati de buna uyacak kadar yavaştır. GraphRAG zamanlamayı tersine çevirir: sorgu zamanı maliyeti mütevazıdır (yerel arama bir mahalleyi, küresel arama bir avuç özeti okur), ama indeksleme inşası, korpusun tamamı üzerinde bir kez ve her yenilemede bir daha ödenen büyük, sabit bir LLM faturasıdır.
+
+Şimdi gerçeklik kontrolü; ve bunu bu serideki her şey kadar ciddiye alıyorum. Bunların her biri gecikme, para, yeni hata biçimleri ve hata ayıklama acısı ekler. Üretim sistemlerinin ezici çoğunluğu için dürüst varsayılan, iyi ayarlanmış sıkıcı RAG'dir: 6'dan 9'a kadarki bölümlerin hybrid search'ü, reranking'i ve ileri getirme desenleri, özenle yapılmış halleriyle. En fazla *bir* tanesini ekle ve onu yalnızca, sorunun gerçekten gerektirdiği yerde — hata analizi ve ölçümle kanıtlanmış olarak — ekle; asla agent'lar heyecan verici diye değil. Bir bilgi grafiğini çok modlu gömüler üzerinde kat eden beş araçlı bir agent *kurabiliyor* olman, iade-politikası botunun bunu yapması gerektiği anlamına gelmez.
+
+{/* From experience callout: drop in a real first-person anecdote here (e.g. the time I reached for a full agent when a reranker-plus-hybrid setup from Parts 7-8 would have solved the same problem for a tenth of the cost and latency, the agent looped, the bill climbed, and the fix was deleting code, not adding it), then wrap it as: > 💡 **From experience** ...story... */}
+
+Bunun gerektirdiği disiplin — basiti varsay, karmaşıklığı yalnızca kanıt üzerine ekle — tamamen kanıta sahip olmaya bağlıdır. Sonraki iki bölüm de tam oraya gidiyor: sisteminin gerçekten iyi olup olmadığını ölçmek (11. bölüm) ve onu üretimde koşturmak (12. bölüm).
+
+## Kendin dene
+
+Notlayıcı-kapılı bir dal ile ucu açık bir döngü arasındaki farkı hissetmenin en temiz yolu, çağrıları saymak. [agentic_loop.py](/essays/advanced-rag-architectures/agentic_loop.py), en küçük dürüst taslak: mock'lanmış, yalnızca politika içeren yerel bir index, bir web "yedeği", en iyi parçayı notlayan bir getirme değerlendiricisi ve bunların üstünde iki kontrol akışı: CRAG (getir, notla, yalnızca not kötüyse yedeğe düş) ve agentic bir ReAct döngüsü (reason-act-observe, sert bir adım tavanıyla). Gerçek LLM yok, dolayısıyla yalnızca numpy ile bir saniyede koşar; `sentence-transformers` varsa notlayıcı gerçekten anlama göre yönlendirir.
+
+Çalıştır ve `llm_calls` sayacını izle. Korpus içindeki iade sorusu yerel olarak cevaplanır; korpus dışındaki pil sorusu düzeltici dalı web'e zorlar. Sonra farka dikkat et: aynı cevaplar için CRAG bir üretim çağrısı harcar, agent iki ya da üç; tablonun uyardığı 3 ila 10 katın bir minyatürü. Yapmaya değer üç deney:
+
+- Notlayıcının `irrelevant_below` eşiğini yükselt ve yeniden koş. Web yedeği, iyi yerel cevaplar üzerinde tetiklenmeye başlar (aşırı tetikleme): daha çok çağrı, daha çok gecikme ve her sorgunun bir dış kaynağa sızması.
+- Agent'ta `max_steps=1` ayarla, sonra da çok yüksek bir değer. Tavanın, takılı kalmış bir döngü ile kontrolden çıkmış bir fatura arasında duran tek şey olduğunu izle.
+- Yerel index'inin iyi cevaplayabildiği bir soru ekle ve agent'ın web aracına hiç bulaşmadığını doğrula: yönlendirmenin, bedavaya, nottan kendiliğinden düşüşü.
+
+> ⚠️ **Sık düşülen tuzaklar**
+>
+> - **Yakınsamadan dönen agent'lar.** Kendi getirmesini sürekli "yeterince iyi değil" diye notlayan bir agent, faturan (ya da sabrın) tükenene kadar, tur başına bir model çağrısıyla, sonsuza dek reason-act-observe yapar. Her zaman sert bir **adım tavanı ve bir token/maliyet bütçesi** koy ve agent'ın onlara çarptığında ne yapacağını tanımla (elindekinden cevap ver ya da dürüstçe reddet); tıpkı taslağın `max_steps`'te durduğu gibi. Tavansız bir agent bir özellik değil, gerçekleşmeyi bekleyen bir kazadır.
+> - **CRAG'in web yedeğini aşırı tetiklemesi.** Değerlendiricinin "irrelevant" çıtasını fazla agresif ayarlarsan, gayet iyi yerel parçaları reddeder ve kendi index'inin zaten iyi cevapladığı sorgularda web aramasına düşer. Bu daha yavaştır, daha pahalıdır ve her sorguyu sessizce bir dış servise sızdırır. Notlama eşiklerini gerçek trafik üzerinde ayarla ve yedeğin ne sıklıkla ateşlendiğini logla: sorguların çoğunda ateşleniyorsa yanlış kalibre olan notlayıcıdır, index değil.
+> - **GraphRAG'in bayatlaması.** Grafik, korpusunun inşa anındaki bir anlık görüntüsüdür. Belgeler değiştikçe çıkarılmış varlıklar, ilişkiler ve topluluk özetleri sessizce güncelliğini yitirir ve sorgu yolundaki hiçbir şey sana bunu söylemez. Grafiği, yenilenmesi gereken herhangi bir index gibi ele al: yeniden çıkarım için bütçe ayır (pahalı LLM geçişi odur, dolayısıyla her düzenlemede yapamazsın), son inşadan beri nelerin değiştiğini takip et ve unutma: bayat bir grafikten gelen kendinden emin yanlış bir cevap, doğru olanla tıpatıp aynı görünür.
+
+## Özet çıkarımlar
+
+- Bu bölümün sıçraması, **sabit bir hattan** (getir, sonra üret, her seferinde aynı şekilde) kontrol akışlı, **karar veren bir döngüye**: getirip getirmemeye karar ver, dönen şeyi yargıla, tekrar dene, adım adım akıl yürüt, yapıda gezin. Buradaki mimarilerin dördü (Agentic, CRAG, Self-RAG, GraphRAG) o karar vermeyi eklemenin farklı yolları; Multi-Modal RAG ise dikeydir, her şeyin metin olduğu varsayımını gevşetir.
+- **Agentic RAG**, getirmeyi, bir **agent**'ın reason-act-observe (**ReAct**) döngüsünde seçebileceği bir **araç** yapar; **sorgu yönlendirmeyi** ve **multi-hop getirmeyi** mümkün kılar, bedeli gecikme, para ve öngörülemezliktir.
+- **Corrective RAG (CRAG)**, parçaları notlayan ve kötü olduklarında, üretmeden önce web araması gibi bir yedek tetikleyen bir **getirme değerlendiricisi** ekler. Ucuz, öngörülebilir ve açık alan boşlukları için harika.
+- **Self-RAG**, yargıyı **yansıma token'ları** aracılığıyla modelin içine taşır; bunlar getirmeli mi ve her iddia dayanaklı mı diye karar verir. CRAG dışarıdan kapılar, Self-RAG içeriden düşünür.
+- **GraphRAG**, tek tek parçaların cevaplayamadığı multi-hop ve küresel sorularda kazanmak için, varlıklar ve ilişkilerden oluşan bir **bilgi grafiği** üzerinde (isteğe bağlı **topluluk özetleme** ile) getirme yapar; **Multi-Modal RAG** ise **çok modlu gömüler** (paylaşılan, CLIP tarzı bir uzay) ya da medyayı metne çevirme yoluyla görüntüler, tablolar ve ses üzerinde getirme yapar. İkisi de güçlü, özelleşmiş ve inşası daha pahalı.
+- İyi ayarlanmış basit RAG'i varsay ve **bir** gelişmiş mimariyi, yalnızca ölçüm — heyecan değil — sorunun buna ihtiyacı olduğunu kanıtladığında ekle. Bu alan hızlı ilerliyor ve benim bir bilgi kesim tarihim var; o yüzden buradaki her adlı yöntemi bir anlık görüntü olarak ele al ve güncel durumu doğrula.
+
+## Referanslar
+
+Bu bölümdeki her adlı mimari, belirli bir makaleye dayanıyor. Benim özetlerim yerine birincil kaynakları istersen:
+
+- Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K., & Cao, Y. (2022). *ReAct: Synergizing Reasoning and Acting in Language Models.* arXiv:2210.03629. [https://arxiv.org/abs/2210.03629](https://arxiv.org/abs/2210.03629)
+- Asai, A., Wu, Z., Wang, Y., Sil, A., & Hajishirzi, H. (2023). *Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection.* arXiv:2310.11511. [https://arxiv.org/abs/2310.11511](https://arxiv.org/abs/2310.11511)
+- Yan, S.-Q., Gu, J.-C., Zhu, Y., & Ling, Z.-H. (2024). *Corrective Retrieval Augmented Generation.* arXiv:2401.15884. [https://arxiv.org/abs/2401.15884](https://arxiv.org/abs/2401.15884)
+- Edge, D., Trinh, H., Cheng, N., Bradley, J., Chao, A., Mody, A., Truitt, S., & Larson, J. (2024). *From Local to Global: A Graph RAG Approach to Query-Focused Summarization.* arXiv:2404.16130. [https://arxiv.org/abs/2404.16130](https://arxiv.org/abs/2404.16130)
+- Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., Krueger, G., & Sutskever, I. (2021). *Learning Transferable Visual Models From Natural Language Supervision.* arXiv:2103.00020. [https://arxiv.org/abs/2103.00020](https://arxiv.org/abs/2103.00020)
+
+## Sözlük
+
+- **Agent**: sabit bir betiği izlemek yerine, bir görev hakkında akıl yürüten, bir eylem ya da araç seçen, sonucu gözlemleyen ve bir döngü içinde sıradaki adıma karar veren bir dil modeli.
+- **Agentic RAG**: getirmenin, bir agent'ın çağırmayı seçebileceği araçlardan biri olduğu bir RAG sistemi; getirip getirmemeye, neyi ve kaç kez getireceğine model karar verir.
+- **ReAct döngüsü (ReAct loop)**: bir agent'ın koştuğu reason, act, observe, tekrar çevrimi; adımlarına önceden tanımlı bir sıra yerine çalışma anında karar verir.
+- **Araç kullanımı (tool use)**: bir modele, gerektiğinde çağırabileceği, adlandırılmış ve açıklanmış bir yetenek kümesi (getirme, web araması, bir veritabanı, bir hesap makinesi) vermek.
+- **Sorgu yönlendirme (query routing)**: bir sorgunun hangi kaynağa ya da index'e gönderilmesi gerektiğine karar vermek; böylece sistem, cevabı barındıramayacak bir depoda arama yapmaz.
+- **Multi-hop getirme (multi-hop retrieval)**: birinin sonucunun bir sonrakini beslediği zincirleme getirmeler; bir soru tek bir aramayla cevaplanamadığında kullanılır.
+- **Corrective RAG (CRAG)**: getirilen parçaları bir değerlendiriciyle notlayan ve kötü olduklarında, üretmeden önce web-arama yedeği gibi bir düzeltici eylem yapan bir hat.
+- **Getirme değerlendiricisi (retrieval evaluator)**: CRAG'de, getirilen parçaları relevant, ambiguous ya da irrelevant olarak notlayan hafif model ya da sınıflandırıcı.
+- **Self-RAG**: modelin, anında getirmeli mi ve kendi ifadeleri dayanaklı mı diye karar vermek için yansıma token'ları ürettiği, öz-yansıtmalı bir RAG yaklaşımı.
+- **Yansıma token'ları (reflection tokens)**: Self-RAG'de modelin, getirmeyi kapılamak ve pasaj ilgililiği ile kendi iddialarının dayanaklılığını yargılamak için ürettiği özel kontrol sinyalleri.
+- **Bilgi grafiği (knowledge graph)**: bilginin, etiketli ilişkilerle (kenarlar) birleşmiş varlıklar (düğümler) olarak temsili; olgular arasındaki bağlantıları açık hale getirir.
+- **GraphRAG**: korpustan bir bilgi grafiği inşa eden ve sorgu zamanında, vektör benzerliği yerine ya da onun yanında, grafikte gezinen veya topluluk özetlerini kullanan bir RAG yaklaşımı.
+- **Topluluk özetleme (community summarization)**: bir bilgi grafiğini sıkı bağlanmış topluluklara kümelemek ve her birini özetlemek; bütüncül, korpus çapındaki sorulara önceden sindirilmiş cevaplar verir.
+- **Multi-Modal RAG**: görüntüler, tablolar, grafikler, ses ve video dahil, metinden fazlası üzerinde getirme ve üretim.
+- **Çok modlu gömüler (multimodal embeddings)**: farklı modaliteleri (metin, görüntüler) tek bir paylaşılan vektör uzayına yerleştiren gömüler; aralarında arama yapabilmeni sağlar.
+- **CLIP**: bir görüntü ile onu tarif eden metin yakın noktalara embed olsun diye görüntü-altyazı çiftleri üzerinde eğitilmiş bir model; metinden görüntüye ve görüntüden metne aramayı mümkün kılar.
+
+---
+
+**Sırada, 11. Bölüm: RAG'i Değerlendirmek.** Kontrol akışını ve mimarileri gönül rahatlığıyla ekliyoruz; peki herhangi birinin işe yaradığını nereden biliyoruz? Sırada ölçmek var: faithfulness, cevap ilgililiği, bağlam precision'ı ve recall'u, ve bunları sayısallaştıran çerçeveler. Naif ya da agentic; ölçemediğin bir sistemi ne iyileştirebilir ne de savunabilirsin.

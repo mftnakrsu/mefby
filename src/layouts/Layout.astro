@@ -71,7 +71,7 @@ const locale = lang === 'tr' ? 'tr_TR' : 'en_US';
     <meta name="twitter:description" content={description} />
     {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
 
-    <script type="application/ld+json" set:html={JSON.stringify({
+    <script is:inline type="application/ld+json" set:html={JSON.stringify({
       "@context": "https://schema.org",
       "@type": "Person",
       name: "Meftun Akarsu",
