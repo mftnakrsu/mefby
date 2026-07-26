@@ -1,0 +1,407 @@
+---
+title: "Asıl Para Çıkarımda Yanıyor"
+description: "Bir LLM'i eğitmek bir kez olur. Çıkarım ise kullanıcı her enter'a bastığında olur. Açık kaynak bir modeli servis etmenin gerçek maliyeti üzerine notlarım: GPU belleği nereye gidiyor, neden asıl canını yakan şey ağırlıklar değil KV cache, tek bir forward pass'in içinde tam olarak ne oluyor, ve quantization bir puandan az doğruluk karşılığında nasıl 3 kat throughput geri kazandırıyor. Verimli LLM servisi üzerine bir yazı dizisinin 1. bölümü."
+date: 2026-07-26
+tags: ["LLM", "Çıkarım", "vLLM", "GPU", "KV Cache", "Quantization", "Optimizasyon", "MLOps"]
+lang: "tr"
+translationSlug: "efficient-llm-inference"
+isTranslation: true
+---
+
+import Diagram from '../../components/essay/Diagram.astro';
+
+Herkes eğitimden bahsediyor. GPU kümeleri, haftalarca süren hesaplama, insanın gözünü yaşartan bütçeler. İyi bir hikâye çıkıyor ortaya, ve zaten sürecin basın bülteni yazılan kısmı da orası.
+
+Ama eğitim bir kez olur. Çıkarım (inference), bir kullanıcı her enter'a bastığında olur. Bunu her kullanıcıyla, her mesajla, ürünün ayakta olduğu her günle çarpın; aritmetik artık başa baş bile değil: bir modele harcadığınız paranın çoğunu onu yapmaya değil, çalıştırmaya harcıyorsunuz.
+
+Bir süredir DeepLearning.AI'ın Red Hat ile birlikte hazırladığı, Cedric Clyburn'ün anlattığı [Fast & Efficient LLM Inference](https://www.deeplearning.ai/) kursunu takip ediyorum ve öğrendiklerimi ilerledikçe yazıya döküyorum. Bu ilk bölüm zemin katı: verimli servis etmek neden umursanmaya değer, model bir token üretirken içeride tam olarak ne oluyor ve GPU belleğinizin her baytı nerede bitiyor. Sonraki bölümlerde quantization, vLLM ve benchmark tarafına elimizi sokacağız.
+
+<Diagram number="1" caption="Bütün resim: tek bir çıkarım motoruna aynı anda düşen çok sayıda kullanıcı, GPU belleğini statik model ağırlıkları ile dinamik KV cache arasında bölüşen bir sistem, ve geriye teker teker akan tokenlar.">
+  <img src="/essays/efficient-llm-inference/01-course-overview.jpg" alt="vLLM ile verimli LLM servisine genel bakış: kullanıcı istekleri, dört GPU üzerinde PagedAttention, sürekli gruplama ve prefix caching çalıştıran bir çıkarım motoruna akıyor ve kullanıcılara token üretiyor. Altta GPU belleği model ağırlıkları, KV cache ve boş bellek olarak bölünüyor; bunu quantization, verimli servis ve benchmark hattı izliyor." />
+</Diagram>
+
+## Problem değişti
+
+2023'ün başında rekabetçi diyebileceğimiz açık kaynak model neredeyse yoktu. Bugün Hugging Face üzerinde binlercesi var; model eğiten hemen her kurumdan, OpenAI dâhil.
+
+Yani soru taraf değiştirdi. Eskiden *iyi bir model bulabilir miyim?* diye soruyorduk. Artık soru şu: *bu modeli verimli çalıştırabilir miyim?*
+
+Bu da doğal olarak şunu getiriyor: neden birinin API'sini çağırmak yerine modeli kendin çalıştırasın ki? Sürekli aynı dört gerekçe çıkıyor karşımıza:
+
+- **Maliyet.** Token başına ödemek yerine model boyutunu işin zorluğuna göre seçersin. Her isteğin en büyük modeline ihtiyacı yok.
+- **Güvenlik.** Veri ortamından hiç çıkmaz. Sağlık ya da finansta bu çoğu zaman bir tercih değil, bir zorunluluktur.
+- **Kontrol.** Modeli ne zaman yükselteceğine, ne zaman emekliye ayıracağına sen karar verirsin. Rate limit yok, üçüncü bir tarafın çökmesiyle birlikte ürününün de yere çakılması yok.
+- **Özelleştirme.** Kendi alanına göre fine-tune edebilirsin; bu sana aynı anda hem doğruluk hem maliyet kontrolü kazandırır.
+
+Bunların hiçbiri bedava değil. Başkasının operasyonel derdini kendi derdinle takas ediyorsun, ve bu yazının geri kalanı o derdin neye benzediğiyle ilgili.
+
+## İyi bir dağıtımı iki sayı belirler
+
+Her üretim sistemi gibi bir LLM dağıtımının da ölçülebilir hedeflere ihtiyacı var — servis seviyesi hedefleri (SLO). Takip etmeye değer iki boyut var ve ikisine birden ihtiyacın var.
+
+**Doğruluk**, çünkü yanlış cevap veren bir model işe yaramaz. Halüsinasyon gören ya da markanın diline uymayan cevaplar veren bir model, ne kadar hızlı olursa olsun başarısızdır. Eşiğin nerede olduğu tamamen kullanım senaryona bağlı ve dağıtımdan önce bunu kontrol etme yerin model kartı. Optimize edilmiş varyantların model kartları, her standart benchmark için bir satır yayımlar — genel bilgi için MMLU, matematik için GSM8K, ve benzeri — yanına da bir **recovery** sütunu koyar: optimize edilmiş sürüm, orijinal modelin doğruluğunun ne kadarını koruyabilmiş. Sıkıştırılmış bir modelde ortalama %99.88 gibi bir sayı gördüğünde, doğruluk SLO'nu dayadığın sayı işte odur.
+
+**Çıkarım performansı**, çünkü kimsenin beklemeye tahammül etmediği bir model de işe yaramaz. Üç gecikme metriği önemli:
+
+- **İlk token süresi (TTFT)** — kullanıcı ekranda hiçbir şey belirmeden önce ne kadar boşluğa bakıyor.
+- **Tokenlar arası gecikme (ITL)** — ardışık çıktı tokenları arasındaki ortalama boşluk, ilki hariç. Üretimin "akıcı" ya da "kekeme" hissettirmesi tam olarak bu demek.
+- **İstek gecikmesi** — uçtan uca toplam süre.
+
+Gecikmenin yanında bir de **throughput** var: tüm istekler genelinde saniyede üretilen ortalama çıktı token sayısı. Gecikme tek kullanıcının deneyimidir; throughput ise sisteminin üretim ölçeğinde ayakta kalıp kalmadığıdır.
+
+Her iki boyuttaki küçük açıklar ilerleyen aşamalarda büyük problemlere dönüşür. İşe yaraması için, sahaya çıkmış bir modelin hem yeterince hızlı hem de yeterince doğru olması gerekir.
+
+## Donanım matematiği
+
+İşin somutlaştığı yer burası. GPU belleğinin iki şeyi barındırması gerekiyor: **model ağırlıkları**, ki bir kullanıcıya da yüz kullanıcıya da hizmet verirken aynı sabit yeri kaplar, ve **KV cache**, ki her token ve her aktif istekle birlikte büyüyen bir çalışma belleğidir.
+
+Bu ikisi birbirine hiç benzemez, ve bütün mesele o farkta.
+
+<Diagram number="2" caption="Ağırlıklar statiktir: bir kez yüklenir, boyutu sabittir, tüm istekler paylaşır. KV cache dinamiktir: her isteğe özeldir ve üretilen her tokenla büyür. Verimli çıkarım, büyük ölçüde ikincisini yönetme sanatıdır.">
+  <img src="/essays/efficient-llm-inference/02-gpu-memory-overview.jpg" alt="LLM çıkarımında GPU belleği üçe ayrılır: bir kez yüklenip tüm isteklerce paylaşılan statik model ağırlıkları, her isteğe özel olan ve üretilen her tokenla büyüyen dinamik KV cache, ve yeni istekleri soğuran boş bellek. 70B bir model için: yaklaşık 140 GB ağırlık, 8k tokende 2.5 GB KV cache, 32k tokende 10 GB." />
+</Diagram>
+
+70 milyar parametreli Llama 3'ü ele alalım. Çıktığı hassasiyette bir parametre kabaca iki bayt, dolayısıyla tek başına ağırlıklar yaklaşık **140 GB** yer istiyor. Yani sırf modeli yükleyebilmek için en az iki tane 80 GB'lık GPU gerekiyor.
+
+Kimse onu öyle dağıtmıyor ama. 70B sınıfı bir model için standart üretim birimi dört adet 80 GB GPU — toplam 320 GB, ki bu da geriye **her şey için yaklaşık 180 GB** bırakıyor.
+
+O "her şey" neredeyse tamamen KV cache. Llama 3 70B için 32.000 tokenlik tek bir uzun bağlam isteği, tek başına yaklaşık 10 GB KV cache istiyor. Yani 180 GB'lık boşlukla paralelde yaklaşık **18 uzun bağlam kullanıcısına** hizmet verebilirsin.
+
+Ancak veremezsin — en azından varsayılan hâliyle. Hiçbir bellek optimizasyonu olmayan naif bir servis kurulumu o alanı öyle kötü yönetir ki aynı donanım **iki ya da üç** kullanıcıya bakar.
+
+Aynı GPU'larda on sekize karşı üç. Bu kursun bütün konusu o uçurum.
+
+## Optimize edilecek iki yer
+
+O uçurumu kapatan teknikler iki kategoriye ayrılıyor ve gerçekten de türce farklılar.
+
+**Model optimizasyonları** modelin kendisine, daha sahaya çıkmadan önce uygulanır. Quantization, sparsification. Amaç, olabildiğince doğruluğu korurken bellek ayak izini ve gereken hesabı düşürmek. Bunu bir kez yaparsın, elinde bir çıktı olur, o çıktıyı dağıtırsın.
+
+**Çıkarım optimizasyonları** ise çalışma zamanında, servis motorunun içinde olur. Sürekli gruplama (continuous batching), prefix caching, PagedAttention. Bunlar modeli hiç değiştirmez — onu ne kadar verimli çalıştırdığını değiştirir.
+
+<Diagram number="3" caption="Bu dizinin gideceği yer: önce temeller, sonra quantization ile modeli sıkıştırmak, ardından vLLM ve üç temel çalışma zamanı tekniğiyle servis etmek, ve üretime yaklaşmadan önce dürüstçe benchmark almak.">
+  <img src="/essays/efficient-llm-inference/03-course-roadmap.jpg" alt="Açık kaynak modelden üretim dağıtımına giden beş aşamalı yol haritası: temeller, LLM Compressor ile quantization, vLLM ile servis, vLLM'in temel teknikleri (PagedAttention, sürekli gruplama, prefix caching), GuideLLM ve LM-Eval ile benchmark, ve son olarak üretim." />
+</Diagram>
+
+İkisi de önemli ve birbirini tamamlıyorlar. Ama hepsinin altında hiç kaybolmayan bir kısıt var:
+
+> Performans, doğruluk, maliyet. Çoğu dağıtım bunlardan ikisini seçebiliyor.
+
+Gerçek zamanlı gecikme kullanıcılarının beklememesi demek, ama yüksek throughput genelde daha çok hesap ister. Doğruluk güven kazandırır, ama daha iyi skorlu büyük modeller daha pahalıdır. Altyapı harcamasının da makul kalması gerekir — ancak agresif model optimizasyonu doğruluğu kemirebilir. Doğru araçlar bu sınırları beklediğinden çok daha ileriye taşır, ama takası ortadan kaldırmaz.
+
+Kabaca bir büyüklük fikri vermek gerekirse: 70B bir modelin tam hassasiyetle, istekleri teker teker işleyen naif bir dağıtımı, gerçek kullanıcı hacminde ayda yüz binlerce hatta milyonlarca dolara çıkabiliyor. Üzerine sürekli gruplama ve PagedAttention ile düzgün KV cache yönetimi eklediğinde, tek başına throughput iyileşmesi faturadan yaklaşık bir büyüklük mertebesi siliyor. Sonra aynı sunucuya quantize edilmiş bir model koyduğunda — daha küçük ayak izi, daha hızlı ağırlık yükleme, GPU donanımının daha iyi kullanılması — bir kez daha düşüyor.
+
+Varış noktası orası. Şimdi temellere dönelim, çünkü bu tekniklerin hiçbiri neyi optimize ettiklerini bilmeden anlam ifade etmiyor.
+
+## Çıkarım aslında nedir
+
+Bir istem gönderdiğinde — bir soru, bir kod önerisi, özetlenecek bir belge, ya da bugünlerde senin adına bunu yapan bir ajan — kaputun altında olan şeyin adı **çıkarım**: eğitilmiş bir modeli kullanarak yanıt üretmek.
+
+Bunu üretimde çalıştırmak, üst üste dizilmiş üç parça gerektiriyor:
+
+- En üstte **model**: milyarlarca öğrenilmiş parametreyi tutan dosya.
+- Ortada **çıkarım sunucusu**: modeli yükleyen, gelen istekleri yöneten ve bu yazıdaki her optimizasyonu hayata geçiren vLLM gibi bir yazılım.
+- En altta **donanım hızlandırıcı**: sayısal ağır işi yapan, genelde bir GPU.
+
+<Diagram number="4" caption="Üç katmanlı yığın. Bir istem uygulamadan çıkarım sunucusuna, oradan GPU'ya iniyor; üretilen tokenlar aynı yoldan geri çıkıyor.">
+  <img src="/essays/efficient-llm-inference/04-inference-stack.jpg" alt="Üretimde LLM çıkarımı üç katmanlı bir yığın olarak: bir yapay zekâ uygulaması kullanıcı istemini çıkarım sunucusuna (vLLM) gönderiyor; sunucu istek zamanlama, gruplama, KV cache yönetimi ve bellek optimizasyonunu üstlenip model ağırlıklarını, istek başına KV cache'i ve tensor core'ları barındıran GPU'yu sürüyor. Üretilen tokenlar kullanıcıya geri akıyor." />
+</Diagram>
+
+Ortadaki katmanı atlayabilirsin. Modeli PyTorch ile doğrudan GPU'ya yüklemek gayet çalışır — bir notebook için, ya da tek kullanıcı için. Aynı anda çok sayıda kullanıcıya hizmet vermen gerektiği anda çıkarım sunucusu opsiyonel olmaktan çıkar. GPU'yu üretim ölçeğinde gerçekten kullanılabilir kılan parça odur.
+
+### Teker teker token
+
+LLM'ler cümle üretmez. Bir token üretir, sonra bir tane daha; token da kabaca bir kelime ya da kelimenin bir parçasıdır.
+
+Döngü elle takip edilebilecek kadar basit. `The quick brown` gönderiyorsun. Model bunu işleyip sıradaki tokenı tahmin ediyor: `fox`. O token girdinin sonuna ekleniyor, yani girdi artık `The quick brown fox` ve model tekrar çalışıp `jumps`'ı tahmin ediyor. Ekle, tekrar çalıştır, `over`. Bu, model işinin bittiğini bildiren özel bir dizi-sonu tokenı üretene kadar sürüyor.
+
+Buna **otoregresif üretim** deniyor ve önemli özelliği şu: her yeni token, kendinden önceki bütün tokenlara bağlı — modelin az önce kendi yazdıkları dâhil.
+
+Bu da şu demek: bir yanıttaki her token, modelden tam bir geçiş gerektiriyor. 500 tokenlik bir cevap, 500 forward pass demek.
+
+### Tek bir forward pass'in içi
+
+Peki forward pass nedir?
+
+Model her girdi tokenını bir sayı vektörüne çeviriyor — **token embedding**. Bu embeddingler bir transformer katmanı yığınından akıyor. Her katmanın iki parçası var: tokenların birbiriyle bilgi alışverişi yaptığı bir **self-attention** bloğu, ve her tokenın temsilini biraz daha işleyen bir **ileri beslemeli ağ** (feed-forward network). Bu ikili N kez, üst üste tekrarlanıyor.
+
+Son katmandan sonra çıktı **LM head**'e giriyor; burası modelin içsel temsilini olası her sıradaki token için bir skora çeviriyor. En yüksek skor kazanıyor — `fox`, %90 olasılıkla. Ardından o token girdinin sonuna ekleniyor ve bütün yığın baştan çalışıyor.
+
+<Diagram number="5" caption="Uçtan uca tek bir forward pass: istemden embeddinglere, N transformer katmanından geçip LM head'den olası her token için bir skora. Sonra ekle ve tekrarla.">
+  <img src="/essays/efficient-llm-inference/05-forward-pass.jpg" alt="Bir transformer'ın sıradaki tokenı nasıl ürettiği: girdi istemi token embeddinglerine çevriliyor, her biri self-attention ve ileri beslemeli ağ içeren N transformer katmanından geçiyor, ardından olası her sıradaki token için skor üreten LM head'e giriyor. En yüksek skorlu token, %90 olasılıkla fox, girdinin sonuna ekleniyor ve döngü dizi-sonu tokenına kadar tekrarlanıyor." />
+</Diagram>
+
+Tek bir transformer katmanına yakınlaşınca her iki bloğun da aynı temel yapı taşından kurulu olduğu ortaya çıkıyor: **lineer katmanlar**. Lineer katman bir matris çarpımıdır. Bir vektör al, bir ağırlık matrisiyle çarp, yeni bir vektör elde et. Operasyonun tamamı bu.
+
+Aynı zamanda modelin parametrelerinin neredeyse tamamının yaşadığı ve hesabın neredeyse tamamının olduğu yer de burası.
+
+- Self-attention **dört** lineer katman barındırır: Q, K, V ve O projeksiyonları. Tokenların nasıl ilişkili olduklarını çözmek için birbirine baktığı yer burası.
+- İleri beslemeli ağ **üç** tane barındırır: gate, up ve down projeksiyonları. Bunlar her tokenı bağımsız işler, tokenlar arasında hiçbir etkileşim olmadan.
+
+<Diagram number="6" caption="Bir katman, açılmış hâliyle. Her iki bloktaki her şey lineer katmanlara, yani matris çarpımlarına iniyor: attention'da dört, ileri beslemeli ağda üç tane.">
+  <img src="/essays/efficient-llm-inference/06-transformer-layer.jpg" alt="Tek bir transformer katmanının içi: bir self-attention bloğu, ardından bir ileri beslemeli ağ; her ikisinin sonunda artık bağlantı toplaması ve katman normalizasyonu var. Self-attention Q, K, V ve O projeksiyonlarından kurulu ve ölçeklenmiş nokta çarpımı attention'ını besliyor; ileri beslemeli ağ ise SiLU ya da GELU aktivasyonuyla gate, up ve down projeksiyonlarından kurulu." />
+</Diagram>
+
+Bu ağırlık matrisleri eğitim sırasında bir kez öğrenilir ve bir daha değişmez. Modelin yaptığı her şey — tokenları anlamak, aralarında ilişki kurmak, sıradakini tahmin etmek — bu lineer katmanların matris çarpımı yapmasına iner. Tekrar tekrar, N transformer bloğu boyunca, üretilen her bir token için.
+
+### Attention, somut olarak
+
+Self-attention, her tokenın diğerlerine dikkat kesildiği yer. Model `The quick brown fox`'u okuduğunda, `fox`'un `quick` ile bağlantılı olduğunu — yani hızlı olan şeyin tilki olduğunu — anlamasını sağlayan mekanizma attention'dır.
+
+Bunun için o token'a ait üç vektör hesaplanır. Her biri, tokenın mevcut temsilini ayrı bir lineer katmandan geçirmekle elde edilir:
+
+- **Q**, sorgu (query): *bağlamdan ne öğrenmek istiyorum?*
+- **K**, anahtar (key): *işte etiketim ve içerdiğim bilginin türü.*
+- **V**, değer (value): *etiketim eşleşiyorsa, işte asıl içeriğim.*
+
+Tokenın "mevcut temsili", eğer bu ilk transformer katmanıysa girdi embeddingidir; değilse bir önceki katmanın çıktısıdır.
+
+`fox` için attention hesabı şöyle işliyor. Sorgusu Q'yu al ve o ana kadarki her tokenın anahtarıyla — kendisi dâhil — nokta çarpımı üzerinden karşılaştır. Yüksek nokta çarpımı *bu token benim için ilgili* demek; düşük olan değil demek. Dört tokenlik bir dizide bu sana dört ham skor verir.
+
+Bu skorları, sayıları sayısal olarak dengede tutmak için anahtar boyutunun kareköküne böl, sonra bir softmax'tan geçir ki toplamı bire eşit ağırlıklara dönüşsünler. Diyelim ki token 2 en yüksek çıktı, 0.52 — model token 2'nin token 4 için en önemli olduğunu düşünüyor.
+
+Son olarak, bütün değer vektörlerinin bu ağırlıklarla ağırlıklı toplamını al. Sonuç tek bir vektör, artık dizinin geri kalanından gelen bağlamla zenginleşmiş hâlde. Dördüncü lineer katman olan `o_proj`'den geçiyor ve attention bloğunun çıktısı bu oluyor.
+
+<Diagram number="7" caption="Aynı katman, ağırlık matrisi çözünürlüğünde: Q çarpı K devriği, anahtar boyutunun kareköküne bölünüp softmax'tan geçirilerek attention ağırlıklarına, sonra V'ye uygulanıyor.">
+  <img src="/essays/efficient-llm-inference/07-attention-detail.jpg" alt="Bir transformer katmanının ağırlık matrislerini gösteren ayrıntılı görünümü. Self-attention'da girdi token temsilleri W_Q, W_K, W_V üzerinden Q, K ve V'yi üretiyor; ölçeklenmiş nokta çarpımı attention'ı Q ile K devriğini çarpıp d_k'nin kareköküne bölüyor, softmax uyguluyor ve sonuç W_O'dan geçiyor. İleri beslemeli ağ ise aralarında bir aktivasyonla gate, up ve down projeksiyonlarını uyguluyor." />
+</Diagram>
+
+## KV cache'i doğuran gözlem
+
+O hesabın neye ihtiyaç duyduğuna dikkatli bakalım.
+
+Yeni bir token üretmek için dizideki **her önceki tokenın anahtarı ve değeri** gerekiyor. Ama **sorgu** yalnızca mevcut token için gerekiyor. Q adım başınadır. K ve V ise bütün geçmiştir.
+
+Bu asimetri işin tamamı.
+
+Adım adım gidelim. Model 4. tokenı, `fox`'u üretiyor; Q4, K4, V4'ü hesaplıyor. Attention, Q4'ü önceki bütün tokenların anahtar ve değerleriyle birlikte kullanıyor. Şimdi 5. tokenı, `jumps`'ı üretiyor — ve bunun için yeni bir Q5 sorgusuna, artı yeni bir K5 ve V5'e ihtiyacı var. Ama 1'den 4'e kadarki tokenların K ve V'si değişmedi. Zaten değişmesine imkân yok. Onları yeniden hesaplamak saf israf olurdu.
+
+O yüzden hesaplamıyorsun. Bir token için K ve V'yi hesapladıktan sonra onları GPU belleğine kaydediyorsun. Sonraki her adımda yalnızca yeni token için K ve V hesaplayıp cache'in sonuna ekliyorsun; attention geri kalanını depodan çekiyor.
+
+İşte bu **KV cache**. Ve bu N katmanın her birinde olduğu için, tasarruf N ile çarpılıyor.
+
+<Diagram number="8" caption="Üretimin dört adımı. Her adım yalnızca yeni token için Q, K ve V hesaplıyor; önceki bütün anahtar ve değerler yeniden hesaplanmak yerine cache'ten okunuyor.">
+  <img src="/essays/efficient-llm-inference/08-kv-cache-steps.jpg" alt="Dört üretim adımı boyunca KV cache. Her adımda yalnızca mevcut tokenın sorgu, anahtar ve değeri hesaplanıyor; önceki bütün tokenların anahtar ve değerleri yeniden hesaplanmak yerine cache'ten alınıyor ve yeni anahtar ile değer cache'e ekleniyor. KV cache olmasaydı her adımda önceki her tokenın K ve V'si yeniden hesaplanacaktı." />
+</Diagram>
+
+### Ne kadar büyüyor
+
+Token başına, her katmanda bir anahtar ve bir değer vektörü saklıyorsun. Burada çok kritik ve gözden kaçması çok kolay bir ayrıntı var.
+
+Her katman attention'ı çok sayıda **head** üzerinde paralel çalıştırıyor ki model aynı anda birkaç tür ilişkiyi yakalayabilsin. Llama 3 70B'de bunlardan 64 tane var. Ama model 64 set anahtar ve değer saklamıyor — **sekiz** saklıyor.
+
+Bunun adı **gruplanmış sorgu attention'ı** (grouped-query attention, GQA): sekizerli sorgu head grupları tek bir anahtar/değer head'ini paylaşıyor. Sorgular çeşitliliğini koruyor; cache ise katlanmıyor. Bu bir mimari dipnot değil — aşağıdaki sayıların hiç değilse katlanılabilir olmasının tek başına en büyük sebebi.
+
+Yani boyut formülüne giren sayı attention head sayısı değil, **KV head** sayısı. Token başına:
+
+```
+2 × katman_sayısı × kv_head_sayısı × head_boyutu × dtype_bayt
+```
+
+Baştaki 2, hem K hem V sakladığın için. Llama 3 70B'de: 80 katman, 8 KV head, head boyutu 128, ve çıktığı hassasiyette sayı başına iki bayt.
+
+```
+2 × 80 × 8 × 128 × 2 = 327.680 bayt ≈ token başına 320 KB
+```
+
+Token başına. Şimdi bunu insanların gerçekten kullandığı bağlam uzunluklarına ölçekleyelim:
+
+| Bağlam uzunluğu | Ne demek | KV cache |
+| --- | --- | --- |
+| 2.000 token | tipik bir sohbet turu | ~640 MB |
+| 8.000 token | standart üretim seviyesi | ~2.5 GB |
+| 32.000 token | uzun bir belge ya da kod tabanı | ~10 GB |
+| 128.000 token | Llama 3'ün azamisi | ~40 GB |
+
+<Diagram number="9" caption="Aynı tablo, arkasındaki formülle birlikte; ve asıl canı yakan kısım: KV cache eşzamanlı kullanıcı sayısıyla da ölçekleniyor, yirmi uzun bağlam isteği tek başına ~800 GB istiyor.">
+  <img src="/essays/efficient-llm-inference/09-kv-cache-growth.jpg" alt="Llama 3 70B'nin FP16'da KV cache büyümesi: 2.000 token yaklaşık 640 MB, 8.000 token yaklaşık 2,5 GB, 32.000 token yaklaşık 10 GB ve 128.000 token yaklaşık 40 GB; token başına kabaca 320 KB. Boyut formülü 2 çarpı katman sayısı çarpı KV head sayısı çarpı head boyutu çarpı bayt. Tek bir 128K isteği artı 140 GB ağırlık toplamda yaklaşık 180 GB ediyor, yirmi eşzamanlı uzun bağlam kullanıcısı ise yaklaşık 800 GB KV cache istiyor." />
+</Diagram>
+
+GQA'nın burada senin için ne kadar iş yaptığına bir durup bakmaya değer. Sekiz yerine 64 head'in hepsini saklasaydın token başına rakam kabaca 2,5 MB olurdu; bu da son satırı ~320 GB'a çıkarır — tek bir sohbet için, modelin kendi ağırlıklarının iki katından fazlası. Uzun bağlamı ekonomik olarak mümkün kılan şey gruplanmış sorgu attention'ı.
+
+Yine de sayıların bugünkü hâlinde biraz duralım. Modelin kendi ağırlıkları yaklaşık 140 GB. Azami bağlamlı tek bir istek, üstüne 40 GB KV cache istiyor — tek bir kullanıcının sohbeti için, modelin bütün boyutunun neredeyse üçte biri.
+
+Ve bu *istek başına*. Aynı anda on uzun bağlam kullanıcısına hizmet ver, modelin kendisi hariç 400 GB'ın üzerinde KV cache'e ihtiyacın olsun.
+
+Modern LLM çıkarımında baskın bellek derdinin ağırlıklar değil KV cache olmasının sebebi bu. GPU belleğinde yaşıyor, hem dizi uzunluğuyla hem eşzamanlı istek sayısıyla doğrusal büyüyor, ve onu verimli yönetmek bir üretim çıkarım sunucusunun tek başına en büyük işi.
+
+## Tensörler aslında nerede yaşıyor
+
+Çıkarım sırasında bellekte oturan iki şeyi artık biliyorsun. Biraz geri çekilip onların yaşadığı bellek sistemine bakmakta fayda var.
+
+Önce kısa bir terim notu. Şu ana kadar *vektör*, *matris* ve *ara değerler* kelimelerini epey gevşek kullandım. Herhangi bir çok boyutlu sayı dizisinin genel adı **tensör**. Tek bir sayı sıfır boyutlu bir tensör, vektör bir boyutlu, matris iki boyutlu. Q, K, V, KV cache ve modelin ağırlıkları — hepsi tensör. Buradan sonra "modelde dolaşan veri" dediğimde kastettiğim şey sadece tensörler.
+
+Bir GPU'nun üç kademeli belleği var ve bunlar hem boyut hem hız olarak dramatik biçimde farklılar.
+
+En altta **CPU DRAM** oturuyor — ana makinenin ana belleği. GPU bağımsız bir bilgisayar değil; kendi CPU'su ve RAM'i olan bir makineye takılıyor. O ana bellek çok değişkenlik gösteriyor: dizüstünde 16 GB, veri merkezi sunucusunda bir terabayt ya da fazlası. Boyutu ne olursa olsun, GPU'ya *uzak*. Ve o sınırdan veri geçirmek, kartın kendi üzerinde olan biten her şeye kıyasla yavaş.
+
+Ortada **HBM** — yüksek bant genişlikli bellek — var. İnsanlar "GPU belleği" ya da VRAM dediğinde kastettikleri şey bu. GPU kartının üzerinde, hesap birimlerine yakın. Ana bellekten küçük ama çok daha hızlı.
+
+En üstte **SRAM** var: GPU'nun hesap birimlerinin hemen yanındaki yonga üstü bellek. O birimlerin adı **tensor core**; matris çarpımlarını son derece hızlı yapan özel donanım — ki modeldeki her lineer katmanın ihtiyacı da tam olarak bu. Tensor core'lar girdilerini SRAM'den okur, hesabı yapar, sonucu geri yazar. SRAM minicik ve olağanüstü hızlı; bütün işi tensor core'ları aç bırakmamak.
+
+Somut sayılar, NVIDIA A100 üzerinden:
+
+| Kademe | Boyut | Bant genişliği |
+| --- | --- | --- |
+| SRAM | ~20 MB | ~19 TB/s |
+| HBM | 40 GB | ~1.5 TB/s |
+| Host ↔ GPU aktarımı | (host DRAM) | ~12 GB/s |
+
+<Diagram number="10" caption="Hesap birimlerine yaklaştıkça kapasite düşüyor, bant genişliği tırmanıyor. Host belleği ile yonga üstü SRAM arasında kabaca üç büyüklük mertebesi bant genişliği farkı var.">
+  <img src="/essays/efficient-llm-inference/10-memory-hierarchy.jpg" alt="NVIDIA A100'de boyut ve hıza göre GPU bellek hiyerarşisi: CPU DRAM yaklaşık bir terabayt ve PCIe üzerinden yaklaşık 12 GB/s, HBM 40 GB ve yaklaşık 1,5 TB/s, SRAM yaklaşık 20 MB ve yaklaşık 19 TB/s ile tensor core'ları besliyor. Veri hesap birimlerine yaklaştıkça kapasite azalıyor, bant genişliği artıyor." />
+</Diagram>
+
+Takas tertemiz, ve bugüne kadar kurulmuş her bellek hiyerarşisinin her seviyesindeki takasın aynısı: bellek hesap birimlerine ne kadar yakınsa o kadar hızlıdır, ve o kadar azdır.
+
+Peki çıkarım neyi nereye koyuyor?
+
+**Model ağırlıkları** başlangıçta bir kez diskten ya da host DRAM'den HBM'e yükleniyor ve sunucunun ömrü boyunca orada kalıyor. **KV cache** de HBM'de yaşıyor, her istek daha fazla token işledikçe büyüyor. Her forward pass sırasında, ağırlıkların ve KV cache'in küçük parçaları HBM'den SRAM'e çekiliyor ki tensor core'lar üzerinde çalışabilsin. Bu tekrar tekrar oluyor — her lineer katman için, N transformer katmanının her birinde, üretilen her token için.
+
+Bir de her adımda üretilen **geçici tensörler** var: mevcut tokenın sorgu vektörü, attention çıktısı, her ileri beslemeli katmanın ara çıktıları. Dikkat: o adımın K ve V'si bu listede *yok* — onlar KV cache'e ekleniyor ve kalıyor. Gerçekten geçici olanlar ise diğer her şeyle birlikte HBM'de yer alıyor, tensor core'lar tükettikçe SRAM'e parçalar hâlinde akıtılıyor, ve adım bitince serbest bırakılıyor.
+
+Bu ayrıntıda titiz olmaya değer, çünkü füzyonlu çekirdeklerin (fused kernels) saldırdığı yer tam olarak burası. FlashAttention bunun ders kitabı örneği: bütün değeri, bu ara değerlerin bir kısmını HBM'e yazıp bir an sonra geri okumak yerine SRAM'de tutmasında.
+
+<Diagram number="11" caption="KV cache'in neden hızlı bellekte yaşayamadığı: fazlasıyla büyük, adımlar boyunca kalıcı olmak zorunda, ve her akış çoklu işlemcisinin tamamına erişebilmesi gerekiyor.">
+  <img src="/essays/efficient-llm-inference/11-kv-cache-in-hbm.jpg" alt="KV cache'in neden SRAM'de değil HBM'de yaşadığı. HBM 40 ilâ 192 GB kapasiteyi yaklaşık 1,5 TB/s ile sunuyor ve bütün akış çoklu işlemcilerinden erişilebiliyor; SRAM ise toplamda yalnızca yaklaşık 10 ilâ 100 MB, paylaşımlı değil işlemci başına, ve register'lar, aktivasyonlar ile ara hesap verisi için ayrılmış durumda. KV cache büyük, birçok adım ve katman boyunca yeniden kullanılıyor ve GPU'nun tamamından erişilebilir olması gerekiyor." />
+</Diagram>
+
+## Seni sınırlayan iki şey
+
+Geriye çıkarımın olabilecek en yüksek hızını belirleyen iki kaldıraç kalıyor, sadece iki tane:
+
+1. Verinin HBM'den SRAM'e ne kadar hızlı taşınabildiği.
+2. Veri geldikten sonra tensor core'ların onun üzerinde ne kadar hızlı hesap yapabildiği.
+
+Bu dizinin geri kalanındaki her optimizasyon buraya dönüyor. Daha az veri taşı, daha verimli taşı, ya da belleği daha iyi yönet. Quantization taşınması gereken şeyi küçültüyor. PagedAttention KV cache'in nerede oturduğunu yönetiyor. Sürekli gruplama her seferinde daha fazla faydalı iş taşınmasını sağlıyor.
+
+O hâlde ilkinden başlayalım.
+
+## Makas açılmaya devam ediyor
+
+Modeller yeteneklendikçe aynı zamanda epey büyüdüler. Daha çok parametre demek daha çok bellek, daha çok hesap, daha çok maliyet demek.
+
+Model boyutunu logaritmik eksende zamana karşı çizdiğinizde eğilim acımasız: 2017'deki orijinal Transformer 50 milyon parametre, bugünün sınır modelleri yüz milyarlarda, bazıları bir trilyonu geçmiş durumda. **Model boyutları kabaca her yıl ikiye katlandı.**
+
+GPU belleği katlanmadı. Büyüdü, ama o hızın yanına bile yaklaşamadı. Dolayısıyla modellerin yapabildiği ile donanımın gerçekten çalıştırabildiği arasındaki makas açılmaya devam ediyor.
+
+Bu uyumsuzluk dört somut problem doğuruyor:
+
+- **Altyapı.** Daha büyük model demek daha çok hızlandırıcı, çoğu zaman birden fazla düğüme yayılmış hâlde, ve bu hızla pahalılaşıyor.
+- **Kullanıcı deneyimi.** Daha çok parametre; daha yavaş yanıt, daha düşük throughput ve KV cache'te uzun bağlama daha az yer demek.
+- **Enerji.** Her ek GPU güç çekiyor. Ölçeklendiğinde bu, yuvarlama hatası değil, gerçek bir çevresel maliyet.
+- **Eskime riski.** Altı ay sonra yerini bir başkasına bırakacak bir modele göre boyutlandırılmış altyapıya yatırım yapıyorsun.
+
+Bu makası kapatma yolun sıkıştırma.
+
+## Quantization: daha az bit sakla
+
+Fikir neredeyse utandıracak kadar basit. Bir ağırlığı π gibi düşün. 3,14159265… saklayabilirsin, ya da 3,14 saklayabilirsin. İkincisi daha az hassas ve çok daha küçük.
+
+Çoğu LLM **BF16** ile çıkıyor — sayı başına 16 bit. Quantization bu sayıları daha düşük bitli formatlara çeviriyor: FP8, INT8, INT4. Sayı başına daha az bit, genel olarak daha küçük model.
+
+İsimlendirme üzerine kısa bir not, çünkü biri açıklayana kadar alfabe çorbasına benziyor:
+
+- **FP**, kayan nokta (floating point) — 3,14 gibi ondalıklı sayılar.
+- **BF**, brain floating point. BF16, Google'ın geliştirdiği 16 bitlik bir format ve FP16'dan *daha geniş bir aralığa* sahip; bu da onu büyük modellerde sayısal olarak daha kararlı kılıyor. Varsayılan yayın formatı hâline gelmesinin sebebi bu kararlılık.
+- **INT**, tam sayı (integer) — 3 ya da −127 gibi.
+
+İçselleştirmeye değen şey şu: aralık ve hassasiyet ayrı iki düğme. FP32 çok geniş bir aralığı ince hassasiyetle kaplıyor, yani temsil edilebilir değerler arasındaki boşluklar minicik. BF16 *aynı aralığı* kaplıyor ama aradaki boşluklar daha büyük — Google'ın yaptığı takas tam olarak bu. FP16 ve INT8'e indikçe aralık da daralıyor, boşluklar ise büyümeye devam ediyor.
+
+Sürekli hassasiyeti boyutla takas ediyorsun.
+
+Quantization iki farklı şeye uygulanabiliyor: modelin öğrenilmiş parametreleri olan **ağırlıklar**, ve forward pass sırasında hesaplanan ara değerler olan **aktivasyonlar**. Bu ayrım kulağa geldiğinden daha önemli, birazdan geri döneceğim.
+
+Bir de probleme başka bir açıdan saldıran **sparsification** var: modelin tahminlerine en az katkıda bulunan ağırlıkları sıfırlayıp çıkarım sırasında tamamen atlanabilir hâle getirmek. Yaygın yaklaşım **2:4 seyreklik**; bir ağırlık tensöründeki her dört değerden ikisi sıfıra çekiliyor, hem bellek hem hesap kırpılıyor.
+
+## Bunun getirisi, GPU cinsinden
+
+Soyutlamalar ikna edici değil. İşte 109 milyar parametreli Llama 4 Scout.
+
+| Format | Parametre başına bit | Ağırlıklar | GPU (80 GB) |
+| --- | --- | --- | --- |
+| BF16 (çıktığı hâli) | 16 | ~220 GB | 3 |
+| INT8 / FP8 | 8 | ~109 GB | 2 |
+| INT4 / FP4 | 4 | ~55 GB | 1 |
+
+BF16 parametre başına iki bayt, yani 109 milyar × 2 ≈ 220 GB; bu da en az üç adet 80 GB GPU istiyor. 8 bite — bir bayta — in, 109 milyar × 1 ≈ 109 GB olsun. Yarı bellek, iki GPU. 4 bite git, kabaca 55 GB'dasın: orijinalden %75 azalma, ve bütün model **tek** GPU'ya sığıyor.
+
+Aynı model. Üç GPU'dan bire. Altyapı faturasının biçim değiştirmesi işte bu.
+
+## Modelin neresinde oluyor
+
+Önceki bölümlerden hatırlayalım: model bir transformer blokları yığını, her blokta dört lineer katmanlı bir self-attention bloğu ve üç lineer katmanlı bir ileri beslemeli ağ var.
+
+**Quantization'ın odaklandığı yer o lineer katmanlar.** Her yer değil — başka bileşenler de var, özellikle baştaki embedding katmanı ve sondaki LM head; bunlar doğruluğu korumak için tipik olarak quantization'ın *dışında* bırakılıyor.
+
+Neden özellikle lineer katmanlar? İki sebep, ve ikisi de bu yazının her yerinde karşımıza çıkan sebepler: bir forward pass sırasındaki zamanın çoğu onların içinde geçiyor, çünkü asıl matris çarpımları orada oluyor; ve modelin ağırlıklarının büyük kısmı orada yaşıyor. Birim riske düşen en yüksek etki.
+
+Bir lineer katmanın içinde quantize edebileceğin iki şey var:
+
+- **Ağırlıklar** — öğrenilmiş matris.
+- **Girdi aktivasyonları** — o ağırlıklarla çarpılan tensör.
+
+Girdi aktivasyonları adının çağrıştırdığından daha basit. Bir lineer katmana akan ve ağırlıklarıyla çarpılan her şey bir girdi aktivasyonudur. Attention'ın içinde bu, Q, K ve V projeksiyonlarına akan `fox`'un tensör temsili olabilir. Aynı şekilde `o_proj`'e akan ağırlıklı toplam çıktısı da olabilir. Hepsi ağdan geçerken yol boyunca ağırlıklarla çarpılan tensörler.
+
+## İki kazanç, ve aynı kazanç değiller
+
+Bu, benim için gerçekten aydınlatıcı olan kısım oldu; çünkü quantization sadece bellek kazandırmıyor — iki etkisi de doğrudan yukarıdaki bellek hiyerarşisine oturuyor.
+
+**Quantize edilmiş ağırlıklar sana veri hareketi tarafında daha düşük gecikme kazandırıyor.** Her forward pass'te GPU, tensor core'lar çalışabilsin diye ağırlıkları HBM'den SRAM'e çekiyor. O ağırlıklar 16 yerine 8 bitse, taşınacak veri kelimenin tam anlamıyla yarı yarıya. Daha hızlı taşınıyor. Çıkarım hızlanıyor.
+
+**Quantize edilmiş aktivasyonlar ise hesap tarafında daha yüksek throughput kazandırıyor.** Tensor core'lar sayılar düşük hassasiyetli formatlardayken saniyede daha fazla işlem yapabiliyor. Modern GPU'larda — Hopper, Ada Lovelace ve sonrası — özel FP8 tensor core'ları var; daha eski Ampere donanımında aynı rolü INT8 tensor core'ları üstleniyor.
+
+Yani ağırlık quantization'ı *taşımayı* hızlandırıyor. Aktivasyon quantization'ı *matematiği* hızlandırıyor. Tam hızlanmayı açan şey ikisini birden quantize etmek, ve bu da bir modeli sıkıştırırken sana gerçek bir seçim sunuyor:
+
+| Şema | Ne quantize ediliyor | Çıkarım sırasında | Kazanç |
+| --- | --- | --- | --- |
+| **W8A16** (yalnız ağırlık) | sadece ağırlıklar, örn. INT8'e | ağırlıklar HBM'den sıkıştırılmış gelir, çarpımdan hemen önce BF16'ya geri açılır | daha az veri taşınır; tensor core hızlanması **yok** |
+| **W8A8** | ağırlıklar *ve* aktivasyonlar, örn. INT8 veya FP8'e | matematiğin kendisi düşük hassasiyetli tensor core'larda koşar | daha az veri taşınır **ve** saniyede daha çok işlem |
+
+Yalnız ağırlık quantization'ında tensor core'lar hesabı hâlâ yüksek hassasiyette yapıyor, dolayısıyla kazanç tamamen veri hareketinde. W8A8 ise hem bellek maliyetini hem hesap maliyetini düşürüyor.
+
+Pratikte bu beş şeye dönüşüyor: daha az GPU ihtiyacı, daha düşük dağıtım maliyeti, azalan gecikme, daha yüksek throughput ve daha uzun bağlam (çünkü ağırlıklardan boşalan bellek KV cache'e geri dönüyor), ve daha düşük enerji tüketimi.
+
+## Gerçek trafikte neye benziyor
+
+Soyut benchmarkları görmezden gelmek kolay, o yüzden gerçekçi bir iş yükü: RAG — modelin bir bilgi tabanından çekilen belgeleri kullanarak soru yanıtladığı senaryo.
+
+Girdi 1.024 token, üç parçaya bölünmüş: 50 token sistem istemi (*"verilen bağlamı kullanarak yanıtla"*), 20 token kullanıcının asıl sorusu, ve 900 token getirilen bağlam — yanıtı barındıran belgeler. Çıktı yaklaşık 128 token.
+
+İçeri bol bağlam giriyor, dışarı orta boy bir yanıt çıkıyor. Quantization'ın karşılığını vermesi gereken biçim tam olarak bu, çünkü taşınacak çok veri ve yapılacak çok hesap var.
+
+İki H100 üzerinde koşan Llama 3 70B'de, FP16 taban çizgisine karşı ağırlıkları *ve* aktivasyonları quantize edilmiş FP8'in sonuçları:
+
+| Metrik | FP16 taban | FP8 (W8A8) |
+| --- | --- | --- |
+| Throughput (yük altında, girdi token/sn) | ~158'de plato yapıyor | ~474'e tırmanıyor |
+| İlk token süresi (yüksek yükte) | 30.000 ms'nin üzerinde | ~4.800 ms |
+
+Aynı donanımda **3 kattan fazla throughput**. Ve asıl dikkatini çekmesi gereken sayı gecikme tarafında: ağır yük altında FP16 tabanının TTFT'si 30 saniyeyi aşıyor — kullanıcı yarım dakika boyunca boşluğa bakıyor — FP8 ise görece düz kalıp 4,8 saniye civarında tepe yapıyor. Yüksek yükte kabaca **6–7 kat** gecikme azalması, hem de sana hiç donanım maliyeti çıkarmayan bir değişiklikten.
+
+## Peki model kötüleşiyor mu?
+
+Akla gelen soru bu. Hassasiyeti çöpe atıyorsun. Bir şeyin bozulması gerek.
+
+Dürüst cevap: quantization doğru yapıldığında, esasen hayır. Ama o cümlede *doğru yapıldığında* gerçek bir yük taşıyor.
+
+Naif quantization — her sayıyı körlemesine daha az bite yuvarlamak — modele zarar veriyor. Pratikte işe yarayan şey **GPTQ**, **AWQ** ve **SmoothQuant** gibi **kalibre edilmiş** teknikler. Bunlar körlemesine yuvarlamak yerine modelden küçük ve temsili bir veri kümesi geçirip hangi ağırlık ve değerlerin en çok önemli olduğunu çıkarıyor, ve quantization sırasında onları koruyor.
+
+Kanıt, quantize edilmiş modellerin üç akıl yürütme benchmark'ında değerlendirilmesinden geliyor: **AIME 2024** (30 uzman seviyesi yarışma matematiği problemi), **MATH-500** (500 zorlu problemden oluşan derlenmiş bir küme) ve **GPQA-Diamond** (uzman doğrulamalı fen soruları). Metrik ortalama pass@1 — modelin ilk denemede doğru bildiği problemlerin yüzdesi, üç benchmark genelinde ortalanmış. Yüksek olan iyi.
+
+Llama-8B'den Qwen-32B'ye uzanan model boyutlarında dört hassasiyet formatı karşılaştırılmış: taban olarak BF16, FP W8A8, INT W8A8, ve en agresif şema olan 4 bitlik ağırlıklı INT W4A16.
+
+Üst düzey sonuç şu: çubuklar hemen her yerde aynı yükseklikte. Somutlaştırmak için Qwen-14B'ye yakınlaşalım:
+
+| Format | Ortalama pass@1 |
+| --- | --- |
+| BF16 (orijinal) | 73,6 |
+| INT W4A16 (4 bit ağırlık) | 72,8 |
+| FP W8A8 | 74,3 |
+
+Grafikteki en agresif şema — dört bitlik ağırlık, 4 kat küçülme — **tam bir puandan az** bir bedele mal oluyor.
+
+Ve FP W8A8 satırı orijinalden *yüksek* skor alıyor. Quantization modeli akıllandırdığı için değil. Fark, koşular arası rastgele değişkenlik sayılacak kadar küçük. Ama noktayı temiz koyuyor: 8 bitlik kayan noktada, modeli yarıya indirmişken, bazı durumlarda kayda değer hiçbir doğruluk kaybı olmuyor.
+
+Doğru yapıldığında quantization sana hız ve bellek kazancını, model kalitesinden vazgeçmeden veriyor.
+
+Sırada: **GPTQ** ve **AWQ** bunu tam olarak nasıl başarıyor, ve bir modeli elle sıkıştırmak.
