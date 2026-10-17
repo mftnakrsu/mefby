@@ -1,4 +1,4 @@
-import { CompanyProfile, Experience, Project, Service, Skill, Client, Publication, Education, WritingPost } from './types';
+import { CompanyProfile, Experience, Project, Product, Service, Skill, Client, Publication, Education, WritingPost } from './types';
 
 export const PROFILE: CompanyProfile = {
   name: "Mefby",
@@ -176,6 +176,103 @@ export const PROJECTS: Project[] = [
     tags: ["YOLO", "TensorRT", "Jetson", "UAV", "IEEE"],
     imageUrl: "https://images.unsplash.com/photo-1473968512647-3e447244af8f?auto=format&fit=crop&q=80&w=600",
     link: "https://doi.org/10.1109/INISTA59065.2023.10310562"
+  }
+];
+
+// Products I build and run. Each entry gets a card on /products and a page at
+// /products/<slug>; screenshots and media live under public/products/<slug>/.
+export const PRODUCTS: Product[] = [
+  {
+    slug: "oyla",
+    name: "Oyla",
+    tagline: "Open-source live polls, word clouds and open questions for talks, classes and meetings.",
+    metaTitle: "Oyla: open-source live polls and word clouds",
+    summary: "Open-source live polls, word clouds and open questions. The audience joins from their phones with a 6-digit code, no accounts or app. MIT licensed.",
+    description: "Your audience joins from their phones with a 6-digit code or a QR code, with no accounts and no app to install, and their answers appear live on your screen. \u201COyla\u201D means \u201Cvote!\u201D in Turkish.",
+    status: "Live",
+    launched: "2026-10",
+    license: "MIT",
+    languages: ["EN", "TR"],
+    stack: ["Node.js", "Fastify", "Socket.IO", "SQLite", "React", "Docker"],
+    features: [
+      "The audience joins from their phones with a 6-digit code or a QR code. No accounts, no app.",
+      "Four question types: multiple choice, word cloud, open question and scale.",
+      "Results update live on the presenter screen as answers come in.",
+      "English and Turkish interface.",
+      "Self-hostable as one Docker container: Node.js, Fastify, Socket.IO, SQLite and React.",
+      "Open source under the MIT license."
+    ],
+    steps: [
+      {
+        title: "Create",
+        body: "Start a presentation and add your questions: multiple choice, word cloud, open question or scale."
+      },
+      {
+        title: "Share the code",
+        body: "Put the presenter screen up. People open oyla.mefby.com on their phones and type the 6-digit code, or scan the QR code."
+      },
+      {
+        title: "Watch answers arrive",
+        body: "Votes, words and answers show up on the big screen live while people respond."
+      }
+    ],
+    links: {
+      app: "https://oyla.mefby.com",
+      source: "https://github.com/mftnakrsu/oyla",
+      docs: "https://mftnakrsu.github.io/oyla/"
+    },
+    image: {
+      src: "/products/oyla/present-results.png",
+      alt: "Oyla presenter screen showing multiple-choice results as horizontal bars, with the join code and QR code at the top",
+      width: 2160,
+      height: 1350
+    },
+    video: {
+      src: "/products/oyla/oyla-demo.mp4",
+      poster: "/products/oyla/poster.png",
+      caption: "A short walkthrough: building a presentation, joining from a phone and watching results arrive live."
+    },
+    gallery: [
+      {
+        images: [
+          {
+            src: "/products/oyla/editor.png",
+            alt: "The Oyla editor with a list of four questions on the left and a multiple-choice question with four options being edited on the right",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "The editor. Add questions, reorder them and copy the join link."
+      },
+      {
+        images: [
+          {
+            src: "/products/oyla/phone-vote.png",
+            alt: "A phone screen showing the question \u201CWhich feature should we build next?\u201D with four answer options and a Send vote button",
+            width: 1170,
+            height: 1992
+          },
+          {
+            src: "/products/oyla/phone-thanks.png",
+            alt: "A phone screen with a red \u201Cvoted\u201D stamp and the message \u201CAnswer sent\u201D",
+            width: 1170,
+            height: 1992
+          }
+        ],
+        caption: "On a phone. Pick an answer, send it, then watch the big screen."
+      },
+      {
+        images: [
+          {
+            src: "/products/oyla/present-results.png",
+            alt: "The presenter screen showing live multiple-choice results as horizontal bars with percentages and vote counts",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "The presenter screen. Bars fill up as votes come in; the join code stays at the top."
+      }
+    ]
   }
 ];
 

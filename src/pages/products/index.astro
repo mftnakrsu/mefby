@@ -1,0 +1,43 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ProductRow from '../../components/ProductRow.astro';
+import { PRODUCTS } from '../../../constants';
+
+// Newest launch first; "YYYY-MM" strings sort correctly as text.
+const products = [...PRODUCTS].sort((a, b) => b.launched.localeCompare(a.launched));
+
+const itemListJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: 'Products by Meftun Akarsu',
+  numberOfItems: products.length,
+  itemListElement: products.map((p, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    url: new URL(`/products/${p.slug}`, Astro.site).toString(),
+    name: p.name,
+  })),
+};
+---
+
+<Layout
+  title="Products — Meftun Akarsu"
+  description={['Software I build and run.', ...products.map((p) => `${p.name}: ${p.tagline}`)].join(' ')}
+  ogImage={products[0]?.image.src}
+>
+  <script is:inline type="application/ld+json" set:html={JSON.stringify(itemListJsonLd)} />
+  <div class="min-h-screen bg-white text-zinc-500 font-sans">
+    <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
+      <a href="/" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors mb-12 inline-block">&larr; back</a>
+
+      <h1 class="text-2xl font-semibold text-zinc-900 mb-1">Products</h1>
+      <p class="text-sm text-zinc-400 mb-10">Software I build and run · {products.length} {products.length === 1 ? 'product' : 'products'}</p>
+
+      <ul class="border-t border-zinc-100">
+        {products.map((product) => (
+          <ProductRow product={product} showImage />
+        ))}
+      </ul>
+    </div>
+  </div>
+</Layout>

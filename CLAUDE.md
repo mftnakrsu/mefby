@@ -25,6 +25,7 @@ The project has no required environment variables. `.env.example` is empty.
 
 **Content split.**
 - **Résumé data** (profile, experience, projects, publications, education, certifications, external writings) stays in `constants.ts` and is imported by `src/pages/index.astro`. Rendered at build time as static HTML.
+- **Products** are the `PRODUCTS` array in `constants.ts` (type `Product` in `types.ts`). Each entry is listed on the home page and `/products` via `src/components/ProductRow.astro`, and gets a page from the dynamic route `src/pages/products/[slug].astro` (video, how it works, features, screenshots, links). Media goes under `public/products/<slug>/`.
 - **Essays** live as MDX files in `src/content/essays/`. Frontmatter is validated by a Zod schema in `src/content.config.ts` (Astro Content Layer, `glob` loader; an entry's `id` is its filename without extension and doubles as the URL slug). The dynamic route `src/pages/essays/[...slug].astro` renders each essay through `src/layouts/EssayLayout.astro`.
 
 **Adding a new essay.** Drop an MDX file into `src/content/essays/`, add frontmatter matching the schema (title, description, date, tags), write the prose. The home page and `/essays` index pick it up automatically. Embed figures with the `Diagram` component:
