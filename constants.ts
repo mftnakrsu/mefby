@@ -230,7 +230,7 @@ export const PRODUCTS: Product[] = [
     video: {
       src: "/products/oyla/oyla-demo.mp4",
       poster: "/products/oyla/poster.png",
-      caption: "A short walkthrough: building a presentation, joining from a phone and watching results arrive live."
+      caption: "A short walkthrough: asking a question, joining from a phone, watching results arrive live and picking a theme."
     },
     gallery: [
       {
