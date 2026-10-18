@@ -188,8 +188,8 @@ export const PRODUCTS: Product[] = [
     tagline: "Open-source live polls, word clouds and open questions for talks, classes and meetings.",
     metaTitle: "Oyla: open-source live polls and word clouds",
     summary: "Open-source live polls, word clouds and open questions. The audience joins from their phones with a 6-digit code, no accounts or app. MIT licensed.",
-    description: "Your audience joins from their phones with a 6-digit code or a QR code, with no accounts and no app to install, and their answers appear live on your screen. \u201COyla\u201D means \u201Cvote!\u201D in Turkish.",
-    status: "Live",
+    description: "Your audience joins from their phones with a 6-digit code or a QR code, with no accounts and no app to install, and their answers appear live on your screen. You run it on your own computer or server. \u201COyla\u201D means \u201Cvote!\u201D in Turkish.",
+    status: "Open source",
     launched: "2026-10",
     license: "MIT",
     languages: ["EN", "TR"],
@@ -198,8 +198,9 @@ export const PRODUCTS: Product[] = [
       "The audience joins from their phones with a 6-digit code or a QR code. No accounts, no app.",
       "Four question types: multiple choice, word cloud, open question and scale.",
       "Results update live on the presenter screen as answers come in.",
-      "English and Turkish interface.",
-      "Self-hostable as one Docker container: Node.js, Fastify, Socket.IO, SQLite and React.",
+      "Four colour themes per presentation; phones follow the presenter's choice.",
+      "English and Turkish interface, light and dark mode.",
+      "Self-hosted: one Docker container with Node.js, Fastify, Socket.IO, SQLite and React.",
       "Open source under the MIT license."
     ],
     steps: [
@@ -209,7 +210,7 @@ export const PRODUCTS: Product[] = [
       },
       {
         title: "Share the code",
-        body: "Put the presenter screen up. People open oyla.mefby.com on their phones and type the 6-digit code, or scan the QR code."
+        body: "Put the presenter screen up. People open your Oyla server on their phones and type the 6-digit code, or scan the QR code."
       },
       {
         title: "Watch answers arrive",
@@ -217,9 +218,8 @@ export const PRODUCTS: Product[] = [
       }
     ],
     links: {
-      app: "https://oyla.mefby.com",
-      source: "https://github.com/mftnakrsu/oyla",
-      docs: "https://mftnakrsu.github.io/oyla/"
+      docs: "https://oyla.mefby.com",
+      source: "https://github.com/mftnakrsu/oyla"
     },
     image: {
       src: "/products/oyla/present-results.png",
@@ -237,12 +237,12 @@ export const PRODUCTS: Product[] = [
         images: [
           {
             src: "/products/oyla/editor.png",
-            alt: "The Oyla editor with a list of four questions on the left and a multiple-choice question with four options being edited on the right",
+            alt: "The Oyla editor with four questions and the theme picker on the left and a multiple-choice question with four options being edited on the right",
             width: 2160,
             height: 1350
           }
         ],
-        caption: "The editor. Add questions, reorder them and copy the join link."
+        caption: "The editor. Add questions, reorder them, pick a theme and copy the join link."
       },
       {
         images: [
@@ -254,7 +254,7 @@ export const PRODUCTS: Product[] = [
           },
           {
             src: "/products/oyla/phone-thanks.png",
-            alt: "A phone screen with a red \u201Cvoted\u201D stamp and the message \u201CAnswer sent\u201D",
+            alt: "A phone screen with a green \u201Cvoted\u201D stamp and the message \u201CAnswer sent\u201D",
             width: 1170,
             height: 1992
           }
@@ -271,6 +271,17 @@ export const PRODUCTS: Product[] = [
           }
         ],
         caption: "The presenter screen. Bars fill up as votes come in; the join code stays at the top."
+      },
+      {
+        images: [
+          {
+            src: "/products/oyla/word-cloud.png",
+            alt: "A word cloud on the presenter screen: \u201Cmomentum\u201D largest in the middle, other words smaller, some of them written vertically",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "A word cloud. The more people give a word, the bigger it gets."
       }
     ]
   }

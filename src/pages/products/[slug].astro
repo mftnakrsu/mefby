@@ -28,7 +28,7 @@ const appJsonLd = {
   '@type': 'SoftwareApplication',
   name: product.name,
   description: product.tagline,
-  url: links.app ?? pageUrl,
+  url: links.app ?? links.docs ?? pageUrl,
   image: abs(product.image.src),
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'Web',
@@ -100,15 +100,15 @@ const captionClass = 'px-4 sm:px-6 py-3 border-t border-zinc-100 bg-zinc-50/40 t
               <span aria-hidden="true">&#8599;</span>
             </a>
           )}
-          {links.source && (
-            <a href={links.source} target="_blank" rel="noopener noreferrer" class={secondaryBtn}>
-              Source on GitHub<span class="sr-only"> (opens in a new tab)</span>
+          {links.docs && (
+            <a href={links.docs} target="_blank" rel="noopener noreferrer" class={links.app ? secondaryBtn : primaryBtn}>
+              Documentation<span class="sr-only"> (opens in a new tab)</span>
               <span aria-hidden="true">&#8599;</span>
             </a>
           )}
-          {links.docs && (
-            <a href={links.docs} target="_blank" rel="noopener noreferrer" class={secondaryBtn}>
-              Documentation<span class="sr-only"> (opens in a new tab)</span>
+          {links.source && (
+            <a href={links.source} target="_blank" rel="noopener noreferrer" class={secondaryBtn}>
+              Source on GitHub<span class="sr-only"> (opens in a new tab)</span>
               <span aria-hidden="true">&#8599;</span>
             </a>
           )}
@@ -242,7 +242,7 @@ const captionClass = 'px-4 sm:px-6 py-3 border-t border-zinc-100 bg-zinc-50/40 t
         )}
         {links.docs && (
           <a href={links.docs} target="_blank" rel="noopener noreferrer" class="text-zinc-500 hover:text-emerald-600">
-            Docs<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">&#8599;</span>
+            {links.app ? 'Docs' : new URL(links.docs).host}<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">&#8599;</span>
           </a>
         )}
       </footer>
