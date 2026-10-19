@@ -183,6 +183,107 @@ export const PROJECTS: Project[] = [
 // /products/<slug>; screenshots and media live under public/products/<slug>/.
 export const PRODUCTS: Product[] = [
   {
+    slug: "flashjot",
+    name: "Flashjot",
+    tagline: "A quick-capture box and notebook for your desktop: press a shortcut, write the idea down, press Enter.",
+    metaTitle: "Flashjot: open-source quick capture and Markdown notebook",
+    summary: "Press Ctrl+Alt+N anywhere, type, press Enter. Flashjot saves the idea and gets out of the way. Plain Markdown notes. Linux, Windows, macOS. MIT licensed.",
+    description: "Ideas show up at bad times. Flashjot keeps a small capture box one shortcut away on Linux, Windows and macOS, and a notebook for when you have time to sort things out. Every note is a plain Markdown file in your Documents folder, so you can read it without the app.",
+    status: "Open source",
+    launched: "2026-10",
+    license: "MIT",
+    languages: ["EN", "TR"],
+    operatingSystem: "Linux, Windows, macOS",
+    applicationCategory: "ProductivityApplication",
+    stack: ["Rust", "Tauri", "Svelte", "TypeScript", "CodeMirror"],
+    features: [
+      "Ctrl+Alt+N opens the quick box on the monitor your mouse is on, with the cursor already in it. Enter saves.",
+      "Esc or a click elsewhere closes the box and keeps the draft for next time.",
+      "Quick notes land in an Inbox. Press M to file one into a folder; it gets a title from its first line.",
+      "A notebook with folders, a Markdown editor with live styling, clickable checkboxes and full-text search.",
+      "Notes are plain .md files. Open them in Obsidian or VS Code, keep them in git or a synced folder.",
+      "Every save is atomic, so a crash or power cut never leaves a half-written note.",
+      "English and Turkish interface, light and dark mode.",
+      "A 3 MB installer for Linux (.deb, .rpm, AppImage), Windows and macOS. No account, no network access.",
+      "Open source under the MIT license."
+    ],
+    steps: [
+      {
+        title: "Capture",
+        body: "Press Ctrl+Alt+N in any app, type the thought and press Enter. The box closes and you are back where you were."
+      },
+      {
+        title: "Sort",
+        body: "Open the notebook with Ctrl+Alt+D. Quick notes wait in the Inbox; move one into a folder with M or delete it."
+      },
+      {
+        title: "Write",
+        body: "Pages are Markdown with headings, checkboxes and code blocks, saved as you type and searchable with Ctrl+K."
+      }
+    ],
+    links: {
+      docs: "https://flashjot.mefby.com",
+      source: "https://github.com/mftnakrsu/flashjot"
+    },
+    image: {
+      src: "/products/flashjot/notebook.png",
+      alt: "The Flashjot notebook with the folders Ideas and Work in the sidebar and a page called Robot arm with headings, checkboxes and a code block",
+      width: 2160,
+      height: 1350
+    },
+    video: {
+      src: "/products/flashjot/flashjot-demo.mp4",
+      poster: "/products/flashjot/poster.png",
+      caption: "A short walkthrough: capturing an idea with the quick box, finding it in the Inbox, filing it into a folder and writing a checklist."
+    },
+    gallery: [
+      {
+        images: [
+          {
+            src: "/products/flashjot/quick-box.png",
+            alt: "The quick box over a dark desktop: a white card with a red rule under the Flashjot title and the text \u201CTry a belt drive for the shoulder joint\u201D",
+            width: 1600,
+            height: 900
+          }
+        ],
+        caption: "The quick box. Enter saves, Shift+Enter adds a line, Esc closes it and keeps the draft."
+      },
+      {
+        images: [
+          {
+            src: "/products/flashjot/inbox.png",
+            alt: "The Inbox with three quick notes shown as cards with red top rules and the time each was written",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "The Inbox. Quick notes wait here as cards until you file them."
+      },
+      {
+        images: [
+          {
+            src: "/products/flashjot/move.png",
+            alt: "The Move to dialog over the Inbox with \u201CIde\u201D typed, offering the folder Ideas, a new folder and No folder",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Filing a note. Type a few letters of a folder and press Enter."
+      },
+      {
+        images: [
+          {
+            src: "/products/flashjot/dark.png",
+            alt: "The notebook in dark mode with the Robot arm page open",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Dark mode follows your system setting."
+      }
+    ]
+  },
+  {
     slug: "oyla",
     name: "Oyla",
     tagline: "Open-source live polls, word clouds and open questions for talks, classes and meetings.",

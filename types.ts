@@ -107,6 +107,8 @@ export interface Product {
   launched: string;          // ISO year-month, e.g. "2026-10"
   license?: string;
   languages?: string[];      // UI languages, e.g. ["EN", "TR"]
+  operatingSystem?: string;  // JSON-LD; defaults to "Web"
+  applicationCategory?: string; // JSON-LD; defaults to "BusinessApplication"
   stack: string[];
   features: string[];
   steps?: ProductStep[];     // "How it works"
