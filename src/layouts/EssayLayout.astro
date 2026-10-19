@@ -29,6 +29,11 @@ const dateFormatted = date.toISOString().slice(0, 10);
 const backLabel = lang === 'tr' ? 'geri' : 'back';
 const langs = ['en', 'tr'] as const;
 
+const SPONSOR_URL = 'https://github.com/sponsors/mftnakrsu';
+const sponsorText = lang === 'tr'
+  ? { lead: 'İşine yaradı mı?', body: 'Bu yazılar ve kodları ücretsiz. Seriyi desteklemek istersen GitHub Sponsors üzerinden katkı verebilirsin.', cta: 'Destek ol' }
+  : { lead: 'Found this useful?', body: 'These essays and their code are free. If you want to support the series, you can sponsor me on GitHub.', cta: 'Sponsor' };
+
 const SERIES_META = {
   rag: { en: 'RAG FROM FIRST PRINCIPLES', tr: 'RAG: İLK İLKELERDEN', hub: '/essays/rag' },
   agents: { en: 'AGENTS FROM FIRST PRINCIPLES', tr: 'AJANLAR: İLK İLKELERDEN', hub: '/essays/agents' },
@@ -159,6 +164,18 @@ const breadcrumbJsonLd = {
             ))}
           </div>
         )}
+
+        <aside class="mt-10 flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border border-zinc-200 bg-zinc-50/60 px-5 py-4" aria-label={lang === 'tr' ? 'Destek' : 'Support'}>
+          <p class="flex-1 text-[13px] leading-relaxed text-zinc-500">
+            <span class="font-medium text-zinc-800">{sponsorText.lead}</span> {sponsorText.body}
+          </p>
+          <a
+            href={SPONSOR_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="self-start sm:self-auto shrink-0 inline-flex items-center gap-1.5 text-[12px] font-medium px-3.5 py-1.5 rounded-full text-emerald-700 bg-white border border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+          ><span aria-hidden="true" class="text-pink-500">&#9829;</span> {sponsorText.cta}</a>
+        </aside>
       </article>
 
       {inSeries && (prevEssay || nextEssay) && (
