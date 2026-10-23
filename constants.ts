@@ -191,7 +191,7 @@ export const PRODUCTS: Product[] = [
     description: "Ülgen connects EVREN, the model API run by Türkiye's Presidency of Defence Industries (SSB), to Qwen Code, opencode, Codex CLI and Claude Code. It is one binary that does the part in between: signing in, keeping the key safe, accepting the terms, watching the quota and writing each tool's settings. It is not a new coding agent. It is an independent, non-commercial project, not affiliated with SSB, EVREN or the makers of the tools it sets up. The name comes from Ülgen, the creator deity of Turkic mythology.",
     status: "Open source",
     launched: "2026-10",
-    license: "AGPL-3.0",
+    license: "AGPL-3.0-only",
     languages: ["EN", "TR"],
     operatingSystem: "Linux, Windows, macOS",
     applicationCategory: "DeveloperApplication",
