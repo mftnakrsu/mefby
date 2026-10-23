@@ -183,6 +183,106 @@ export const PROJECTS: Project[] = [
 // /products/<slug>; screenshots and media live under public/products/<slug>/.
 export const PRODUCTS: Product[] = [
   {
+    slug: "ulgen",
+    name: "Ülgen",
+    tagline: "EVREN for the coding tools you already use: one command signs you in, sets up Qwen Code, opencode, Codex CLI or Claude Code, and starts it.",
+    metaTitle: "Ülgen: EVREN for Qwen Code, opencode, Codex and Claude Code",
+    summary: "Run ulgen, sign in once, and Qwen Code, opencode, Codex CLI or Claude Code starts on an EVREN model. The key stays in your OS credential store. AGPL-3.0.",
+    description: "Ülgen connects EVREN, the model API run by Türkiye's Presidency of Defence Industries (SSB), to Qwen Code, opencode, Codex CLI and Claude Code. It is one binary that does the part in between: signing in, keeping the key safe, accepting the terms, watching the quota and writing each tool's settings. It is not a new coding agent. It is an independent, non-commercial project, not affiliated with SSB, EVREN or the makers of the tools it sets up. The name comes from Ülgen, the creator deity of Turkic mythology.",
+    status: "Open source",
+    launched: "2026-10",
+    license: "AGPL-3.0",
+    languages: ["EN", "TR"],
+    operatingSystem: "Linux, Windows, macOS",
+    applicationCategory: "DeveloperApplication",
+    stack: ["Go", "go-keyring", "GoReleaser", "nFPM", "cosign"],
+    features: [
+      "ulgen login opens EVREN's API keys page, where you sign in with e-Devlet. It asks for the key, shows the terms and saves the key once EVREN has accepted it.",
+      "The key is kept in the operating system's credential store, or a file only you can read. It is never written into a tool's settings file, printed or logged.",
+      "ulgen setup writes the right settings into each tool. Every changed file is backed up first, --dry-run shows the change without writing it, and --remove takes it out again.",
+      "ulgen status shows how much of today's quota is left and the models. ulgen doctor checks the key, EVREN and every tool and says what to do about what is wrong.",
+      "Claude Code talks to a translator inside Ülgen on your own machine and never receives the key. Anthropic does not support using Claude Code with other models; Ülgen says so once per run.",
+      "Turkish and English interface. Every command follows the system language.",
+      "One binary for Linux, Windows and macOS, with .deb and .rpm packages and signed checksums.",
+      "Open source under the AGPL-3.0-only license."
+    ],
+    steps: [
+      {
+        title: "Sign in",
+        body: "Run ulgen. It opens EVREN's API keys page, where you sign in with e-Devlet and create a key, then shows the terms and saves the key."
+      },
+      {
+        title: "Set up",
+        body: "Ülgen finds the coding tools you have installed, asks which one you want and sets it up for EVREN. Every file it changes is backed up first."
+      },
+      {
+        title: "Code",
+        body: "The tool starts on an EVREN model. Later runs of ulgen start it straight away; ulgen qwen, opencode, codex or claude switches to another one."
+      }
+    ],
+    links: {
+      docs: "https://ulgen.mefby.com",
+      source: "https://github.com/mftnakrsu/ulgen"
+    },
+    image: {
+      src: "/products/ulgen/claude.png",
+      alt: "Claude Code running on the EVREN model deepseek-v4.1-flash: asked what main.go prints, it reads the file and answers that it prints 6765, the 20th Fibonacci number",
+      width: 2160,
+      height: 1350
+    },
+    video: {
+      src: "/products/ulgen/ulgen-demo.mp4",
+      poster: "/products/ulgen/poster.png",
+      caption: "A short walkthrough: signing in, setting up opencode after a dry run, checking everything with ulgen doctor and ulgen status, and Claude Code answering a question through EVREN."
+    },
+    gallery: [
+      {
+        images: [
+          {
+            src: "/products/ulgen/setup.png",
+            alt: "A terminal running ulgen setup: a table of qwen, opencode, codex and claude with their installed versions and EVREN state, then ulgen setup opencode updating opencode.json and saving a backup",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Setup. It lists the tools it finds, writes a tool's EVREN settings and keeps a backup of the file it changed."
+      },
+      {
+        images: [
+          {
+            src: "/products/ulgen/doctor.png",
+            alt: "A terminal running ulgen doctor: ok for the saved key, EVREN accepting it, the daily tokens left, opencode set up and Claude Code ready, and dashes for Qwen Code and Codex CLI, which are not installed",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Doctor. It checks the key, EVREN and every tool, and says what to do next."
+      },
+      {
+        images: [
+          {
+            src: "/products/ulgen/status.png",
+            alt: "A terminal running ulgen status: signed in with the key from the system keychain, 15,000,000 of 15,000,000 daily tokens left, and seven EVREN models with their context and output sizes",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Status. Today's quota and the models EVREN serves."
+      },
+      {
+        images: [
+          {
+            src: "/products/ulgen/claude.png",
+            alt: "Claude Code v2.1.309 on the EVREN model deepseek-v4.1-flash, answering “What does main.go print? One sentence.” with “It prints 6765 (the 20th Fibonacci number, computed recursively).”",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Claude Code, started with ulgen claude, reads a file and answers through EVREN."
+      }
+    ]
+  },
+  {
     slug: "flashjot",
     name: "Flashjot",
     tagline: "A quick-capture box and notebook for your desktop: press a shortcut, write the idea down, press Enter.",
