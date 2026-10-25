@@ -121,7 +121,7 @@ transparent offline/toy fallback where a real model/VLM/LLM isn't available.
   uses `sentence-transformers`/`transformers`, already listed).
 - **Commit directly to `main`; CONFIRM with the user before `git push`.** No Claude co-author trailer,
   no "Generated with Claude Code" (hard rule, see `no-claude-coauthor-trailer`).
-- Install on this machine: TAI internal PyPI mirror + `--break-system-packages` (see `tai-pypi-mirror`).
+- Install on this machine: an internal PyPI mirror + `--break-system-packages`.
 
 ---
 
