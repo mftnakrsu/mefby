@@ -1,0 +1,14 @@
+---
+// A small uppercase label followed by a hairline: group and block headings.
+interface Props {
+  as?: 'h2' | 'h3' | 'p';
+  id?: string;
+  class?: string;
+}
+const { as: Tag = 'h2', id, class: className } = Astro.props;
+---
+
+<div class:list={['mb-4 flex items-center gap-3', className]}>
+  <Tag id={id} class="t-label shrink-0 text-fg-muted"><slot /></Tag>
+  <span aria-hidden="true" class="h-px flex-1 bg-fg-line"></span>
+</div>

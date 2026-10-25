@@ -1,0 +1,35 @@
+---
+// "full" closes the home page (the reference's "Get in touch"); "compact"
+// sits under every reading page.
+import { PROFILE } from '../../../constants';
+import ContactLinks from './ContactLinks.astro';
+import PageLinks from './PageLinks.astro';
+
+interface Props {
+  variant?: 'full' | 'compact';
+}
+const { variant = 'compact' } = Astro.props;
+const year = new Date().getFullYear();
+---
+
+{variant === 'full' ? (
+  <footer id="contact" lang="en" class="mx-auto max-w-[1100px] px-6 pb-16 pt-24 sm:px-10 sm:pb-20 sm:pt-32">
+    <p class="t-mono mb-6 text-fg-muted" data-reveal>Get in touch</p>
+    <h2 class="t-title mb-10 max-w-[18ch] text-balance" data-reveal style="--i:1">{PROFILE.closing}</h2>
+    <div data-reveal style="--i:2">
+      <ContactLinks include={['email', 'linkedin', 'github', 'medium']} />
+    </div>
+    <div class="mt-20 flex flex-col gap-3 border-t border-fg-line pt-8 text-fg-muted sm:flex-row sm:items-center sm:justify-between">
+      <p class="t-mono">© {year} {PROFILE.owner} · {PROFILE.role}</p>
+      <nav aria-label="Footer"><PageLinks rss class="t-mono" /></nav>
+    </div>
+  </footer>
+) : (
+  <footer lang="en" class="mx-auto mt-24 max-w-[1100px] border-t border-fg-line px-6 py-8 text-fg-muted sm:px-10">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <p class="t-mono">© {year} {PROFILE.owner}</p>
+      <nav aria-label="Footer"><PageLinks rss class="t-mono" /></nav>
+      <ContactLinks variant="icon" include={['email', 'linkedin', 'github', 'medium']} class="-ml-3 sm:ml-0" />
+    </div>
+  </footer>
+)}

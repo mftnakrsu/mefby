@@ -1,16 +1,23 @@
-import { CompanyProfile, Experience, Project, Product, Service, Skill, Client, Publication, Education, WritingPost } from './types';
+import type { CompanyProfile, Experience, Project, Product, Service, Skill, Client, Publication, Education, WritingPost } from './types';
 
 export const PROFILE: CompanyProfile = {
   name: "Mefby",
   owner: "Meftun Akarsu",
   title: "AI Engineer | M.Sc. AI Engineering @ THI",
+  role: "AI Engineer",
+  headline: "LLM systems, computer vision & data",
   bio: "I work on AI systems \u2014 LLM infrastructure, computer vision, and data pipelines. Three years at Bosch building inspection systems, anomaly detection, and process automation for manufacturing. Studying AI Engineering at TH Ingolstadt, Germany.",
+  about: [
+    "I build AI systems that run in production: retrieval and agent pipelines on large language models, computer vision for manufacturing, and the data work in between.",
+    "Three years at Bosch on vision inspection and process automation, then production RAG and GraphRAG systems at RADIAITE and Hagia. I study AI Engineering for Autonomous Systems at TH Ingolstadt and write framework-free courses on RAG, agents and evals."
+  ],
+  closing: "Building Oyla and Flashjot, and open to the right conversations.",
   email: "meftunakrsu@gmail.com",
   location: "Ankara, Turkiye",
   socials: {
     linkedin: "https://www.linkedin.com/in/meftunakarsu/",
     github: "https://github.com/mftnakrsu",
-    twitter: "https://medium.com/@meftunakarsu"
+    medium: "https://medium.com/@meftunakarsu"
   }
 };
 

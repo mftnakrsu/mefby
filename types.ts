@@ -67,13 +67,17 @@ export interface CompanyProfile {
   name: string;
   owner: string;
   title: string;
+  role: string;          // "AI Engineer": hero and footer
+  headline: string;      // the hero's role line
   bio: string;
+  about: string[];       // the hero's two paragraphs
+  closing: string;       // the footer's one-sentence statement
   email: string;
   location: string;
   socials: {
-    linkedin?: string;
-    github?: string;
-    twitter?: string;
+    linkedin: string;
+    github: string;
+    medium: string;
   };
 }
 
