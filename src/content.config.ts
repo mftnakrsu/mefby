@@ -39,4 +39,46 @@ const essays = defineCollection({
   }),
 });
 
-export const collections = { essays };
+const projects = defineCollection({
+  // One file per project; the file name is the URL slug (/projects/<id>).
+  // A non-empty body is the write-up and gives the entry its own page;
+  // body-less entries are rows on /projects that link to their repo.
+  loader: glob({ pattern: '*.mdx', base: './src/content/projects' }),
+  schema: z.object({
+    title: z.string(),
+    summary: z.string(), // one sentence: index row, home card, meta description
+    year: z.number().int(), // year the work started
+    category: z.enum(['llm', 'research', 'edge', 'vision', 'data', 'learning']),
+    spec: z.array(z.string()).default([]), // spec-line tokens, e.g. ["RAG", "Azure"]
+    stack: z.array(z.string()).default([]),
+    private: z.boolean().default(false), // closed source: no repo link, "Private" badge
+    stars: z.number().int().optional(), // GitHub stars snapshot, notable public repos only
+    links: z
+      .object({
+        repo: z.url().optional(),
+        site: z.url().optional(),
+        demo: z.url().optional(),
+        paper: z.url().optional(),
+        package: z.url().optional(),
+      })
+      .default({}),
+    image: z
+      .object({
+        src: z.string(), // /projects/<slug>/… or an images.unsplash.com URL
+        alt: z.string(),
+        width: z.number().int(),
+        height: z.number().int(),
+        credit: z.string().optional(), // "Photo: Name / Unsplash"
+        creditUrl: z.url().optional(), // photographer's Unsplash profile, with utm_source=mefby
+      })
+      .optional(),
+    featured: z
+      .object({
+        group: z.enum(['llm', 'vision', 'research', 'edge']),
+        order: z.number().int(),
+      })
+      .optional(),
+  }),
+});
+
+export const collections = { essays, projects };

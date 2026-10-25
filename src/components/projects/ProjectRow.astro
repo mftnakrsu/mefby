@@ -1,0 +1,48 @@
+---
+// One row on /projects. Links to the project's page, to its repository (new
+// tab) or, for private work without a page, to nothing.
+interface Props {
+  title: string;
+  year: number | string;
+  summary: string;
+  stack?: string[];
+  href?: string | null;
+  external?: boolean;
+  stars?: number;
+  isPrivate?: boolean;
+  dense?: boolean;
+}
+const { title, year, summary, stack = [], href = null, external = false, stars, isPrivate = false, dense = false } = Astro.props;
+const Tag = href ? 'a' : 'div';
+---
+
+<li class="border-b border-fg-line">
+  <Tag
+    href={href ?? undefined}
+    target={href && external ? '_blank' : undefined}
+    rel={href && external ? 'noopener noreferrer' : undefined}
+    class:list={['group block', dense ? 'py-4' : 'py-5']}
+  >
+    <div class="flex items-baseline gap-3">
+      <h3
+        class:list={[
+          'font-display font-medium leading-snug tracking-[-0.01em]',
+          dense ? 'text-[1.05rem]' : 'text-[1.2rem]',
+          href && 'decoration-fg-line underline-offset-4 group-hover:underline',
+        ]}
+      >{title}{href && external && <span class="sr-only"> (opens in a new tab)</span>}</h3>
+      {stars != null && (
+        <span class="t-mono shrink-0 text-fg-muted"><span aria-hidden="true">★ </span>{stars}<span class="sr-only"> GitHub stars</span></span>
+      )}
+      {isPrivate && (
+        <span class="t-label shrink-0 rounded-full border border-fg-line px-2 py-0.5 text-[0.62rem] text-fg-muted">Private</span>
+      )}
+      <span class="t-mono ml-auto shrink-0 text-fg-muted">{year}</span>
+      {href && (
+        <span aria-hidden="true" class="shrink-0 text-fg-muted transition-transform group-hover:translate-x-0.5">{external ? '↗' : '→'}</span>
+      )}
+    </div>
+    <p class:list={['mt-1.5 text-fg-muted', dense ? 'text-[0.95rem] leading-relaxed' : 't-body']}>{summary}</p>
+    {stack.length > 0 && <p class="t-mono mt-2 text-fg-muted">{stack.join(' · ')}</p>}
+  </Tag>
+</li>

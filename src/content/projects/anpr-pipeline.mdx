@@ -1,0 +1,29 @@
+---
+title: "anpr-pipeline"
+summary: "License-plate recognition from detection to privacy-aware storage, packaged on PyPI and served over a FastAPI HTTP and WebSocket API."
+year: 2022
+category: vision
+spec: ["ALPR", "OCR", "FastAPI", "PyPI"]
+stack: ["Python", "fast-alpr", "fast-plate-ocr", "ONNX Runtime", "FastAPI", "SQLModel", "uv"]
+stars: 203
+links:
+  repo: "https://github.com/mftnakrsu/Automatic_Number_Plate_Recognition_YOLO_OCR"
+  package: "https://pypi.org/project/anpr-pipeline/"
+featured: { group: vision, order: 1 }
+---
+
+## Overview
+
+anpr-pipeline reads license plates end to end: it finds the plate, follows it across video frames, reads the characters, checks them against the Turkish plate format and stores the result without keeping the plate text. It installs from PyPI and runs behind a FastAPI service with REST and WebSocket endpoints. I first wrote it in 2022 on a YOLOv5 fork with EasyOCR and Flask, and rewrote it in 2026 on fast-alpr and fast-plate-ocr; the original code is still in the repository's legacy folder.
+
+## How it works
+
+A YOLOv9-t detector in ONNX finds plates, and a small IoU tracker follows each one from frame to frame. fast-plate-ocr reads the characters with a confidence for each. A parser checks the reading against all 81 Turkish province codes and fixes characters that are easy to confuse in their position, such as 0 and O, 1 and I, or 8 and B. A per-character majority vote over the best reads of a track then settles the plate. A dark web page served by the same app takes image uploads or a live webcam stream.
+
+## Privacy
+
+License plates are personal data under Türkiye's KVKK and the EU's GDPR, so the database never holds plate text. It stores an HMAC-SHA256 hash salted with a per-deployment pepper, which still allows matching, and a background worker deletes rows after a retention period of 30 days by default.
+
+## Engineering
+
+The project is managed with uv and pyproject.toml and checked with ruff, pyright and more than 60 pytest tests. It exposes Prometheus metrics, logs with structlog and can send OpenTelemetry traces.

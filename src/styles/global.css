@@ -4,6 +4,7 @@
 @import "@fontsource-variable/hanken-grotesk/wght-italic.css";
 @import "@fontsource-variable/geist-mono";
 @import "katex/dist/katex.min.css";
+@import "./prose.css";
 
 /*
   Design tokens, OKLCH. src/lib/palette.ts mirrors these values for the colour
