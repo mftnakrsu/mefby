@@ -165,7 +165,21 @@ const captionClass = 'border-t border-fg-line px-4 py-3 text-[0.95rem] leading-r
         <div class="space-y-10">
           {gallery.map((fig, i) => (
             <figure class={figureClass} data-reveal>
-              {fig.images.length === 1 ? (
+              {fig.images.length === 1 && fig.images[0].src.endsWith('.gif') ? (
+                // A GIF cannot be paused, so it loads and plays only once the reader opens it (WCAG 2.2.2).
+                <details>
+                  <summary class="cursor-pointer px-4 py-3 text-fg-muted hover:text-fg sm:px-6">Play the animation</summary>
+                  <img
+                    src={fig.images[0].src}
+                    alt={fig.images[0].alt}
+                    width={fig.images[0].width}
+                    height={fig.images[0].height}
+                    loading="lazy"
+                    decoding="async"
+                    class="block h-auto w-full"
+                  />
+                </details>
+              ) : fig.images.length === 1 ? (
                 <img
                   src={fig.images[0].src}
                   alt={fig.images[0].alt}

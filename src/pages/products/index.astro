@@ -28,7 +28,7 @@ const itemListJsonLd = {
 
 <Layout
   title="Products — Meftun Akarsu"
-  description={['Software I build and run.', ...products.map((p) => `${p.name}: ${p.tagline}`)].join(' ')}
+  description={`Software I build and run: ${products.map((p) => p.name).join(', ')}.`}
   ogImage={products[0]?.image.src}
 >
   <script is:inline type="application/ld+json" set:html={JSON.stringify(itemListJsonLd)} />

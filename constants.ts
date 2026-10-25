@@ -365,17 +365,17 @@ export const PRODUCTS: Product[] = [
       "Run ulgen and it signs you in, finds the coding tools you have installed, asks which one you want, sets it up for EVREN and starts it. Later runs start that tool straight away.",
       "Works with Qwen Code, opencode, Codex CLI and Claude Code. Setup backs up every file it changes, --dry-run shows the change first, and setup --remove takes it out again.",
       "ulgen status shows the remaining daily quota and the models; ulgen doctor checks the key, EVREN and every tool, and says what to do about what is wrong.",
-      "The key is kept in the operating system's credential store. It is never written into a tool's settings file, never printed and never logged.",
+      "The key is kept in the operating system's credential store (or, where the system has none, in a file only you can read). It is never written into a tool's settings file and never logged.",
       "Claude Code never receives the key at all: it talks to a translator inside Ülgen on your own machine.",
       "Every command follows the system language, Turkish or English.",
       "Installs with one line on Linux and macOS, or in PowerShell on Windows; Pardus, Debian and Ubuntu packages are available too.",
-      "Known limits: Anthropic does not support Claude Code with other models, so ulgen run claude goes through the translator and says so, and token counts on EVREN are estimates.",
+      "Known limits: Anthropic does not support Claude Code with other models, and ulgen run claude works through a translator and says so once per run. The token counts Claude Code shows on EVREN are estimates.",
       "Independent and non-commercial: not affiliated with EVREN or the makers of the tools it sets up."
     ],
     steps: [
       {
         title: "Sign in",
-        body: "Run ulgen. It opens EVREN's API keys page (sign-in is through e-Devlet), shows the terms and saves your key in the credential store."
+        body: "Run ulgen. It opens EVREN's API keys page (sign-in is through e-Devlet), asks for the key, shows the terms and saves the key."
       },
       {
         title: "Pick a tool",
@@ -408,7 +408,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Plays a sound when Claude Code finishes a long turn, and stays quiet when you are already looking at the terminal.",
     metaTitle: "agent-buzzer: hear when your AI agent finishes",
     summary: "A small shell tool that plays a sound when Claude Code finishes a long turn, and stays quiet when the turn was short or you are watching the terminal. MIT licensed.",
-    description: "A tool that beeps after every turn becomes unbearable within an hour, so agent-buzzer only plays when it is worth interrupting you: the turn took longer than 30 seconds and your terminal is not the window in front of you. When something can't be determined, it plays, because a missed notification is worse than one extra beep. Claude Code is the only agent wired up today; Codex, Cursor's agent and Antigravity are on the roadmap.",
+    description: "A tool that beeps after every turn becomes unbearable within an hour, so agent-buzzer gates the sound: by default it stays silent when a turn took less than 30 seconds and while your terminal is the window in front of you. Questions and permission prompts skip the length rule, because that is exactly when you want to know. When something can't be determined, it plays, because a missed notification is worse than one extra beep. Claude Code is the only agent wired up today; Codex, Cursor's agent and Antigravity are on the roadmap.",
     status: "Open source",
     launched: "2026-07",
     license: "MIT",
