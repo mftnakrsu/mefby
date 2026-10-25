@@ -1,7 +1,8 @@
 ---
 // A small uppercase label followed by a hairline: group and block headings.
 interface Props {
-  as?: 'h2' | 'h3' | 'p';
+  // Keep 'as' quoted: unquoted, Astro ignores this Props type and callers go unchecked.
+  'as'?: 'h2' | 'h3' | 'p';
   id?: string;
   class?: string;
 }

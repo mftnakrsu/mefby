@@ -5,7 +5,8 @@ interface Props {
   kicker: string;
   title: string;
   titleId: string;
-  as?: 'h1' | 'h2';
+  // Keep 'as' quoted: unquoted, Astro ignores this Props type and callers go unchecked.
+  'as'?: 'h1' | 'h2';
   spec?: string[];
   lead?: string;
 }
