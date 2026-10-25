@@ -10,6 +10,9 @@ interface Props {
 }
 const { variant = 'compact' } = Astro.props;
 const year = new Date().getFullYear();
+// Built here because Astro drops a bare space between two expressions in a
+// template whose root is a ternary (it printed "© 2026Meftun Akarsu").
+const copyright = `© ${year} ${PROFILE.owner}`;
 ---
 
 {variant === 'full' ? (
@@ -20,14 +23,14 @@ const year = new Date().getFullYear();
       <ContactLinks include={['email', 'linkedin', 'github', 'medium']} />
     </div>
     <div class="mt-20 flex flex-col gap-3 border-t border-fg-line pt-8 text-fg-muted sm:flex-row sm:items-center sm:justify-between">
-      <p class="t-mono">© {year} {PROFILE.owner} · {PROFILE.role}</p>
+      <p class="t-mono">{copyright} · {PROFILE.role}</p>
       <nav aria-label="Footer"><PageLinks rss class="t-mono" /></nav>
     </div>
   </footer>
 ) : (
   <footer lang="en" class="mx-auto mt-24 max-w-[1100px] border-t border-fg-line px-6 py-8 text-fg-muted sm:px-10">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <p class="t-mono">© {year} {PROFILE.owner}</p>
+      <p class="t-mono">{copyright}</p>
       <nav aria-label="Footer"><PageLinks rss class="t-mono" /></nav>
       <ContactLinks variant="icon" include={['email', 'linkedin', 'github', 'medium']} class="-ml-3 sm:ml-0" />
     </div>

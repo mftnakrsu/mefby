@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { allRoutes, readPage } from './helpers/dist.ts';
+import { allRoutes, readPage, visibleText } from './helpers/dist.ts';
 import { PROFILE } from '../constants.ts';
 
 test('every page has one main landmark, a skip link and the js flag', () => {
@@ -28,4 +28,12 @@ test('reading pages end with the compact footer', () => {
   const footer = html.slice(html.lastIndexOf('<footer'));
   assert.ok(footer.includes('href="/rss.xml"'));
   assert.ok(footer.includes(`href="${PROFILE.socials.medium}"`));
+});
+
+// Astro drops a bare space between two expressions in a template whose root is
+// a ternary, which once printed "© 2026Meftun Akarsu".
+test('the footer copyright line keeps the space between the year and the name', () => {
+  const html = readPage('/essays');
+  const footer = visibleText(html.slice(html.lastIndexOf('<footer')));
+  assert.match(footer, new RegExp(`© \\d{4} ${PROFILE.owner}`));
 });
