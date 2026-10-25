@@ -30,7 +30,7 @@ const tags = topicTags(essay.data.tags);
           <span aria-hidden="true" class="size-1.5 rounded-full bg-accent"></span>New<span class="sr-only"> (most recent essay)</span>
         </span>
       )}
-      <span aria-hidden="true" class="ml-auto shrink-0 text-fg-muted transition-transform group-hover:translate-x-0.5">→</span>
+      <span aria-hidden="true" class="ml-auto shrink-0 text-fg-muted transition-transform motion-reduce:transition-none group-hover:translate-x-0.5">→</span>
     </div>
     <p class="t-mono mt-2 flex flex-wrap gap-x-2 text-fg-muted">
       <time datetime={essay.data.date.toISOString().slice(0, 10)}>{fmtDate(essay.data.date)}</time>

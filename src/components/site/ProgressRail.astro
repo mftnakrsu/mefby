@@ -22,9 +22,9 @@ import { HOME_SECTIONS, twoDigits } from '../../lib/sections';
           data-section-link={s.id}
           class="group relative flex items-center justify-end gap-3 text-fg-muted aria-[current=true]:text-fg"
         >
-          <span class="pointer-events-none absolute right-full top-1/2 mr-3 -translate-y-1/2 translate-x-1 whitespace-nowrap text-right font-display text-[0.82rem] leading-tight opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 min-[1440px]:group-aria-[current=true]:translate-x-0 min-[1440px]:group-aria-[current=true]:opacity-100">{s.title}</span>
+          <span class="pointer-events-none absolute right-full top-1/2 mr-3 -translate-y-1/2 translate-x-1 whitespace-nowrap text-right font-display text-[0.82rem] leading-tight opacity-0 transition-[opacity,translate] duration-300 motion-reduce:transition-none group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 min-[1440px]:group-aria-[current=true]:translate-x-0 min-[1440px]:group-aria-[current=true]:opacity-100">{s.title}</span>
           <span class="t-mono text-[0.66rem]">{twoDigits(i + 1)}</span>
-          <span aria-hidden="true" class="hidden h-px w-5 bg-current transition-[width] duration-300 group-hover:w-7 group-aria-[current=true]:w-9 group-aria-[current=true]:bg-accent xl:block"></span>
+          <span aria-hidden="true" class="hidden h-px w-5 bg-current transition-[width] duration-300 motion-reduce:transition-none group-hover:w-7 group-aria-[current=true]:w-9 group-aria-[current=true]:bg-accent xl:block"></span>
         </a>
       </li>
     ))}
