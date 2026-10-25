@@ -1,0 +1,105 @@
+---
+// 01 Products: Oyla as the lead case (video, how it works, screenshots,
+// links), then the other products as rows.
+import HomeSection from './HomeSection.astro';
+import Label from '../site/Label.astro';
+import Button from '../site/Button.astro';
+import ProductCard from '../ProductCard.astro';
+import { PRODUCTS } from '../../../constants';
+import { fmtMonth, productLinks } from '../../lib/productMeta';
+import { twoDigits } from '../../lib/sections';
+
+const LEAD = 'oyla';
+// The row under the video: both phone screens, then two presenter screens.
+const ROW = ['phone-vote.png', 'phone-thanks.png', 'present-results.png', 'word-cloud.png'];
+
+const lead = PRODUCTS.find((p) => p.slug === LEAD);
+if (!lead?.video) throw new Error(`ProductsSection: "${LEAD}" needs a video`);
+const video = lead.video;
+const others = PRODUCTS.filter((p) => p.slug !== LEAD);
+const shots = (lead.gallery ?? []).flatMap((f) => f.images);
+const row = ROW.map((file) => {
+  const shot = shots.find((s) => s.src.endsWith(`/${file}`));
+  if (!shot) throw new Error(`ProductsSection: ${LEAD} has no ${file}`);
+  return shot;
+});
+const link = 'decoration-fg-line underline-offset-4 hover:underline';
+---
+
+<HomeSection
+  id="products"
+  spec={['Open source', 'Web', 'Desktop', 'Command line']}
+  lead="Software I build and run, all of it open source."
+>
+  <article aria-labelledby="lead-product">
+    <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1" data-reveal>
+      <h3 id="lead-product" class="t-heading"><a href={`/products/${lead.slug}`} class={link}>{lead.name}</a></h3>
+      <p class="t-mono text-fg-muted">{fmtMonth(lead.launched)}{lead.license && ` · ${lead.license}`}</p>
+    </div>
+    <p class="t-body measure mb-8" data-reveal>{lead.tagline}</p>
+
+    <figure class="mb-10 overflow-hidden rounded-xl border border-fg-line bg-paper-sunk" data-reveal>
+      <video
+        controls
+        muted
+        playsinline
+        preload="metadata"
+        poster={video.poster}
+        src={video.src}
+        aria-label={`${lead.name} demo video`}
+        class="block aspect-video h-auto w-full"
+      >
+        <a href={video.src}>Download the {lead.name} demo video</a>.
+      </video>
+      <figcaption class="border-t border-fg-line px-4 py-3 text-[0.95rem] leading-relaxed text-fg-muted sm:px-5">
+        <span class="t-mono mr-2">Demo</span>{video.caption}
+      </figcaption>
+    </figure>
+
+    {lead.steps && lead.steps.length > 0 && (
+      <ol class="mb-10 grid gap-6 sm:grid-cols-3" data-reveal>
+        {lead.steps.map((step, i) => (
+          <li>
+            <span aria-hidden="true" class="t-mono text-fg-muted">{twoDigits(i + 1)}</span>
+            <h4 class="mt-2 font-display text-[1.15rem] font-medium leading-snug">{step.title}</h4>
+            <p class="mt-1 text-[0.95rem] leading-relaxed text-fg-muted">{step.body}</p>
+          </li>
+        ))}
+      </ol>
+    )}
+
+    {/* Column widths follow the aspect ratios (phones 0.587, screens 1.6), so the row has one height. */}
+    <ul class="mb-10 grid grid-cols-2 items-start gap-3 sm:grid-cols-[0.587fr_0.587fr_1.6fr_1.6fr]" data-reveal>
+      {row.map((shot) => (
+        <li class="overflow-hidden rounded-lg border border-fg-line bg-paper-sunk">
+          <img
+            src={shot.src}
+            alt={shot.alt}
+            width={shot.width}
+            height={shot.height}
+            loading="lazy"
+            decoding="async"
+            class="block h-auto w-full"
+          />
+        </li>
+      ))}
+    </ul>
+
+    <div class="flex flex-wrap items-center gap-3" data-reveal>
+      <Button href={`/products/${lead.slug}`}>More about {lead.name}</Button>
+      {productLinks(lead).map((l) => (
+        <Button href={l.href} variant="secondary" external>{l.label}</Button>
+      ))}
+    </div>
+  </article>
+
+  <div class="mt-20">
+    <Label as="p">More products</Label>
+    <ul class="mt-8 space-y-12">
+      {others.map((product) => (
+        <li data-reveal><ProductCard product={product} variant="row" /></li>
+      ))}
+    </ul>
+    <p class="mt-12"><a href="/products" class={`t-mono ${link}`}>All products →</a></p>
+  </div>
+</HomeSection>

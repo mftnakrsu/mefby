@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import SiteHeader from '../components/site/SiteHeader.astro';
 import SiteFooter from '../components/site/SiteFooter.astro';
+import ProgressRail from '../components/site/ProgressRail.astro';
 
 interface Alternate {
   hreflang: string;
@@ -97,6 +98,7 @@ const home = variant === 'home';
       class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-paper focus:px-4 focus:py-2 focus:text-ink"
     >Skip to content</a>
     <SiteHeader mode={home ? 'dock' : 'static'} />
+    {home && <ProgressRail />}
     <main id="main">
       <slot />
     </main>

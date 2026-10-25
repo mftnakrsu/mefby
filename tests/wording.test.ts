@@ -1,5 +1,5 @@
 // Built pages follow the wording rules in tests/wording.local.json (skipped
-// without it). Task 11 adds the home page.
+// without it). Covers the home page, /projects/** and /products/**.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { allRoutes, readPage, visibleText, attrValues } from './helpers/dist.ts';
@@ -21,4 +21,10 @@ test('project and product pages follow the wording rules', { skip }, () => {
       assert.deepEqual(findTerms(text, rules!.privatePages), [], `${route} (private)`);
     }
   }
+});
+
+test('the home page follows the wording rules, including the home list', { skip }, () => {
+  const text = readable(readPage('/'));
+  assert.deepEqual(findTerms(text, rules!.everywhere), [], 'everywhere');
+  assert.deepEqual(findTerms(text, rules!.home), [], 'home');
 });

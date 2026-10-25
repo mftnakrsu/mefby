@@ -1,0 +1,50 @@
+---
+// 04 Experience: the roles as a timeline, then education and certifications.
+import HomeSection from './HomeSection.astro';
+import Label from '../site/Label.astro';
+import { CERTIFICATIONS, EDUCATION, EXPERIENCE } from '../../../constants';
+
+// "Aug 2025 - Feb 2026" → "Aug 2025 – Feb 2026"
+const period = (p: string) => p.replace(' - ', ' – ');
+---
+
+<HomeSection
+  id="experience"
+  spec={['Production RAG', 'Generative video', 'Vision inspection', 'Automation']}
+  lead="From vision inspection on manufacturing lines to production RAG chatbots."
+>
+  <ol class="border-t border-fg-line">
+    {EXPERIENCE.map((exp) => (
+      <li class="grid gap-x-8 gap-y-1 border-b border-fg-line py-6 sm:grid-cols-[10rem_1fr]" data-reveal>
+        <p class="t-mono pt-1 text-fg-muted">{period(exp.period)}</p>
+        <div>
+          <h3 class="font-display text-[1.2rem] font-medium leading-snug">
+            {exp.role} <span class="text-fg-muted">— {exp.company}</span>
+          </h3>
+          <p class="measure mt-2 text-[0.98rem] leading-relaxed text-fg-muted">{exp.description}</p>
+        </div>
+      </li>
+    ))}
+  </ol>
+
+  <section aria-labelledby="education" class="mt-16" data-reveal>
+    <Label as="h3" id="education">Education</Label>
+    <ul class="space-y-4">
+      {EDUCATION.map((edu) => (
+        <li class="grid gap-x-8 gap-y-1 sm:grid-cols-[10rem_1fr]">
+          <p class="t-mono pt-0.5 text-fg-muted">{period(edu.period)}</p>
+          <p>
+            <span class="font-medium">{edu.degree}</span><span class="text-fg-muted">, {edu.school}{edu.gpa && ` (GPA ${edu.gpa})`}</span>
+          </p>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section aria-labelledby="certifications" class="mt-14" data-reveal>
+    <Label as="h3" id="certifications">Certifications</Label>
+    <ul class="grid gap-x-8 gap-y-2 text-[0.95rem] text-fg-muted sm:grid-cols-2">
+      {CERTIFICATIONS.map((cert) => <li>{cert}</li>)}
+    </ul>
+  </section>
+</HomeSection>

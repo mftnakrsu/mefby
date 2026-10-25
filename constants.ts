@@ -1,4 +1,4 @@
-import type { CompanyProfile, Experience, Project, Product, Service, Skill, Client, Publication, Education, WritingPost } from './types';
+import type { CompanyProfile, Experience, Product, Service, Skill, Client, Publication, Education, WritingPost } from './types';
 
 export const PROFILE: CompanyProfile = {
   name: "Mefby",
@@ -150,39 +150,6 @@ export const EXPERIENCE: Experience[] = [
     period: "Jan 2022 - Apr 2022",
     description: "Built an OCR-based product recognition system integrating AI/ML with PLC (Snap7) for production line automation.",
     logo: "https://ui-avatars.com/api/?name=MO&background=1a1a1a&color=f59e0b&size=128&bold=true&font-size=0.4"
-  }
-];
-
-export const PROJECTS: Project[] = [
-  {
-    id: 2,
-    title: "Odigos \u2014 RAG Chatbot",
-    description: "Production RAG chatbot for autism spectrum families in Italy. 58+ features, knowledge graph + vector search + semantic reranking on Azure with Neo4j and pgvector.",
-    tags: ["RAG", "Neo4j", "pgvector", "Azure", "GPT-4"],
-    imageUrl: "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=600"
-  },
-  {
-    id: 3,
-    title: "Visual Quality Control",
-    description: "YOLO + PyTorch inspection pipeline at Bosch. Cut destructive testing from 9/day to 3/day. OCR and Cognex vision inspections reduced customer complaints by 10%.",
-    tags: ["YOLO", "PyTorch", "OpenCV", "Cognex"],
-    imageUrl: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=600"
-  },
-  {
-    id: 4,
-    title: "Cinematic Video Generation",
-    description: "Fine-tuned Wan2.1 I2V-14B with LoRA for cinematic scene synthesis from limited data. Single-GPU pipeline producing coherent 720p video sequences.",
-    tags: ["Stable Diffusion", "LoRA", "Video AI", "arXiv"],
-    imageUrl: "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=600",
-    link: "https://arxiv.org/abs/2510.27364"
-  },
-  {
-    id: 5,
-    title: "Aerial Object Detection",
-    description: "Compared YOLO v3-v8 on VisDrone-2019 aerial images. Optimized with TensorRT for Jetson Nano and Jetson Orin. Published at IEEE INISTA 2023.",
-    tags: ["YOLO", "TensorRT", "Jetson", "UAV", "IEEE"],
-    imageUrl: "https://images.unsplash.com/photo-1473968512647-3e447244af8f?auto=format&fit=crop&q=80&w=600",
-    link: "https://doi.org/10.1109/INISTA59065.2023.10310562"
   }
 ];
 
@@ -496,6 +463,15 @@ export const PRODUCTS: Product[] = [
       }
     ]
   }
+];
+
+// Essays shown in the home page's Writing section, in this order (canonical
+// slugs). src/lib/homeEssays.ts fails the build if one is missing, a draft or
+// a translation.
+export const HOME_ESSAYS: string[] = [
+  "efficient-llm-inference",
+  "graph-rag-language",
+  "easa-ai-concept-paper"
 ];
 
 export const PUBLICATIONS: Publication[] = [

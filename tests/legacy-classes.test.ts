@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { allRoutes, readPage, attrValues } from './helpers/dist.ts';
 
-// Pages restyled so far; Tasks 11 and 12 extend the list.
-const RESTYLED = [/^\/projects(\/|$)/, /^\/products(\/|$)/];
+// Pages restyled so far; Task 12 extends the list.
+const RESTYLED = [/^\/$/, /^\/projects(\/|$)/, /^\/products(\/|$)/];
 
 const isLegacy = (token: string): boolean => {
   const utility = token.slice(token.lastIndexOf(':') + 1); // hover:bg-zinc-50 → bg-zinc-50

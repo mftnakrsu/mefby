@@ -1,0 +1,29 @@
+---
+// A numbered course as a large entry: title and part count, a one-line blurb,
+// then Part 1 and the companion code. The home page's Writing section and /essays.
+import type { Course } from '../lib/courses';
+
+interface Props {
+  course: Course;
+  parts: number;
+  firstHref: string;
+  // Keep 'as' quoted: unquoted, Astro ignores this Props type and callers go unchecked.
+  'as'?: 'h2' | 'h3';
+}
+const { course, parts, firstHref, as: Heading = 'h3' } = Astro.props;
+const link = 'decoration-fg-line underline-offset-4 hover:underline';
+---
+
+<article class="border-t border-fg-line py-8">
+  <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+    <Heading class="t-heading"><a href={course.href} class={link}>{course.title}</a></Heading>
+    <span class="t-mono text-fg-muted">{parts} parts</span>
+  </div>
+  <p class="t-body measure mt-3 text-fg-muted">{course.blurb}</p>
+  <p class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[0.95rem] font-medium">
+    <a href={firstHref} class={link}>Start at Part 1 <span aria-hidden="true">→</span></a>
+    <a href={course.repo} target="_blank" rel="noopener noreferrer" class={link}>
+      Code on GitHub<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span>
+    </a>
+  </p>
+</article>

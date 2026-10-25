@@ -1,0 +1,73 @@
+---
+// 02 Writing: the three courses, the hand-picked essays, and a few Medium posts.
+import { getCollection } from 'astro:content';
+import HomeSection from './HomeSection.astro';
+import Label from '../site/Label.astro';
+import CourseEntry from '../CourseEntry.astro';
+import EssayRow from '../EssayRow.astro';
+import { HOME_ESSAYS, PROFILE, WRITING } from '../../../constants';
+import { COURSES, courseParts } from '../../lib/courses';
+import { pickEssays } from '../../lib/homeEssays';
+import { fmtMaybe } from '../../lib/essayMeta';
+
+const essays = await getCollection('essays');
+const total = essays.filter((e) => !e.data.draft && !e.data.isTranslation).length;
+const courses = COURSES.map((course) => {
+  const parts = courseParts(essays, course.series);
+  if (!parts[0]) throw new Error(`WritingSection: ${course.title} has no published parts`);
+  return { course, count: parts.length, firstHref: `/essays/${parts[0].id}` };
+});
+const picked = pickEssays(essays, HOME_ESSAYS);
+const medium = WRITING.filter((p) => p.url).slice(0, 4);
+const link = 'decoration-fg-line underline-offset-4 hover:underline';
+---
+
+<HomeSection
+  id="writing"
+  spec={[`${COURSES.length} courses`, `${total} essays`, 'English & Turkish']}
+  lead="Framework-free courses that build RAG, agents and evals by hand, and essays on the systems around them."
+>
+  <ul class="border-b border-fg-line">
+    {courses.map(({ course, count, firstHref }, i) => (
+      <li data-reveal style={`--i:${i}`}>
+        <CourseEntry course={course} parts={count} firstHref={firstHref} />
+      </li>
+    ))}
+  </ul>
+
+  <section aria-labelledby="home-essays" class="mt-16">
+    <Label as="h3" id="home-essays">Essays</Label>
+    <ul data-reveal>
+      {picked.map((essay) => <EssayRow essay={essay} as="h4" />)}
+    </ul>
+    <p class="mt-6"><a href="/essays" class={`t-mono ${link}`}>All {total} essays →</a></p>
+  </section>
+
+  {medium.length > 0 && (
+    <section aria-labelledby="home-medium" class="mt-16">
+      <Label as="h3" id="home-medium">On Medium</Label>
+      <ul data-reveal>
+        {medium.map((post) => (
+          <li class="border-b border-fg-line">
+            <a
+              href={post.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="group flex flex-col gap-1 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+            >
+              <span class="decoration-fg-line underline-offset-4 group-hover:underline">
+                {post.title}<span class="sr-only"> (opens in a new tab)</span>
+              </span>
+              <time datetime={post.date} class="t-mono shrink-0 text-fg-muted">{fmtMaybe(post.date)}</time>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p class="mt-6">
+        <a href={PROFILE.socials.medium} target="_blank" rel="noopener noreferrer" class={`t-mono ${link}`}>
+          All posts on Medium<span class="sr-only"> (opens in a new tab)</span> ↗
+        </a>
+      </p>
+    </section>
+  )}
+</HomeSection>
