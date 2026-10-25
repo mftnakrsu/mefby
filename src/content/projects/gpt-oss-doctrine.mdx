@@ -16,8 +16,8 @@ A LoRA fine-tune of OpenAI's open-weight gpt-oss-20b, a mixture-of-experts model
 
 ## How it was built
 
-GPT-5.4 generated 18,730 question–answer pairs from the documents, split by chunk so that test questions never share a source passage with the training data. A rank-16 adapter trained for two epochs. A GPT-5.4 judge then compared it with the base model on 1,873 held-out pairs for accuracy, completeness and grounding, and the adapter won 82.6% of them (95% CI 80.9–84.4%). Judging 300 pairs again with randomized positions moved the result by less than two points. A Hugging Face Space puts both models side by side.
+GPT-5.4 generated 18,730 question–answer pairs from the documents, split by chunk, so no chunk appears in both the training and the test data. A rank-16 adapter trained for two epochs. A GPT-5.4 judge then compared it with the base model on 1,873 held-out pairs for accuracy, completeness and grounding, and the adapter won 82.6% of them (95% CI 80.9–84.4%). Judging 300 pairs again with randomized positions moved the result by less than two points. A Hugging Face Space puts both models side by side.
 
 ## What it taught me
 
-The largest change was behavior, not knowledge. The reasoning-tuned base model spent its whole budget on hidden reasoning and usually gave no final answer; the adapter answers directly, in about 49 tokens instead of 297. Where the base model did answer, the adapter still won 77.9% of the time. Validation loss during training sat on a different scale from loss on the inference path, and neither tracked the judged quality, so the judge became the measure that counted.
+The largest change was behavior, not knowledge. The reasoning-tuned base model spent its whole budget on hidden reasoning and usually gave no final answer; the adapter answers directly, in about 49 tokens instead of 297. Where the base model did answer, the adapter still won 77.9% of the time. Validation loss during training sat on a different scale from loss on the inference path, and the inference-path loss did not track the judged quality, so the judge became the measure that counted.

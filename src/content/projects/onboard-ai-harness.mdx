@@ -14,7 +14,7 @@ The harness that will run on the onboard computer of an autonomous vehicle. It s
 
 ## Design
 
-Every proposal passes a safety gate before it reaches the control computer. While the link to the operator is up, the operator approves each proposal; if the link drops, a deterministic policy decides onboard. The system is built in rate layers, and a slow layer never blocks a fast one: consumers keep only the latest state, treat data as stale once it passes its maximum age, and never queue old messages. Events are acknowledged and resent up to six times, which at 5% packet loss leaves about one chance in sixty million that an event is lost.
+Every proposal passes a safety gate before it reaches the control computer. While the link to the operator is up, the operator approves each proposal; if the link drops, a deterministic policy decides onboard. The system is built in rate layers, and a slow layer never blocks a fast one: consumers keep only the latest state, treat data as stale once it passes its maximum age, and never queue old messages. Events are acknowledged and sent up to six times, which at 5% packet loss leaves about one chance in sixty million that an event is lost.
 
 ## Status
 
