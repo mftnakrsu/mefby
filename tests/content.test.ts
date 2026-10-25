@@ -145,7 +145,6 @@ const INVENTORY: Record<string, Record<string, boolean>> = {
     'manufacturing-intent': false,
     'azure-databricks-platform': false,
     'chiller-forecasting': false,
-    'integrated-ml': false,
     'rpa-robots': false,
     'cltv-prediction': false,
     'rfm-segmentation': false,
@@ -190,7 +189,7 @@ test('each inventoried category holds exactly the approved projects', () => {
 test('the inventory covers every category and every project file', () => {
   assert.deepEqual(Object.keys(INVENTORY).sort(), [...CATEGORY_ORDER].sort());
   const listed = Object.values(INVENTORY).flatMap((c) => Object.keys(c));
-  assert.equal(listed.length, 67);
+  assert.equal(listed.length, 66);
   assert.deepEqual(entries.map((e) => e.slug).sort(), [...listed].sort());
   assert.equal(Object.values(INVENTORY).flatMap((c) => Object.values(c)).filter(Boolean).length, 25);
 });
