@@ -1,0 +1,14 @@
+---
+// A group heading on /projects: the group's name and how many entries it holds,
+// over a hairline.
+interface Props {
+  id: string;
+  count: number;
+}
+const { id, count } = Astro.props;
+---
+
+<div class="mb-2 flex items-baseline gap-4 border-b border-fg-line pb-3">
+  <h2 id={id} class="t-heading"><slot /></h2>
+  <span aria-hidden="true" class="t-mono text-fg-muted">{count}</span>
+</div>

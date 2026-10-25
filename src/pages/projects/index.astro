@@ -1,7 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import SectionMeta from '../../components/site/SectionMeta.astro';
-import Label from '../../components/site/Label.astro';
+import GroupHeading from '../../components/projects/GroupHeading.astro';
 import ProjectRow from '../../components/projects/ProjectRow.astro';
 import { getCollection } from 'astro:content';
 import { PRODUCTS } from '../../../constants';
@@ -16,12 +16,12 @@ const lead = `Products, LLM systems, research, edge AI, computer vision, data wo
 ---
 
 <Layout title="Projects — Meftun Akarsu" description={lead}>
-  <div class="mx-auto max-w-[46rem] px-6 pt-14 sm:pt-20">
+  <div class="mx-auto max-w-[1100px] px-6 pt-14 sm:px-10 sm:pt-20">
     <SectionMeta as="h1" kicker={`Projects · ${yearSpan(projects)}`} title="Projects" titleId="projects-title" lead={lead} />
 
     <section aria-labelledby="group-products" data-reveal>
-      <Label id="group-products">Products</Label>
-      <ul>
+      <GroupHeading id="group-products" count={products.length}>Products</GroupHeading>
+      <ul class="lg:grid lg:grid-cols-2 lg:gap-x-12">
         {products.map((p) => (
           <ProjectRow title={p.name} year={p.launched.slice(0, 4)} summary={p.tagline} stack={p.stack} href={`/products/${p.slug}`} />
         ))}
@@ -29,9 +29,9 @@ const lead = `Products, LLM systems, research, edge AI, computer vision, data wo
     </section>
 
     {groups.map((g) => (
-      <section aria-labelledby={`group-${g.category}`} class="mt-14" data-reveal>
-        <Label id={`group-${g.category}`}>{CATEGORY_LABELS[g.category]}</Label>
-        <ul class={g.category === 'learning' ? 'md:grid md:grid-cols-2 md:gap-x-10' : undefined}>
+      <section aria-labelledby={`group-${g.category}`} class="mt-16 sm:mt-20" data-reveal>
+        <GroupHeading id={`group-${g.category}`} count={g.items.length}>{CATEGORY_LABELS[g.category]}</GroupHeading>
+        <ul class={g.category === 'learning' ? 'md:grid md:grid-cols-2 md:gap-x-10 lg:grid-cols-3' : 'lg:grid lg:grid-cols-2 lg:gap-x-12'}>
           {g.items.map((p) => {
             const href = projectHref(p);
             return (
