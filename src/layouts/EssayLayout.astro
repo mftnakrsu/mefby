@@ -1,6 +1,8 @@
 ---
 import Layout from './Layout.astro';
 import { COURSES } from '../lib/courses';
+// Only essays typeset math ($$…$$, rendered by KaTeX at build time), so only they load its CSS.
+import 'katex/dist/katex.min.css';
 
 interface SeriesLink {
   slug: string;

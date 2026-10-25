@@ -37,7 +37,7 @@ addEventListener('focusin', (e) => {
 });
 
 // The bottom 12% of the last screen never crosses the margin above, so once
-// the page is scrolled to the end, show whatever is left.
+// the page is scrolled (or resized) to its end, show whatever is left.
 const atEnd = () =>
   window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
 const onScroll = () => {
@@ -47,6 +47,8 @@ const onScroll = () => {
     io.unobserve(el);
   });
   removeEventListener('scroll', onScroll);
+  removeEventListener('resize', onScroll);
 };
 addEventListener('scroll', onScroll, { passive: true });
+addEventListener('resize', onScroll, { passive: true });
 onScroll();

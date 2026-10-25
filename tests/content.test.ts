@@ -176,7 +176,8 @@ const INVENTORY: Record<string, Record<string, boolean>> = {
   },
 };
 
-const categoryOf = (frontmatter: string) => frontmatter.match(/^category: ([a-z]+)$/m)?.[1] ?? '';
+const categoryOf = (frontmatter: string) =>
+  (frontmatterValue(frontmatter, 'category') ?? '').replace(/\s+#.*$/, '').replace(/^(["'])(.*)\1$/, '$2').trim();
 
 test('each inventoried category holds exactly the approved projects', () => {
   for (const [category, approved] of Object.entries(INVENTORY)) {

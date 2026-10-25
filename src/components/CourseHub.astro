@@ -30,7 +30,7 @@ const itemListJsonLd = {
   itemListElement: parts.map((p) => ({
     '@type': 'ListItem',
     position: p.data.seriesOrder,
-    url: new URL(`/essays/${p.id}`, Astro.site).toString(),
+    url: new URL(`/essays/${p.id}/`, Astro.site).toString(),
     name: p.data.title,
   })),
 };

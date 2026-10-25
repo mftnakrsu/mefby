@@ -556,6 +556,7 @@ export const WRITING: WritingPost[] = [
   },
   {
     title: "REST API'den Web Uygulamalar\u0131na: FastAPI, Flask ve Streamlit Rehberi",
+    lang: "tr",
     date: "2025-01-25",
     url: "https://medium.com/@meftunakarsu/rest-apiden-web-uygulamalar%C4%B1na-fastapi-flask-ve-streamlit-rehberi-444e9f1ea307"
   },
@@ -576,6 +577,7 @@ export const WRITING: WritingPost[] = [
   },
   {
     title: "Nedir bu Deep Fake?",
+    lang: "tr",
     date: "2023-10-11",
     url: "https://medium.com/@meftunakarsu/nedir-bu-deep-fake-2c95aa35e7bd"
   },

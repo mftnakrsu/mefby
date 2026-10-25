@@ -61,7 +61,7 @@ image:                   # optional; needed when the project is featured
 Optional write-up, 120–350 words in `##` sections. With a body, the project gets its own page.
 ```
 
-Images come from the project's own public repository (copied to `public/projects/<slug>/`) or from Unsplash: `node scripts/unsplash.mjs search "<query>"`, then `node scripts/unsplash.mjs use <photo-id>`, which registers the use and prints the `image` block with the photographer credit. Never take images from private repositories. `npm test` checks the schema rules, write-up lengths, image sizes and links.
+Images come from the project's own public repository (copied to `public/projects/<slug>/`) or from Unsplash: `node scripts/unsplash.mjs search "<query>"`, then `node scripts/unsplash.mjs use <photo-id>`, which registers the use and prints the `image` block with the photographer credit. Never take images from private repositories. `npm test` checks the schema rules, write-up lengths, image sizes and links. The tests also pin the approved inventory: add the slug to `INVENTORY` in `tests/content.test.ts` (under its category; `true` when it has a write-up) and raise the totals there (entries, write-ups); a `featured` entry also goes into the expected card order in `tests/home.test.ts`.
 
 **Adding an essay.** Drop an MDX file into `src/content/essays/`, add frontmatter matching the schema (title, description, date, tags), write the prose. `/essays` and the RSS feed pick it up automatically; the home page shows only the essays in `HOME_ESSAYS`. Embed figures with the `Diagram` component:
 
@@ -75,7 +75,7 @@ import Diagram from '../../components/essay/Diagram.astro';
 
 Static SVGs go under `public/essays/<slug>/`. Interactive figures are self-contained HTML files in the same folder, embedded with `IframeFigure` (it sizes the iframe to its content).
 
-**Styling.** Tailwind CSS 4 via the `@tailwindcss/vite` plugin; the theme is in `src/styles/global.css` (`@theme` and `@theme inline`; no `tailwind.config.js`). Long-form text (essays and project write-ups) is styled by `src/styles/prose.css` (`.prose`, plus `.prose-project` for write-ups). KaTeX CSS is imported globally for math in essays.
+**Styling.** Tailwind CSS 4 via the `@tailwindcss/vite` plugin; the theme is in `src/styles/global.css` (`@theme` and `@theme inline`; no `tailwind.config.js`). Long-form text (essays and project write-ups) is styled by `src/styles/prose.css` (`.prose`, plus `.prose-project` for write-ups). EssayLayout imports the KaTeX CSS; math needs `$$…$$` (inline `$…$` is off, so dollar amounts stay text).
 
 **SEO.** `Layout.astro` sets default meta, OpenGraph and Person JSON-LD. `EssayLayout.astro` adds Article and BreadcrumbList JSON-LD and hreflang alternates for EN/TR pairs; product pages add SoftwareApplication JSON-LD. `@astrojs/sitemap` generates `/sitemap-index.xml`; `/rss.xml` serves the essay feed from the content collection.
 

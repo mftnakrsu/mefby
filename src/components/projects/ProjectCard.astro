@@ -20,7 +20,7 @@ const srcset = unsplashSrcset(image.src, image.width, image.height);
     <img
       src={image.src}
       srcset={srcset}
-      sizes={srcset ? '(min-width: 768px) 22rem, 100vw' : undefined}
+      sizes={srcset ? '(min-width: 1100px) 494px, (min-width: 640px) calc(50vw - 56px), calc(100vw - 48px)' : undefined}
       alt={image.alt}
       width={image.width}
       height={image.height}

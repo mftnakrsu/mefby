@@ -56,7 +56,7 @@ const link = 'decoration-fg-line underline-offset-4 hover:underline';
               class="group flex flex-col gap-1 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
             >
               <span class="decoration-fg-line underline-offset-4 group-hover:underline">
-                {post.title}<span class="sr-only"> (opens in a new tab)</span>
+                <span lang={post.lang}>{post.title}</span><span class="sr-only"> (opens in a new tab)</span>
               </span>
               <time datetime={post.date} class="t-mono shrink-0 text-fg-muted">{fmtMaybe(post.date)}</time>
             </a>

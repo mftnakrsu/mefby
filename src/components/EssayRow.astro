@@ -14,6 +14,8 @@ interface Props {
 const { essay, featured = false, as: Heading = 'h3' } = Astro.props;
 const langs = essayLangs(essay.data.lang, !!essay.data.translationSlug);
 const tags = topicTags(essay.data.tags);
+// Mark a Turkish essay's title and description, since the list is in English.
+const lang = essay.data.lang === 'en' ? undefined : essay.data.lang;
 ---
 
 <li class="border-b border-fg-line">
@@ -22,7 +24,7 @@ const tags = topicTags(essay.data.tags);
       {essay.data.seriesOrder != null && (
         <span class="t-mono shrink-0 text-fg-muted">Part {essay.data.seriesOrder}</span>
       )}
-      <Heading class="font-display text-[1.2rem] font-medium leading-snug tracking-[-0.01em] decoration-fg-line underline-offset-4 group-hover:underline">
+      <Heading lang={lang} class="font-display text-[1.2rem] font-medium leading-snug tracking-[-0.01em] decoration-fg-line underline-offset-4 group-hover:underline">
         {essay.data.title}
       </Heading>
       {featured && (
@@ -40,7 +42,7 @@ const tags = topicTags(essay.data.tags);
       <span><span class="sr-only">Available in </span>{langs.join(' · ')}</span>
     </p>
     {essay.data.description && (
-      <p class="measure mt-2 line-clamp-2 text-[0.95rem] leading-relaxed text-fg-muted">{essay.data.description}</p>
+      <p lang={lang} class="measure mt-2 line-clamp-2 text-[0.95rem] leading-relaxed text-fg-muted">{essay.data.description}</p>
     )}
     {tags.length > 0 && (
       <ul class="t-mono mt-2.5 flex flex-wrap gap-x-2 text-fg-muted" aria-label="Topics">

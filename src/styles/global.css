@@ -3,7 +3,6 @@
 @import "@fontsource-variable/hanken-grotesk";
 @import "@fontsource-variable/hanken-grotesk/wght-italic.css";
 @import "@fontsource-variable/geist-mono";
-@import "katex/dist/katex.min.css";
 @import "./prose.css";
 
 /*
@@ -226,6 +225,12 @@ body {
     html.js [data-reveal] {
       opacity: 1;
       transform: none;
+    }
+    /* Print on paper whichever zone the home page was scrolled to. */
+    :root {
+      --canvas: var(--paper) !important;
+      --fg: var(--text-ink) !important;
+      --focus: var(--accent-ink) !important;
     }
   }
 }

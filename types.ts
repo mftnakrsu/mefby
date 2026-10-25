@@ -52,6 +52,7 @@ export interface WritingPost {
   title: string;
   date: string;
   url?: string;
+  lang?: 'tr'; // set when the post is not in English
 }
 
 export interface CompanyProfile {
