@@ -1,10 +1,16 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import ProductRow from '../../components/ProductRow.astro';
+import SectionMeta from '../../components/site/SectionMeta.astro';
+import ProductCard from '../../components/ProductCard.astro';
 import { PRODUCTS } from '../../../constants';
 
-// Newest launch first; "YYYY-MM" strings sort correctly as text.
+// Newest launch first. "YYYY-MM" strings sort correctly as text, and the sort
+// is stable, so products launched in the same month keep their PRODUCTS order.
 const products = [...PRODUCTS].sort((a, b) => b.launched.localeCompare(a.launched));
+const years = products.map((p) => Number(p.launched.slice(0, 4)));
+const first = Math.min(...years);
+const last = Math.max(...years);
+const span = first === last ? String(first) : `${first}–${last}`;
 
 const itemListJsonLd = {
   '@context': 'https://schema.org',
@@ -26,18 +32,20 @@ const itemListJsonLd = {
   ogImage={products[0]?.image.src}
 >
   <script is:inline type="application/ld+json" set:html={JSON.stringify(itemListJsonLd)} />
-  <div class="min-h-screen bg-white text-zinc-500 font-sans">
-    <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
-      <a href="/" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors mb-12 inline-block">&larr; back</a>
-
-      <h1 class="text-2xl font-semibold text-zinc-900 mb-1">Products</h1>
-      <p class="text-sm text-zinc-400 mb-10">Software I build and run · {products.length} {products.length === 1 ? 'product' : 'products'}</p>
-
-      <ul class="border-t border-zinc-100">
-        {products.map((product) => (
-          <ProductRow product={product} showImage />
-        ))}
-      </ul>
-    </div>
+  <div class="mx-auto max-w-[46rem] px-6 pt-14 sm:pt-20">
+    <SectionMeta
+      as="h1"
+      kicker={`Products · ${span}`}
+      title="Products"
+      titleId="products-title"
+      lead="Software I build and run, newest first."
+    />
+    <ul class="grid gap-x-8 gap-y-14 sm:grid-cols-2">
+      {products.map((product, i) => (
+        <li data-reveal style={`--i:${i % 2}`}>
+          <ProductCard product={product} as="h2" eager={i < 2} />
+        </li>
+      ))}
+    </ul>
   </div>
 </Layout>

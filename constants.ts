@@ -200,6 +200,7 @@ export const PRODUCTS: Product[] = [
     launched: "2026-10",
     license: "MIT",
     languages: ["EN", "TR"],
+    spec: ["Live polls", "Word clouds", "Self-hosted"],
     stack: ["Node.js", "Fastify", "Socket.IO", "SQLite", "React", "Docker"],
     features: [
       "The audience joins from their phones with a 6-digit code or a QR code. No accounts, no app.",
@@ -289,6 +290,209 @@ export const PRODUCTS: Product[] = [
           }
         ],
         caption: "A word cloud. The more people give a word, the bigger it gets."
+      }
+    ]
+  },
+  {
+    slug: "flashjot",
+    name: "Flashjot",
+    tagline: "A small notebook for Linux, Windows and macOS: press a shortcut, write the idea down, press Enter, and you're back to work.",
+    metaTitle: "Flashjot: quick notes from anywhere, saved as Markdown",
+    summary: "A small notebook for Linux, Windows and macOS. One shortcut opens a quick box from anywhere, and every note is a plain Markdown file. MIT licensed.",
+    description: "Ideas show up at bad times: in the middle of a build, a meeting or a sentence. Flashjot keeps a capture box one shortcut away. Quick notes land in an Inbox, and later you file them into folders in the notebook. Every note is a plain Markdown file on your disk (Documents/Flashjot by default), so Obsidian, VS Code, grep and git can read it too.",
+    status: "Open source",
+    launched: "2026-10",
+    license: "MIT",
+    languages: ["EN", "TR"],
+    platforms: ["Linux", "Windows", "macOS"],
+    spec: ["Desktop app", "Markdown", "Tauri"],
+    stack: ["Tauri", "Rust", "Svelte", "TypeScript", "CodeMirror"],
+    features: [
+      "Quick box (Ctrl+Alt+N, ⌘⌥N on macOS): opens on the monitor your mouse is on. Enter saves, Shift+Enter adds a line, and Esc closes it while keeping your draft.",
+      "Notebook (Ctrl+Alt+D): folders, pages, a Markdown editor with live styling and clickable checkboxes, and full-text search (Ctrl+K).",
+      "Tasks: start a quick note with [] to add tasks; Open tasks lists every unchecked task across your notes.",
+      "Inbox: quick notes wait as cards. Move one into a folder with M and it takes its title from its first line; delete with Del, and undo if you change your mind.",
+      "Plain files: each note is a .md file, so your notes stay readable even without Flashjot.",
+      "Safe writes: every save goes to a temporary file first and is then swapped in, so a crash or power cut never leaves a half-written note.",
+      "Keyboard first, with configurable global shortcuts. Light and dark themes follow the system, and the interface is in English and Turkish.",
+      "Small: built with Tauri, so it uses the system web view instead of bundling a browser.",
+      "Installers for Linux (.deb, .rpm, AppImage), Windows (.exe, .msi) and macOS (.dmg). The macOS build is not notarized yet, and on Wayland you add the two global shortcuts in your desktop's keyboard settings."
+    ],
+    steps: [
+      {
+        title: "Catch it",
+        body: "Press Ctrl+Alt+N wherever you are. A small box opens on top of whatever you are doing; type the idea and press Enter."
+      },
+      {
+        title: "Let it wait",
+        body: "The note lands in the Inbox as a card and waits there until you have time to sort it."
+      },
+      {
+        title: "File it",
+        body: "Ctrl+Alt+D opens the notebook. Press M to move a card into a folder, or keep writing on a Markdown page."
+      }
+    ],
+    links: {
+      download: "https://github.com/mftnakrsu/flashjot/releases/latest",
+      docs: "https://flashjot.mefby.com",
+      source: "https://github.com/mftnakrsu/flashjot"
+    },
+    image: {
+      src: "/products/flashjot/notebook.png",
+      alt: "The Flashjot notebook: folders and pages on the left, and a Markdown page called Robot arm with a checklist of parts on the right",
+      width: 1000,
+      height: 680
+    },
+    video: {
+      src: "/products/flashjot/demo.mp4",
+      poster: "/products/flashjot/poster.png",
+      caption: "A 40-second tour: catching an idea in the middle of a build, finding it in the Inbox, filing it with one key, and the notebook."
+    },
+    gallery: [
+      {
+        images: [
+          {
+            src: "/products/flashjot/notebook.png",
+            alt: "The Flashjot notebook: folders and pages on the left, and a Markdown page called Robot arm with a checklist of parts on the right",
+            width: 1000,
+            height: 680
+          }
+        ],
+        caption: "The notebook. Folders and pages on the left; Markdown with live styling and checkboxes you tick with a click."
+      },
+      {
+        images: [
+          {
+            src: "/products/flashjot/inbox.png",
+            alt: "The Inbox in the light theme: three quick notes as cards, newest first",
+            width: 1000,
+            height: 680
+          },
+          {
+            src: "/products/flashjot/inbox-dark.png",
+            alt: "The same Inbox in the dark theme",
+            width: 1000,
+            height: 680
+          }
+        ],
+        caption: "The Inbox, light and dark. Quick notes wait here as cards until you sort them."
+      }
+    ]
+  },
+  {
+    slug: "ulgen",
+    name: "Ülgen",
+    tagline: "Connects EVREN, Türkiye's national model API, to the coding tools you already use: Qwen Code, opencode, Codex CLI and Claude Code.",
+    metaTitle: "Ülgen: EVREN for the coding tools you already use",
+    summary: "One binary that signs you in to EVREN, Türkiye's national model API, and sets up Qwen Code, opencode, Codex CLI or Claude Code to use it. AGPL-3.0.",
+    description: "The coding tools already work well, and EVREN serves capable open-weight models. What is missing is the part in between: signing in, keeping the key safe, accepting the terms, watching the quota, writing the right settings into each tool, and a Turkish interface. Ülgen is that part. It is one binary, not a new coding agent, and it is named after the creator deity of Turkic mythology.",
+    status: "Open source",
+    launched: "2026-10",
+    license: "AGPL-3.0-only",
+    languages: ["EN", "TR"],
+    platforms: ["Linux", "Windows", "macOS"],
+    applicationCategory: "DeveloperApplication",
+    spec: ["Command line", "Go", "Coding agents"],
+    stack: ["Go"],
+    features: [
+      "Run ulgen and it signs you in, finds the coding tools you have installed, asks which one you want, sets it up for EVREN and starts it. Later runs start that tool straight away.",
+      "Works with Qwen Code, opencode, Codex CLI and Claude Code. Setup backs up every file it changes, --dry-run shows the change first, and setup --remove takes it out again.",
+      "ulgen status shows the remaining daily quota and the models; ulgen doctor checks the key, EVREN and every tool, and says what to do about what is wrong.",
+      "The key is kept in the operating system's credential store. It is never written into a tool's settings file, never printed and never logged.",
+      "Claude Code never receives the key at all: it talks to a translator inside Ülgen on your own machine.",
+      "Every command follows the system language, Turkish or English.",
+      "Installs with one line on Linux and macOS, or in PowerShell on Windows; Pardus, Debian and Ubuntu packages are available too.",
+      "Known limits: Anthropic does not support Claude Code with other models, so ulgen run claude goes through the translator and says so, and token counts on EVREN are estimates.",
+      "Independent and non-commercial: not affiliated with EVREN or the makers of the tools it sets up."
+    ],
+    steps: [
+      {
+        title: "Sign in",
+        body: "Run ulgen. It opens EVREN's API keys page (sign-in is through e-Devlet), shows the terms and saves your key in the credential store."
+      },
+      {
+        title: "Pick a tool",
+        body: "Ülgen finds the coding tools you have installed, asks which one you want and writes the EVREN settings into it, keeping a backup."
+      },
+      {
+        title: "Start coding",
+        body: "The tool starts on an EVREN model. Next time ulgen starts it straight away; ulgen opencode, qwen, codex or claude switches to another one."
+      }
+    ],
+    links: {
+      docs: "https://ulgen.mefby.com",
+      source: "https://github.com/mftnakrsu/ulgen"
+    },
+    image: {
+      src: "/products/ulgen/poster.png",
+      alt: "Claude Code running on an EVREN model in a terminal: asked what main.go prints, it reads the file and answers 6765, the 20th Fibonacci number",
+      width: 1920,
+      height: 1080
+    },
+    video: {
+      src: "/products/ulgen/demo.mp4",
+      poster: "/products/ulgen/poster.png",
+      caption: "A 40-second tour: signing in, setup showing its change before writing it, doctor and status, and Claude Code answering on an EVREN model."
+    }
+  },
+  {
+    slug: "agent-buzzer",
+    name: "agent-buzzer",
+    tagline: "Plays a sound when Claude Code finishes a long turn, and stays quiet when you are already looking at the terminal.",
+    metaTitle: "agent-buzzer: hear when your AI agent finishes",
+    summary: "A small shell tool that plays a sound when Claude Code finishes a long turn, and stays quiet when the turn was short or you are watching the terminal. MIT licensed.",
+    description: "A tool that beeps after every turn becomes unbearable within an hour, so agent-buzzer only plays when it is worth interrupting you: the turn took longer than 30 seconds and your terminal is not the window in front of you. When something can't be determined, it plays, because a missed notification is worse than one extra beep. Claude Code is the only agent wired up today; Codex, Cursor's agent and Antigravity are on the roadmap.",
+    status: "Open source",
+    launched: "2026-07",
+    license: "MIT",
+    platforms: ["macOS", "Linux", "Windows"],
+    applicationCategory: "DeveloperApplication",
+    spec: ["Claude Code hooks", "Shell script", "No dependencies"],
+    stack: ["Bash", "PowerShell"],
+    features: [
+      "Four events, each with its own sound: done, waiting (a permission prompt or a question), error and subagent.",
+      "Silence rules, checked in order: the master switch, quiet hours (off by default), turns shorter than 30 seconds, and your own terminal being the frontmost app.",
+      "Focus detection compares the frontmost app with the terminal Claude Code runs in. On macOS it needs no Accessibility or Automation permission.",
+      "buzzer status says whether it would play right now and why; buzzer doctor checks audio, focus detection and missing files; every decision is logged with its reason.",
+      "One shell script with no dependencies. buzzer hooks prints the settings snippet for you to add; it never edits ~/.claude/settings.json itself.",
+      "Hooks come back in about 0.3 seconds: playback runs detached, and the focus check is capped at two seconds.",
+      "Plain key=value configuration. Sounds, volume, the threshold and quiet hours can all be changed from the command line.",
+      "macOS is the reference platform. Linux and Windows (buzzer.ps1) work but are less tested, and on Wayland focus detection only works on sway."
+    ],
+    steps: [
+      {
+        title: "Install",
+        body: "Run ./install.sh. It copies buzzer to ~/.local/bin, adds the bundled sounds and writes a default config."
+      },
+      {
+        title: "Wire up the hooks",
+        body: "buzzer hooks prints the snippet for Claude Code's settings. You add it yourself with the /hooks command."
+      },
+      {
+        title: "Look away",
+        body: "Start a long task and switch to something else. When the turn ends you hear it; if you were watching the terminal, it stays quiet."
+      }
+    ],
+    links: {
+      source: "https://github.com/mftnakrsu/agent-buzzer"
+    },
+    image: {
+      src: "/products/agent-buzzer/banner.png",
+      alt: "The agent-buzzer banner: a bell connected to the icons of Claude, Codex, Cursor and Antigravity, above the line “Hear when your AI agent finishes.”",
+      width: 1200,
+      height: 800
+    },
+    gallery: [
+      {
+        images: [
+          {
+            src: "/products/agent-buzzer/demo.gif",
+            alt: "A terminal running buzzer status twice: with the terminal in front, every event is silent; after looking away, every event would play",
+            width: 1100,
+            height: 400
+          }
+        ],
+        caption: "The same command a moment apart: looking at the terminal, then looking away. A GIF has no sound, so it shows the decision."
       }
     ]
   }
