@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { loadWordingRules, findTerms, NO_WORDING_LIST } from './helpers/wording.ts';
+import { CATEGORY_ORDER } from '../src/lib/projects.ts';
 
 const DIR = new URL('../src/content/projects/', import.meta.url);
 
@@ -151,6 +152,29 @@ const INVENTORY: Record<string, Record<string, boolean>> = {
     'association-rules': false,
     'water-quality': false,
   },
+  learning: {
+    'sql-notes': false,
+    'llm-challenge': false,
+    'isedak-training': false,
+    'paper-summaries': false,
+    'tf2-object-detection': false,
+    deepdream: false,
+    'diffusion-ddpm-ddim': false,
+    'genai-gradio': false,
+    'mlops-cheatsheet': false,
+    'pytorch-tutorial': false,
+    'cifar100-cnn': false,
+    'cats-and-dogs': false,
+    'transfer-learning': false,
+    'nvidia-dli': false,
+    'ml-algorithms': false,
+    'reinforcement-learning': false,
+    'opencv-basics': false,
+    'data-structures': false,
+    'pyqt5-gui': false,
+    'apache-pig': false,
+    'streamlit-heroku': false,
+  },
 };
 
 const categoryOf = (frontmatter: string) => frontmatter.match(/^category: ([a-z]+)$/m)?.[1] ?? '';
@@ -161,4 +185,12 @@ test('each inventoried category holds exactly the approved projects', () => {
     assert.deepEqual(actual.map((e) => e.slug).sort(), Object.keys(approved).sort(), category);
     for (const e of actual) assert.equal(Boolean(e.body), approved[e.slug], `${e.slug}: write-up`);
   }
+});
+
+test('the inventory covers every category and every project file', () => {
+  assert.deepEqual(Object.keys(INVENTORY).sort(), [...CATEGORY_ORDER].sort());
+  const listed = Object.values(INVENTORY).flatMap((c) => Object.keys(c));
+  assert.equal(listed.length, 67);
+  assert.deepEqual(entries.map((e) => e.slug).sort(), [...listed].sort());
+  assert.equal(Object.values(INVENTORY).flatMap((c) => Object.values(c)).filter(Boolean).length, 25);
 });
