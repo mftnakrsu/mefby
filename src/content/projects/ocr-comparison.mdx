@@ -1,0 +1,23 @@
+---
+title: "OCR engines compared"
+summary: "A benchmark that runs Tesseract, EasyOCR, RapidOCR, PaddleOCR and keras-ocr on the same images and reports what each read, how fast and how confidently."
+year: 2022
+category: vision
+spec: ["OCR", "Benchmark", "Python package"]
+stack: ["Python", "Tesseract", "EasyOCR", "RapidOCR", "PaddleOCR", "keras-ocr", "pytest"]
+stars: 63
+links:
+  repo: "https://github.com/mftnakrsu/Comparison-of-OCR"
+---
+
+## Overview
+
+A tool that runs several OCR engines over the same images and reports what each one read, how long it took and how confident it was, so the trade-offs can be seen rather than read about. I first wrote it in 2022 to compare keras-ocr, EasyOCR and Tesseract, and later turned it into a small package with RapidOCR and PaddleOCR in the line-up.
+
+## How it works
+
+Each engine is an optional extra, so you install only the ones you want to run. Every engine returns the same shape, a text box with its text, polygon and confidence, so adding an engine means writing one small adapter and registering it. A command-line tool picks the engines and languages, prints a table of boxes, time per image and mean confidence, and can save a comparison figure or write JSON. The tests run without any engine installed and download nothing.
+
+## What it showed
+
+In the original run Tesseract did poorly on whole images and better once the text had been detected first, keras-ocr was accurate but slow on a CPU, and EasyOCR was a good all-rounder that coped with noise and did well on receipts and PDFs. Since then keras-ocr has stopped being maintained, so it sits behind its own extra, and PaddleOCR is the strongest engine in the line-up. The right engine still depends on your images.

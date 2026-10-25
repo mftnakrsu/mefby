@@ -1,0 +1,21 @@
+---
+title: "Production shot-tracking dashboard"
+summary: "A dashboard that tracks every episode, scene and shot of a series in production, with progress over time and the workload of each artist."
+year: 2025
+category: data
+spec: ["Dashboard", "Google Drive API", "FastAPI", "Next.js"]
+stack: ["Python", "FastAPI", "Next.js", "TypeScript", "Google Drive API"]
+private: true
+---
+
+## Overview
+
+A production dashboard I built at Hagia for a series in production. It shows where every episode, scene and shot stands, so producers and supervisors can follow the progress without collecting spreadsheets by hand.
+
+## What it shows
+
+Progress for each episode, scene and shot; a matrix of scene progress across the whole series; the workload of each owner and artist; and progress figures by day and by week. The numbers follow the team's own tracking files and update as those files change.
+
+## How it is built
+
+A FastAPI backend reads the production's tracking files from Google Drive through the Drive API and writes the generated reports, and a Next.js front end draws the dashboard on top of it. The team keeps working in the files it already uses, and the dashboard needs nothing extra from them.

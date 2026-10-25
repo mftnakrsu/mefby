@@ -127,6 +127,30 @@ const INVENTORY: Record<string, Record<string, boolean>> = {
     'lane-segmentation': false,
     'daq-imu-loadcell': false,
   },
+  vision: {
+    'anpr-pipeline': true,
+    'yolo-pool': true,
+    'ocr-comparison': true,
+    'visual-quality-control': true,
+    'kanban-ocr': false,
+    'fire-detection': false,
+    'traceability-labels': false,
+    'sealant-inspection': false,
+    'mes-traceability': false,
+  },
+  data: {
+    'analytics-workbench': true,
+    'shot-tracking-dashboard': true,
+    'manufacturing-intent': false,
+    'azure-databricks-platform': false,
+    'chiller-forecasting': false,
+    'integrated-ml': false,
+    'rpa-robots': false,
+    'cltv-prediction': false,
+    'rfm-segmentation': false,
+    'association-rules': false,
+    'water-quality': false,
+  },
 };
 
 const categoryOf = (frontmatter: string) => frontmatter.match(/^category: ([a-z]+)$/m)?.[1] ?? '';
