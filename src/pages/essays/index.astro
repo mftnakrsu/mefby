@@ -1,52 +1,60 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { getCollection, type CollectionEntry } from 'astro:content';
+import SectionMeta from '../../components/site/SectionMeta.astro';
+import CourseEntry from '../../components/CourseEntry.astro';
 import EssayRow from '../../components/EssayRow.astro';
+import { getCollection, type CollectionEntry } from 'astro:content';
+import { COURSES, courseParts } from '../../lib/courses';
 
-const all = await getCollection('essays', ({ data }) => !data.draft && !data.isTranslation);
+const essays = await getCollection('essays');
+const all = essays.filter((e) => !e.data.draft && !e.data.isTranslation);
 
-// Numbered series (e.g. the RAG series) reads in part order, ascending; everything
-// else follows, newest first. The "New" badge stays on the genuinely newest essay.
+// Each course in part order, then the standalone essays, newest first. The
+// "New" marker stays on the genuinely newest essay.
 const byDateDesc = (a: CollectionEntry<'essays'>, b: CollectionEntry<'essays'>) =>
   b.data.date.getTime() - a.data.date.getTime();
-const byOrder = (a: CollectionEntry<'essays'>, b: CollectionEntry<'essays'>) =>
-  (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0);
-const ragSeries = all.filter((e) => e.data.seriesOrder != null && e.data.series === 'rag').sort(byOrder);
-const agentsSeries = all.filter((e) => e.data.seriesOrder != null && e.data.series === 'agents').sort(byOrder);
-const evalsSeries = all.filter((e) => e.data.seriesOrder != null && e.data.series === 'evals').sort(byOrder);
-const rest = all.filter((e) => e.data.seriesOrder == null).sort(byDateDesc);
-const essays = [...ragSeries, ...agentsSeries, ...evalsSeries, ...rest];
+const courses = COURSES.map((course) => ({ course, parts: courseParts(essays, course.series) }));
+const standalone = all.filter((e) => e.data.seriesOrder == null).sort(byDateDesc);
 const newestSlug = [...all].sort(byDateDesc)[0]?.id;
-// Count canonicals that have a Turkish counterpart (translations are filtered out above),
-// so the bilingual claim stays accurate as more essays get translated.
+// Canonicals with a Turkish counterpart, so the bilingual claim stays accurate.
 const bilingualCount = all.filter((e) => e.data.translationSlug).length;
 ---
 
 <Layout title="Essays — Meftun Akarsu" description="Long-form technical essays.">
-  <div class="min-h-screen bg-white text-zinc-500 font-sans">
-    <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
-      <a href="/" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors mb-12 inline-block">&larr; back</a>
+  <div class="mx-auto max-w-[1100px] px-6 pt-14 sm:px-10 sm:pt-20">
+    <SectionMeta
+      as="h1"
+      kicker={`${all.length} essays · ${bilingualCount} also in Türkçe`}
+      title="Essays"
+      titleId="essays-title"
+      lead="Framework-free courses that build RAG, agents and evals by hand, and essays on the systems around them."
+    />
 
-      <h1 class="text-2xl font-semibold text-zinc-900 mb-1">Essays</h1>
-      <p class="text-sm text-zinc-400 mb-10">{essays.length} essays · {bilingualCount} also in Türkçe</p>
-
-      <a
-        href="https://github.com/mftnakrsu/rag-by-hand"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="group mb-8 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-3 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40"
-      >
-        <span class="text-[13px] text-zinc-600">
-          <span class="font-medium text-zinc-900">RAG from First Principles</span> &mdash; runnable code &amp; step-by-step notebooks for the {ragSeries.length}-part series
-        </span>
-        <span class="shrink-0 text-[11px] font-mono text-zinc-400 group-hover:text-emerald-600">Code on GitHub &#8599;</span>
-      </a>
-
-      <ul class="border-t border-zinc-100">
-        {essays.map((essay) => (
-          <EssayRow essay={essay} featured={essay.id === newestSlug} />
+    <section aria-labelledby="courses" data-reveal>
+      <h2 id="courses" class="t-heading mb-4">Courses</h2>
+      <ul class="border-b border-fg-line">
+        {courses.map(({ course, parts }) => (
+          <li>
+            <CourseEntry course={course} parts={parts.length} firstHref={parts[0] ? `/essays/${parts[0].id}` : course.href} />
+          </li>
         ))}
       </ul>
-    </div>
+    </section>
+
+    {courses.map(({ course, parts }) => (
+      <section aria-labelledby={`list-${course.series}`} class="mt-16 sm:mt-20" data-reveal>
+        <h2 id={`list-${course.series}`} class="t-heading mb-4">{course.title}</h2>
+        <ul class="border-t border-fg-line">
+          {parts.map((essay) => <EssayRow essay={essay} featured={essay.id === newestSlug} />)}
+        </ul>
+      </section>
+    ))}
+
+    <section aria-labelledby="list-standalone" class="mt-16 sm:mt-20" data-reveal>
+      <h2 id="list-standalone" class="t-heading mb-4">Standalone essays</h2>
+      <ul class="border-t border-fg-line">
+        {standalone.map((essay) => <EssayRow essay={essay} featured={essay.id === newestSlug} />)}
+      </ul>
+    </section>
   </div>
 </Layout>

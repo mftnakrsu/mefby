@@ -13,6 +13,7 @@ test('three courses in order, each with its hub and companion repository', () =>
   for (const c of COURSES) {
     assert.equal(c.href, `/essays/${c.series}`);
     assert.equal(c.repo, `https://github.com/mftnakrsu/${c.series}-by-hand`);
+    assert.equal(c.glossary, `/essays/${c.series}-glossary`);
   }
 });
 

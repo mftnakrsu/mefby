@@ -1,27 +1,31 @@
 ---
+// An essay figure: a near-white content area (the figures are drawn on
+// white) in a hairline card, with a caption bar. Wider than the text column
+// on large screens. The figure itself is untouched.
 interface Props {
   number?: number | string;
   caption?: string;
   source?: string;
   class?: string;
 }
-const { number, caption, source, class: className = '' } = Astro.props;
+const { number, caption, source, class: className } = Astro.props;
 const hasFooter = number != null || caption || source;
 ---
 
 <figure
-  class={`my-10 rounded-xl border border-zinc-200 bg-white md:-mx-8 lg:-mx-24 xl:-mx-40 ${className}`}
+  class:list={[
+    'my-10 overflow-hidden rounded-xl border border-fg-line bg-paper md:-mx-8 lg:-mx-24 xl:-mx-40',
+    className,
+  ]}
 >
-  <div class="p-4 sm:p-6">
+  <div class="p-4 sm:p-6 [&>p:last-child]:mb-0">
     <slot />
   </div>
   {hasFooter && (
-    <figcaption class="px-4 sm:px-6 py-3 border-t border-zinc-100 bg-zinc-50/40 text-xs text-zinc-600 leading-relaxed">
-      {number != null && <span class="font-mono text-zinc-400 mr-2">Fig {number}</span>}
+    <figcaption class="border-t border-fg-line bg-paper-sunk px-4 py-3 text-[0.9rem] leading-relaxed text-fg-muted sm:px-6">
+      {number != null && <span class="t-mono mr-2 text-fg">Fig {number}</span>}
       {caption}
-      {source && (
-        <a href={source} class="ml-2 underline text-zinc-400">source</a>
-      )}
+      {source && <a href={source} class="ml-2 underline underline-offset-2">source</a>}
     </figcaption>
   )}
 </figure>

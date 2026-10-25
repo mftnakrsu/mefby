@@ -1,0 +1,33 @@
+---
+// A course's glossary index: one row per part, linking straight to the
+// glossary at the end of that part.
+import { getCollection } from 'astro:content';
+import Layout from '../layouts/Layout.astro';
+import SectionMeta from './site/SectionMeta.astro';
+import PartList from './PartList.astro';
+import { COURSES, courseParts, type Series } from '../lib/courses';
+
+interface Props {
+  series: Series;
+}
+const { series } = Astro.props;
+const course = COURSES.find((c) => c.series === series);
+if (!course) throw new Error(`CourseGlossary: unknown series "${series}"`);
+const parts = courseParts(await getCollection('essays'), series);
+---
+
+<Layout
+  title={`${course.short} Glossary — Meftun Akarsu`}
+  description={`A reference index to every glossary in the ${course.title} series: jump straight to the terms defined in each part.`}
+>
+  <div class="mx-auto max-w-[46rem] px-6 pt-14 sm:pt-20">
+    <SectionMeta as="h1" kicker="Reference" title={`${course.short} Glossary`} titleId="glossary-title" />
+    <p class="t-body measure mb-12" data-reveal>
+      Every part of <a href={course.href} class="text-accent-ink underline underline-offset-2">{course.title}</a>
+      ends with a glossary that defines the terms it introduced. This page collects them in one place. Pick a
+      part below and you land directly on its glossary, so you can look up a definition without re-reading the prose.
+    </p>
+    <PartList parts={parts} total={parts.length} glossary />
+    <p class="mt-10"><a href={course.href} class="t-mono text-fg-muted hover:text-fg">← Back to the course</a></p>
+  </div>
+</Layout>

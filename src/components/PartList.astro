@@ -1,0 +1,39 @@
+---
+// A course's parts as a numbered list ("01 / 20", title, reading time, a
+// "code" marker and the description). With `glossary`, each row links to
+// the part's #glossary section instead and shows only the title.
+import type { CollectionEntry } from 'astro:content';
+import { readingTime } from '../lib/essayMeta';
+import { twoDigits } from '../lib/sections';
+
+interface Props {
+  parts: CollectionEntry<'essays'>[];
+  total: number;
+  glossary?: boolean;
+}
+const { parts, total, glossary = false } = Astro.props;
+---
+
+<ol class="border-t border-fg-line">
+  {parts.map((p) => (
+    <li class="border-b border-fg-line">
+      <a href={`/essays/${p.id}${glossary ? '#glossary' : ''}`} class="group grid grid-cols-[4.5rem_1fr_auto] items-baseline gap-x-3 py-4">
+        <span aria-hidden="true" class="t-mono text-fg-muted">{twoDigits(p.data.seriesOrder ?? 0)} / {twoDigits(total)}</span>
+        <span class="min-w-0">
+          <span class="block font-display text-[1.15rem] font-medium leading-snug decoration-fg-line underline-offset-4 group-hover:underline">
+            <span class="sr-only">Part {p.data.seriesOrder}: </span>{p.data.title}
+          </span>
+          {glossary ? (
+            <span class="t-mono mt-1 block text-fg-muted">Glossary</span>
+          ) : (
+            <Fragment>
+              <span class="t-mono mt-1 block text-fg-muted">{readingTime(p.body)} min read{p.data.codeUrl ? ' · code' : ''}</span>
+              <span class="measure mt-1.5 line-clamp-2 text-[0.95rem] leading-relaxed text-fg-muted">{p.data.description}</span>
+            </Fragment>
+          )}
+        </span>
+        <span aria-hidden="true" class="text-fg-muted transition-transform group-hover:translate-x-0.5">→</span>
+      </a>
+    </li>
+  ))}
+</ol>
