@@ -1,0 +1,21 @@
+---
+title: "Damage assessment from aerial imagery"
+summary: "Research and a local demo on assessing building damage after disasters from aerial images, with small vision-language models and a DINOv2 probe."
+year: 2026
+category: research
+spec: ["VLM", "DINOv2", "Benchmark", "Local models"]
+stack: ["Ollama", "Qwen3-VL", "Gemma 3", "DINOv2", "FastAPI", "scikit-learn", "Python"]
+private: true
+---
+
+## Overview
+
+A research project on documenting damage to buildings and infrastructure after a disaster from aerial imagery, for humanitarian assessment. It has two parts: a 77-page research report in Turkish on the algorithms, the system designs, the evidence from real deployments and the open research questions, and a local demo that measures what small models can do today.
+
+## The demo
+
+The demo scores small vision-language models, running locally in Ollama, on labeled building crops from the public CRASAR-U-DROIDs dataset, here from a 2021 tornado. Each model has to reply in a fixed JSON schema with one of four damage levels and its evidence. On about 70 buildings, Qwen3-VL 8B raised a false alarm on 8 of 20 intact buildings and missed damage on 5 of 49 damaged ones, while Gemma 3 4B never missed damage but flagged 19 of the 20 intact buildings. An Assess page takes an uploaded image and shows the model's assessment next to it.
+
+## What a vision backbone sees
+
+A second page asks the same question of a frozen DINOv2 backbone, on before-and-after satellite crops of 617 buildings from Hurricane Michael. The similarity between a building's two images drops clearly only once the building is destroyed, and a linear probe on top reaches a macro-F1 of 0.47. The two results are not directly comparable: the buildings, the imagery and the events differ.

@@ -1,0 +1,23 @@
+---
+title: "Cinematic video generation"
+summary: "A two-stage pipeline that adapts Wan2.1 I2V-14B with LoRA on a few short clips and generates 720p scenes in the look of a historical drama."
+year: 2025
+category: research
+spec: ["Video diffusion", "LoRA", "arXiv", "Single GPU"]
+stack: ["Wan2.1 I2V-14B", "LoRA", "PyTorch", "FSDP"]
+links:
+  paper: "https://arxiv.org/abs/2510.27364"
+featured: { group: research, order: 2 }
+---
+
+## Overview
+
+A practical pipeline for fine-tuning an open video diffusion model to produce cinematic scenes for television and film from a small dataset. I built it at Hagia and wrote it up with colleagues in a paper on arXiv. The idea is to separate learning the visual style from generating the motion.
+
+## How it works
+
+In the first stage, LoRA modules in the cross-attention layers of Wan2.1 I2V-14B adapt the model to a compact set of short clips from a historical television film. The domain transfer takes hours on a single GPU. In the second stage, the adapted model produces keyframes that keep the costumes, the lighting and the color grading of the source, and the model's video decoder expands them into coherent 720p sequences. Light parallelization and sequence partitioning speed up inference without a loss in quality.
+
+## Result
+
+Measured with FVD, CLIP similarity and LPIPS, and checked in a small study with experts, the adapted model improves on the base model in cinematic fidelity and in temporal stability. The paper releases the complete training and inference pipeline so it can be reproduced and adapted to other productions.

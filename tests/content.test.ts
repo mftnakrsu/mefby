@@ -110,6 +110,23 @@ const INVENTORY: Record<string, Record<string, boolean>> = {
     'travel-planner-agents': false,
     'multi-pdf-chat': false,
   },
+  research: {
+    'rag-vs-agentic': true,
+    'video-generation': true,
+    'gpt-oss-doctrine': true,
+    'inference-engines': true,
+    'damage-assessment-vlm': true,
+  },
+  edge: {
+    'offline-voice-command': true,
+    'onboard-ai-harness': true,
+    'lenet-cpp': true,
+    'kalman-filters': true,
+    'qlearning-gridworld': true,
+    'lidar-autonomy': false,
+    'lane-segmentation': false,
+    'daq-imu-loadcell': false,
+  },
 };
 
 const categoryOf = (frontmatter: string) => frontmatter.match(/^category: ([a-z]+)$/m)?.[1] ?? '';

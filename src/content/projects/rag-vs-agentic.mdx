@@ -1,0 +1,24 @@
+---
+title: "rag-vs-agentic"
+summary: "A controlled comparison of five RAG pipelines for multi-hop requirements traceability, across 13,456 runs and four robustness axes."
+year: 2026
+category: research
+spec: ["RAG", "GraphRAG", "Agents", "Evaluation"]
+stack: ["Python", "LangGraph", "ChromaDB", "Azure OpenAI", "LaTeX"]
+links:
+  repo: "https://github.com/mftnakrsu/rag-vs-agentic"
+  paper: "https://github.com/mftnakrsu/rag-vs-agentic/blob/main/arXiv-preprint.pdf"
+featured: { group: research, order: 1 }
+---
+
+## Overview
+
+A study of how much the retrieval strategy matters when a question needs several hops through linked requirements. Five pipelines share the embedder, the vector store, the graph, the generator and the prompt, and differ only in retrieval: a vanilla baseline, an agentic loop, GraphRAG, an agent with a graph tool and an adaptive router. They are tested along four axes, the embedder, the corpus, the graph traversal and the judge, over 13,456 generation runs at up to three seeds and more than 30,000 faithfulness judgments.
+
+## What the study found
+
+Where you measure decides the winner. The graph walk fills the context at a precision of 0.12–0.23, while the answers it feeds cite at 0.48–0.98. Score the retrieved set and GraphRAG ranks below the baseline; score the citations and it ranks first. The vanilla pipeline ties GraphRAG at one and two hops and comes last at three or more, and the same crossover appears on MuSiQue and 2WikiMultihopQA. Faithfulness falls with hop distance, tracking how much context a pipeline adds rather than the corpus. LLM judges are unstable too: judging identical pairs again eleven weeks later gave a self-agreement kappa of at most 0.14.
+
+## The corpus
+
+I built AeroSys, a synthetic requirements corpus in the style of IBM DOORS: 1,132 requirements across 30 modules with typed trace links, released under CC BY 4.0 on Hugging Face and Kaggle, with 296 questions stratified by hop count. The preprint is in the repository.

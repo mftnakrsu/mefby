@@ -1,0 +1,21 @@
+---
+title: "LLM inference engines"
+summary: "A 25-chapter course in Turkish on serving LLMs with vLLM, SGLang, llama.cpp and Ollama, with lab scripts for benchmarking the engines."
+year: 2026
+category: research
+spec: ["LLM serving", "vLLM", "SGLang", "Benchmarking"]
+stack: ["vLLM", "SGLang", "llama.cpp", "Ollama", "Python", "Bash"]
+private: true
+---
+
+## Overview
+
+A course in Turkish that takes an engineer from first principles to expert level in serving large language models with vLLM, SGLang, llama.cpp and Ollama. It has 25 chapters and a Turkish–English glossary, about 138,000 words in all. Each chapter rests on research checked against current sources, and a separate agent reviewed it adversarially before it was accepted.
+
+## What it covers
+
+How prefill and decode differ and what the KV cache costs; quantization formats from GGUF K-quants to AWQ, GPTQ and FP8; PagedAttention, continuous batching, RadixAttention and speculative decoding; and parallelism across GPUs. A chapter on benchmark method defines time to first token, time per output token, inter-token latency and goodput, so that engines can be compared fairly.
+
+## The labs
+
+The labs run on two reference machines: a workstation GPU with 8 GB, where Qwen3-1.7B fits, and an NVIDIA H200 with 141 GB, sized for 70B models in FP8 and for mixture-of-experts models. Lab scripts drive the load, watch the GPU and turn the measurements into a report. A benchmark of vLLM, SGLang and Ollama on the same workloads is being set up; it has no results yet.
