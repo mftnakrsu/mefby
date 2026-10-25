@@ -1,9 +1,117 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
+@import "@fontsource-variable/bricolage-grotesque/opsz.css";
+@import "@fontsource-variable/hanken-grotesk";
+@import "@fontsource-variable/hanken-grotesk/wght-italic.css";
+@import "@fontsource-variable/geist-mono";
 @import "katex/dist/katex.min.css";
 
+/*
+  Design tokens, OKLCH. src/lib/palette.ts mirrors these values for the colour
+  journey and the contrast tests; tests/tokens.test.ts keeps the two in sync.
+*/
+:root {
+  --paper: oklch(0.985 0.004 85);
+  --paper-sunk: oklch(0.955 0.006 80);
+  --ink-deep: oklch(0.19 0.012 265);
+  --ink-deepest: oklch(0.145 0.014 265);
+  --text-ink: oklch(0.24 0.012 270);
+  --muted-ink: oklch(0.5 0.01 270);
+  --text-bone: oklch(0.94 0.004 85);
+  --muted-bone: oklch(0.95 0.004 85 / 0.74);
+  --accent: oklch(0.7 0.13 55);
+  --accent-soft: oklch(0.7 0.13 55 / 0.14);
+  --accent-ink: oklch(0.5 0.14 45);
+
+  /*
+    Live tokens: components use only these. --canvas is the page colour (the
+    home page's journey script moves it); --fg is readable text on it.
+  */
+  --canvas: var(--paper);
+  --fg: var(--text-ink);
+  --focus: var(--accent-ink);
+  --fg-muted: color-mix(in oklab, var(--fg), var(--canvas) 30%);
+  --fg-line: color-mix(in oklab, var(--fg), transparent 86%);
+  --chrome-fg: var(--fg);
+  --chrome-bg: color-mix(in oklab, var(--canvas), transparent 26%);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --ff-display: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
+  --ff-body: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  --ff-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Canvases darker than lightness 0.58 (set by src/scripts/journey.ts). */
+:root[data-tone="dark"] {
+  --fg: var(--text-bone);
+  --focus: var(--accent);
+}
+
+/* Registered so the ink ↔ bone switch can animate. */
+@property --fg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(0.24 0.012 270);
+}
+
+/* Only the colours above exist as utilities. */
 @theme {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-*: initial;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-sunk: var(--paper-sunk);
+  --color-ink-deep: var(--ink-deep);
+  --color-ink: var(--text-ink);
+  --color-bone: var(--text-bone);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-canvas: var(--canvas);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-line: var(--fg-line);
+  --color-chrome-bg: var(--chrome-bg);
+  --color-chrome-fg: var(--chrome-fg);
+  --color-focus: var(--focus);
+
+  --font-display: var(--ff-display);
+  --font-sans: var(--ff-body);
+  --font-mono: var(--ff-mono);
+}
+
+@layer base {
+  html {
+    background-color: var(--canvas);
+    -webkit-text-size-adjust: 100%;
+    transition: --fg 200ms linear;
+    scroll-padding-top: 4.5rem;
+  }
+
+  body {
+    font-family: var(--ff-body);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--accent-soft);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -12,32 +120,129 @@
   }
 }
 
-body {
-  background-color: #ffffff;
-  color: #52525b;
-  font-family: var(--font-sans);
-}
-
-/* Guard against horizontal page scroll from wide/full-bleed figures (Diagram
-   breaks out of the column with negative margins). `clip` avoids creating a
-   scroll container the way `hidden` would. */
+/* Guard against horizontal scroll from full-bleed figures; `clip` keeps sticky working. */
 html,
 body {
   overflow-x: clip;
 }
 
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: #ffffff; }
-::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 2px; }
+@layer components {
+  /* Type scale (from the reference). Spec lines use .t-label; .t-mono is for data. */
+  .t-display {
+    font-family: var(--ff-display);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    font-size: clamp(2.75rem, 9vw, 6.5rem);
+  }
+  .t-title {
+    font-family: var(--ff-display);
+    font-weight: 500;
+    line-height: 1.02;
+    letter-spacing: -0.015em;
+    font-size: clamp(2rem, 6vw, 4rem);
+  }
+  .t-heading {
+    font-family: var(--ff-display);
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    font-size: clamp(1.3rem, 3vw, 1.85rem);
+  }
+  .t-lead {
+    font-size: clamp(1.12rem, 2.4vw, 1.45rem);
+    line-height: 1.55;
+    letter-spacing: -0.005em;
+  }
+  .t-body {
+    font-size: clamp(1rem, 1.6vw, 1.075rem);
+    line-height: 1.62;
+  }
+  .t-mono {
+    font-family: var(--ff-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .t-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .measure {
+    max-width: 64ch;
+  }
 
-a { transition: color 0.15s; }
+  /*
+    Reveal on scroll (src/scripts/reveal.ts sets data-revealed). Hidden only
+    under html.js, so the page is fully visible without JavaScript.
+  */
+  html.js [data-reveal] {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.7s var(--ease-out-quart),
+      transform 0.8s var(--ease-out-expo);
+    transition-delay: calc(var(--i, 0) * 65ms);
+  }
+  html.js [data-reveal][data-revealed] {
+    opacity: 1;
+    transform: none;
+  }
 
-/* Consistent keyboard-focus indicator for links, buttons, and embedded figures. */
-a:focus-visible,
-button:focus-visible,
-[tabindex]:focus-visible,
-iframe:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-  border-radius: 2px;
+  /* Hero rule: draws in left to right on load. */
+  .draw-rule {
+    height: 2px;
+    width: clamp(72px, 12vw, 132px);
+    background: var(--accent);
+    transform-origin: left center;
+    animation: draw-in 0.9s var(--ease-out-expo) 0.35s both;
+  }
+
+  /* Scroll cue: a hairline that gently extends and retracts. */
+  .scroll-cue {
+    transform-origin: left center;
+    animation: cue 2.6s var(--ease-out-quart) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html.js [data-reveal] {
+      transform: none;
+      transition: opacity 0.3s ease;
+      transition-delay: 0s;
+    }
+    .draw-rule,
+    .scroll-cue {
+      animation: none;
+    }
+  }
+
+  @media print {
+    html.js [data-reveal] {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@keyframes draw-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes cue {
+  0%,
+  100% {
+    transform: scaleX(0.4);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
 }
