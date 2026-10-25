@@ -82,6 +82,17 @@
       word-break: break-word;
     }
   }
+  /* github-light's keyword, comment and parameter colours fall under 4.5:1 on
+     the sunk surface; use darker shades of the same hues. */
+  .prose pre span[style*="#D73A49" i] {
+    color: #cb2431 !important;
+  }
+  .prose pre span[style*="#6A737D" i] {
+    color: #5f6872 !important;
+  }
+  .prose pre span[style*="#E36209" i] {
+    color: #b04800 !important;
+  }
 
   .prose :where(ul) {
     list-style: none;
@@ -231,6 +242,10 @@
   @media (hover: none) {
     .copy-btn {
       opacity: 1;
+    }
+    /* The button is always visible on touch screens: keep it clear of the first line. */
+    .prose pre:has(> .copy-btn) {
+      padding-top: 2.4rem;
     }
   }
 }

@@ -34,7 +34,7 @@ test('an essay in a course: series label, meta row, prose and part navigation', 
 
 test('essay figures sit in the new frame with a mono "Fig" label', () => {
   const html = readPage('/essays/build-your-first-rag');
-  assert.match(html, /<figure class="[^"]*\bborder-fg-line\b[^"]*\bbg-paper\b/);
+  assert.match(html, /<figure class="[^"]*\bborder-fg-line\b[^"]*\bbg-paper(?![\w-])/);
   assert.match(html, /<span class="t-mono[^"]*">Fig 1<\/span>/);
 });
 

@@ -936,10 +936,14 @@
       else if (ni === step.node) el.classList.add("is-active");
       else                       el.classList.add("is-upcoming");
     });
-    // keep the active stage centered on narrow screens (no vertical page jump)
+    // keep the active stage centered on narrow screens; scroll the rail only, since
+    // scrollIntoView would also scroll the essay page that embeds this figure
     var activeNode = nodeEls[step.node];
-    if (activeNode && activeNode.scrollIntoView) {
-      activeNode.scrollIntoView({ inline: "center", block: "nearest" });
+    var railWrap = rail.parentElement;
+    if (activeNode && railWrap) {
+      var wrapBox = railWrap.getBoundingClientRect();
+      var nodeBox = activeNode.getBoundingClientRect();
+      railWrap.scrollLeft += (nodeBox.left + nodeBox.width / 2) - (wrapBox.left + wrapBox.width / 2);
     }
 
     // scenes: show only the active one
