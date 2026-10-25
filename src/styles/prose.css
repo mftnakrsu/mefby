@@ -101,6 +101,20 @@
     height: 1px;
     background: var(--accent);
   }
+  /* GFM task lists: the checkbox is the marker. */
+  .prose :where(.task-list-item) {
+    padding-left: 1.5em;
+  }
+  .prose :where(.task-list-item)::before {
+    content: none;
+  }
+  .prose :where(.task-list-item > input[type="checkbox"]) {
+    position: absolute;
+    left: 0;
+    top: 0.5em;
+    margin: 0;
+    accent-color: var(--accent-ink);
+  }
   /* Tailwind's preflight hides list numbers; essays rely on them. */
   .prose :where(ol) {
     list-style: decimal-leading-zero;
