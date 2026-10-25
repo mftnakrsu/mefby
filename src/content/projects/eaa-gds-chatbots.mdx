@@ -1,0 +1,22 @@
+---
+title: "EAA & GDS chatbots"
+summary: "Two live Copilot Studio chatbots for an international accessibility organization, with accessible chat pages, a search pipeline and an evaluation set."
+year: 2026
+category: llm
+spec: ["Copilot Studio", "Azure AI Search", "WCAG", "Evaluation"]
+stack: ["Copilot Studio", "Power Automate", "Dataverse", "Azure AI Search", "Python", "HTML", "axe-core"]
+private: true
+featured: { group: llm, order: 2 }
+---
+
+## Overview
+
+Two chatbots on Microsoft Copilot Studio that I built and maintain at RADIAITE for an international accessibility organization. Both are live: one answers from the organization's knowledge base, the other searches a public database of commitments. People reach them through accessible chat pages embedded in the organization's website.
+
+## What I built
+
+I wrote the chat pages: inline chats whose start screen carries a privacy notice, and a floating widget. For the commitments bot I built the Python pipeline that indexes the database in Azure AI Search, and I maintain the agent's instructions, so that it answers in the language of each message rather than the browser's. Power Automate flows take new knowledge-base entries in and republish the agent.
+
+## Accessibility and evaluation
+
+Two WCAG audits found no axe violations before or after a chat starts and no horizontal overflow at 320 pixels, and the link color reaches a contrast of 5.88:1. A set of 52 questions compares the classic agent with its successor before a change goes live. One lesson stuck: a widget that passed three automated audits froze the whole page once the website's CMS nested it differently, so every embed is now tested inside a real page.

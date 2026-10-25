@@ -1,0 +1,21 @@
+---
+title: "DAPT adapter router"
+summary: "Serves a base LLM alone or with one of several domain-adapted LoRA adapters, chosen per request, from the command line and over HTTP."
+year: 2026
+category: llm
+spec: ["LoRA", "PEFT", "Serving", "CLI + HTTP"]
+stack: ["Python", "PEFT", "Hugging Face", "Qwen", "pytest"]
+private: true
+---
+
+## Overview
+
+A small service that answers a question with a base language model alone or with one domain-adaptive pretraining (DAPT) LoRA adapter attached. Every request names its target: the base model or an adapter id. The real setup is Qwen3.8-27B with trained adapters; until those exist, a 0.8B model of the same family runs the full path on a CPU.
+
+## How it works
+
+Adapters are standard PEFT folders, and a config file lists each one with its id, its path and the base model it expects. The service runs its startup checks and loads the model before it accepts a request, then serves one request at a time. On the command line the answer goes to stdout, while the adapter report and a log line with the target and the latency go to stderr. Over HTTP, a POST to /ask returns the answer, the target and the latency. An unknown target stops with exit code 2 on the command line and HTTP 400 on the API, and both list the valid targets.
+
+## Testing
+
+A script writes two development adapters with non-zero weights, so each one really changes the model's output. The tests use them on a CPU, need no network and finish in about a minute.

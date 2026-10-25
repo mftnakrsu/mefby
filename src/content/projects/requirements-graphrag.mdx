@@ -1,0 +1,25 @@
+---
+title: "Requirements GraphRAG"
+summary: "Questions, impact analysis and code generation over an IBM DOORS requirements database, running on one GPU with no network connection."
+year: 2026
+category: llm
+spec: ["GraphRAG", "Hybrid retrieval", "Air-gapped", "Single GPU"]
+stack: ["DXL", "Neo4j", "ChromaDB", "BM25", "Qwen3.5-27B", "vLLM", "Python"]
+private: true
+---
+
+## Overview
+
+A GraphRAG system over IBM DOORS, the requirements database many engineering teams keep their specifications in. Engineers ask in Turkish or English and get answers grounded in the requirements and in the trace links between them. It runs entirely offline, on a single NVIDIA H200.
+
+## How it works
+
+DXL scripts export each DOORS module to structured JSON with its links intact, embedded diagrams included as images. A parser loads the requirements into Neo4j as a traceability graph and into ChromaDB as vectors. A question then runs three retrievers: vector search, a one- or two-hop expansion through the graph, and BM25 for exact identifiers and references. Reciprocal rank fusion merges the three lists, and Qwen3.5-27B, served with vLLM, writes the answer from the merged context.
+
+## Three modes
+
+Besides plain questions, impact analysis follows a proposed change through the graph and reports every affected requirement with its direction, hop distance, link chain and a risk level. Code generation turns requirements into Python, C, C++, Rust or Go, with the requirement IDs in the comments so the trace survives into the code.
+
+## Running offline
+
+The whole stack installs from offline packages, with no outside connection at any point. Most of the H200's 141 GB goes to the model's KV cache, which keeps long contexts with many requirements affordable.

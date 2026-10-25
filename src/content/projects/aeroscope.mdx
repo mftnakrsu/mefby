@@ -1,0 +1,23 @@
+---
+title: "AeroScope"
+summary: "A requirements-traceability agent on Neo4j Aura that answers what breaks if a requirement changes and shows the Cypher behind every answer."
+year: 2026
+category: llm
+spec: ["Neo4j Aura", "Graph agent", "Text2Cypher", "Hackathon"]
+stack: ["Neo4j Aura", "Cypher", "Next.js 14", "TypeScript", "Supabase", "Vercel", "Python"]
+links:
+  repo: "https://github.com/mftnakrsu/aeroscope-neo4j-hackathon"
+  demo: "https://aeroscope-neo4j-hackathon.vercel.app"
+---
+
+## Overview
+
+My entry for the Neo4j Aura Agents and Context Building Hackathon 2026. AeroScope answers traceability questions about safety-critical requirements the way a systems engineer would, for example which requirements depend on a bus-voltage threshold that is about to change.
+
+## How it works
+
+The agent picks a tool for each question: a curated Cypher template for predictable traces such as impact analysis, coverage and orphan detection, Text2Cypher for exploratory questions, or similarity search. From a requirement it fans out in both directions: upstream to the stakeholder needs it satisfies, downstream to the logic that derives from it, the tests that verify it, the components it constrains and the standards it references. Besides the trace links engineers wrote by hand, the graph holds implicit dependencies that an LLM inferred offline. Every answer shows the Cypher that produced it.
+
+## The demo
+
+The graph holds a synthetic corpus of about 1,000 requirements across 30 modules. The web app runs on Next.js 14 on Vercel with Supabase sign-in, and the server runs only whitelisted, version-controlled Cypher templates, never arbitrary queries from the browser. The live demo is open to anyone who creates an account.

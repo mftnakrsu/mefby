@@ -90,3 +90,34 @@ test('project files follow the wording rules', { skip: rules ? false : NO_WORDIN
     if (e.isFeatured) assert.deepEqual(findTerms(e.listing, rules!.home), [], `${e.slug} (home card)`);
   }
 });
+
+// The approved inventory: every project file by category, and whether it has
+// a write-up (true: its own page) or is a row on /projects only (false).
+// Tasks 5–8 add one group of categories each; Task 8 checks nothing is missing.
+const INVENTORY: Record<string, Record<string, boolean>> = {
+  llm: {
+    odigos: true,
+    'eaa-gds-chatbots': true,
+    'factsheet-tool': true,
+    'requirements-graphrag': true,
+    'dapt-router': true,
+    'jira-mcp-server': true,
+    aeroscope: true,
+    'hagai-asana': true,
+    'transformation-reports': true,
+    'lead-enrichment-agent': false,
+    'gemini-pdf-extraction': false,
+    'travel-planner-agents': false,
+    'multi-pdf-chat': false,
+  },
+};
+
+const categoryOf = (frontmatter: string) => frontmatter.match(/^category: ([a-z]+)$/m)?.[1] ?? '';
+
+test('each inventoried category holds exactly the approved projects', () => {
+  for (const [category, approved] of Object.entries(INVENTORY)) {
+    const actual = entries.filter((e) => categoryOf(e.frontmatter) === category);
+    assert.deepEqual(actual.map((e) => e.slug).sort(), Object.keys(approved).sort(), category);
+    for (const e of actual) assert.equal(Boolean(e.body), approved[e.slug], `${e.slug}: write-up`);
+  }
+});

@@ -1,0 +1,22 @@
+---
+title: "Hagai: Asana assistant"
+summary: "A VoltAgent assistant that answers questions about an Asana workspace: daily status, weekly plans, team workload and how often due dates slipped."
+year: 2025
+category: llm
+spec: ["Agent", "Tool use", "Asana API", "TypeScript"]
+stack: ["VoltAgent", "TypeScript", "Zod", "Claude 3.5 Sonnet", "GPT-4o", "LibSQL"]
+links:
+  repo: "https://github.com/mftnakrsu/hagAI-voltagent"
+---
+
+## Overview
+
+An assistant for project teams, built on VoltAgent at Hagia, that answers questions about an Asana workspace in plain language. It runs on Claude 3.5 Sonnet or GPT-4o and keeps the conversation history in LibSQL, so a follow-up question can build on the last answer.
+
+## What it answers
+
+The questions a team lead asks every day and every week: what was done, updated or due today; the plan for the week and how the work is spread across the team, with overdue tasks per person; completion by project and by section; how often each task's due date has slipped and which tasks slip the most; and the gaps, such as overdue, unassigned or undated tasks.
+
+## How it works
+
+Each kind of question is a tool with a Zod schema and a clear description, so the model can tell which one to use. The Asana client keeps to a conservative 100 requests a minute and waits when it gets close to that limit. The VoltOps console shows every run of the agent with its tool calls, so each answer can be traced back to the data it came from.
