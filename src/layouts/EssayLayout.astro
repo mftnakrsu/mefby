@@ -41,6 +41,11 @@ const SERIES_TR = {
   agents: 'AJANLAR: İLK İLKELERDEN',
   evals: 'DEĞERLENDİRME: İLK İLKELERDEN',
 } as const;
+const SPONSOR_URL = 'https://github.com/sponsors/mftnakrsu';
+const sponsorText = tr
+  ? { lead: 'İşine yaradı mı?', body: 'Bu yazılar ve kodları ücretsiz. Seriyi desteklemek istersen GitHub Sponsors üzerinden katkı verebilirsin.', cta: 'Destek ol' }
+  : { lead: 'Found this useful?', body: 'These essays and their code are free. If you want to support the series, you can sponsor me on GitHub.', cta: 'Sponsor' };
+
 const course = COURSES.find((c) => c.series === series) ?? COURSES[0];
 const inSeries = seriesOrder != null && seriesTotal != null;
 const seriesLabel = tr
@@ -168,6 +173,18 @@ const link = 'decoration-fg-line underline-offset-4 hover:underline';
           ))}
         </ul>
       )}
+
+      <aside class="mt-10 flex flex-col gap-4 rounded-xl border border-fg-line bg-paper-sunk px-5 py-4 sm:flex-row sm:items-center" aria-label={tr ? 'Destek' : 'Support'}>
+        <p class="flex-1 text-[0.95rem] leading-relaxed text-fg-muted">
+          <span class="font-medium text-fg">{sponsorText.lead}</span> {sponsorText.body}
+        </p>
+        <a
+          href={SPONSOR_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-full border border-fg-line px-5 text-[0.95rem] font-medium transition-colors hover:border-fg sm:self-auto"
+        ><span aria-hidden="true" class="text-accent">♥</span> {sponsorText.cta}<span class="sr-only">{tr ? ' (yeni sekmede açılır)' : ' (opens in a new tab)'}</span></a>
+      </aside>
     </article>
 
     {inSeries && (prevEssay || nextEssay) && (

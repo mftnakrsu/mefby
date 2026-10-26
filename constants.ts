@@ -311,7 +311,7 @@ export const PRODUCTS: Product[] = [
       height: 680
     },
     video: {
-      src: "/products/flashjot/demo.mp4",
+      src: "/products/flashjot/flashjot-demo.mp4",
       poster: "/products/flashjot/poster.png",
       caption: "A 40-second tour: catching an idea in the middle of a build, finding it in the Inbox, filing it with one key, and the notebook."
     },
@@ -319,13 +319,13 @@ export const PRODUCTS: Product[] = [
       {
         images: [
           {
-            src: "/products/flashjot/notebook.png",
-            alt: "The Flashjot notebook: folders and pages on the left, and a Markdown page called Robot arm with a checklist of parts on the right",
-            width: 1000,
-            height: 680
+            src: "/products/flashjot/quick-box.png",
+            alt: "The quick box over a dark desktop: a white card with a red rule under the Flashjot title and the text “Try a belt drive for the shoulder joint”",
+            width: 1600,
+            height: 900
           }
         ],
-        caption: "The notebook. Folders and pages on the left; Markdown with live styling and checkboxes you tick with a click."
+        caption: "The quick box. Enter saves, Shift+Enter adds a line, Esc closes it and keeps the draft."
       },
       {
         images: [
@@ -343,6 +343,28 @@ export const PRODUCTS: Product[] = [
           }
         ],
         caption: "The Inbox, light and dark. Quick notes wait here as cards until you sort them."
+      },
+      {
+        images: [
+          {
+            src: "/products/flashjot/move.png",
+            alt: "The Move to dialog over the Inbox with “Ide” typed, offering the folder Ideas, a new folder and No folder",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Filing a note. Type a few letters of a folder and press Enter."
+      },
+      {
+        images: [
+          {
+            src: "/products/flashjot/notebook.png",
+            alt: "The Flashjot notebook: folders and pages on the left, and a Markdown page called Robot arm with a checklist of parts on the right",
+            width: 1000,
+            height: 680
+          }
+        ],
+        caption: "The notebook. Folders and pages on the left; Markdown with live styling and checkboxes you tick with a click."
       }
     ]
   },
@@ -397,10 +419,45 @@ export const PRODUCTS: Product[] = [
       height: 1080
     },
     video: {
-      src: "/products/ulgen/demo.mp4",
+      src: "/products/ulgen/ulgen-demo.mp4",
       poster: "/products/ulgen/poster.png",
       caption: "A 40-second tour: signing in, setup showing its change before writing it, doctor and status, and Claude Code answering on an EVREN model."
-    }
+    },
+    gallery: [
+      {
+        images: [
+          {
+            src: "/products/ulgen/setup.png",
+            alt: "A terminal running ulgen setup: a table of qwen, opencode, codex and claude with their installed versions and EVREN state, then ulgen setup opencode updating opencode.json and saving a backup",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Setup. It lists the tools it finds, writes a tool's EVREN settings and keeps a backup of the file it changed."
+      },
+      {
+        images: [
+          {
+            src: "/products/ulgen/doctor.png",
+            alt: "A terminal running ulgen doctor: ok for the saved key, EVREN accepting it, the daily tokens left, opencode set up and Claude Code ready, and dashes for Qwen Code and Codex CLI, which are not installed",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Doctor. It checks the key, EVREN and every tool, and says what to do next."
+      },
+      {
+        images: [
+          {
+            src: "/products/ulgen/status.png",
+            alt: "A terminal running ulgen status: signed in with the key from the system keychain, 15,000,000 of 15,000,000 daily tokens left, and seven EVREN models with their context and output sizes",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Status. Today's quota and the models EVREN serves."
+      }
+    ]
   },
   {
     slug: "agent-buzzer",
