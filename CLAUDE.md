@@ -12,7 +12,7 @@ npm run preview    # serve the built dist/ on http://localhost:3000
 npm test           # node --test "tests/**/*.test.ts" (build first: page tests read dist/)
 ```
 
-Requires Node >= 22.12 (Astro 6); `npm test` needs Node 22.18+ or 24 (TypeScript type stripping). An `.nvmrc` pins 22 for nvm users.
+Requires Node >= 22.23.4 (Astro 7), which also covers `npm test` (TypeScript type stripping). An `.nvmrc` pins 22 for nvm users.
 
 TypeScript and Astro syntax are validated by `astro check` (run automatically during `npm run build`). Tests use Node's built-in runner: unit tests import `src/lib/*.ts` directly, so value imports between `src/lib` files keep the `.ts` extension; page tests read the built HTML in `dist/` through `tests/helpers/dist.ts`. There is no linter or formatter.
 
@@ -24,7 +24,7 @@ Local-only, gitignored: `docs/private/` (planning notes and review documents) an
 
 ## Architecture
 
-**Astro 6, static-by-default, no UI framework.** Pages live in `src/pages/`; layouts in `src/layouts/`; components in `src/components/` (site chrome in `site/`, home sections in `home/`, project pieces in `projects/`, essay figures in `essay/`). All pages render at build time. The only client JS is the one-line `js` flag on `<html>` (`Layout.astro`), `src/scripts/reveal.ts` (every page), `src/scripts/journey.ts` and `src/scripts/home-nav.ts` (home page), and the essay copy-button and iframe auto-fit scripts.
+**Astro 7, static-by-default, no UI framework.** Pages live in `src/pages/`; layouts in `src/layouts/`; components in `src/components/` (site chrome in `site/`, home sections in `home/`, project pieces in `projects/`, essay figures in `essay/`). All pages render at build time. The only client JS is the one-line `js` flag on `<html>` (`Layout.astro`), `src/scripts/reveal.ts` (every page), `src/scripts/journey.ts` and `src/scripts/home-nav.ts` (home page), and the essay copy-button and iframe auto-fit scripts.
 
 **Visual system.** Design tokens are CSS custom properties in `src/styles/global.css` (OKLCH), mirrored as data in `src/lib/palette.ts` for scripts and tests, and mapped into Tailwind with `@theme inline` (`bg-paper`, `bg-paper-sunk`, `text-fg`, `text-fg-muted`, `border-fg-line`, `bg-accent-ink`, `text-accent-ink`, …). Tailwind's default palette is removed, so `zinc-*`, `emerald-*`, `white` and `black` classes do nothing, and `tests/legacy-classes.test.ts` fails if one appears. Components use the live tokens (`--canvas`, `--fg`, `--fg-muted`, `--fg-line`, `--focus`), never raw ink or bone, so they read on any canvas. `--accent` is decoration only on light canvases; links and filled buttons there use `--accent-ink`.
 
@@ -75,7 +75,7 @@ import Diagram from '../../components/essay/Diagram.astro';
 
 Static SVGs go under `public/essays/<slug>/`. Interactive figures are self-contained HTML files in the same folder, embedded with `IframeFigure` (it sizes the iframe to its content).
 
-**Styling.** Tailwind CSS 4 via the `@tailwindcss/vite` plugin; the theme is in `src/styles/global.css` (`@theme` and `@theme inline`; no `tailwind.config.js`). Long-form text (essays and project write-ups) is styled by `src/styles/prose.css` (`.prose`, plus `.prose-project` for write-ups). EssayLayout imports the KaTeX CSS; math needs `$$…$$` (inline `$…$` is off, so dollar amounts stay text).
+**Styling.** Tailwind CSS 4 via the `@tailwindcss/vite` plugin; the theme is in `src/styles/global.css` (`@theme` and `@theme inline`; no `tailwind.config.js`). Long-form text (essays and project write-ups) is styled by `src/styles/prose.css` (`.prose`, plus `.prose-project` for write-ups). EssayLayout imports the KaTeX CSS; math needs `$$…$$` (inline `$…$` is off, so dollar amounts stay text). MDX runs through the unified processor from `@astrojs/markdown-remark` (`markdown.processor` in `astro.config.mjs`), not Astro 7's default, because the essays need remark and rehype plugins. `astro.config.mjs` also sets `compressHTML: true` and the CSS browser targets (`vite.build.cssTarget`); its comments say why.
 
 **SEO.** `Layout.astro` sets default meta, OpenGraph and Person JSON-LD. `EssayLayout.astro` adds Article and BreadcrumbList JSON-LD and hreflang alternates for EN/TR pairs; product pages add SoftwareApplication JSON-LD. `@astrojs/sitemap` generates `/sitemap-index.xml`; `/rss.xml` serves the essay feed from the content collection.
 
