@@ -65,7 +65,7 @@ export const EMPLOYERS: Client[] = [
   },
   {
     id: 4,
-    name: "Coskunoz Holding",
+    name: "Coşkunöz Holding",
     industry: "Manufacturing",
     logo: "https://ui-avatars.com/api/?name=CO&background=1a1a1a&color=f59e0b&size=128&bold=true&font-size=0.4",
     link: "https://www.coskunoz.com.tr"
@@ -138,7 +138,7 @@ export const EXPERIENCE: Experience[] = [
   {
     id: 5,
     role: "AI Engineer Management Trainee",
-    company: "Coskunoz Holding",
+    company: "Coşkunöz Holding",
     period: "Apr 2022 - Oct 2022",
     description: "Implemented RTLS (UWB, Bluetooth) for asset tracking. Built operator tracking with Raspberry Pi 4, YOLO, TensorFlow, and MediaPipe. Predictive maintenance models with XGBoost and LightGBM.",
     logo: "https://ui-avatars.com/api/?name=CO&background=1a1a1a&color=f59e0b&size=128&bold=true&font-size=0.4"

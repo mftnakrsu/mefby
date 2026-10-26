@@ -66,7 +66,7 @@ export const COURSES: readonly Course[] = [
     frontierNote:
       'The production and agent territory you reach for once the offline gate is solid: the eval flywheel, online A/B and guardrail metrics, agent-trajectory evals, and a tiny end-to-end harness.',
     description:
-      'Most eval advice is prose and dashboards. This one builds the measurement stack by hand, one concept at a time, so you can tell a real 2% gain from noise: metrics and the confusion matrix, golden sets, annotator agreement, LLM-as-judge and its biases, confidence intervals, significance and power, pass@k, arenas, calibration, and a CI regression gate. Every part runs on a small labeled set you can trace end to end, with runnable code and an interactive figure.',
+      'A from-scratch course on evaluating LLM systems: build the measurement stack by hand, one concept at a time, so you can tell a real 2% gain from noise.',
     listDescription: 'A from-scratch course on evaluating LLM systems, built by hand.',
   },
 ];
