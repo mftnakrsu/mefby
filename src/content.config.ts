@@ -3,7 +3,7 @@ import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 
 const essays = defineCollection({
-  // Astro 6 Content Layer: entries are loaded explicitly; each file's `id` is its
+  // Content Layer: entries are loaded explicitly; each file's `id` is its
   // filename without the extension, matching the old `slug` used in routes/links.
   loader: glob({ pattern: '**/*.mdx', base: './src/content/essays' }),
   schema: z.object({

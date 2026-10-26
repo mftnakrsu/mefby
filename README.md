@@ -4,7 +4,7 @@ Personal portfolio, projects and essays for Meftun Akarsu (AI Engineer).
 
 ## Tech stack
 
-- **Astro 6** (static-by-default rendering, no UI framework)
+- **Astro 7** (static-by-default rendering, no UI framework)
 - **TypeScript** (strict)
 - **Tailwind CSS 4** with OKLCH design tokens (CSS-native theme config)
 - **MDX** essays and project write-ups via Astro Content Collections (type-safe frontmatter)
@@ -23,7 +23,7 @@ npm test         # unit and page tests (run after a build)
 npm run preview  # serve the build on http://localhost:3000
 ```
 
-Node 22.12 or newer; `npm test` needs Node 22.18+ or 24. No environment variables are needed to build; `.env.example` lists the optional Unsplash key used by `scripts/unsplash.mjs`.
+Node 22.23.4 or newer (Astro 7). No environment variables are needed to build; `.env.example` lists the optional Unsplash key used by `scripts/unsplash.mjs`.
 
 ## Adding a project
 

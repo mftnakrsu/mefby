@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
+import { unified } from '@astrojs/markdown-remark';
 import tailwindcss from '@tailwindcss/vite';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -41,20 +42,25 @@ function rehypeHeadingIds() {
 
 export default defineConfig({
   site: 'https://www.mefby.com',
-  // Light Shiki theme so fenced code blocks match the clean/minimal palette
-  // (the MDX integration inherits this markdown config by default).
+  // Astro 7 strips whitespace between elements by JSX rules by default; keep the
+  // whitespace handling the templates were written for.
+  compressHTML: true,
   markdown: {
-    shikiConfig: { theme: 'github-light' },
-  },
-  integrations: [
-    mdx({
-      // Astro 6 leaves `markdown.gfm` unset, which this MDX integration reads as
-      // "off", so essay tables rendered as plain text. Turn GFM on here.
+    // Astro 7's default Markdown processor runs no remark or rehype plugins, and
+    // the essays need math, KaTeX and heading ids, so stay on unified. The MDX
+    // integration inherits this processor and the Shiki theme.
+    processor: unified({
+      // Essay tables need GitHub-Flavored Markdown.
       gfm: true,
       // A dollar amount ("a $250 order") is prose, not math: math needs $$…$$.
       remarkPlugins: [[remarkMath, { singleDollarTextMath: false }]],
       rehypePlugins: [rehypeKatex, rehypeHeadingIds],
     }),
+    // Light Shiki theme so fenced code blocks match the clean/minimal palette.
+    shikiConfig: { theme: 'github-light' },
+  },
+  integrations: [
+    mdx(),
     sitemap({
       changefreq: 'weekly',
       priority: 0.7,
@@ -62,6 +68,13 @@ export default defineConfig({
   ],
   vite: {
     plugins: [tailwindcss()],
+    build: {
+      // Astro builds for "esnext", which leaves the CSS minifier without browser
+      // targets: it then wrote `text-decoration: underline 1px`, which Safari
+      // reads only from 26.2, and dropped -webkit- prefixes. These are Vite's
+      // default targets; Safari 16.4 and Chrome 111 are also Tailwind 4's floor.
+      cssTarget: ['chrome111', 'edge111', 'firefox114', 'safari16.4', 'ios16.4'],
+    },
   },
   server: {
     port: 3000,
