@@ -30,7 +30,7 @@ Node 22.12 or newer; `npm test` needs Node 22.18+ or 24. No environment variable
 1. Create `src/content/projects/<slug>.mdx` with frontmatter: `title`, `summary`, `year`, `category`, `spec`, `stack`, `links`, and optionally `private`, `image` and `featured`. The schema is in `src/content.config.ts`.
 2. Add a short write-up (120–350 words) below the frontmatter to give the project its own page at `/projects/<slug>`. Without one, it is a row on `/projects` that links to its repository.
 3. Put images under `public/projects/<slug>/`, or pick an Unsplash photo with `node scripts/unsplash.mjs search "<query>"` and `node scripts/unsplash.mjs use <photo-id>`.
-4. Add the slug to `INVENTORY` in `tests/content.test.ts` and raise its totals, then run `npm run build && npm test`.
+4. Add the slug to `INVENTORY` in `tests/content.test.ts` and raise its totals, then run `npm run build && npm test`. A `featured` entry also goes into the expected card order in `tests/home.test.ts`.
 
 ## Writing an essay
 

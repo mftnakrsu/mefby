@@ -27,7 +27,7 @@ const entries = readdirSync(DIR)
     const text = readFileSync(new URL(file, DIR), 'utf8');
     const [, fm = '', body = ''] = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/) ?? [];
     // The image block: two-space-indented "key: value" lines under "image:".
-    const block = fm.match(/^image:\n((?: {2}.+\n?)+)/m)?.[1];
+    const block = fm.match(/^image:[ \t]*(?:#.*)?\n((?: {2}.+\n?)+)/m)?.[1];
     const image = block
       ? (Object.fromEntries(
           [...block.matchAll(/^ {2}(\w+): (.+)$/gm)].map(([, k, v]) => [k, v.startsWith('"') ? JSON.parse(v) : Number(v)]),
@@ -36,7 +36,7 @@ const entries = readdirSync(DIR)
     return {
       slug: file.replace(/\.mdx$/, ''),
       hasPage: body.trim().length > 0,
-      isPrivate: /^private: true$/m.test(fm),
+      isPrivate: /^private:\s*true\b/im.test(fm),
       isFeatured: /^featured:/m.test(fm),
       image,
     };
