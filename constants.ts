@@ -1,16 +1,23 @@
-import { CompanyProfile, Experience, Project, Product, Service, Skill, Client, Publication, Education, WritingPost } from './types';
+import type { CompanyProfile, Experience, Product, Service, Skill, Client, Publication, Education, WritingPost } from './types';
 
 export const PROFILE: CompanyProfile = {
   name: "Mefby",
   owner: "Meftun Akarsu",
   title: "AI Engineer | M.Sc. AI Engineering @ THI",
+  role: "AI Engineer",
+  headline: "LLM systems, computer vision & data",
   bio: "I work on AI systems \u2014 LLM infrastructure, computer vision, and data pipelines. Three years at Bosch building inspection systems, anomaly detection, and process automation for manufacturing. Studying AI Engineering at TH Ingolstadt, Germany.",
+  about: [
+    "I build AI systems that run in production: retrieval and agent pipelines on large language models, computer vision for manufacturing, and the data work in between.",
+    "Three years at Bosch on vision inspection and process automation, then production RAG and GraphRAG systems at RADIAITE and Hagia. I study AI Engineering for Autonomous Systems at TH Ingolstadt and write framework-free courses on RAG, agents and evals."
+  ],
+  closing: "Building Oyla and Flashjot, and open to the right conversations.",
   email: "meftunakrsu@gmail.com",
   location: "Ankara, Turkiye",
   socials: {
     linkedin: "https://www.linkedin.com/in/meftunakarsu/",
     github: "https://github.com/mftnakrsu",
-    twitter: "https://medium.com/@meftunakarsu"
+    medium: "https://medium.com/@meftunakarsu"
   }
 };
 
@@ -58,7 +65,7 @@ export const EMPLOYERS: Client[] = [
   },
   {
     id: 4,
-    name: "Coskunoz Holding",
+    name: "Coşkunöz Holding",
     industry: "Manufacturing",
     logo: "https://ui-avatars.com/api/?name=CO&background=1a1a1a&color=f59e0b&size=128&bold=true&font-size=0.4",
     link: "https://www.coskunoz.com.tr"
@@ -131,7 +138,7 @@ export const EXPERIENCE: Experience[] = [
   {
     id: 5,
     role: "AI Engineer Management Trainee",
-    company: "Coskunoz Holding",
+    company: "Coşkunöz Holding",
     period: "Apr 2022 - Oct 2022",
     description: "Implemented RTLS (UWB, Bluetooth) for asset tracking. Built operator tracking with Raspberry Pi 4, YOLO, TensorFlow, and MediaPipe. Predictive maintenance models with XGBoost and LightGBM.",
     logo: "https://ui-avatars.com/api/?name=CO&background=1a1a1a&color=f59e0b&size=128&bold=true&font-size=0.4"
@@ -146,243 +153,9 @@ export const EXPERIENCE: Experience[] = [
   }
 ];
 
-export const PROJECTS: Project[] = [
-  {
-    id: 2,
-    title: "Odigos \u2014 RAG Chatbot",
-    description: "Production RAG chatbot for autism spectrum families in Italy. 58+ features, knowledge graph + vector search + semantic reranking on Azure with Neo4j and pgvector.",
-    tags: ["RAG", "Neo4j", "pgvector", "Azure", "GPT-4"],
-    imageUrl: "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=600"
-  },
-  {
-    id: 3,
-    title: "Visual Quality Control",
-    description: "YOLO + PyTorch inspection pipeline at Bosch. Cut destructive testing from 9/day to 3/day. OCR and Cognex vision inspections reduced customer complaints by 10%.",
-    tags: ["YOLO", "PyTorch", "OpenCV", "Cognex"],
-    imageUrl: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=600"
-  },
-  {
-    id: 4,
-    title: "Cinematic Video Generation",
-    description: "Fine-tuned Wan2.1 I2V-14B with LoRA for cinematic scene synthesis from limited data. Single-GPU pipeline producing coherent 720p video sequences.",
-    tags: ["Stable Diffusion", "LoRA", "Video AI", "arXiv"],
-    imageUrl: "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=600",
-    link: "https://arxiv.org/abs/2510.27364"
-  },
-  {
-    id: 5,
-    title: "Aerial Object Detection",
-    description: "Compared YOLO v3-v8 on VisDrone-2019 aerial images. Optimized with TensorRT for Jetson Nano and Jetson Orin. Published at IEEE INISTA 2023.",
-    tags: ["YOLO", "TensorRT", "Jetson", "UAV", "IEEE"],
-    imageUrl: "https://images.unsplash.com/photo-1473968512647-3e447244af8f?auto=format&fit=crop&q=80&w=600",
-    link: "https://doi.org/10.1109/INISTA59065.2023.10310562"
-  }
-];
-
 // Products I build and run. Each entry gets a card on /products and a page at
 // /products/<slug>; screenshots and media live under public/products/<slug>/.
 export const PRODUCTS: Product[] = [
-  {
-    slug: "ulgen",
-    name: "Ülgen",
-    tagline: "EVREN for the coding tools you already use: one command signs you in, sets up Qwen Code, opencode, Codex CLI or Claude Code, and starts it.",
-    metaTitle: "Ülgen: EVREN for Qwen Code, opencode, Codex and Claude Code",
-    summary: "Run ulgen, sign in once, and Qwen Code, opencode, Codex CLI or Claude Code starts on an EVREN model. The key stays in your OS credential store. AGPL-3.0.",
-    description: "Ülgen connects EVREN, the model API run by Türkiye's Presidency of Defence Industries (SSB), to Qwen Code, opencode, Codex CLI and Claude Code. It is one binary that does the part in between: signing in, keeping the key safe, accepting the terms, watching the quota and writing each tool's settings. It is not a new coding agent. It is an independent, non-commercial project, not affiliated with SSB, EVREN or the makers of the tools it sets up. The name comes from Ülgen, the creator deity of Turkic mythology.",
-    status: "Open source",
-    launched: "2026-10",
-    license: "AGPL-3.0-only",
-    languages: ["EN", "TR"],
-    operatingSystem: "Linux, Windows, macOS",
-    applicationCategory: "DeveloperApplication",
-    stack: ["Go", "go-keyring", "GoReleaser", "nFPM", "cosign"],
-    features: [
-      "ulgen login opens EVREN's API keys page, where you sign in with e-Devlet. It asks for the key, shows the terms and saves the key once EVREN has accepted it.",
-      "The key is kept in the operating system's credential store, or a file only you can read. It is never written into a tool's settings file, printed or logged.",
-      "ulgen setup writes the right settings into each tool. Every changed file is backed up first, --dry-run shows the change without writing it, and --remove takes it out again.",
-      "ulgen status shows how much of today's quota is left and the models. ulgen doctor checks the key, EVREN and every tool and says what to do about what is wrong.",
-      "Claude Code talks to a translator inside Ülgen on your own machine and never receives the key. Anthropic does not support using Claude Code with other models; Ülgen says so once per run.",
-      "Turkish and English interface. Every command follows the system language.",
-      "One binary for Linux, Windows and macOS, with .deb and .rpm packages and signed checksums.",
-      "Open source under the AGPL-3.0-only license."
-    ],
-    steps: [
-      {
-        title: "Sign in",
-        body: "Run ulgen. It opens EVREN's API keys page, where you sign in with e-Devlet and create a key, then shows the terms and saves the key."
-      },
-      {
-        title: "Set up",
-        body: "Ülgen finds the coding tools you have installed, asks which one you want and sets it up for EVREN. Every file it changes is backed up first."
-      },
-      {
-        title: "Code",
-        body: "The tool starts on an EVREN model. Later runs of ulgen start it straight away; ulgen qwen, opencode, codex or claude switches to another one."
-      }
-    ],
-    links: {
-      docs: "https://ulgen.mefby.com",
-      source: "https://github.com/mftnakrsu/ulgen"
-    },
-    image: {
-      src: "/products/ulgen/claude.png",
-      alt: "Claude Code running on the EVREN model deepseek-v4.1-flash: asked what main.go prints, it reads the file and answers that it prints 6765, the 20th Fibonacci number",
-      width: 2160,
-      height: 1350
-    },
-    video: {
-      src: "/products/ulgen/ulgen-demo.mp4",
-      poster: "/products/ulgen/poster.png",
-      caption: "A short walkthrough: signing in, setting up opencode after a dry run, checking everything with ulgen doctor and ulgen status, and Claude Code answering a question through EVREN."
-    },
-    gallery: [
-      {
-        images: [
-          {
-            src: "/products/ulgen/setup.png",
-            alt: "A terminal running ulgen setup: a table of qwen, opencode, codex and claude with their installed versions and EVREN state, then ulgen setup opencode updating opencode.json and saving a backup",
-            width: 2160,
-            height: 1350
-          }
-        ],
-        caption: "Setup. It lists the tools it finds, writes a tool's EVREN settings and keeps a backup of the file it changed."
-      },
-      {
-        images: [
-          {
-            src: "/products/ulgen/doctor.png",
-            alt: "A terminal running ulgen doctor: ok for the saved key, EVREN accepting it, the daily tokens left, opencode set up and Claude Code ready, and dashes for Qwen Code and Codex CLI, which are not installed",
-            width: 2160,
-            height: 1350
-          }
-        ],
-        caption: "Doctor. It checks the key, EVREN and every tool, and says what to do next."
-      },
-      {
-        images: [
-          {
-            src: "/products/ulgen/status.png",
-            alt: "A terminal running ulgen status: signed in with the key from the system keychain, 15,000,000 of 15,000,000 daily tokens left, and seven EVREN models with their context and output sizes",
-            width: 2160,
-            height: 1350
-          }
-        ],
-        caption: "Status. Today's quota and the models EVREN serves."
-      },
-      {
-        images: [
-          {
-            src: "/products/ulgen/claude.png",
-            alt: "Claude Code v2.1.309 on the EVREN model deepseek-v4.1-flash, answering “What does main.go print? One sentence.” with “It prints 6765 (the 20th Fibonacci number, computed recursively).”",
-            width: 2160,
-            height: 1350
-          }
-        ],
-        caption: "Claude Code, started with ulgen claude, reads a file and answers through EVREN."
-      }
-    ]
-  },
-  {
-    slug: "flashjot",
-    name: "Flashjot",
-    tagline: "A quick-capture box and notebook for your desktop: press a shortcut, write the idea down, press Enter.",
-    metaTitle: "Flashjot: open-source quick capture and Markdown notebook",
-    summary: "Press Ctrl+Alt+N anywhere, type, press Enter. Flashjot saves the idea and gets out of the way. Plain Markdown notes. Linux, Windows, macOS. MIT licensed.",
-    description: "Ideas show up at bad times. Flashjot keeps a small capture box one shortcut away on Linux, Windows and macOS, and a notebook for when you have time to sort things out. Every note is a plain Markdown file in your Documents folder, so you can read it without the app.",
-    status: "Open source",
-    launched: "2026-10",
-    license: "MIT",
-    languages: ["EN", "TR"],
-    operatingSystem: "Linux, Windows, macOS",
-    applicationCategory: "ProductivityApplication",
-    stack: ["Rust", "Tauri", "Svelte", "TypeScript", "CodeMirror"],
-    features: [
-      "Ctrl+Alt+N opens the quick box on the monitor your mouse is on, with the cursor already in it. Enter saves.",
-      "Esc or a click elsewhere closes the box and keeps the draft for next time.",
-      "Quick notes land in an Inbox. Press M to file one into a folder; it gets a title from its first line.",
-      "A notebook with folders, a Markdown editor with live styling, clickable checkboxes and full-text search.",
-      "Notes are plain .md files. Open them in Obsidian or VS Code, keep them in git or a synced folder.",
-      "Every save is atomic, so a crash or power cut never leaves a half-written note.",
-      "English and Turkish interface, light and dark mode.",
-      "A 3 MB installer for Linux (.deb, .rpm, AppImage), Windows and macOS. No account, no network access.",
-      "Open source under the MIT license."
-    ],
-    steps: [
-      {
-        title: "Capture",
-        body: "Press Ctrl+Alt+N in any app, type the thought and press Enter. The box closes and you are back where you were."
-      },
-      {
-        title: "Sort",
-        body: "Open the notebook with Ctrl+Alt+D. Quick notes wait in the Inbox; move one into a folder with M or delete it."
-      },
-      {
-        title: "Write",
-        body: "Pages are Markdown with headings, checkboxes and code blocks, saved as you type and searchable with Ctrl+K."
-      }
-    ],
-    links: {
-      docs: "https://flashjot.mefby.com",
-      source: "https://github.com/mftnakrsu/flashjot"
-    },
-    image: {
-      src: "/products/flashjot/notebook.png",
-      alt: "The Flashjot notebook with the folders Ideas and Work in the sidebar and a page called Robot arm with headings, checkboxes and a code block",
-      width: 2160,
-      height: 1350
-    },
-    video: {
-      src: "/products/flashjot/flashjot-demo.mp4",
-      poster: "/products/flashjot/poster.png",
-      caption: "A short walkthrough: capturing an idea with the quick box, finding it in the Inbox, filing it into a folder and writing a checklist."
-    },
-    gallery: [
-      {
-        images: [
-          {
-            src: "/products/flashjot/quick-box.png",
-            alt: "The quick box over a dark desktop: a white card with a red rule under the Flashjot title and the text \u201CTry a belt drive for the shoulder joint\u201D",
-            width: 1600,
-            height: 900
-          }
-        ],
-        caption: "The quick box. Enter saves, Shift+Enter adds a line, Esc closes it and keeps the draft."
-      },
-      {
-        images: [
-          {
-            src: "/products/flashjot/inbox.png",
-            alt: "The Inbox with three quick notes shown as cards with red top rules and the time each was written",
-            width: 2160,
-            height: 1350
-          }
-        ],
-        caption: "The Inbox. Quick notes wait here as cards until you file them."
-      },
-      {
-        images: [
-          {
-            src: "/products/flashjot/move.png",
-            alt: "The Move to dialog over the Inbox with \u201CIde\u201D typed, offering the folder Ideas, a new folder and No folder",
-            width: 2160,
-            height: 1350
-          }
-        ],
-        caption: "Filing a note. Type a few letters of a folder and press Enter."
-      },
-      {
-        images: [
-          {
-            src: "/products/flashjot/dark.png",
-            alt: "The notebook in dark mode with the Robot arm page open",
-            width: 2160,
-            height: 1350
-          }
-        ],
-        caption: "Dark mode follows your system setting."
-      }
-    ]
-  },
   {
     slug: "oyla",
     name: "Oyla",
@@ -394,6 +167,7 @@ export const PRODUCTS: Product[] = [
     launched: "2026-10",
     license: "MIT",
     languages: ["EN", "TR"],
+    spec: ["Live polls", "Word clouds", "Self-hosted"],
     stack: ["Node.js", "Fastify", "Socket.IO", "SQLite", "React", "Docker"],
     features: [
       "The audience joins from their phones with a 6-digit code or a QR code. No accounts, no app.",
@@ -485,7 +259,277 @@ export const PRODUCTS: Product[] = [
         caption: "A word cloud. The more people give a word, the bigger it gets."
       }
     ]
+  },
+  {
+    slug: "flashjot",
+    name: "Flashjot",
+    tagline: "A small notebook for Linux, Windows and macOS: press a shortcut, write the idea down, press Enter, and you're back to work.",
+    metaTitle: "Flashjot: quick notes from anywhere, saved as Markdown",
+    summary: "A small notebook for Linux, Windows and macOS. One shortcut opens a quick box from anywhere, and every note is a plain Markdown file. MIT licensed.",
+    description: "Ideas show up at bad times: in the middle of a build, a meeting or a sentence. Flashjot keeps a capture box one shortcut away. Quick notes land in an Inbox, and later you file them into folders in the notebook. Every note is a plain Markdown file on your disk (Documents/Flashjot by default), so Obsidian, VS Code, grep and git can read it too.",
+    status: "Open source",
+    launched: "2026-10",
+    license: "MIT",
+    languages: ["EN", "TR"],
+    platforms: ["Linux", "Windows", "macOS"],
+    applicationCategory: "ProductivityApplication",
+    spec: ["Desktop app", "Markdown", "Tauri"],
+    stack: ["Tauri", "Rust", "Svelte", "TypeScript", "CodeMirror"],
+    features: [
+      "Quick box (Ctrl+Alt+N, ⌘⌥N on macOS): opens on the monitor your mouse is on. Enter saves, Shift+Enter adds a line, and Esc closes it while keeping your draft.",
+      "Notebook (Ctrl+Alt+D): folders, pages, a Markdown editor with live styling and clickable checkboxes, and full-text search (Ctrl+K).",
+      "Tasks: start a quick note with [] to add tasks; Open tasks lists every unchecked task across your notes.",
+      "Inbox: quick notes wait as cards. Move one into a folder with M and it takes its title from its first line; delete with Del, and undo if you change your mind.",
+      "Plain files: each note is a .md file, so your notes stay readable even without Flashjot.",
+      "Safe writes: every save goes to a temporary file first and is then swapped in, so a crash or power cut never leaves a half-written note.",
+      "Keyboard first, with configurable global shortcuts. Light and dark themes follow the system, and the interface is in English and Turkish.",
+      "Small: built with Tauri, so it uses the system web view instead of bundling a browser.",
+      "Installers for Linux (.deb, .rpm, AppImage), Windows (.exe, .msi) and macOS (.dmg). The macOS build is not notarized yet, and on Wayland you add the two global shortcuts in your desktop's keyboard settings."
+    ],
+    steps: [
+      {
+        title: "Catch it",
+        body: "Press Ctrl+Alt+N wherever you are. A small box opens on top of whatever you are doing; type the idea and press Enter."
+      },
+      {
+        title: "Let it wait",
+        body: "The note lands in the Inbox as a card and waits there until you have time to sort it."
+      },
+      {
+        title: "File it",
+        body: "Ctrl+Alt+D opens the notebook. Press M to move a card into a folder, or keep writing on a Markdown page."
+      }
+    ],
+    links: {
+      download: "https://github.com/mftnakrsu/flashjot/releases/latest",
+      docs: "https://flashjot.mefby.com",
+      source: "https://github.com/mftnakrsu/flashjot"
+    },
+    image: {
+      src: "/products/flashjot/notebook.png",
+      alt: "The Flashjot notebook: folders and pages on the left, and a Markdown page called Robot arm with a checklist of parts on the right",
+      width: 1000,
+      height: 680
+    },
+    video: {
+      src: "/products/flashjot/flashjot-demo.mp4",
+      poster: "/products/flashjot/poster.png",
+      caption: "A 40-second tour: catching an idea in the middle of a build, finding it in the Inbox, filing it with one key, and the notebook."
+    },
+    gallery: [
+      {
+        images: [
+          {
+            src: "/products/flashjot/quick-box.png",
+            alt: "The quick box over a dark desktop: a white card with a red rule under the Flashjot title and the text “Try a belt drive for the shoulder joint”",
+            width: 1600,
+            height: 900
+          }
+        ],
+        caption: "The quick box. Enter saves, Shift+Enter adds a line, Esc closes it and keeps the draft."
+      },
+      {
+        images: [
+          {
+            src: "/products/flashjot/inbox.png",
+            alt: "The Inbox in the light theme: three quick notes as cards, newest first",
+            width: 1000,
+            height: 680
+          },
+          {
+            src: "/products/flashjot/inbox-dark.png",
+            alt: "The same Inbox in the dark theme",
+            width: 1000,
+            height: 680
+          }
+        ],
+        caption: "The Inbox, light and dark. Quick notes wait here as cards until you sort them."
+      },
+      {
+        images: [
+          {
+            src: "/products/flashjot/move.png",
+            alt: "The Move to dialog over the Inbox with “Ide” typed, offering the folder Ideas, a new folder and No folder",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Filing a note. Type a few letters of a folder and press Enter."
+      },
+      {
+        images: [
+          {
+            src: "/products/flashjot/notebook.png",
+            alt: "The Flashjot notebook: folders and pages on the left, and a Markdown page called Robot arm with a checklist of parts on the right",
+            width: 1000,
+            height: 680
+          }
+        ],
+        caption: "The notebook. Folders and pages on the left; Markdown with live styling and checkboxes you tick with a click."
+      }
+    ]
+  },
+  {
+    slug: "ulgen",
+    name: "Ülgen",
+    tagline: "Connects EVREN, Türkiye's national model API, to the coding tools you already use: Qwen Code, opencode, Codex CLI and Claude Code.",
+    metaTitle: "Ülgen: EVREN for the coding tools you already use",
+    summary: "One binary that signs you in to EVREN, Türkiye's national model API, and sets up Qwen Code, opencode, Codex CLI or Claude Code to use it. AGPL-3.0.",
+    description: "The coding tools already work well, and EVREN serves capable open-weight models. What is missing is the part in between: signing in, keeping the key safe, accepting the terms, watching the quota, writing the right settings into each tool, and a Turkish interface. Ülgen is that part. It is one binary, not a new coding agent, and it is named after the creator deity of Turkic mythology.",
+    status: "Open source",
+    launched: "2026-10",
+    license: "AGPL-3.0-only",
+    languages: ["EN", "TR"],
+    platforms: ["Linux", "Windows", "macOS"],
+    applicationCategory: "DeveloperApplication",
+    spec: ["Command line", "Go", "Coding agents"],
+    stack: ["Go"],
+    features: [
+      "Run ulgen and it signs you in, finds the coding tools you have installed, asks which one you want, sets it up for EVREN and starts it. Later runs start that tool straight away.",
+      "Works with Qwen Code, opencode, Codex CLI and Claude Code. Setup backs up every file it changes, --dry-run shows the change first, and setup --remove takes it out again.",
+      "ulgen status shows the remaining daily quota and the models; ulgen doctor checks the key, EVREN and every tool, and says what to do about what is wrong.",
+      "The key is kept in the operating system's credential store (or, where the system has none, in a file only you can read). It is never written into a tool's settings file and never logged.",
+      "Claude Code never receives the key at all: it talks to a translator inside Ülgen on your own machine.",
+      "Every command follows the system language, Turkish or English.",
+      "Installs with one line on Linux and macOS, or in PowerShell on Windows; Pardus, Debian and Ubuntu packages are available too.",
+      "Known limits: Anthropic does not support Claude Code with other models, and ulgen run claude works through a translator and says so once per run. The token counts Claude Code shows on EVREN are estimates.",
+      "Independent and non-commercial: not affiliated with EVREN or the makers of the tools it sets up."
+    ],
+    steps: [
+      {
+        title: "Sign in",
+        body: "Run ulgen. It opens EVREN's API keys page (sign-in is through e-Devlet), asks for the key, shows the terms and saves the key."
+      },
+      {
+        title: "Pick a tool",
+        body: "Ülgen finds the coding tools you have installed, asks which one you want and writes the EVREN settings into it, keeping a backup."
+      },
+      {
+        title: "Start coding",
+        body: "The tool starts on an EVREN model. Next time ulgen starts it straight away; ulgen opencode, qwen, codex or claude switches to another one."
+      }
+    ],
+    links: {
+      docs: "https://ulgen.mefby.com",
+      source: "https://github.com/mftnakrsu/ulgen"
+    },
+    image: {
+      src: "/products/ulgen/poster.png",
+      alt: "Claude Code running on an EVREN model in a terminal: asked what main.go prints, it reads the file and answers 6765, the 20th Fibonacci number",
+      width: 1920,
+      height: 1080
+    },
+    video: {
+      src: "/products/ulgen/ulgen-demo.mp4",
+      poster: "/products/ulgen/poster.png",
+      caption: "A 40-second tour: signing in, setup showing its change before writing it, doctor and status, and Claude Code answering on an EVREN model."
+    },
+    gallery: [
+      {
+        images: [
+          {
+            src: "/products/ulgen/setup.png",
+            alt: "A terminal running ulgen setup: a table of qwen, opencode, codex and claude with their installed versions and EVREN state, then ulgen setup opencode updating opencode.json and saving a backup",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Setup. It lists the tools it finds, writes a tool's EVREN settings and keeps a backup of the file it changed."
+      },
+      {
+        images: [
+          {
+            src: "/products/ulgen/doctor.png",
+            alt: "A terminal running ulgen doctor: ok for the saved key, EVREN accepting it, the daily tokens left, opencode set up and Claude Code ready, and dashes for Qwen Code and Codex CLI, which are not installed",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Doctor. It checks the key, EVREN and every tool, and says what to do next."
+      },
+      {
+        images: [
+          {
+            src: "/products/ulgen/status.png",
+            alt: "A terminal running ulgen status: signed in with the key from the system keychain, 15,000,000 of 15,000,000 daily tokens left, and seven EVREN models with their context and output sizes",
+            width: 2160,
+            height: 1350
+          }
+        ],
+        caption: "Status. Today's quota and the models EVREN serves."
+      }
+    ]
+  },
+  {
+    slug: "agent-buzzer",
+    name: "agent-buzzer",
+    tagline: "Plays a sound when Claude Code finishes a long turn, and stays quiet when you are already looking at the terminal.",
+    metaTitle: "agent-buzzer: hear when your AI agent finishes",
+    summary: "A small shell tool that plays a sound when Claude Code finishes a long turn, and stays quiet when the turn was short or you are watching the terminal. MIT licensed.",
+    description: "A tool that beeps after every turn becomes unbearable within an hour, so agent-buzzer gates the sound: by default it stays silent when a turn took less than 30 seconds and while your terminal is the window in front of you. Questions and permission prompts skip the length rule, because that is exactly when you want to know. When something can't be determined, it plays, because a missed notification is worse than one extra beep. Claude Code is the only agent wired up today; Codex, Cursor's agent and Antigravity are on the roadmap.",
+    status: "Open source",
+    launched: "2026-07",
+    license: "MIT",
+    platforms: ["macOS", "Linux", "Windows"],
+    applicationCategory: "DeveloperApplication",
+    spec: ["Claude Code hooks", "Shell script", "No dependencies"],
+    stack: ["Bash", "PowerShell"],
+    features: [
+      "Four events, each with its own sound: done, waiting (a permission prompt or a question), error and subagent.",
+      "Silence rules, checked in order: the master switch, quiet hours (off by default), turns shorter than 30 seconds, and your own terminal being the frontmost app.",
+      "Focus detection compares the frontmost app with the terminal Claude Code runs in. On macOS it needs no Accessibility or Automation permission.",
+      "buzzer status says whether it would play right now and why; buzzer doctor checks audio, focus detection and missing files; every decision is logged with its reason.",
+      "One shell script with no dependencies. buzzer hooks prints the settings snippet for you to add; it never edits ~/.claude/settings.json itself.",
+      "Hooks come back in about 0.3 seconds: playback runs detached, and the focus check is capped at two seconds.",
+      "Plain key=value configuration. Sounds, volume, the threshold and quiet hours can all be changed from the command line.",
+      "macOS is the reference platform. Linux and Windows (buzzer.ps1) work but are less tested, and on Wayland focus detection only works on sway."
+    ],
+    steps: [
+      {
+        title: "Install",
+        body: "Run ./install.sh. It copies buzzer to ~/.local/bin, adds the bundled sounds and writes a default config."
+      },
+      {
+        title: "Wire up the hooks",
+        body: "buzzer hooks prints the snippet for Claude Code's settings. You add it yourself with the /hooks command."
+      },
+      {
+        title: "Look away",
+        body: "Start a long task and switch to something else. When the turn ends you hear it; if you were watching the terminal, it stays quiet."
+      }
+    ],
+    links: {
+      source: "https://github.com/mftnakrsu/agent-buzzer"
+    },
+    image: {
+      src: "/products/agent-buzzer/banner.png",
+      alt: "The agent-buzzer banner: a bell connected to the icons of Claude, Codex, Cursor and Antigravity, above the line “Hear when your AI agent finishes.”",
+      width: 1200,
+      height: 800
+    },
+    gallery: [
+      {
+        images: [
+          {
+            src: "/products/agent-buzzer/demo.gif",
+            alt: "A terminal running buzzer status twice: with the terminal in front, every event is silent; after looking away, every event would play",
+            width: 1100,
+            height: 400
+          }
+        ],
+        caption: "The same command a moment apart: looking at the terminal, then looking away. A GIF has no sound, so it shows the decision."
+      }
+    ]
   }
+];
+
+// Essays shown in the home page's Writing section, in this order (canonical
+// slugs). src/lib/homeEssays.ts fails the build if one is missing, a draft or
+// a translation.
+export const HOME_ESSAYS: string[] = [
+  "efficient-llm-inference",
+  "graph-rag-language",
+  "easa-ai-concept-paper"
 ];
 
 export const PUBLICATIONS: Publication[] = [
@@ -570,6 +614,7 @@ export const WRITING: WritingPost[] = [
   },
   {
     title: "REST API'den Web Uygulamalar\u0131na: FastAPI, Flask ve Streamlit Rehberi",
+    lang: "tr",
     date: "2025-01-25",
     url: "https://medium.com/@meftunakarsu/rest-apiden-web-uygulamalar%C4%B1na-fastapi-flask-ve-streamlit-rehberi-444e9f1ea307"
   },
@@ -590,6 +635,7 @@ export const WRITING: WritingPost[] = [
   },
   {
     title: "Nedir bu Deep Fake?",
+    lang: "tr",
     date: "2023-10-11",
     url: "https://medium.com/@meftunakarsu/nedir-bu-deep-fake-2c95aa35e7bd"
   },

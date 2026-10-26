@@ -1,0 +1,28 @@
+---
+title: "Offline analytics workbench"
+summary: "A workbench for preparing, exploring and analyzing large datasets entirely offline, with a guided root-cause analysis on top."
+year: 2026
+category: data
+spec: ["DuckDB", "Offline-first", "Visual analytics", "Local app"]
+stack: ["Python", "FastAPI", "DuckDB", "PyArrow", "React", "Graphic Walker", "Perspective", "Playwright"]
+private: true
+image:
+  src: "https://images.unsplash.com/photo-1791036770710-57c2fdfc0bf5?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8NXx8cm9jayUyMGxheWVycyUyMGNyb3NzJTIwc2VjdGlvbnxlbnwxfDB8fHwxNzkyOTQ4MDkxfDA&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "Gray-blue rock face seen from above, with two pale wavy bands of layered strata running across it"
+  width: 1600
+  height: 1000
+  credit: "Photo: Hannah Fleming-Hlll / Unsplash"
+  creditUrl: "https://unsplash.com/@fhdigital?utm_source=mefby&utm_medium=referral"
+---
+
+## Overview
+
+An offline-first analytics workbench for data preparation, visual exploration and statistics, with an extension for guided root-cause analysis. It is built to run on an air-gapped Windows PC, installed from a single bundle, and it makes no outside requests at all. The aim is one tool that does what BI tools, visual analytics tools and statistics packages each do on their own.
+
+## How it works
+
+Data lands in DuckDB through a loader designed for 100 GB in bounded memory: it splits tables into parts, can stop and pick up again after an interruption, checks the free disk space and respects a memory budget. On top sit a visual explorer, whose query descriptions a WebAssembly binary translates into DuckDB SQL inside a sandbox with no file or network access; pivot tables and a worksheet on Perspective; formulas compiled to SQL; and charts. An extension API with its own test kit lets the root-cause analysis add its pages without any browser code.
+
+## Quality
+
+Every milestone ends with a visual QA loop: screenshots of every screen in Chromium and WebKit at three resolutions, click-through tests of the main flows, automatic checks for console errors, outside requests and accessibility rules, and visual regression baselines for the screens that have been approved.

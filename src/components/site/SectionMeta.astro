@@ -1,0 +1,28 @@
+---
+// The opening of a home section or a page, as in the reference: accent dot,
+// kicker and hairline, then title, spec line and lead, revealed in four steps.
+interface Props {
+  kicker: string;
+  title: string;
+  titleId: string;
+  // Keep 'as' quoted: unquoted, Astro ignores this Props type and callers go unchecked.
+  'as'?: 'h1' | 'h2';
+  spec?: string[];
+  lead?: string;
+}
+const { kicker, title, titleId, as: Heading = 'h2', spec = [], lead } = Astro.props;
+---
+
+<div class="mb-10 sm:mb-14">
+  <div class="mb-5 flex items-center gap-3" data-reveal>
+    <span aria-hidden="true" class="size-2.5 shrink-0 rounded-full bg-accent"></span>
+    <span class="t-mono text-fg-muted">{kicker}</span>
+    <span aria-hidden="true" class="h-px flex-1 bg-fg-line"></span>
+  </div>
+  <Heading id={titleId} class="t-title mb-4 text-balance" data-reveal style="--i:1">{title}</Heading>
+  {spec.length > 0 && (
+    <p class="t-label mb-5 text-fg-muted" data-reveal style="--i:2">{spec.join(' · ')}</p>
+  )}
+  {lead && <p class="t-lead measure" data-reveal style="--i:3">{lead}</p>}
+  <slot />
+</div>

@@ -1,0 +1,37 @@
+---
+// The light opening, as in the reference: kicker, name, a drawn accent rule,
+// the role line, two short paragraphs, contact links, the site's pages and a
+// scroll cue. The dock takes over once it scrolls away.
+import { PROFILE } from '../../../constants';
+import ContactLinks from '../site/ContactLinks.astro';
+import PageLinks from '../site/PageLinks.astro';
+
+const year = new Date().getFullYear();
+---
+
+<header
+  id="top"
+  class="relative mx-auto flex min-h-[88svh] max-w-[1100px] flex-col justify-center px-6 pb-24 pt-28 sm:px-10 lg:min-h-screen lg:pt-32"
+>
+  <p class="t-mono mb-6 text-fg-muted" data-reveal>Portfolio · Selected work, {year}</p>
+  <h1 class="t-display max-w-[14ch]">{PROFILE.owner}</h1>
+  <div aria-hidden="true" class="draw-rule mb-7 mt-5"></div>
+  <p class="t-heading mb-8 max-w-[24ch] font-normal text-fg-muted" data-reveal style="--i:1">
+    {PROFILE.role}. {PROFILE.headline}.
+  </p>
+  <div class="measure space-y-4">
+    {PROFILE.about.map((line, i) => (
+      <p class="t-lead" data-reveal style={`--i:${2 + i}`}>{line}</p>
+    ))}
+  </div>
+  <div class="mt-10" data-reveal style="--i:4">
+    <ContactLinks />
+  </div>
+  <nav aria-label="Pages" class="mt-2 text-fg-muted" data-reveal style="--i:5">
+    <PageLinks class="t-mono" />
+  </nav>
+  <div class="mt-14 flex items-center gap-3 text-fg-muted sm:mt-20" data-reveal style="--i:6">
+    <span class="t-label">Scroll</span>
+    <span aria-hidden="true" class="scroll-cue h-px w-12 bg-current"></span>
+  </div>
+</header>

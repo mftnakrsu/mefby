@@ -1,0 +1,29 @@
+---
+// The site's three index pages (plus RSS in the footer). aria-current marks
+// the section: "page" on the index itself, "true" anywhere below it.
+interface Props {
+  rss?: boolean;
+  class?: string;
+}
+const { rss = false, class: className } = Astro.props;
+const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const LINKS = [
+  { href: '/projects', label: 'Projects' },
+  { href: '/essays', label: 'Essays' },
+  { href: '/products', label: 'Products' },
+];
+const current = (href: string) =>
+  path === href ? 'page' : path.startsWith(`${href}/`) ? 'true' : undefined;
+const linkClass = 'inline-flex min-h-11 items-center decoration-fg-line underline-offset-4 hover:underline';
+---
+
+<ul class:list={['flex flex-wrap items-center gap-x-5', className]}>
+  {LINKS.map((l) => (
+    <li>
+      <a href={l.href} aria-current={current(l.href)} class={`${linkClass} [&[aria-current]]:underline`}>{l.label}</a>
+    </li>
+  ))}
+  {rss && (
+    <li><a href="/rss.xml" class={linkClass}>RSS</a></li>
+  )}
+</ul>

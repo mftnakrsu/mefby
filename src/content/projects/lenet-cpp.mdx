@@ -1,0 +1,28 @@
+---
+title: "LeNet-5 inference in C++"
+summary: "A minimal CNN inference framework in C++ for LeNet-5 on MNIST, with two optimized branches: im2col and GEMM for 2.4 times the speed, int8 weights for a quarter of the size."
+year: 2025
+category: edge
+spec: ["C++", "im2col + GEMM", "int8", "Edge computing"]
+stack: ["C++", "Make"]
+private: true
+image:
+  src: "https://images.unsplash.com/photo-1762265648694-8b92981255e5?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8N3x8Z3JhcGglMjBwYXBlciUyMHBlbmNpbHxlbnwxfDB8fHwxNzkyOTQ3NjQyfDA&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "Squared-paper spiral notebook, a clear light bulb and a yellow pencil lined up on a pale surface"
+  width: 1600
+  height: 1000
+  credit: "Photo: Cht Gsml / Unsplash"
+  creditUrl: "https://unsplash.com/@karepesinde?utm_source=mefby&utm_medium=referral"
+---
+
+## Overview
+
+A minimal framework for CNN inference that I wrote in C++ for the course Systems Engineering and Architecting for Edge Computing at TH Ingolstadt, in the winter semester 2025/26. It implements LeNet-5 and classifies MNIST digits with a 4D tensor class in NCHW layout, the layers and an MNIST loader, and nothing else.
+
+## Two optimizations
+
+The baseline computes convolution directly, in seven nested loops, and takes 80 ms for 100 images. The performance branch rewrites convolution as im2col followed by a matrix multiplication, which brings the same batch down to 33 ms, 2.4 times faster. The quantization branch stores the weights as int8 instead of float, which shrinks them from 245 KB to 61 KB, a reduction of 75%, at about the speed of the baseline.
+
+## The network
+
+Two convolution layers with 5×5 kernels, each followed by ReLU and max pooling, then three fully connected layers from 400 inputs down to 120, 84 and 10 outputs, and a softmax. Every branch keeps the same network, so the measurements compare only the implementation.

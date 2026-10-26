@@ -1,0 +1,22 @@
+---
+// One numbered home section: the landmark with the id that the dock, the rail
+// and the colour journey use, one column at the header and footer width, and
+// the reference-style opening (accent dot, "01 / 05", title, spec line, lead).
+import SectionMeta from '../site/SectionMeta.astro';
+import { HOME_SECTIONS, sectionKicker, type HomeSectionId } from '../../lib/sections';
+
+interface Props {
+  id: HomeSectionId;
+  spec?: string[];
+  lead?: string;
+}
+const { id, spec, lead } = Astro.props;
+const title = HOME_SECTIONS.find((s) => s.id === id)?.title ?? id;
+---
+
+<section id={id} aria-labelledby={`${id}-title`}>
+  <div class="mx-auto max-w-[1100px] px-6 py-20 sm:px-10 sm:py-28 lg:py-32">
+    <SectionMeta kicker={sectionKicker(id)} title={title} titleId={`${id}-title`} spec={spec} lead={lead} />
+    <slot />
+  </div>
+</section>

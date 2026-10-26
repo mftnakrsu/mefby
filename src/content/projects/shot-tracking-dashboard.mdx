@@ -1,0 +1,28 @@
+---
+title: "Production shot-tracking dashboard"
+summary: "A dashboard that tracks every episode, scene and shot of a series in production, with progress over time and the workload of each artist."
+year: 2025
+category: data
+spec: ["Dashboard", "Google Drive API", "FastAPI", "Next.js"]
+stack: ["Python", "FastAPI", "Next.js", "TypeScript", "Google Drive API"]
+private: true
+image:
+  src: "https://images.unsplash.com/photo-1570834322056-ba3e2994ab85?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8OXx8Y2luZW1hJTIwY2FtZXJhJTIwb24lMjBzZXR8ZW58MXwwfHx8MTc5Mjk0NzMxN3ww&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "Black and white view of a video camera hanging from a crane arm, with stage lights glowing in the haze behind"
+  width: 1600
+  height: 1000
+  credit: "Photo: Miguel Ángel Hernández / Unsplash"
+  creditUrl: "https://unsplash.com/@miguelherc96?utm_source=mefby&utm_medium=referral"
+---
+
+## Overview
+
+A production dashboard I built at Hagia for a series in production. It shows where every episode, scene and shot stands.
+
+## What it shows
+
+Progress for each episode, scene and shot; a matrix of scene progress across the whole series; the workload of each owner and artist; and progress figures by day and by week. Shot progress is tracked in real time.
+
+## How it is built
+
+A FastAPI backend reads the production's shot files from Google Drive through the Drive API and writes the generated reports, and a Next.js front end draws the dashboard on top of it. A shot's episode, scene and number come from its file name, and a work-in-progress prefix marks it as unfinished; anything else counts as completed. Sign-in goes through Supabase, and charts are drawn with Recharts.

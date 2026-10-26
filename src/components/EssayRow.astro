@@ -1,55 +1,52 @@
 ---
+// One essay in a list (home page, /essays): title in the display face, a mono
+// meta line (date · reading time · languages), the description and topics.
+// "featured" adds a small "New" marker with a terracotta dot.
 import type { CollectionEntry } from 'astro:content';
 import { fmtDate, readingTime, essayLangs, topicTags } from '../lib/essayMeta';
 
 interface Props {
   essay: CollectionEntry<'essays'>;
   featured?: boolean;
+  // Keep 'as' quoted: unquoted, Astro ignores this Props type and callers go unchecked.
+  'as'?: 'h2' | 'h3' | 'h4';
 }
-const { essay, featured = false } = Astro.props;
+const { essay, featured = false, as: Heading = 'h3' } = Astro.props;
 const langs = essayLangs(essay.data.lang, !!essay.data.translationSlug);
 const tags = topicTags(essay.data.tags);
+// Mark a Turkish essay's title and description, since the list is in English.
+const lang = essay.data.lang === 'en' ? undefined : essay.data.lang;
 ---
 
-<li class="border-b border-zinc-100">
-  <a
-    href={`/essays/${essay.id}`}
-    class={`group block py-5 rounded-lg transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${featured ? '-ml-2 -mr-2 pl-3 pr-2 rounded-l-none border-l-2 border-emerald-300' : '-mx-2 px-2'}`}
-  >
-    <div class="flex items-baseline gap-2">
+<li class="border-b border-fg-line">
+  <a href={`/essays/${essay.id}`} class="group block py-5">
+    <div class="flex items-baseline gap-3">
       {essay.data.seriesOrder != null && (
-        <span class="shrink-0 font-mono text-[10px] text-zinc-500 border border-zinc-200 rounded px-1.5 py-px" aria-label={`Part ${essay.data.seriesOrder}`}>Part {essay.data.seriesOrder}</span>
+        <span class="t-mono shrink-0 text-fg-muted">Part {essay.data.seriesOrder}</span>
       )}
-      <h3 class={`font-medium text-zinc-900 leading-snug group-hover:text-emerald-700 transition-colors ${featured ? 'text-base' : 'text-[15px]'}`}>
+      <Heading lang={lang} class="font-display text-[1.2rem] font-medium leading-snug tracking-[-0.01em] decoration-fg-line underline-offset-4 group-hover:underline">
         {essay.data.title}
-      </h3>
+      </Heading>
       {featured && (
-        <span class="shrink-0 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-medium uppercase tracking-wider text-emerald-700">
-          New<span class="sr-only"> — most recent essay</span>
+        <span class="t-label inline-flex shrink-0 items-center gap-1.5 text-fg-muted">
+          <span aria-hidden="true" class="size-1.5 rounded-full bg-accent"></span>New<span class="sr-only"> (most recent essay)</span>
         </span>
       )}
-      <span aria-hidden="true" class="ml-auto pl-2 text-zinc-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all">&rarr;</span>
+      <span aria-hidden="true" class="ml-auto shrink-0 text-fg-muted transition-transform motion-reduce:transition-none group-hover:translate-x-0.5">→</span>
     </div>
-
-    <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-zinc-600">
+    <p class="t-mono mt-2 flex flex-wrap gap-x-2 text-fg-muted">
       <time datetime={essay.data.date.toISOString().slice(0, 10)}>{fmtDate(essay.data.date)}</time>
-      <span aria-hidden="true" class="text-zinc-300">&middot;</span>
+      <span aria-hidden="true">·</span>
       <span>{readingTime(essay.body)} min read</span>
-      <span aria-hidden="true" class="text-zinc-300">&middot;</span>
-      <span aria-label={`Available in ${langs.join(' and ')}`}>{langs.join(' · ')}</span>
-    </div>
-
+      <span aria-hidden="true">·</span>
+      <span><span class="sr-only">Available in </span>{langs.join(' · ')}</span>
+    </p>
     {essay.data.description && (
-      <p class="mt-2 text-[13px] leading-relaxed text-zinc-500 line-clamp-2">
-        {essay.data.description}
-      </p>
+      <p lang={lang} class="measure mt-2 line-clamp-2 text-[0.95rem] leading-relaxed text-fg-muted">{essay.data.description}</p>
     )}
-
     {tags.length > 0 && (
-      <ul class="mt-2.5 flex flex-wrap gap-x-1.5 gap-y-1" aria-label="Topics">
-        {tags.map((tag) => (
-          <li class="text-[10px] font-mono text-zinc-500 group-hover:text-emerald-600/80 transition-colors">#{tag}</li>
-        ))}
+      <ul class="t-mono mt-2.5 flex flex-wrap gap-x-2 text-fg-muted" aria-label="Topics">
+        {tags.map((tag) => <li>#{tag}</li>)}
       </ul>
     )}
   </a>

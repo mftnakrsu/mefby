@@ -266,7 +266,7 @@ evals-by-hand/
   README.md            # one row per part: | Part | Topic | Code | Notebook | Essay | + Colab badges;
                        # offline-runtime preamble; links back to rag-by-hand + agents-by-hand + /essays/evals
   requirements.txt     # numpy; optional scipy (only to CHECK a hand-derived value); optional openai
-                       # (commented Ollama + claude fallback) for the real-judge path. Note: TAI PyPI
+                       # (commented Ollama + claude fallback) for the real-judge path. Note: internal PyPI
                        # mirror + pip --break-system-packages on the author's machine.
   LICENSE  .gitignore
   shared/

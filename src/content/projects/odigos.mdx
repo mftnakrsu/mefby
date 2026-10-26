@@ -1,0 +1,33 @@
+---
+title: "Odigos"
+summary: "A production RAG chatbot for families in Italy living with autism, built for Fondazione Paideia."
+year: 2025
+category: llm
+spec: ["RAG", "Knowledge graph", "Azure", "Production"]
+stack: ["Neo4j", "pgvector", "Cohere Rerank", "GPT-4.1", "Azure Container Apps", "GitHub Actions"]
+private: true
+image:
+  src: "https://images.unsplash.com/photo-1591951425600-d09958978584?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8MXx8b3BlbiUyMGJvb2slMjB3YXJtJTIwbGlnaHR8ZW58MXwwfHx8MTc5Mjk0NjM5Nnww&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "Pages of an open book fanned out in a wide arc against a plain cream background"
+  width: 1600
+  height: 1000
+  credit: "Photo: Olga Tutunaru / Unsplash"
+  creditUrl: "https://unsplash.com/@otutunaru?utm_source=mefby&utm_medium=referral"
+featured: { group: llm, order: 1 }
+---
+
+## Overview
+
+Odigos is a retrieval-augmented chatbot for families in Italy living with autism, built for Fondazione Paideia during my time at RADIAITE. It answers from retrieved sources rather than from whatever a general model remembers, and it runs in production.
+
+## What I built
+
+I built the pipeline end to end: knowledge-graph traversal over Neo4j, vector search over pgvector, semantic reranking with Cohere, and answer generation with GPT-4.1. The product grew to more than 58 features.
+
+## How it works
+
+A question takes two retrieval paths: a traversal of the knowledge graph and a vector search. Cohere reranks the combined candidates so the model sees a short, relevant context, and GPT-4.1 writes the answer from it.
+
+## Deployment
+
+The service runs on Azure Container Apps with Neo4j and pgvector behind it, and every change ships through a CI/CD pipeline on GitHub Actions.

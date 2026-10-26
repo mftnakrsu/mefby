@@ -1,5 +1,8 @@
 ---
 import '../styles/global.css';
+import SiteHeader from '../components/site/SiteHeader.astro';
+import SiteFooter from '../components/site/SiteFooter.astro';
+import ProgressRail from '../components/site/ProgressRail.astro';
 
 interface Alternate {
   hreflang: string;
@@ -14,6 +17,7 @@ interface Props {
   publishedTime?: string;
   tags?: string[];
   alternates?: Alternate[];
+  variant?: 'home' | 'page';
 }
 
 const {
@@ -25,18 +29,22 @@ const {
   publishedTime,
   tags = [],
   alternates = [],
+  variant = 'page',
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined;
 const locale = lang === 'tr' ? 'tr_TR' : 'en_US';
+// The home page gets the dock, the progress rail and the full footer.
+const home = variant === 'home';
 ---
 
 <!DOCTYPE html>
-<html lang={lang}>
+<html lang={lang} data-page={home ? 'home' : undefined}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline>document.documentElement.classList.add('js');</script>
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
@@ -84,6 +92,19 @@ const locale = lang === 'tr' ? 'tr_TR' : 'en_US';
     })} />
   </head>
   <body>
-    <slot />
+    <a
+      href="#main"
+      lang="en"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-paper focus:px-4 focus:py-2 focus:text-ink"
+    >Skip to content</a>
+    <SiteHeader mode={home ? 'dock' : 'static'} />
+    {home && <ProgressRail />}
+    <main id="main">
+      <slot />
+    </main>
+    <SiteFooter variant={home ? 'full' : 'compact'} />
+    <script>
+      import '../scripts/reveal';
+    </script>
   </body>
 </html>

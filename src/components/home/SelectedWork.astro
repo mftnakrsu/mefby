@@ -1,0 +1,32 @@
+---
+// 03 Selected work: the featured projects in their four groups. Each group
+// opens with a heading at the /projects group-heading size over a hairline.
+import { getCollection } from 'astro:content';
+import HomeSection from './HomeSection.astro';
+import ProjectCard from '../projects/ProjectCard.astro';
+import { FEATURED_LABELS, featuredGroups } from '../../lib/projects';
+
+const groups = featuredGroups(await getCollection('projects'));
+---
+
+<HomeSection
+  id="work"
+  spec={groups.map((g) => FEATURED_LABELS[g.group])}
+  lead="Projects with a short write-up each. The full list is on the projects page."
+>
+  {groups.map((g, gi) => (
+    <section aria-labelledby={`work-${g.group}`} class:list={[gi > 0 && 'mt-16']}>
+      <div class="border-b border-fg-line pb-3">
+        <h3 id={`work-${g.group}`} class="t-heading">{FEATURED_LABELS[g.group]}</h3>
+      </div>
+      <ul class="mt-6 grid gap-x-8 gap-y-12 sm:grid-cols-2">
+        {g.items.map((project, i) => (
+          <li data-reveal style={`--i:${i % 2}`}><ProjectCard project={project} /></li>
+        ))}
+      </ul>
+    </section>
+  ))}
+  <p class="mt-14">
+    <a href="/projects" class="t-mono decoration-fg-line underline-offset-4 hover:underline">All projects →</a>
+  </p>
+</HomeSection>

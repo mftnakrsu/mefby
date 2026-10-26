@@ -1,0 +1,35 @@
+---
+// 05 Publications: year, title (linked), venue and authors.
+import HomeSection from './HomeSection.astro';
+import { PUBLICATIONS } from '../../../constants';
+
+const years = PUBLICATIONS.map((p) => p.year);
+const first = Math.min(...years);
+const last = Math.max(...years);
+const span = first === last ? String(first) : `${first}–${last}`;
+---
+
+<HomeSection
+  id="publications"
+  spec={['Video generation', 'RAG', 'Datasets', 'Object detection']}
+  lead={`Papers and preprints, ${span}.`}
+>
+  <ol class="border-t border-fg-line">
+    {PUBLICATIONS.map((pub) => (
+      <li class="grid gap-x-8 gap-y-1 border-b border-fg-line py-6 sm:grid-cols-[4rem_1fr]" data-reveal>
+        <p class="t-mono pt-1 text-fg-muted">{pub.year}</p>
+        <div>
+          <h3 class="font-display text-[1.15rem] font-medium leading-snug">
+            {pub.link ? (
+              <a href={pub.link} target="_blank" rel="noopener noreferrer" class="decoration-fg-line underline-offset-4 hover:underline">
+                {pub.title}<span class="sr-only"> (opens in a new tab)</span>
+              </a>
+            ) : pub.title}
+          </h3>
+          <p class="t-mono mt-2 text-fg-muted">{pub.venue}</p>
+          <p class="mt-1 text-[0.95rem] text-fg-muted">{pub.authors}</p>
+        </div>
+      </li>
+    ))}
+  </ol>
+</HomeSection>

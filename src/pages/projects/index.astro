@@ -1,0 +1,55 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import SectionMeta from '../../components/site/SectionMeta.astro';
+import GroupHeading from '../../components/projects/GroupHeading.astro';
+import ProjectRow from '../../components/projects/ProjectRow.astro';
+import { getCollection } from 'astro:content';
+import { PRODUCTS } from '../../../constants';
+import { CATEGORY_LABELS, groupByCategory, hasPage, projectHref, yearSpan } from '../../lib/projects';
+
+const projects = await getCollection('projects');
+const groups = groupByCategory(projects);
+// Newest launch first; "YYYY-MM" strings sort correctly as text.
+const products = [...PRODUCTS].sort((a, b) => b.launched.localeCompare(a.launched));
+const total = projects.length + products.length;
+const lead = `Products, LLM systems, research, edge AI, computer vision, data work and the notebooks I learned on: ${total} in all.`;
+---
+
+<Layout title="Projects — Meftun Akarsu" description={lead}>
+  <div class="mx-auto max-w-[1100px] px-6 pt-14 sm:px-10 sm:pt-20">
+    <SectionMeta as="h1" kicker={`Projects · ${yearSpan(projects)}`} title="Projects" titleId="projects-title" lead={lead} />
+
+    <section aria-labelledby="group-products" data-reveal>
+      <GroupHeading id="group-products" count={products.length}>Products</GroupHeading>
+      <ul class="lg:grid lg:grid-cols-2 lg:gap-x-12">
+        {products.map((p) => (
+          <ProjectRow title={p.name} year={p.launched.slice(0, 4)} summary={p.tagline} stack={p.stack} href={`/products/${p.slug}`} />
+        ))}
+      </ul>
+    </section>
+
+    {groups.map((g) => (
+      <section aria-labelledby={`group-${g.category}`} class="mt-16 sm:mt-20" data-reveal>
+        <GroupHeading id={`group-${g.category}`} count={g.items.length}>{CATEGORY_LABELS[g.category]}</GroupHeading>
+        <ul class={g.category === 'learning' ? 'md:grid md:grid-cols-2 md:gap-x-10 lg:grid-cols-3' : 'lg:grid lg:grid-cols-2 lg:gap-x-12'}>
+          {g.items.map((p) => {
+            const href = projectHref(p);
+            return (
+              <ProjectRow
+                title={p.data.title}
+                year={p.data.year}
+                summary={p.data.summary}
+                stack={p.data.stack}
+                href={href}
+                external={href !== null && !hasPage(p)}
+                stars={p.data.stars}
+                isPrivate={p.data.private}
+                dense={g.category === 'learning'}
+              />
+            );
+          })}
+        </ul>
+      </section>
+    ))}
+  </div>
+</Layout>

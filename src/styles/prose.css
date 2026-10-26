@@ -1,0 +1,251 @@
+/*
+  Long-form text: essays (EssayLayout) and project write-ups (.prose-project).
+  Colours come from the live tokens, so the rules read on any canvas.
+  :where() keeps specificity at one class, so utilities inside MDX still win.
+*/
+@layer components {
+  .prose {
+    color: var(--fg);
+    font-size: 1.0625rem; /* 17px */
+    line-height: 1.7;
+  }
+  @media (min-width: 640px) {
+    .prose {
+      font-size: 1.125rem; /* 18px */
+    }
+  }
+
+  .prose :where(p, ul, ol, table, pre, blockquote) {
+    margin-block: 0 1.25em;
+  }
+
+  .prose :where(h2) {
+    font-family: var(--ff-display);
+    font-weight: 500;
+    font-size: clamp(1.45rem, 3vw, 1.8rem);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 2.4em 0 0.7em;
+  }
+  .prose :where(h3) {
+    font-family: var(--ff-display);
+    font-weight: 500;
+    font-size: 1.25rem;
+    line-height: 1.25;
+    margin: 1.9em 0 0.6em;
+  }
+  .prose :where(h4) {
+    font-weight: 600;
+    margin: 1.6em 0 0.5em;
+  }
+  .prose :where(strong) {
+    font-weight: 650;
+  }
+  .prose :where(a) {
+    color: var(--accent-ink);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+  }
+  .prose :where(a):hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .prose :where(code) {
+    font-family: var(--ff-mono);
+    font-size: 0.86em;
+    background-color: var(--paper-sunk);
+    border-radius: 4px;
+    padding: 0.12em 0.35em;
+  }
+  /* Shiki sets an inline background; the surface comes from the tokens instead. */
+  .prose :where(pre) {
+    position: relative;
+    background-color: var(--paper-sunk) !important;
+    border: 1px solid var(--fg-line);
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    line-height: 1.65;
+  }
+  .prose :where(pre code) {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+  }
+  @media (max-width: 640px) {
+    .prose :where(pre code) {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  }
+  /* github-light's keyword, comment and parameter colours fall under 4.5:1 on
+     the sunk surface; use darker shades of the same hues. */
+  .prose pre span[style*="#D73A49" i] {
+    color: #cb2431 !important;
+  }
+  .prose pre span[style*="#6A737D" i] {
+    color: #5f6872 !important;
+  }
+  .prose pre span[style*="#E36209" i] {
+    color: #b04800 !important;
+  }
+
+  .prose :where(ul) {
+    list-style: none;
+    padding-left: 0;
+  }
+  .prose :where(ul > li) {
+    position: relative;
+    padding-left: 1.25rem;
+    margin-bottom: 0.5em;
+  }
+  .prose :where(ul > li)::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.85em;
+    width: 0.55rem;
+    height: 1px;
+    background: var(--accent);
+  }
+  /* GFM task lists: the checkbox is the marker. */
+  .prose :where(.task-list-item) {
+    padding-left: 1.5em;
+  }
+  .prose :where(.task-list-item)::before {
+    content: none;
+  }
+  .prose :where(.task-list-item > input[type="checkbox"]) {
+    position: absolute;
+    left: 0;
+    top: 0.5em;
+    margin: 0;
+    accent-color: var(--accent-ink);
+  }
+  /* Tailwind's preflight hides list numbers; essays rely on them. */
+  .prose :where(ol) {
+    list-style: decimal-leading-zero;
+    padding-left: 2.1em;
+  }
+  .prose :where(ol > li) {
+    padding-left: 0.3em;
+    margin-bottom: 0.5em;
+  }
+  .prose :where(ol > li)::marker {
+    font-family: var(--ff-mono);
+    font-size: 0.82em;
+    color: var(--fg-muted);
+  }
+  .prose :where(li > ul, li > ol) {
+    margin-top: 0.5em;
+    margin-bottom: 0;
+  }
+
+  .prose :where(table) {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.88em;
+    line-height: 1.55;
+  }
+  .prose :where(th, td) {
+    border-bottom: 1px solid var(--fg-line);
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .prose :where(thead th) {
+    font-weight: 600;
+    white-space: nowrap;
+    border-bottom-color: color-mix(in oklab, var(--fg), transparent 70%);
+  }
+  .prose :where(tbody td code) {
+    white-space: nowrap;
+  }
+
+  .prose :where(blockquote) {
+    border-left: 2px solid var(--accent);
+    padding-left: 1.25rem;
+    font-style: italic;
+  }
+  .prose :where(blockquote p:last-child) {
+    margin-bottom: 0;
+  }
+  .prose :where(blockquote strong) {
+    font-style: normal;
+  }
+
+  .prose :where(hr) {
+    border: 0;
+    border-top: 1px solid var(--fg-line);
+    margin: 2.5em 0;
+  }
+  .prose :where(.katex-display) {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.25rem 0;
+  }
+
+  /* Project write-ups: section headings read as labels with a hairline. */
+  .prose-project :where(h2) {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: var(--ff-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    line-height: 1.4;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    margin: 2.6em 0 1em;
+  }
+  .prose-project :where(h2)::after {
+    content: "";
+    height: 1px;
+    flex: 1;
+    background: var(--fg-line);
+  }
+  .prose-project > :where(h2:first-child) {
+    margin-top: 0;
+  }
+
+  /* Copy button that EssayLayout adds to every code block. */
+  .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    font: 600 0.68rem var(--ff-mono);
+    color: var(--fg-muted);
+    background: var(--paper);
+    border: 1px solid var(--fg-line);
+    border-radius: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity 0.15s,
+      color 0.15s;
+  }
+  .prose pre:hover .copy-btn,
+  .copy-btn:focus-visible {
+    opacity: 1;
+  }
+  .copy-btn:hover {
+    color: var(--fg);
+  }
+  @media (hover: none) {
+    .copy-btn {
+      opacity: 1;
+    }
+    /* The button is always visible on touch screens: keep it clear of the first line. */
+    .prose pre:has(> .copy-btn) {
+      padding-top: 2.4rem;
+    }
+  }
+}

@@ -1,0 +1,55 @@
+---
+// "static": the sticky bar on reading pages. "dock": the home page's fixed bar,
+// which slides in after the hero (src/scripts/home-nav.ts sets data-visible)
+// and carries the section numbers below lg, where the progress rail is hidden.
+import { PROFILE } from '../../../constants';
+import { HOME_SECTIONS, twoDigits } from '../../lib/sections';
+import ContactLinks from './ContactLinks.astro';
+import PageLinks from './PageLinks.astro';
+
+interface Props {
+  mode?: 'static' | 'dock';
+}
+const { mode = 'static' } = Astro.props;
+const dock = mode === 'dock';
+---
+
+<header
+  lang="en"
+  data-dock={dock ? '' : undefined}
+  class:list={[
+    'inset-x-0 top-0 z-40 border-b border-fg-line bg-chrome-bg text-chrome-fg backdrop-blur-md',
+    dock
+      ? 'fixed invisible -translate-y-full opacity-0 transition-[translate,opacity,visibility] duration-500 motion-reduce:transition-none data-[visible]:visible data-[visible]:translate-y-0 data-[visible]:opacity-100'
+      : 'sticky',
+  ]}
+>
+  <div class="mx-auto flex max-w-[1100px] items-center justify-between gap-4 px-4 min-[384px]:px-6 sm:px-10">
+    <a href={dock ? '#top' : '/'} class="inline-flex min-h-11 items-center font-display text-[1.02rem] font-medium tracking-tight">
+      {PROFILE.owner}
+    </a>
+    <div class="flex items-center gap-2 sm:gap-6">
+      {dock && (
+        <nav aria-label="Sections" class="lg:hidden">
+          <ol class="flex items-center">
+            {HOME_SECTIONS.map((s, i) => (
+              <li>
+                <a
+                  href={`#${s.id}`}
+                  data-section-link={s.id}
+                  class="t-mono inline-flex min-h-11 min-w-9 items-center justify-center text-fg-muted [&[aria-current]]:text-fg"
+                >{twoDigits(i + 1)}<span class="sr-only"> {s.title}</span></a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
+      <nav aria-label="Site" class:list={[dock && 'hidden sm:block']}>
+        <PageLinks />
+      </nav>
+      <div class:list={['hidden', dock ? 'lg:block' : 'sm:block']}>
+        <ContactLinks variant="icon" />
+      </div>
+    </div>
+  </div>
+</header>

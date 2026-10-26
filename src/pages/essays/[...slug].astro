@@ -1,6 +1,7 @@
 ---
 import { getCollection, render, type CollectionEntry } from 'astro:content';
 import EssayLayout from '../../layouts/EssayLayout.astro';
+import { readingTime } from '../../lib/essayMeta';
 
 export async function getStaticPaths() {
   const essays = await getCollection('essays', ({ data }) => !data.draft);
@@ -69,6 +70,7 @@ const { Content } = await render(essay);
   seriesTotal={seriesTotal}
   prevEssay={prevEssay}
   nextEssay={nextEssay}
+  readingMinutes={readingTime(essay.body)}
 >
   <Content />
 </EssayLayout>

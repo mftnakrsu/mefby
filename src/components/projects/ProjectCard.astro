@@ -1,0 +1,45 @@
+---
+// A featured project on the home page: image (16:10), title, spec line and
+// summary. The title links to the project's page and its ::after covers the
+// whole card; the Unsplash credit sits above that overlay so it stays a link.
+import type { CollectionEntry } from 'astro:content';
+import { unsplashSrcset } from '../../lib/images';
+
+interface Props {
+  project: CollectionEntry<'projects'>;
+}
+const { project } = Astro.props;
+const { data } = project;
+const image = data.image;
+if (!image) throw new Error(`${project.id}: a featured project needs an image`);
+const srcset = unsplashSrcset(image.src, image.width, image.height);
+---
+
+<article class="group relative">
+  <div class="mb-5 overflow-hidden rounded-xl border border-fg-line bg-paper-sunk">
+    <img
+      src={image.src}
+      srcset={srcset}
+      sizes={srcset ? '(min-width: 1100px) 494px, (min-width: 640px) calc(50vw - 56px), calc(100vw - 48px)' : undefined}
+      alt={image.alt}
+      width={image.width}
+      height={image.height}
+      loading="lazy"
+      decoding="async"
+      class="block aspect-[16/10] h-auto w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02] motion-reduce:transition-none"
+    />
+  </div>
+  <h4 class="font-display text-[1.3rem] font-medium leading-tight tracking-[-0.01em]">
+    <a
+      href={`/projects/${project.id}`}
+      class="decoration-fg-line underline-offset-4 after:absolute after:inset-0 group-hover:underline"
+    >{data.title}</a>
+  </h4>
+  {data.spec.length > 0 && <p class="t-label mt-2 text-fg-muted">{data.spec.join(' · ')}</p>}
+  <p class="mt-3 text-[0.98rem] leading-relaxed text-fg-muted">{data.summary}</p>
+  {image.credit && image.creditUrl && (
+    <p class="t-mono relative z-10 mt-2 text-fg-muted">
+      <a href={image.creditUrl} class="underline decoration-fg-line underline-offset-2 hover:decoration-current">{image.credit}</a>
+    </p>
+  )}
+</article>

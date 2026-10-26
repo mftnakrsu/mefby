@@ -1,0 +1,28 @@
+---
+title: "Onboard AI harness"
+summary: "The framework that runs AI modules on an autonomous vehicle's onboard computer: messaging, timing, health checks, a safety gate and recording."
+year: 2026
+category: edge
+spec: ["Robotics", "Messaging", "Simulation", "Safety"]
+stack: ["Python", "UDP", "Pydantic", "uv", "pytest", "mypy", "ruff"]
+private: true
+image:
+  src: "https://images.unsplash.com/photo-1518770660439-4636190af475?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8M3x8c2luZ2xlJTIwYm9hcmQlMjBjb21wdXRlciUyMGNpcmN1aXR8ZW58MXwwfHx8MTc5Mjk0NzQ5Mnww&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "Close-up of a dark circuit board with a square microchip, capacitors and copper rings, in shallow focus"
+  width: 1600
+  height: 1000
+  credit: "Photo: Alexandre Debiève / Unsplash"
+  creditUrl: "https://unsplash.com/@alexkixa?utm_source=mefby&utm_medium=referral"
+---
+
+## Overview
+
+The harness that will run on the onboard computer of an autonomous vehicle. It starts and feeds two AI modules, one that fuses sensor data into tracked objects and one that proposes what to do next; it watches their timing and health, connects them to the vehicle's control computer and to the operator's station, and records every message. The control computer always has the final say.
+
+## Design
+
+Every proposal passes a safety gate before it reaches the control computer. While the link to the operator is up, the operator approves each proposal; if the link drops, a deterministic policy decides onboard. The system is built in rate layers, and a slow layer never blocks a fast one: consumers keep only the latest state, treat data as stale once it passes its maximum age, and never queue old messages. Events are acknowledged and sent up to six times, which at 5% packet loss leaves about one chance in sixty million that an event is lost.
+
+## Status
+
+Phase 1 runs everything on one computer in simulation, with mock AI modules and a software-in-the-loop simulator in place of the control computer. The first milestone is done: the message contract with its topic registry and a generated reference, UDP transport with a reliable layer, and the staleness helpers.

@@ -1,0 +1,63 @@
+---
+// A course hub (/essays/rag, /essays/agents, /essays/evals): the opening,
+// "Start with Part 1", code and glossary links, then the core and frontier
+// tracks.
+import { getCollection } from 'astro:content';
+import Layout from '../layouts/Layout.astro';
+import SectionMeta from './site/SectionMeta.astro';
+import Button from './site/Button.astro';
+import PartList from './PartList.astro';
+import { COURSES, courseParts, type Series } from '../lib/courses';
+
+interface Props {
+  series: Series;
+}
+const { series } = Astro.props;
+const course = COURSES.find((c) => c.series === series);
+if (!course) throw new Error(`CourseHub: unknown series "${series}"`);
+const parts = courseParts(await getCollection('essays'), series);
+const first = parts[0];
+if (!first) throw new Error(`CourseHub: ${course.title} has no published parts`);
+const core = parts.filter((p) => (p.data.seriesOrder ?? 0) <= course.coreParts);
+const frontier = parts.filter((p) => (p.data.seriesOrder ?? 0) > course.coreParts);
+
+const itemListJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: course.title,
+  description: course.listDescription,
+  numberOfItems: parts.length,
+  itemListElement: parts.map((p) => ({
+    '@type': 'ListItem',
+    position: p.data.seriesOrder,
+    url: new URL(`/essays/${p.id}/`, Astro.site).toString(),
+    name: p.data.title,
+  })),
+};
+---
+
+<Layout title={`${course.title} — Meftun Akarsu`} description={course.description}>
+  <script is:inline type="application/ld+json" set:html={JSON.stringify(itemListJsonLd)} />
+  <div class="mx-auto max-w-[1100px] px-6 pt-14 sm:px-10 sm:pt-20">
+    <SectionMeta as="h1" kicker={`A ${parts.length}-part course`} title={course.title} titleId="course-title" />
+    <p class="t-body measure mb-8" data-reveal>{course.intro}</p>
+    <div class="mb-14 flex flex-wrap items-center gap-3" data-reveal style="--i:1">
+      <Button href={`/essays/${first.id}`}>Start with Part 1: {first.data.title} <span aria-hidden="true">→</span></Button>
+      <Button href={course.repo} variant="secondary" external>Code on GitHub</Button>
+      <Button href={course.glossary} variant="secondary">Glossary</Button>
+    </div>
+
+    <section aria-labelledby="core-track" data-reveal>
+      <h2 id="core-track" class="t-heading mb-4">Core track · Parts 1–{core.length}</h2>
+      <PartList parts={core} total={parts.length} />
+    </section>
+
+    {frontier.length > 0 && (
+      <section aria-labelledby="frontier-track" class="mt-16 sm:mt-20" data-reveal>
+        <h2 id="frontier-track" class="t-heading mb-4">Frontier track · Parts {course.coreParts + 1}–{parts.length}</h2>
+        <p class="t-body measure mb-4 text-fg-muted">{course.frontierNote}</p>
+        <PartList parts={frontier} total={parts.length} />
+      </section>
+    )}
+  </div>
+</Layout>

@@ -1,8 +1,12 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import SectionMeta from '../../components/site/SectionMeta.astro';
+import Label from '../../components/site/Label.astro';
+import Button from '../../components/site/Button.astro';
 import { PRODUCTS } from '../../../constants';
 import type { Product } from '../../../types';
-import { fmtMonth } from '../../lib/productMeta';
+import { fmtMonth, operatingSystem, productFacts, productLinks } from '../../lib/productMeta';
+import { twoDigits } from '../../lib/sections';
 
 export function getStaticPaths() {
   return PRODUCTS.map((product) => ({ params: { slug: product.slug }, props: { product } }));
@@ -12,30 +16,27 @@ interface Props {
   product: Product;
 }
 const { product } = Astro.props;
-const { links, video, steps = [], gallery = [] } = product;
+const { image, video, steps = [], gallery = [] } = product;
 
 const abs = (path: string) => new URL(path, Astro.site).toString();
-const pageUrl = abs(`/products/${product.slug}`);
-const metaDescription = product.summary ?? product.tagline;
-
-const facts = [
-  product.license ? `Open source (${product.license})` : null,
-  product.languages?.length ? product.languages.join(' · ') : null,
-].filter((f): f is string => f != null);
+const pageUrl = abs(`/products/${product.slug}/`);
+const facts = productFacts(product);
+const links = productLinks(product);
 
 const appJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   name: product.name,
   description: product.tagline,
-  url: links.app ?? links.docs ?? pageUrl,
-  image: abs(product.image.src),
+  url: product.links.app ?? product.links.docs ?? pageUrl,
+  image: abs(image.src),
   applicationCategory: product.applicationCategory ?? 'BusinessApplication',
-  operatingSystem: product.operatingSystem ?? 'Web',
+  operatingSystem: operatingSystem(product),
   datePublished: product.launched,
   ...(product.license ? { license: `https://spdx.org/licenses/${product.license}.html` } : {}),
   ...(product.languages?.length ? { inLanguage: product.languages.map((l) => l.toLowerCase()) } : {}),
-  ...(links.source ? { sameAs: [links.source] } : {}),
+  ...(product.links.download ? { downloadUrl: product.links.download } : {}),
+  ...(product.links.source ? { sameAs: [product.links.source] } : {}),
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   author: {
     '@type': 'Person',
@@ -49,203 +50,180 @@ const breadcrumbJsonLd = {
   '@type': 'BreadcrumbList',
   itemListElement: [
     { '@type': 'ListItem', position: 1, name: 'Home', item: abs('/') },
-    { '@type': 'ListItem', position: 2, name: 'Products', item: abs('/products') },
+    { '@type': 'ListItem', position: 2, name: 'Products', item: abs('/products/') },
     { '@type': 'ListItem', position: 3, name: product.name, item: pageUrl },
   ],
 };
 
-const primaryBtn =
-  'inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40';
-const secondaryBtn =
-  'inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40';
-// Same full-bleed breakout the essay figures (Diagram) use.
-const figureClass = 'rounded-xl border border-zinc-200 bg-white overflow-hidden md:-mx-8 lg:-mx-24 xl:-mx-40';
-const captionClass = 'px-4 sm:px-6 py-3 border-t border-zinc-100 bg-zinc-50/40 text-xs text-zinc-600 leading-relaxed';
+// Figures break out of the text column on wide screens, as essay figures do.
+const figureClass = 'overflow-hidden rounded-xl border border-fg-line bg-paper-sunk md:-mx-6 lg:-mx-24 xl:-mx-40';
+const captionClass = 'border-t border-fg-line px-4 py-3 text-[0.95rem] leading-relaxed text-fg-muted sm:px-6';
 ---
 
 <Layout
   title={`${product.metaTitle ?? product.name} — Meftun Akarsu`}
-  description={metaDescription}
-  ogImage={product.image.src}
+  description={product.summary ?? product.tagline}
+  ogImage={image.src}
 >
   <script is:inline type="application/ld+json" set:html={JSON.stringify(appJsonLd)} />
   <script is:inline type="application/ld+json" set:html={JSON.stringify(breadcrumbJsonLd)} />
-  <div class="min-h-screen bg-white text-zinc-500 font-sans">
-    <div class="max-w-2xl mx-auto px-6 py-16 md:py-24">
-      <a href="/products" class="text-xs text-zinc-400 hover:text-emerald-600 transition-colors mb-12 inline-block">&larr; all products</a>
+  <article class="mx-auto max-w-[46rem] px-6 pt-14 sm:pt-20" aria-labelledby="product-title">
+    <SectionMeta
+      as="h1"
+      kicker={`${product.status} · ${fmtMonth(product.launched)}`}
+      title={product.name}
+      titleId="product-title"
+      spec={product.spec}
+      lead={product.tagline}
+    />
 
-      <article>
-        <p class="text-[11px] font-mono uppercase tracking-widest text-emerald-700 mb-3">
-          Product · Launched <time datetime={product.launched}>{fmtMonth(product.launched)}</time>
-        </p>
-        <h1 class="text-2xl sm:text-[28px] font-semibold text-zinc-900 leading-[1.25] tracking-tight mb-6">{product.name}</h1>
-        <p class="text-[15px] text-zinc-600 italic leading-relaxed border-l-2 border-emerald-400 pl-4 mb-6">{product.tagline}</p>
-        <p class="text-[15px] text-zinc-600 leading-relaxed mb-4">{product.description}</p>
+    <p class="t-body measure mb-8" data-reveal>{product.description}</p>
 
-        {facts.length > 0 && (
-          <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-zinc-500 mb-8">
-            {facts.map((f, i) => (
-              <Fragment>
-                {i > 0 && <span aria-hidden="true" class="text-zinc-300">&middot;</span>}
-                <span>{f}</span>
-              </Fragment>
-            ))}
-          </p>
-        )}
+    {facts.length > 0 && (
+      <dl class="mb-10 grid grid-cols-[auto_1fr] items-baseline gap-x-8 gap-y-2" data-reveal style="--i:1">
+        {facts.map((f) => (
+          <Fragment>
+            <dt class="t-label text-fg-muted">{f.label}</dt>
+            <dd class="t-mono">{f.value}</dd>
+          </Fragment>
+        ))}
+      </dl>
+    )}
 
-        <div class="flex flex-wrap items-center gap-2 mb-12">
-          {links.app && (
-            <a href={links.app} target="_blank" rel="noopener noreferrer" class={primaryBtn}>
-              Open the live app<span class="sr-only"> (opens in a new tab)</span>
-              <span aria-hidden="true">&#8599;</span>
-            </a>
-          )}
-          {links.docs && (
-            <a href={links.docs} target="_blank" rel="noopener noreferrer" class={links.app ? secondaryBtn : primaryBtn}>
-              Documentation<span class="sr-only"> (opens in a new tab)</span>
-              <span aria-hidden="true">&#8599;</span>
-            </a>
-          )}
-          {links.source && (
-            <a href={links.source} target="_blank" rel="noopener noreferrer" class={secondaryBtn}>
-              Source on GitHub<span class="sr-only"> (opens in a new tab)</span>
-              <span aria-hidden="true">&#8599;</span>
-            </a>
-          )}
-        </div>
+    {links.length > 0 && (
+      <div class="mb-14 flex flex-wrap items-center gap-3" data-reveal style="--i:2">
+        {links.map((l, i) => (
+          <Button href={l.href} variant={i === 0 ? 'primary' : 'secondary'} external>{l.label}</Button>
+        ))}
+      </div>
+    )}
 
-        {video && (
-          <figure class={`mb-16 ${figureClass}`}>
-            <video
-              controls
-              muted
-              playsinline
-              preload="metadata"
-              poster={video.poster}
-              src={video.src}
-              aria-label={`${product.name} demo video`}
-              class="block w-full h-auto bg-zinc-50"
-            >
-              <a href={video.src}>Download the {product.name} demo video</a>.
-            </video>
-            <figcaption class={captionClass}>
-              <span class="font-mono text-zinc-400 mr-2">Demo</span>{video.caption}
-            </figcaption>
-          </figure>
-        )}
+    <figure class={`mb-16 ${figureClass}`} data-reveal>
+      {video ? (
+        <Fragment>
+          <video
+            controls
+            playsinline
+            preload="metadata"
+            poster={video.poster}
+            src={video.src}
+            aria-label={`${product.name} demo video`}
+            class="block aspect-video h-auto w-full"
+          >
+            <a href={video.src}>Download the {product.name} demo video</a>.
+          </video>
+          <figcaption class={captionClass}>
+            <span class="t-mono mr-2">Demo</span>{video.caption}
+          </figcaption>
+        </Fragment>
+      ) : (
+        <img
+          src={image.src}
+          alt={image.alt}
+          width={image.width}
+          height={image.height}
+          loading="lazy"
+          decoding="async"
+          class="block h-auto w-full"
+        />
+      )}
+    </figure>
 
-        {steps.length > 0 && (
-          <section class="mb-16" aria-labelledby="how-it-works">
-            <div class="flex items-center gap-3 mb-2">
-              <h2 id="how-it-works" class="text-[11px] font-medium text-zinc-400 uppercase tracking-widest">How it works</h2>
-              <span aria-hidden="true" class="h-px flex-1 bg-zinc-100"></span>
-            </div>
-            <ol class="border-t border-zinc-100">
-              {steps.map((step, i) => (
-                <li class="flex gap-3 py-4 border-b border-zinc-100">
-                  <span class="shrink-0 mt-0.5 w-7 text-right font-mono text-[11px] text-zinc-400">{i + 1}</span>
-                  <span class="min-w-0">
-                    <span class="block text-[15px] font-medium text-zinc-900">{step.title}</span>
-                    <span class="mt-1 block text-[13px] leading-relaxed text-zinc-500">{step.body}</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
+    {steps.length > 0 && (
+      <section class="mb-16" aria-labelledby="how-it-works" data-reveal>
+        <Label id="how-it-works">How it works</Label>
+        <ol>
+          {steps.map((step, i) => (
+            <li class="grid grid-cols-[2.5rem_1fr] gap-x-3 border-b border-fg-line py-5">
+              <span aria-hidden="true" class="t-mono pt-1.5 text-fg-muted">{twoDigits(i + 1)}</span>
+              <div>
+                <h3 class="font-display text-[1.2rem] font-medium leading-snug">{step.title}</h3>
+                <p class="t-body mt-1 text-fg-muted">{step.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    )}
 
-        {product.features.length > 0 && (
-          <section class="mb-16" aria-labelledby="features">
-            <div class="flex items-center gap-3 mb-5">
-              <h2 id="features" class="text-[11px] font-medium text-zinc-400 uppercase tracking-widest">Features</h2>
-              <span aria-hidden="true" class="h-px flex-1 bg-zinc-100"></span>
-            </div>
-            <ul class="space-y-2.5">
-              {product.features.map((feature) => (
-                <li class="relative pl-5 text-[15px] leading-relaxed text-zinc-600 before:absolute before:left-0 before:top-[0.8em] before:h-px before:w-2 before:bg-emerald-400">
-                  {feature}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+    {product.features.length > 0 && (
+      <section class="mb-16" aria-labelledby="features" data-reveal>
+        <Label id="features">Features</Label>
+        <ul class="space-y-3">
+          {product.features.map((feature) => (
+            <li class="t-body relative pl-6 before:absolute before:left-0 before:top-[0.8em] before:h-px before:w-3 before:bg-accent">
+              {feature}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
 
-        {gallery.length > 0 && (
-          <section class="mb-16" aria-labelledby="screenshots">
-            <div class="flex items-center gap-3 mb-6">
-              <h2 id="screenshots" class="text-[11px] font-medium text-zinc-400 uppercase tracking-widest">Screenshots</h2>
-              <span aria-hidden="true" class="h-px flex-1 bg-zinc-100"></span>
-            </div>
-            <div class="space-y-10">
-              {gallery.map((fig, i) => (
-                <figure class={figureClass}>
-                  {fig.images.length === 1 ? (
+    {gallery.length > 0 && (
+      <section class="mb-16" aria-labelledby="screenshots">
+        <Label id="screenshots">Screenshots</Label>
+        <div class="space-y-10">
+          {gallery.map((fig, i) => (
+            <figure class={figureClass} data-reveal>
+              {fig.images.length === 1 && fig.images[0].src.endsWith('.gif') ? (
+                // A GIF cannot be paused, so it loads and plays only once the reader opens it (WCAG 2.2.2).
+                <details>
+                  <summary class="cursor-pointer px-4 py-3 text-fg-muted hover:text-fg sm:px-6">Play the animation</summary>
+                  <img
+                    src={fig.images[0].src}
+                    alt={fig.images[0].alt}
+                    width={fig.images[0].width}
+                    height={fig.images[0].height}
+                    loading="lazy"
+                    decoding="async"
+                    class="block h-auto w-full"
+                  />
+                </details>
+              ) : fig.images.length === 1 ? (
+                <img
+                  src={fig.images[0].src}
+                  alt={fig.images[0].alt}
+                  width={fig.images[0].width}
+                  height={fig.images[0].height}
+                  loading="lazy"
+                  decoding="async"
+                  class="block h-auto w-full"
+                />
+              ) : (
+                <div class="flex justify-center gap-4 p-4 sm:gap-8 sm:p-8">
+                  {fig.images.map((img) => (
                     <img
-                      src={fig.images[0].src}
-                      alt={fig.images[0].alt}
-                      width={fig.images[0].width}
-                      height={fig.images[0].height}
+                      src={img.src}
+                      alt={img.alt}
+                      width={img.width}
+                      height={img.height}
                       loading="lazy"
                       decoding="async"
-                      class="block w-full h-auto"
+                      class:list={[
+                        'block h-auto min-w-0 flex-1 rounded-lg border border-fg-line',
+                        // Phone screenshots stay phone-sized; wide ones share the row.
+                        img.height > img.width && 'max-w-[240px]',
+                      ]}
                     />
-                  ) : (
-                    <div class="flex justify-center gap-4 sm:gap-8 bg-zinc-50/60 p-4 sm:p-8">
-                      {fig.images.map((img) => (
-                        <img
-                          src={img.src}
-                          alt={img.alt}
-                          width={img.width}
-                          height={img.height}
-                          loading="lazy"
-                          decoding="async"
-                          class="block w-1/2 max-w-[240px] h-auto rounded-lg border border-zinc-200"
-                        />
-                      ))}
-                    </div>
-                  )}
-                  <figcaption class={captionClass}>
-                    <span class="font-mono text-zinc-400 mr-2">Fig {i + 1}</span>{fig.caption}
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          </section>
-        )}
+                  ))}
+                </div>
+              )}
+              <figcaption class={captionClass}>
+                <span class="t-mono mr-2">Fig {i + 1}</span>{fig.caption}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+    )}
 
-        {product.stack.length > 0 && (
-          <section class="mb-16" aria-labelledby="built-with">
-            <div class="flex items-center gap-3 mb-5">
-              <h2 id="built-with" class="text-[11px] font-medium text-zinc-400 uppercase tracking-widest">Built with</h2>
-              <span aria-hidden="true" class="h-px flex-1 bg-zinc-100"></span>
-            </div>
-            <ul class="flex flex-wrap gap-2">
-              {product.stack.map((tech) => (
-                <li class="text-[11px] font-mono text-zinc-500 bg-zinc-50 border border-zinc-200 px-2.5 py-1 rounded-full">{tech}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </article>
+    {product.stack.length > 0 && (
+      <section class="mb-16" aria-labelledby="built-with">
+        <Label id="built-with">Built with</Label>
+        <p class="t-mono text-fg-muted">{product.stack.join(' · ')}</p>
+      </section>
+    )}
 
-      <footer class="pt-8 border-t border-zinc-200 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-        <a href="/products" class="text-zinc-400 hover:text-emerald-600 transition-colors">&larr; all products</a>
-        {links.app && (
-          <a href={links.app} target="_blank" rel="noopener noreferrer" class="text-zinc-500 hover:text-emerald-600">
-            {new URL(links.app).host}<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">&#8599;</span>
-          </a>
-        )}
-        {links.source && (
-          <a href={links.source} target="_blank" rel="noopener noreferrer" class="text-zinc-500 hover:text-emerald-600">
-            GitHub<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">&#8599;</span>
-          </a>
-        )}
-        {links.docs && (
-          <a href={links.docs} target="_blank" rel="noopener noreferrer" class="text-zinc-500 hover:text-emerald-600">
-            {links.app ? 'Docs' : new URL(links.docs).host}<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">&#8599;</span>
-          </a>
-        )}
-      </footer>
-    </div>
-  </div>
+    <p><a href="/products" class="t-mono text-fg-muted hover:text-fg">← All products</a></p>
+  </article>
 </Layout>

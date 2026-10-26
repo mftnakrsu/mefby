@@ -1,0 +1,52 @@
+---
+// A product as a card (/products) or a row (the home page's Products section):
+// static image, name, spec line, tagline, launch month and license. The name
+// links to the product's page and its ::after stretches over the whole card.
+// GIF demos stay on the product pages.
+import type { Product } from '../../types';
+import { fmtMonth } from '../lib/productMeta';
+
+interface Props {
+  product: Product;
+  variant?: 'card' | 'row';
+  // Keep 'as' quoted: unquoted, Astro ignores this Props type and callers go unchecked.
+  'as'?: 'h2' | 'h3';
+  eager?: boolean;  // above the fold: skip lazy loading
+}
+const { product, variant = 'card', as: Heading = 'h3', eager = false } = Astro.props;
+const row = variant === 'row';
+const { image } = product;
+const meta = [fmtMonth(product.launched), product.license].filter(Boolean).join(' · ');
+---
+
+<article
+  class:list={[
+    'group relative',
+    row && 'grid gap-5 sm:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] sm:items-start sm:gap-8',
+  ]}
+>
+  <div class:list={['overflow-hidden rounded-xl border border-fg-line bg-paper-sunk', !row && 'mb-5']}>
+    <img
+      src={image.src}
+      alt={image.alt}
+      width={image.width}
+      height={image.height}
+      loading={eager ? undefined : 'lazy'}
+      decoding="async"
+      class="block aspect-[16/10] h-auto w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02] motion-reduce:transition-none"
+    />
+  </div>
+  <div>
+    <Heading class="font-display text-[1.45rem] font-medium leading-tight tracking-[-0.01em]">
+      <a
+        href={`/products/${product.slug}`}
+        class="decoration-fg-line underline-offset-4 after:absolute after:inset-0 group-hover:underline"
+      >{product.name}</a>
+    </Heading>
+    {product.spec && product.spec.length > 0 && (
+      <p class="t-label mt-2 text-fg-muted">{product.spec.join(' · ')}</p>
+    )}
+    <p class="t-body mt-3">{product.tagline}</p>
+    <p class="t-mono mt-3 text-fg-muted">{meta}</p>
+  </div>
+</article>

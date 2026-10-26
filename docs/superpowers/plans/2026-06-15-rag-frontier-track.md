@@ -18,7 +18,7 @@
 - **Notebooks committed OUTPUT-FREE**, executed top-to-bottom on BOTH paths (real-model + forced-offline via `HF_HOME=<empty>` + `HF_HUB_OFFLINE=1` + `TRANSFORMERS_OFFLINE=1`); fail on any `output_type=='error'`.
 - **Essays:** em-dash-free; no `# h1`; italic series line first; `## What you'll learn` → `## Prerequisites` → body → `> 💡 **From experience**` (real anecdote + invisible `{/* author: swap ... */}` marker, NEVER a raw `[INSERT...]`) → `## Key takeaways` → `## Glossary` → next-part teaser. Design tokens verbatim (spec §5). Keep `{` and bare `<` out of prose.
 - **Git discipline:** rag-by-hand → commit directly to `main`, **confirm before push**. mefby → feature branch → PR → user merges; **`git add` only this change's own files, never `-A`**; never touch `easa-ai-blog.md`; keep `docs/superpowers/*` out of PRs. **No Claude co-author trailer / no "Generated with Claude Code"** anywhere.
-- **Install** (this machine): `pip install --break-system-packages --index-url https://repo.tai.com.tr/repository/Pypi/simple <pkgs>`.
+- **Install** (this machine): `pip install --break-system-packages <pkgs>` (through an internal PyPI mirror).
 - **Build gate:** `cd /home/ubuntu/Desktop/mefby-main && npm run build` (astro check + build) must pass before any PR.
 
 ---
@@ -74,7 +74,7 @@
 - [ ] **Step 1: Confirm Python deps importable**
 
 Run: `python3 -c "import numpy, nbformat, nbclient, ipykernel; print(numpy.__version__)"`
-Expected: prints a numpy version (e.g. `2.4.4`), exit 0. If a module is missing, install via the TAI mirror command in the conventions block.
+Expected: prints a numpy version (e.g. `2.4.4`), exit 0. If a module is missing, install via the mirror command in the conventions block.
 
 - [ ] **Step 2: Re-read the canonical fallback pattern**
 

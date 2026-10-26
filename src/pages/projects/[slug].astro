@@ -1,0 +1,125 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import SectionMeta from '../../components/site/SectionMeta.astro';
+import Label from '../../components/site/Label.astro';
+import Button from '../../components/site/Button.astro';
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import { CATEGORY_LABELS, pageSequence } from '../../lib/projects';
+import { unsplashSrcset } from '../../lib/images';
+
+export async function getStaticPaths() {
+  // Index order, so previous/next walk the list the way /projects shows it.
+  const sequence = pageSequence(await getCollection('projects'));
+  return sequence.map((project, i) => ({
+    params: { slug: project.id },
+    props: { project, prev: sequence[i - 1] ?? null, next: sequence[i + 1] ?? null },
+  }));
+}
+
+type Project = CollectionEntry<'projects'>;
+interface Props {
+  project: Project;
+  prev: Project | null;
+  next: Project | null;
+}
+const { project, prev, next } = Astro.props;
+const { data } = project;
+const { Content } = await render(project);
+
+const abs = (path: string) => new URL(path, Astro.site).toString();
+const pageUrl = abs(`/projects/${project.id}/`);
+
+// The first link present is the primary button.
+const links = [
+  { href: data.links.site, label: 'Website' },
+  { href: data.links.demo, label: 'Live demo' },
+  { href: data.links.repo, label: 'Source on GitHub' },
+  { href: data.links.paper, label: 'Paper' },
+  { href: data.links.package, label: 'Package' },
+].filter((l): l is { href: string; label: string } => Boolean(l.href));
+
+const image = data.image;
+const srcset = image ? unsplashSrcset(image.src, image.width, image.height) : undefined;
+
+const breadcrumbJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: abs('/') },
+    { '@type': 'ListItem', position: 2, name: 'Projects', item: abs('/projects/') },
+    { '@type': 'ListItem', position: 3, name: data.title, item: pageUrl },
+  ],
+};
+---
+
+<Layout title={`${data.title} — Meftun Akarsu`} description={data.summary} ogImage={image?.src}>
+  <script is:inline type="application/ld+json" set:html={JSON.stringify(breadcrumbJsonLd)} />
+  <article class="mx-auto max-w-[46rem] px-6 pt-14 sm:pt-20" aria-labelledby="project-title">
+    <SectionMeta
+      as="h1"
+      kicker={`${CATEGORY_LABELS[data.category]} · ${data.year}`}
+      title={data.title}
+      titleId="project-title"
+      spec={data.spec}
+      lead={data.summary}
+    />
+
+    {image && (
+      <figure class="mb-12 overflow-hidden rounded-xl border border-fg-line bg-paper-sunk" data-reveal>
+        <img
+          src={image.src}
+          srcset={srcset}
+          sizes={srcset ? '(min-width: 768px) 46rem, 100vw' : undefined}
+          alt={image.alt}
+          width={image.width}
+          height={image.height}
+          decoding="async"
+          class="block h-auto w-full"
+        />
+        {image.credit && (
+          <figcaption class="t-mono border-t border-fg-line px-4 py-2.5 text-fg-muted">
+            {image.creditUrl ? (
+              <a href={image.creditUrl} class="underline decoration-fg-line underline-offset-2 hover:decoration-current">{image.credit}</a>
+            ) : image.credit}
+          </figcaption>
+        )}
+      </figure>
+    )}
+
+    <div class="prose prose-project">
+      <Content />
+    </div>
+
+    {links.length > 0 && (
+      <div class="mt-10 flex flex-wrap items-center gap-3">
+        {links.map((l, i) => (
+          <Button href={l.href} variant={i === 0 ? 'primary' : 'secondary'} external>{l.label}</Button>
+        ))}
+      </div>
+    )}
+    {data.private && <p class="t-mono mt-10 text-fg-muted">Private codebase</p>}
+
+    {data.stack.length > 0 && (
+      <section class="mt-12" aria-labelledby="built-with">
+        <Label id="built-with">Built with</Label>
+        <p class="t-mono text-fg-muted">{data.stack.join(' · ')}</p>
+      </section>
+    )}
+
+    <nav aria-label="More projects" class="mt-16 grid grid-cols-2 gap-6 border-t border-fg-line pt-8">
+      {prev ? (
+        <a href={`/projects/${prev.id}`} class="group block">
+          <span class="t-mono block text-fg-muted">← Previous</span>
+          <span class="mt-1 block font-display text-lg leading-snug decoration-fg-line underline-offset-4 group-hover:underline">{prev.data.title}</span>
+        </a>
+      ) : <span></span>}
+      {next ? (
+        <a href={`/projects/${next.id}`} class="group block text-right">
+          <span class="t-mono block text-fg-muted">Next →</span>
+          <span class="mt-1 block font-display text-lg leading-snug decoration-fg-line underline-offset-4 group-hover:underline">{next.data.title}</span>
+        </a>
+      ) : <span></span>}
+    </nav>
+    <p class="mt-10"><a href="/projects" class="t-mono text-fg-muted hover:text-fg">← All projects</a></p>
+  </article>
+</Layout>

@@ -1,0 +1,29 @@
+---
+title: "Hagai: Asana assistant"
+summary: "A VoltAgent assistant that answers questions about an Asana workspace: daily status, weekly plans, team workload and how often due dates slipped."
+year: 2025
+category: llm
+spec: ["Agent", "Tool use", "Asana API", "TypeScript"]
+stack: ["VoltAgent", "TypeScript", "Zod", "Claude 3.5 Sonnet", "GPT-4o", "LibSQL"]
+links:
+  repo: "https://github.com/mftnakrsu/hagAI-voltagent"
+image:
+  src: "https://images.unsplash.com/photo-1435527173128-983b87201f4d?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8MXx8cGFwZXIlMjBwbGFubmVyJTIwY2FsZW5kYXIlMjBkZXNrfGVufDF8MHx8fDE3OTI5NDcxOTZ8MA&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "Open monthly planner lying on a wooden desk, its grid of dates fading into soft focus"
+  width: 1600
+  height: 1000
+  credit: "Photo: Eric Rothermel / Unsplash"
+  creditUrl: "https://unsplash.com/@erothermel?utm_source=mefby&utm_medium=referral"
+---
+
+## Overview
+
+An assistant for project teams, built on VoltAgent at Hagia, that answers questions about an Asana workspace in plain language. It runs on Claude 3.5 Sonnet or GPT-4o and keeps the conversation history in LibSQL, so a follow-up question can build on the last answer.
+
+## What it answers
+
+The questions a team lead asks every day and every week: what was done, updated or due today; the plan for the week and how the work is spread across the team, with overdue tasks per person; completion by project and by section; how often each task's due date has slipped and which tasks slip the most; and the gaps, such as overdue, unassigned or undated tasks.
+
+## How it works
+
+Each kind of question is a tool with a Zod schema and a clear description, so the model can tell which one to use. The Asana client keeps to a conservative 100 requests a minute and waits when it gets close to that limit. Hagai runs as a local VoltAgent server, and people chat with it in the VoltOps console.

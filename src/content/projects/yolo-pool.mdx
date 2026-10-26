@@ -1,0 +1,30 @@
+---
+title: "yolo_pool"
+summary: "A pool-safety detector that tells adults from children with a custom YOLOv8m model, tracks each person and warns when a child is alone."
+year: 2026
+category: vision
+spec: ["YOLOv8", "ByteTrack", "TensorRT", "Jetson Nano"]
+stack: ["Ultralytics YOLOv8", "ByteTrack", "PyTorch", "OpenCV", "TensorRT"]
+links:
+  repo: "https://github.com/mftnakrsu/yolo_pool"
+image:
+  src: "https://images.unsplash.com/photo-1782958995190-75701221aab4?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8Mnx8ZW1wdHklMjBzd2ltbWluZyUyMHBvb2wlMjBsYW5lc3xlbnwxfDB8fHwxNzkyOTQ2NjU0fDA&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "Empty indoor swimming pool with lane ropes, a dark ceiling with warm lights and loungers lined up along tall windows"
+  width: 1600
+  height: 1000
+  credit: "Photo: Andy Wang / Unsplash"
+  creditUrl: "https://unsplash.com/@space_launch_system?utm_source=mefby&utm_medium=referral"
+featured: { group: vision, order: 2 }
+---
+
+## Overview
+
+A real-time safety system for swimming pools. A custom-trained YOLOv8m model detects the people around a pool and labels each one as an adult or a child, and ByteTrack keeps a persistent ID on every person from frame to frame. A dedicated tool raises a warning when a child is near the pool without an adult.
+
+## Training
+
+The model learned from more than 14,000 labeled people, about half of them adults and half children, in pool scenes labeled with CVAT and Roboflow and combined with a public child-versus-adult dataset. It trained on an A100 in Google Colab with augmentation and early stopping, which ended the run at epoch 78. On validation it reaches a mAP50 of 0.86 and a mAP50-95 of 0.552, and inference takes about 2 ms per image on the A100.
+
+## Running it
+
+A command-line tool processes video files, images, webcams and RTSP streams, and a real-time mode shows the frame rate and lets you change the confidence threshold while it runs. For the edge, scripts set everything up on an NVIDIA Jetson Nano and export the model to TensorRT in FP16, which the project says runs three to five times faster than PyTorch on the device.

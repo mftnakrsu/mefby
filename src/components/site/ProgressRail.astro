@@ -1,0 +1,32 @@
+---
+// The home page's section rail (lg and up), fixed at the right edge: numbers
+// 01–05 with short lines. The active section (aria-current, set by
+// src/scripts/home-nav.ts) shows its name and a longer terracotta line.
+// Inactive numbers use the muted text colour, so they stay AA on every zone.
+//
+// The content column is 1100px wide, so the rail adapts to the room beside it:
+// below xl (1280px) it is the numbers alone, tucked into the page gutter; from
+// xl it adds the lines; from 1440px the active section's name stays visible.
+// Below that a name appears on hover and focus only. Names are out of the
+// layout (absolute, no pointer events), so the rail's hit area is just the
+// number and line and never sits over content.
+import { HOME_SECTIONS, twoDigits } from '../../lib/sections';
+---
+
+<nav aria-label="Sections" class="fixed right-3 top-1/2 z-30 hidden -translate-y-1/2 lg:block xl:right-7">
+  <ol class="flex flex-col gap-7">
+    {HOME_SECTIONS.map((s, i) => (
+      <li>
+        <a
+          href={`#${s.id}`}
+          data-section-link={s.id}
+          class="group relative flex items-center justify-end gap-3 text-fg-muted aria-[current=true]:text-fg"
+        >
+          <span class="pointer-events-none absolute right-full top-1/2 mr-3 -translate-y-1/2 translate-x-1 whitespace-nowrap text-right font-display text-[0.82rem] leading-tight opacity-0 transition-[opacity,translate] duration-300 motion-reduce:transition-none group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 min-[1440px]:group-aria-[current=true]:translate-x-0 min-[1440px]:group-aria-[current=true]:opacity-100">{s.title}</span>
+          <span class="t-mono text-[0.66rem]">{twoDigits(i + 1)}</span>
+          <span aria-hidden="true" class="hidden h-px w-5 bg-current transition-[width] duration-300 motion-reduce:transition-none group-hover:w-7 group-aria-[current=true]:w-9 group-aria-[current=true]:bg-accent xl:block"></span>
+        </a>
+      </li>
+    ))}
+  </ol>
+</nav>

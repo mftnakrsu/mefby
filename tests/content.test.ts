@@ -1,0 +1,196 @@
+// Source-level checks on src/content/projects/*.mdx (no build needed).
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { loadWordingRules, findTerms, NO_WORDING_LIST } from './helpers/wording.ts';
+import { CATEGORY_ORDER } from '../src/lib/projects.ts';
+
+const DIR = new URL('../src/content/projects/', import.meta.url);
+
+// These guards fail closed. A frontmatter key is found however YAML spells it
+// (quoted key, space before the colon, any quoting or case of the value, a
+// trailing comment, block or flow style), so an unexpected spelling is checked
+// instead of skipped; what cannot be read at all fails a test of its own.
+const frontmatterValue = (frontmatter: string, key: string): string | undefined => {
+  // The rest of the key's line, minus surrounding quotes; undefined when the key is absent.
+  const raw = frontmatter.match(new RegExp(`^["']?${key}["']?[ \\t]*:[ \\t]*(.*)$`, 'im'))?.[1];
+  return raw?.replace(/^(["'])(.*)\1\s*$/, '$2');
+};
+
+const entries = readdirSync(DIR)
+  .filter((f) => f.endsWith('.mdx'))
+  .map((file) => {
+    const text = readFileSync(new URL(file, DIR), 'utf8');
+    const m = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+    if (!m) throw new Error(`${file}: no frontmatter`);
+    const privateFlag = frontmatterValue(m[1], 'private');
+    return {
+      slug: file.replace(/\.mdx$/, ''),
+      text,
+      frontmatter: m[1],
+      body: m[2].trim(),
+      // Private unless the key is absent or says false: `True`, `true # note` and "true" all count.
+      isPrivate: privateFlag !== undefined && !/^false\b/i.test(privateFlag),
+      isFeatured: frontmatterValue(m[1], 'featured') !== undefined,
+      // Title and summary: what /projects and the home cards show.
+      listing: [frontmatterValue(m[1], 'title'), frontmatterValue(m[1], 'summary')].join('\n'),
+    };
+  });
+
+const proseWords = (body: string) =>
+  body
+    .replace(/^#{1,6} .*$/gm, ' ')
+    .replace(/[*_`>[\]()]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean).length;
+
+test('summaries are one sentence of at most 200 characters', () => {
+  for (const e of entries) {
+    const summary = e.frontmatter.match(/^summary: "(.*)"$/m)?.[1];
+    assert.ok(summary, `${e.slug}: summary`);
+    assert.ok(summary.length <= 200, `${e.slug}: ${summary.length} characters`);
+    assert.ok(/[.]$/.test(summary), `${e.slug}: ends with a full stop`);
+  }
+});
+
+// `listing` reads these two lines. Any other form (unquoted, single-quoted, folded,
+// missing) could leave text out of the wording checks, so it fails here instead.
+test('every title and summary is one double-quoted line, the form the wording checks read', () => {
+  for (const e of entries) {
+    assert.match(e.frontmatter, /^title: ".+"$/m, `${e.slug}: title`);
+    assert.match(e.frontmatter, /^summary: ".+"$/m, `${e.slug}: summary`);
+  }
+});
+
+test('write-ups are 120–350 words in 2–4 sections, starting with Overview', () => {
+  for (const e of entries.filter((x) => x.body)) {
+    const n = proseWords(e.body);
+    assert.ok(n >= 120 && n <= 350, `${e.slug}: ${n} words`);
+    const headings = [...e.body.matchAll(/^(#{1,6}) (.+)$/gm)];
+    assert.ok(headings.every((h) => h[1] === '##'), `${e.slug}: only ## headings`);
+    assert.equal(headings[0]?.[2], 'Overview', `${e.slug}: first heading`);
+    assert.ok(headings.length >= 2 && headings.length <= 4, `${e.slug}: ${headings.length} sections`);
+    assert.ok(!/^import\s|<[A-Za-z]|```|!\[/m.test(e.body), `${e.slug}: plain prose only`);
+  }
+});
+
+test('private projects carry no repository link', () => {
+  for (const e of entries.filter((x) => x.isPrivate)) {
+    // A `repo` key in any spelling: block or flow style, quoted or not.
+    assert.ok(!/\brepo["']?\s*:/.test(e.frontmatter), e.slug);
+  }
+});
+
+const rules = loadWordingRules();
+test('project files follow the wording rules', { skip: rules ? false : NO_WORDING_LIST }, () => {
+  for (const e of entries) {
+    assert.deepEqual(findTerms(e.text, rules!.everywhere), [], e.slug);
+    if (e.isPrivate) assert.deepEqual(findTerms(e.text, rules!.privatePages), [], `${e.slug} (private)`);
+    // Every title and summary is listed on /projects next to the private work.
+    assert.deepEqual(findTerms(e.listing, rules!.privatePages), [], `${e.slug} (listing)`);
+    if (e.isFeatured) assert.deepEqual(findTerms(e.listing, rules!.home), [], `${e.slug} (home card)`);
+  }
+});
+
+// The approved inventory: every project file by category, and whether it has
+// a write-up (true: its own page) or is a row on /projects only (false).
+// Tasks 5–8 add one group of categories each; Task 8 checks nothing is missing.
+const INVENTORY: Record<string, Record<string, boolean>> = {
+  llm: {
+    odigos: true,
+    'eaa-gds-chatbots': true,
+    'factsheet-tool': true,
+    'requirements-graphrag': true,
+    'dapt-router': true,
+    'jira-mcp-server': true,
+    aeroscope: true,
+    'hagai-asana': true,
+    'transformation-reports': true,
+    'lead-enrichment-agent': false,
+    'gemini-pdf-extraction': false,
+    'travel-planner-agents': false,
+    'multi-pdf-chat': false,
+  },
+  research: {
+    'rag-vs-agentic': true,
+    'video-generation': true,
+    'gpt-oss-doctrine': true,
+    'inference-engines': true,
+    'damage-assessment-vlm': true,
+  },
+  edge: {
+    'offline-voice-command': true,
+    'onboard-ai-harness': true,
+    'lenet-cpp': true,
+    'kalman-filters': true,
+    'qlearning-gridworld': true,
+    'lidar-autonomy': false,
+    'lane-segmentation': false,
+    'daq-imu-loadcell': false,
+  },
+  vision: {
+    'anpr-pipeline': true,
+    'yolo-pool': true,
+    'ocr-comparison': true,
+    'visual-quality-control': true,
+    'kanban-ocr': false,
+    'fire-detection': false,
+    'traceability-labels': false,
+    'sealant-inspection': false,
+    'mes-traceability': false,
+  },
+  data: {
+    'analytics-workbench': true,
+    'shot-tracking-dashboard': true,
+    'manufacturing-intent': false,
+    'azure-databricks-platform': false,
+    'chiller-forecasting': false,
+    'rpa-robots': false,
+    'cltv-prediction': false,
+    'rfm-segmentation': false,
+    'association-rules': false,
+    'water-quality': false,
+  },
+  learning: {
+    'sql-notes': false,
+    'llm-challenge': false,
+    'isedak-training': false,
+    'paper-summaries': false,
+    'tf2-object-detection': false,
+    deepdream: false,
+    'diffusion-ddpm-ddim': false,
+    'genai-gradio': false,
+    'mlops-cheatsheet': false,
+    'pytorch-tutorial': false,
+    'cifar100-cnn': false,
+    'cats-and-dogs': false,
+    'transfer-learning': false,
+    'nvidia-dli': false,
+    'ml-algorithms': false,
+    'reinforcement-learning': false,
+    'opencv-basics': false,
+    'data-structures': false,
+    'pyqt5-gui': false,
+    'apache-pig': false,
+    'streamlit-heroku': false,
+  },
+};
+
+const categoryOf = (frontmatter: string) =>
+  (frontmatterValue(frontmatter, 'category') ?? '').replace(/\s+#.*$/, '').replace(/^(["'])(.*)\1$/, '$2').trim();
+
+test('each inventoried category holds exactly the approved projects', () => {
+  for (const [category, approved] of Object.entries(INVENTORY)) {
+    const actual = entries.filter((e) => categoryOf(e.frontmatter) === category);
+    assert.deepEqual(actual.map((e) => e.slug).sort(), Object.keys(approved).sort(), category);
+    for (const e of actual) assert.equal(Boolean(e.body), approved[e.slug], `${e.slug}: write-up`);
+  }
+});
+
+test('the inventory covers every category and every project file', () => {
+  assert.deepEqual(Object.keys(INVENTORY).sort(), [...CATEGORY_ORDER].sort());
+  const listed = Object.values(INVENTORY).flatMap((c) => Object.keys(c));
+  assert.equal(listed.length, 66);
+  assert.deepEqual(entries.map((e) => e.slug).sort(), [...listed].sort());
+  assert.equal(Object.values(INVENTORY).flatMap((c) => Object.values(c)).filter(Boolean).length, 25);
+});

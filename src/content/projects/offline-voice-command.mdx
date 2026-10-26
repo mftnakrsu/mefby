@@ -1,0 +1,29 @@
+---
+title: "Offline voice command"
+summary: "A voice assistant that turns spoken Turkish or English commands into actions for an operator console, running offline on a Jetson Orin."
+year: 2026
+category: edge
+spec: ["Speech", "Local LLM", "Jetson Orin", "Safety"]
+stack: ["Whisper", "Qwen3-4B", "Ollama", "Piper TTS", "Python", "Jetson Orin"]
+private: true
+image:
+  src: "https://images.unsplash.com/photo-1590602846989-e99596d2a6ee?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8OHx8c3R1ZGlvJTIwbWljcm9waG9uZSUyMGNsb3NlJTIwdXB8ZW58MXwwfHx8MTc5Mjk0NjkwMHww&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "Studio microphone with a foam windscreen hanging from a boom arm against a dark background"
+  width: 1600
+  height: 1000
+  credit: "Photo: Jukka Aalho / Unsplash"
+  creditUrl: "https://unsplash.com/@jukkaaalho?utm_source=mefby&utm_medium=referral"
+featured: { group: edge, order: 1 }
+---
+
+## Overview
+
+A voice assistant that understands an operator's spoken commands in Turkish or English, tells the operator console what to do and reads the result back aloud. It runs on an NVIDIA Jetson Orin with no internet connection. The console carries out every command; the assistant only proposes it.
+
+## How it works
+
+Whisper turns speech into text. A fast path handles a plain device command or a single status question directly; anything else goes to one call to Qwen3-4B in Ollama, which returns its decision as JSON. The rule is that the model understands and the code decides: a safety core checks every decision before it goes out, and once the console has acted, Piper reads the outcome aloud, whether done, failed or no change.
+
+## Safety rules
+
+The devices and their names come from the console at every sync, so nothing is hard-coded and the assistant never invents a name. A command that names a device goes through. A name that only sounds similar, a pronoun or a guess by the model is read back and waits for a spoken yes. A negative sentence sends nothing, and a sentence that asks for more than one action is read back as well. A protected set of 166 real exchanges guards every change: no result may change, and the median response time may grow by at most a tenth of a second.

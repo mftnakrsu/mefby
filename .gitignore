@@ -35,3 +35,9 @@ dist-ssr
 
 # Python bytecode (companion scripts under public/ get executed for verification)
 __pycache__/
+
+# Local planning notes and review documents (never committed)
+docs/private/
+
+# Local wording checklist read by tests/helpers/wording.ts (never committed)
+tests/wording.local.json

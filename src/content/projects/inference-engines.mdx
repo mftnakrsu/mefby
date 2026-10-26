@@ -1,0 +1,28 @@
+---
+title: "LLM inference engines"
+summary: "A 25-chapter course in Turkish on serving LLMs with vLLM, SGLang, llama.cpp and Ollama, with lab scripts for benchmarking the engines."
+year: 2026
+category: research
+spec: ["LLM serving", "vLLM", "SGLang", "Benchmarking"]
+stack: ["vLLM", "SGLang", "llama.cpp", "Ollama", "Python", "Bash"]
+private: true
+image:
+  src: "https://images.unsplash.com/photo-1783683783819-e6cb806bba69?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8NHx8c2VydmVyJTIwcmFjayUyMGRhdGElMjBjZW50ZXJ8ZW58MXwwfHx8MTc5Mjk0NzM2MHww&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "Black ethernet cables plugged into two stacked ports of a silver network switch, whose port lights glow amber"
+  width: 1600
+  height: 1000
+  credit: "Photo: Manuel Luikenga / Unsplash"
+  creditUrl: "https://unsplash.com/@manuel_luikenga?utm_source=mefby&utm_medium=referral"
+---
+
+## Overview
+
+A course in Turkish that takes an engineer from first principles to expert level in serving large language models with vLLM, SGLang, llama.cpp and Ollama. It has 25 chapters and a Turkish–English glossary, about 138,000 words in all. Each chapter rests on research checked against current sources, and a separate agent reviewed it adversarially before it was accepted.
+
+## What it covers
+
+How prefill and decode differ and what the KV cache costs; quantization formats from GGUF K-quants to AWQ, GPTQ and FP8; PagedAttention, continuous batching, RadixAttention and speculative decoding; and parallelism across GPUs. A chapter on benchmark method defines time to first token, time per output token, inter-token latency and goodput, so that engines can be compared fairly.
+
+## The labs
+
+The course has two reference machines: a workstation GPU with 8 GB, where the labs run Qwen3-1.7B, and an NVIDIA H200 with 141 GB, sized for 70B models in FP8 and for mixture-of-experts models. Lab scripts drive the load, watch the GPU and turn the measurements into a report.

@@ -1,0 +1,24 @@
+---
+title: "Digital-transformation report suite"
+summary: "Web apps that turn departmental survey data from a television production company into digital-transformation reports, written with Gemini."
+year: 2025
+category: llm
+spec: ["Gemini", "Reports", "Next.js", "Dashboard"]
+stack: ["Next.js", "TypeScript", "Gemini", "Supabase", "Vercel"]
+private: true
+image:
+  src: "https://images.unsplash.com/photo-1543536448-d209d2d13a1c?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8N3x8ZmlsbSUyMHJlZWx8ZW58MXwwfHx8MTc5Mjk0NjgyN3ww&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "A strip of red film standing in two loops on a pale surface, beside a dark film reel"
+  width: 1600
+  height: 1000
+  credit: "Photo: Denise Jans / Unsplash"
+  creditUrl: "https://unsplash.com/@dmjdenise?utm_source=mefby&utm_medium=referral"
+---
+
+## Overview
+
+A suite of small web apps I built at Hagia for the digital-transformation program of a television production company. Consultants collect survey data from each department, and the apps turn it into structured reports that can go straight to the people who run the program.
+
+## How it works
+
+An analyst uploads the survey as a CSV or Excel file, which is checked against the expected schema before anything else happens. Gemini then analyzes the answers and writes a Markdown report organized by the program's phases. The analyst reviews the report in the app and downloads it as Markdown or as a Word document. A companion dashboard, started in Google AI Studio, reads the program's data from Supabase. The report apps are built with Next.js and deployed on Vercel, with the API key kept in the platform's environment settings rather than in the code.

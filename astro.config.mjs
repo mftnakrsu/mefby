@@ -40,7 +40,7 @@ function rehypeHeadingIds() {
 }
 
 export default defineConfig({
-  site: 'https://mefby.vercel.app',
+  site: 'https://www.mefby.com',
   // Light Shiki theme so fenced code blocks match the clean/minimal palette
   // (the MDX integration inherits this markdown config by default).
   markdown: {
@@ -48,7 +48,11 @@ export default defineConfig({
   },
   integrations: [
     mdx({
-      remarkPlugins: [remarkMath],
+      // Astro 6 leaves `markdown.gfm` unset, which this MDX integration reads as
+      // "off", so essay tables rendered as plain text. Turn GFM on here.
+      gfm: true,
+      // A dollar amount ("a $250 order") is prose, not math: math needs $$…$$.
+      remarkPlugins: [[remarkMath, { singleDollarTextMath: false }]],
       rehypePlugins: [rehypeKatex, rehypeHeadingIds],
     }),
     sitemap({

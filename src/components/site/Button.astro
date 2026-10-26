@@ -1,0 +1,24 @@
+---
+// Pill-shaped link. "primary" is terracotta ink with paper text (6.1:1);
+// "secondary" is a hairline outline in the current text colour.
+interface Props {
+  href: string;
+  variant?: 'primary' | 'secondary';
+  external?: boolean;
+  class?: string;
+}
+const { href, variant = 'primary', external = false, class: className } = Astro.props;
+---
+
+<a
+  href={href}
+  target={external ? '_blank' : undefined}
+  rel={external ? 'noopener noreferrer' : undefined}
+  class:list={[
+    'inline-flex min-h-11 items-center gap-1.5 rounded-full px-5 text-[0.95rem] font-medium transition-colors',
+    variant === 'primary'
+      ? 'bg-accent-ink text-paper hover:bg-[color-mix(in_oklab,var(--accent-ink),black_12%)]'
+      : 'border border-fg-line hover:border-fg',
+    className,
+  ]}
+><slot />{external && <span class="sr-only"> (opens in a new tab)</span>}{external && <span aria-hidden="true">↗</span>}</a>

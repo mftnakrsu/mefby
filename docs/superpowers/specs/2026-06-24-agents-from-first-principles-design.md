@@ -592,7 +592,7 @@ agents-by-hand/
   README.md            # one row per part: | Part | Topic | Code | Notebook | Essay | + Colab badges;
                        # an offline-fallback-runtime preamble; link back to rag-by-hand + /essays/agents
   requirements.txt     # stdlib-first; optional openai (commented Ollama + claude-opus-4-8);
-                       # NO otel SDK, NO agent framework. Note: TAI PyPI mirror + pip --break-system-packages
+                       # NO otel SDK, NO agent framework. Note: internal PyPI mirror + pip --break-system-packages
   LICENSE  .gitignore
   shared/
     world.py           # refund-policy + Acme→Globex corpus, base tools, generate() (one swappable

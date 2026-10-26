@@ -1,0 +1,30 @@
+---
+title: "Kalman filters for autonomous robots"
+summary: "A hands-on Kalman filter for robots, built from its five matrices and run in animated 1D and 2D simulations, including a red-light prediction."
+year: 2021
+category: edge
+spec: ["Kalman filter", "State estimation", "Simulation"]
+stack: ["Python", "NumPy", "Matplotlib"]
+stars: 23
+links:
+  repo: "https://github.com/mftnakrsu/AutonomousRobots-Kalman-Filter"
+image:
+  src: "https://images.unsplash.com/photo-1518314916381-77a37c2a49ae?ixid=M3wxMTEzMDc0fDB8MXxzZWFyY2h8MXx8c21hbGwlMjB3aGVlbGVkJTIwcm9ib3R8ZW58MXwwfHx8MTc5Mjk0NzY5Mnww&ixlib=rb-4.1.0&w=1600&h=1000&fit=crop&q=80&auto=format"
+  alt: "A row of small white and gray wheeled robots built from toy bricks, with black cables and red-ringed sensors, on a white shelf"
+  width: 1600
+  height: 1000
+  credit: "Photo: Jelleke Vanooteghem / Unsplash"
+  creditUrl: "https://unsplash.com/@ilumire?utm_source=mefby&utm_medium=referral"
+---
+
+## Overview
+
+A practical introduction to the Kalman filter for autonomous robots. Most tutorials lean on heavy mathematics and give few numerical examples, so this one builds the filter from its five matrices and runs it in small simulations that show what each step does.
+
+## How it works
+
+The state x holds four values, and the uncertainty matrix P starts from the initial uncertainty of each one. Every step has two parts. Predict moves the state forward with the state transition matrix F, so that x(t+1) = F·x(t), and lets the uncertainty grow. Update takes a measurement of two values, which the measurement matrix H maps to the state, weighs it by its own uncertainty R, and pulls the estimate toward it in proportion to how far each side can be trusted.
+
+## The simulations
+
+A one-dimensional simulation comes first. A two-dimensional one follows a car that drives a route or a circle while the filter estimates where it is, and a third uses the filter's prediction to tell whether the car will stop before a red light. Each run is animated with Matplotlib, and a video linked from the repository shows the result.
