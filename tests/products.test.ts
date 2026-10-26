@@ -2,7 +2,7 @@
 // /products index and product pages.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PRODUCTS } from '../constants.ts';
 import { operatingSystem, productLinks } from '../src/lib/productMeta.ts';
@@ -39,6 +39,21 @@ test('product media exist and images match their declared size', () => {
   }
 });
 
+test('every file under public/products is used by a product', () => {
+  const used = new Set(
+    PRODUCTS.flatMap((p) => [
+      p.image.src,
+      ...(p.gallery ?? []).flatMap((f) => f.images.map((img) => img.src)),
+      ...(p.video ? [p.video.src, p.video.poster] : []),
+    ]),
+  );
+  const files = readdirSync(publicFile('/products'), { recursive: true })
+    .filter((f) => /\.[a-z0-9]+$/i.test(f) && !/(^|\/)\./.test(f))
+    .map((f) => `/products/${f}`);
+  assert.ok(files.length > 0, 'media found');
+  assert.deepEqual(files.filter((f) => !used.has(f)), []);
+});
+
 test('/products shows every product as a card with a static image', () => {
   const html = readPage('/products');
   assert.match(html, /<h1 id="products-title"[^>]*>Products<\/h1>/);
@@ -60,6 +75,14 @@ test('each product page has its title, structured data and primary button', () =
 
     const primary = html.match(/<a href="([^"]*)"[^>]*\bbg-accent-ink\b/)?.[1];
     assert.equal(primary, productLinks(p)[0].href, `${p.slug}: primary button`);
+  }
+});
+
+test('each product page shows every figure of its gallery, numbered in order', () => {
+  for (const p of PRODUCTS) {
+    const html = readPage(`/products/${p.slug}`);
+    const labels = [...html.matchAll(/<span class="t-mono mr-2">Fig (\d+)<\/span>/g)].map((m) => Number(m[1]));
+    assert.deepEqual(labels, (p.gallery ?? []).map((_, i) => i + 1), p.slug);
   }
 });
 

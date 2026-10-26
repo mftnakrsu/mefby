@@ -29,3 +29,8 @@ test('a course lists its published parts in part order', () => {
   assert.deepEqual(courseParts(essays, 'rag').map((e) => e.id), ['rag-1', 'rag-2']);
   assert.deepEqual(courseParts(essays, 'evals'), []);
 });
+
+// A hub uses the course description as its meta description.
+test('a course description is at most 200 characters', () => {
+  for (const c of COURSES) assert.ok(c.description.length <= 200, `${c.series}: ${c.description.length} characters`);
+});

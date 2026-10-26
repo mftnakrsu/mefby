@@ -272,6 +272,7 @@ export const PRODUCTS: Product[] = [
     license: "MIT",
     languages: ["EN", "TR"],
     platforms: ["Linux", "Windows", "macOS"],
+    applicationCategory: "ProductivityApplication",
     spec: ["Desktop app", "Markdown", "Tauri"],
     stack: ["Tauri", "Rust", "Svelte", "TypeScript", "CodeMirror"],
     features: [

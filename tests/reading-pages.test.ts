@@ -1,18 +1,19 @@
-// Reading pages: an essay in a course and its Turkish twin, a course hub, a
-// glossary and /essays.
+// Reading pages: an essay in a course and its Turkish twin, the Sponsors note,
+// a course hub, a glossary and /essays.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { readPage, attrValues, jsonLd, visibleText } from './helpers/dist.ts';
 
 const ESSAYS = new URL('../src/content/essays/', import.meta.url);
-const canonical = readdirSync(ESSAYS)
+const published = readdirSync(ESSAYS)
   .filter((file) => file.endsWith('.mdx'))
   .map((file) => ({
     slug: file.replace(/\.mdx$/, ''),
     frontmatter: readFileSync(new URL(file, ESSAYS), 'utf8').split('\n---')[0],
   }))
-  .filter((e) => !/^isTranslation: true$/m.test(e.frontmatter) && !/^draft: true$/m.test(e.frontmatter));
+  .filter((e) => !/^draft: true$/m.test(e.frontmatter));
+const canonical = published.filter((e) => !/^isTranslation: true$/m.test(e.frontmatter));
 
 test('an essay in a course: series label, meta row, prose and part navigation', () => {
   const html = readPage('/essays/build-your-first-rag');
@@ -43,6 +44,25 @@ test('the Turkish twin keeps its language and links back', () => {
   assert.match(html, /<html lang="tr"/);
   assert.match(visibleText(html), /\d+ dk okuma/);
   assert.ok(attrValues(html, 'href').includes('/essays/build-your-first-rag'));
+});
+
+const sponsorNotes = (html: string) =>
+  html.match(/<aside\b[^>]*aria-label="(?:Support|Destek)"[\s\S]*?<\/aside>/g) ?? [];
+
+test('every essay ends with one Sponsors note in its own language; other pages have none', () => {
+  for (const { slug } of published) {
+    const html = readPage(`/essays/${slug}`);
+    const notes = sponsorNotes(html);
+    assert.equal(notes.length, 1, `${slug}: one note`);
+    assert.ok(notes[0].includes('href="https://github.com/sponsors/mftnakrsu"'), `${slug}: link`);
+    assert.ok(notes[0].includes('target="_blank"') && notes[0].includes('rel="noopener noreferrer"'), `${slug}: new tab`);
+    const tr = html.includes('<article lang="tr"');
+    assert.ok(notes[0].includes(tr ? 'aria-label="Destek"' : 'aria-label="Support"'), `${slug}: label`);
+    assert.ok(notes[0].includes(tr ? '(yeni sekmede açılır)' : '(opens in a new tab)'), `${slug}: new-tab note`);
+  }
+  for (const route of ['/', '/essays', '/essays/rag', '/essays/rag-glossary', '/products/oyla', '/projects']) {
+    assert.deepEqual(sponsorNotes(readPage(route)), [], route);
+  }
 });
 
 test('a course hub: opening, Part 1 button, glossary and code links, numbered parts', () => {
